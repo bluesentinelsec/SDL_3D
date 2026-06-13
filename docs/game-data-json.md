@@ -1752,6 +1752,36 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 
+Use `editor.texture.scan` to populate an editor texture browser from a configured
+filesystem directory. By default it reads `editor.asset_source.textures.path`
+and `editor.asset_source.textures.relative`, falling back to `textures` relative
+to the loaded game-data file. The scan publishes rows into a runtime collection
+and mirrors the first visible page into `editor.texture.slot.N.*` scene-state
+keys so authored UI can bind labels, thumbnails, and buttons without hard-coded
+paths. Files matching existing brush material textures reuse those material
+names; new files register `mat.project.texture.<slug>` materials on the target
+brush world.
+
+```json
+{
+  "type": "editor.texture.scan",
+  "world": "brush.level.blockout",
+  "collection": "editor.textures",
+  "slot_count": 6,
+  "outputs": {
+    "count_key": "editor.texture.count",
+    "registered_count_key": "editor.texture.registered_count",
+    "status_key": "editor.texture.scan.status"
+  }
+}
+```
+
+Use `editor.texture.select_index` to choose a scanned texture row by index. The
+action updates `editor.palette.material.cursor`, `editor.texture.material`, and
+`editor.texture.selected_index`. Slot-backed UI image warmup state such as
+`asset_warmup.ui_image.image.editor_shell.texture.slot_0.pending` prevents
+selecting textures that are still loading or failed.
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted

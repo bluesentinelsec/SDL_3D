@@ -64,6 +64,556 @@ static bool debug_make_directory_recursive(const char *path)
     return ok;
 }
 
+static bool editor_texture_extension_supported(const char *filename)
+{
+    const char *dot = filename != NULL ? SDL_strrchr(filename, '.') : NULL;
+    if (dot == NULL || dot[1] == '\0')
+        return false;
+    return SDL_strcasecmp(dot, ".png") == 0 || SDL_strcasecmp(dot, ".jpg") == 0 || SDL_strcasecmp(dot, ".jpeg") == 0 ||
+           SDL_strcasecmp(dot, ".bmp") == 0 || SDL_strcasecmp(dot, ".tga") == 0 || SDL_strcasecmp(dot, ".webp") == 0;
+}
+
+static char editor_path_separator(void)
+{
+#if defined(_WIN32)
+    return '\\';
+#else
+    return '/';
+#endif
+}
+
+static char *editor_path_join(const char *base, const char *leaf)
+{
+    if (leaf == NULL)
+        return NULL;
+    if (base == NULL || base[0] == '\0')
+        return SDL_strdup(leaf);
+    const size_t base_len = SDL_strlen(base);
+    const size_t leaf_len = SDL_strlen(leaf);
+    const bool needs_sep = base_len > 0U && base[base_len - 1U] != '/' && base[base_len - 1U] != '\\';
+    char *joined = (char *)SDL_malloc(base_len + (needs_sep ? 1U : 0U) + leaf_len + 1U);
+    if (joined == NULL)
+        return NULL;
+    SDL_memcpy(joined, base, base_len);
+    size_t offset = base_len;
+    if (needs_sep)
+        joined[offset++] = editor_path_separator();
+    SDL_memcpy(joined + offset, leaf, leaf_len + 1U);
+    return joined;
+}
+
+static bool editor_path_absolute(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+#if defined(_WIN32)
+    const size_t len = SDL_strlen(path);
+    return (len >= 3U && path[0] >= 'A' && path[0] <= 'Z' && path[1] == ':' && (path[2] == '\\' || path[2] == '/')) ||
+           (len >= 2U && path[0] == '\\' && path[1] == '\\');
+#else
+    return path[0] == '/';
+#endif
+}
+
+static char *editor_resolve_directory(slayer3d_game_data_runtime *runtime, const char *directory)
+{
+    if (directory == NULL || directory[0] == '\0')
+        return NULL;
+    if (editor_path_absolute(directory))
+        return SDL_strdup(directory);
+    const char *base_dir = runtime != NULL && runtime->file_base_dir != NULL
+                               ? runtime->file_base_dir
+                               : (runtime != NULL ? runtime->base_dir : NULL);
+    return editor_path_join(base_dir, directory);
+}
+
+static const char *editor_basename(const char *path)
+{
+    const char *base = path;
+    if (path == NULL)
+        return "";
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return base;
+}
+
+static void editor_texture_slug_from_filename(const char *filename, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    buffer[0] = '\0';
+    const char *base = editor_basename(filename);
+    size_t offset = 0U;
+    for (const char *p = base; p != NULL && *p != '\0' && offset + 1U < buffer_size; ++p)
+    {
+        if (*p == '.')
+            break;
+        char c = *p;
+        if (c >= 'A' && c <= 'Z')
+            c = (char)(c - 'A' + 'a');
+        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+            buffer[offset++] = c;
+        else if (offset > 0U && buffer[offset - 1U] != '_')
+            buffer[offset++] = '_';
+    }
+    while (offset > 0U && buffer[offset - 1U] == '_')
+        --offset;
+    if (offset == 0U)
+        SDL_strlcpy(buffer, "texture", buffer_size);
+    else
+        buffer[offset] = '\0';
+}
+
+static void editor_texture_label_from_filename(const char *filename, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    buffer[0] = '\0';
+    const char *base = editor_basename(filename);
+    size_t offset = 0U;
+    bool word_start = true;
+    for (const char *p = base; p != NULL && *p != '\0' && offset + 1U < buffer_size; ++p)
+    {
+        if (*p == '.')
+            break;
+        char c = *p;
+        if (c == '_' || c == '-')
+        {
+            if (offset > 0U && buffer[offset - 1U] != ' ')
+                buffer[offset++] = ' ';
+            word_start = true;
+            continue;
+        }
+        if (word_start && c >= 'a' && c <= 'z')
+            c = (char)(c - 'a' + 'A');
+        buffer[offset++] = c;
+        word_start = false;
+    }
+    while (offset > 0U && buffer[offset - 1U] == ' ')
+        --offset;
+    if (offset == 0U)
+        SDL_strlcpy(buffer, "Texture", buffer_size);
+    else
+        buffer[offset] = '\0';
+}
+
+typedef struct editor_texture_scan_entry
+{
+    char *filename;
+    char *path;
+    char *relative_path;
+    char material[128];
+    char label[96];
+    char slug[96];
+    int sort_order;
+} editor_texture_scan_entry;
+
+typedef struct editor_texture_scan_list
+{
+    editor_texture_scan_entry *entries;
+    int count;
+    int capacity;
+} editor_texture_scan_list;
+
+static void editor_texture_scan_list_free(editor_texture_scan_list *list)
+{
+    if (list == NULL)
+        return;
+    for (int i = 0; i < list->count; ++i)
+    {
+        SDL_free(list->entries[i].filename);
+        SDL_free(list->entries[i].path);
+        SDL_free(list->entries[i].relative_path);
+    }
+    SDL_free(list->entries);
+    SDL_zero(*list);
+}
+
+static int SDLCALL editor_texture_scan_entry_compare(const void *a, const void *b)
+{
+    const editor_texture_scan_entry *ea = (const editor_texture_scan_entry *)a;
+    const editor_texture_scan_entry *eb = (const editor_texture_scan_entry *)b;
+    return SDL_strcasecmp(ea->filename != NULL ? ea->filename : "", eb->filename != NULL ? eb->filename : "");
+}
+
+static int SDLCALL editor_texture_scan_entry_order_compare(const void *a, const void *b)
+{
+    const editor_texture_scan_entry *ea = (const editor_texture_scan_entry *)a;
+    const editor_texture_scan_entry *eb = (const editor_texture_scan_entry *)b;
+    if (ea->sort_order < eb->sort_order)
+        return -1;
+    if (ea->sort_order > eb->sort_order)
+        return 1;
+    return editor_texture_scan_entry_compare(a, b);
+}
+
+static bool editor_texture_scan_list_append(editor_texture_scan_list *list, const char *directory,
+                                            const char *relative_directory, const char *filename)
+{
+    if (list == NULL || directory == NULL || filename == NULL || !editor_texture_extension_supported(filename))
+        return true;
+    if (list->count >= list->capacity)
+    {
+        const int next_capacity = list->capacity > 0 ? list->capacity * 2 : 16;
+        editor_texture_scan_entry *next =
+            (editor_texture_scan_entry *)SDL_realloc(list->entries, (size_t)next_capacity * sizeof(*next));
+        if (next == NULL)
+            return false;
+        SDL_memset(next + list->capacity, 0, (size_t)(next_capacity - list->capacity) * sizeof(*next));
+        list->entries = next;
+        list->capacity = next_capacity;
+    }
+    editor_texture_scan_entry *entry = &list->entries[list->count];
+    SDL_zero(*entry);
+    entry->filename = SDL_strdup(filename);
+    entry->path = editor_path_join(directory, filename);
+    entry->relative_path = editor_path_join(relative_directory != NULL ? relative_directory : "", filename);
+    editor_texture_slug_from_filename(filename, entry->slug, sizeof(entry->slug));
+    editor_texture_label_from_filename(filename, entry->label, sizeof(entry->label));
+    entry->sort_order = list->count;
+    if (entry->filename == NULL || entry->path == NULL || entry->relative_path == NULL)
+    {
+        SDL_free(entry->filename);
+        SDL_free(entry->path);
+        SDL_free(entry->relative_path);
+        SDL_zero(*entry);
+        return false;
+    }
+    ++list->count;
+    return true;
+}
+
+typedef struct editor_texture_enumerate_context
+{
+    editor_texture_scan_list *list;
+    const char *relative_directory;
+    bool ok;
+} editor_texture_enumerate_context;
+
+static SDL_EnumerationResult SDLCALL editor_texture_enumerate_directory_entry(void *userdata, const char *dirname,
+                                                                              const char *fname)
+{
+    editor_texture_enumerate_context *ctx = (editor_texture_enumerate_context *)userdata;
+    if (ctx == NULL || ctx->list == NULL)
+        return SDL_ENUM_FAILURE;
+    char *path = editor_path_join(dirname, fname);
+    SDL_PathInfo file_info;
+    SDL_zero(file_info);
+    const bool is_file = path != NULL && SDL_GetPathInfo(path, &file_info) && file_info.type == SDL_PATHTYPE_FILE;
+    SDL_free(path);
+    if (!is_file)
+        return SDL_ENUM_CONTINUE;
+    if (!editor_texture_scan_list_append(ctx->list, dirname, ctx->relative_directory, fname))
+    {
+        ctx->ok = false;
+        return SDL_ENUM_FAILURE;
+    }
+    return SDL_ENUM_CONTINUE;
+}
+
+static bool editor_scan_texture_directory(const char *directory, const char *relative_directory,
+                                          editor_texture_scan_list *out_list)
+{
+    if (out_list != NULL)
+        SDL_zero(*out_list);
+    if (directory == NULL || directory[0] == '\0' || out_list == NULL)
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (!SDL_GetPathInfo(directory, &info) || info.type != SDL_PATHTYPE_DIRECTORY)
+        return false;
+
+    editor_texture_enumerate_context enumerate_ctx = {out_list, relative_directory, true};
+    const bool ok =
+        SDL_EnumerateDirectory(directory, editor_texture_enumerate_directory_entry, &enumerate_ctx) && enumerate_ctx.ok;
+    if (ok && out_list->count > 1)
+        SDL_qsort(out_list->entries, (size_t)out_list->count, sizeof(out_list->entries[0]),
+                  editor_texture_scan_entry_compare);
+    if (!ok)
+        editor_texture_scan_list_free(out_list);
+    return ok;
+}
+
+static int editor_brush_material_index_by_name_or_texture(const brush_world_runtime *world_runtime, const char *name,
+                                                          const char *filename)
+{
+    const slayer3d_game_data_brush_world *world = world_runtime != NULL ? &world_runtime->desc : NULL;
+    if (world == NULL)
+        return -1;
+    for (int i = 0; i < world->material_count; ++i)
+    {
+        const slayer3d_game_data_brush_material *material = &world->materials[i];
+        if (name != NULL && name[0] != '\0' && material->name != NULL && SDL_strcmp(material->name, name) == 0)
+            return i;
+        if (filename != NULL && filename[0] != '\0' && material->texture != NULL)
+        {
+            const char *material_file = editor_basename(material->texture);
+            if (SDL_strcasecmp(material_file, filename) == 0)
+                return i;
+        }
+    }
+    return -1;
+}
+
+static bool editor_append_brush_material(brush_world_runtime *world_runtime, const char *material_name,
+                                         const char *texture_path)
+{
+    if (world_runtime == NULL || material_name == NULL || material_name[0] == '\0' || texture_path == NULL ||
+        texture_path[0] == '\0')
+    {
+        return false;
+    }
+
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (editor_brush_material_index_by_name_or_texture(world_runtime, material_name, NULL) >= 0)
+        return true;
+
+    const int next_count = world->material_count + 1;
+    slayer3d_game_data_brush_material *materials = (slayer3d_game_data_brush_material *)SDL_realloc(
+        (void *)world->materials, (size_t)next_count * sizeof(*materials));
+    if (materials == NULL)
+        return false;
+    world->materials = materials;
+
+    slayer3d_game_data_brush_material *material = &materials[world->material_count];
+    SDL_zero(*material);
+    material->name = SDL_strdup(material_name);
+    material->texture = SDL_strdup(texture_path);
+    material->albedo = slayer3d_vec4_make(1.0f, 1.0f, 1.0f, 1.0f);
+    material->metallic = 0.0f;
+    material->roughness = 1.0f;
+    material->emissive = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    material->tex_scale = 1.0f;
+    if (material->name == NULL || material->texture == NULL)
+    {
+        SDL_free((void *)material->name);
+        SDL_free((void *)material->texture);
+        SDL_zero(*material);
+        return false;
+    }
+    world->material_count = next_count;
+    return true;
+}
+
+static bool editor_texture_collection_publish_row(slayer3d_game_data_runtime *runtime, const char *collection,
+                                                  int row_index, const editor_texture_scan_entry *entry)
+{
+    if (runtime == NULL || collection == NULL || entry == NULL)
+        return false;
+    return slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "id", entry->slug) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "label", entry->label) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "filename",
+                                                            entry->filename) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "path", entry->path) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "relative_path",
+                                                            entry->relative_path) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "material",
+                                                            entry->material);
+}
+
+static void editor_texture_clear_slots(slayer3d_properties *scene_state, int slot_count)
+{
+    for (int i = 0; scene_state != NULL && i < slot_count; ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.label", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.material", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", i);
+        slayer3d_properties_set_bool(scene_state, key, false);
+    }
+}
+
+static void editor_texture_publish_slot(slayer3d_properties *scene_state, int slot_index,
+                                        const editor_texture_scan_entry *entry)
+{
+    if (scene_state == NULL || entry == NULL)
+        return;
+    char key[128];
+    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.label", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->label);
+    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.material", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->material);
+    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->path);
+    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", slot_index);
+    slayer3d_properties_set_bool(scene_state, key, true);
+}
+
+static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *directory_key = json_string(action, "directory_key", "editor.asset_source.textures.path");
+    const char *relative_directory_key =
+        json_string(action, "relative_directory_key", "editor.asset_source.textures.relative");
+    const char *fallback_directory = json_string(action, "directory", "textures");
+    const char *fallback_relative_directory = json_string(action, "relative_directory", "textures");
+    const char *collection = json_string(action, "collection", "editor.textures");
+    const char *world_name = json_string(action, "world", "brush.editor_shell.target");
+    const char *material_prefix = json_string(action, "material_prefix", "mat.project.texture.");
+    const int slot_count = SDL_max(0, json_int(action, "slot_count", 6));
+    const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
+    const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
+    char *resolved_fallback_directory = NULL;
+    if (directory == NULL || directory[0] == '\0')
+    {
+        resolved_fallback_directory = editor_resolve_directory(runtime, fallback_directory);
+        directory = resolved_fallback_directory != NULL ? resolved_fallback_directory : "";
+    }
+    if (relative_directory == NULL || relative_directory[0] == '\0')
+        relative_directory = fallback_relative_directory != NULL ? fallback_relative_directory : "";
+
+    editor_texture_clear_slots(runtime->scene_state, slot_count);
+    slayer3d_game_data_runtime_collection_clear(runtime, collection);
+
+    editor_texture_scan_list list;
+    SDL_zero(list);
+    if (!editor_scan_texture_directory(directory, relative_directory, &list))
+    {
+        editor_set_int_output(runtime->scene_state, outputs, "count_key", 0);
+        editor_set_string_output(runtime->scene_state, outputs, "status_key", "texture directory unavailable");
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", 0);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status",
+                                       "texture directory unavailable");
+        SDL_free(resolved_fallback_directory);
+        return true;
+    }
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, world_name);
+    int registered_count = 0;
+    for (int i = 0; i < list.count; ++i)
+    {
+        editor_texture_scan_entry *entry = &list.entries[i];
+        int existing_index = editor_brush_material_index_by_name_or_texture(world_runtime, NULL, entry->filename);
+        if (existing_index >= 0)
+        {
+            const slayer3d_game_data_brush_material *material = &world_runtime->desc.materials[existing_index];
+            SDL_strlcpy(entry->material, material->name != NULL ? material->name : "", sizeof(entry->material));
+            entry->sort_order = existing_index;
+        }
+        else
+        {
+            SDL_snprintf(entry->material, sizeof(entry->material), "%s%s", material_prefix, entry->slug);
+            if (editor_append_brush_material(world_runtime, entry->material, entry->path))
+            {
+                ++registered_count;
+                entry->sort_order = 100000 + i;
+            }
+            else
+                entry->material[0] = '\0';
+        }
+    }
+
+    if (list.count > 1)
+        SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_texture_scan_entry_order_compare);
+
+    int published_count = 0;
+    int selected_index = -1;
+    const char *current_material =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.palette.material.cursor", "");
+    for (int i = 0; i < list.count; ++i)
+    {
+        const editor_texture_scan_entry *entry = &list.entries[i];
+        if (entry->material[0] == '\0')
+            continue;
+        (void)editor_texture_collection_publish_row(runtime, collection, published_count, entry);
+        if (published_count < slot_count)
+            editor_texture_publish_slot(runtime->scene_state, published_count, entry);
+        if (current_material != NULL && current_material[0] != '\0' &&
+            SDL_strcmp(current_material, entry->material) == 0)
+            selected_index = published_count;
+        ++published_count;
+    }
+
+    if (published_count > 0)
+    {
+        if (selected_index < 0)
+        {
+            char first_material[128];
+            if (runtime_collection_field_to_string(find_runtime_collection_const(runtime, collection), 0, "material",
+                                                   first_material, sizeof(first_material)) &&
+                first_material[0] != '\0')
+            {
+                slayer3d_properties_set_string(runtime->scene_state, "editor.palette.material.cursor", first_material);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.texture.material", first_material);
+                selected_index = 0;
+            }
+        }
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", selected_index);
+    }
+    else
+    {
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", -1);
+    }
+
+    char status[128];
+    SDL_snprintf(status, sizeof(status), "loaded %d texture%s", published_count, published_count == 1 ? "" : "s");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", published_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.registered_count", registered_count);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status", status);
+    editor_set_int_output(runtime->scene_state, outputs, "count_key", published_count);
+    editor_set_int_output(runtime->scene_state, outputs, "registered_count_key", registered_count);
+    editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
+    editor_texture_scan_list_free(&list);
+    SDL_free(resolved_fallback_directory);
+    return true;
+}
+
+static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    const char *collection_name = json_string(action, "collection", "editor.textures");
+    const char *index_key = json_string(action, "index_key", NULL);
+    const int index = index_key != NULL ? slayer3d_properties_get_int(runtime->scene_state, index_key, 0)
+                                        : json_int(action, "index", 0);
+    const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
+    char warmup_key[128];
+    SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending",
+                 index);
+    if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture loading");
+        return true;
+    }
+    SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.failed",
+                 index);
+    if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture unavailable");
+        return true;
+    }
+
+    char material[128];
+    char label[128];
+    if (!runtime_collection_field_to_string(collection, index, "material", material, sizeof(material)) ||
+        material[0] == '\0')
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture slot is empty");
+        return true;
+    }
+    if (!runtime_collection_field_to_string(collection, index, "label", label, sizeof(label)))
+        SDL_strlcpy(label, "texture", sizeof(label));
+
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", index);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.material.cursor", material);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.material", material);
+    char message[192];
+    SDL_snprintf(message, sizeof(message), "selected texture %s", label);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    return true;
+}
+
 static char *debug_parent_directory(const char *path)
 {
     if (path == NULL)
@@ -982,6 +1532,12 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.brush.paint") == 0)
         return slayer3d_game_data_paint_selected_editor_brushes(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.texture.scan") == 0)
+        return execute_editor_texture_scan_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.texture.select_index") == 0)
+        return execute_editor_texture_select_index_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);

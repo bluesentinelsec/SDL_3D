@@ -50,6 +50,7 @@ void slayer3d_game_data_image_cache_free(slayer3d_game_data_image_cache *cache)
     {
         if (cache->entries[i].loaded)
             slayer3d_free_texture(&cache->entries[i].texture);
+        SDL_free(cache->entries[i].source_path);
         SDL_free(cache->entries[i].shader_vertex_source);
         SDL_free(cache->entries[i].shader_fragment_source);
     }

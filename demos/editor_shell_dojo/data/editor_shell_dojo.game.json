@@ -329,6 +329,13 @@
     "signal.editor.texture.select.door_hatch",
     "signal.editor.texture.select.lava",
     "signal.editor.texture.select.radioactive_crate",
+    "signal.editor.texture.refresh",
+    "signal.editor.texture.select_slot.0",
+    "signal.editor.texture.select_slot.1",
+    "signal.editor.texture.select_slot.2",
+    "signal.editor.texture.select_slot.3",
+    "signal.editor.texture.select_slot.4",
+    "signal.editor.texture.select_slot.5",
     "signal.editor.texture.page.previous",
     "signal.editor.texture.page.next",
     "signal.editor.texture.paint.selection",
@@ -745,8 +752,17 @@
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
-          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
-          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture paint mode" }
         ]
       },
@@ -1002,6 +1018,59 @@
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.radioactive_crate" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.radioactive_crate" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "radioactive crate texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.refresh",
+        "actions": [
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "textures refreshed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.0",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 0 }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.1",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 1 }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.2",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 2 }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.3",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 3 }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.4",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 4 }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select_slot.5",
+        "actions": [
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 5 }
         ]
       },
       {
@@ -2689,7 +2758,13 @@
       { "id": "image.editor_shell.texture.ceiling_metal", "path": "asset://textures/ceiling_metal.jpg" },
       { "id": "image.editor_shell.texture.door_hatch", "path": "asset://textures/door-hatch.png" },
       { "id": "image.editor_shell.texture.lava", "path": "asset://textures/lava.jpg" },
-      { "id": "image.editor_shell.texture.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }
+      { "id": "image.editor_shell.texture.radioactive_crate", "path": "asset://textures/radioactive-crate.png" },
+      { "id": "image.editor_shell.texture.slot_0", "path": "asset://textures/wall_metal.jpg" },
+      { "id": "image.editor_shell.texture.slot_1", "path": "asset://textures/rock_floor.jpg" },
+      { "id": "image.editor_shell.texture.slot_2", "path": "asset://textures/ceiling_metal.jpg" },
+      { "id": "image.editor_shell.texture.slot_3", "path": "asset://textures/door-hatch.png" },
+      { "id": "image.editor_shell.texture.slot_4", "path": "asset://textures/lava.jpg" },
+      { "id": "image.editor_shell.texture.slot_5", "path": "asset://textures/radioactive-crate.png" }
     ],
     "fonts": [
       { "id": "font.editor_shell.ui", "builtin": "Inter", "size": 18 }

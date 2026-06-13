@@ -519,6 +519,42 @@ bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *act
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {
+        "directory_key", "relative_directory_key", "directory", "relative_directory", "collection",
+        "world",         "material_prefix"};
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_strings[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, optional_strings[i]);
+    }
+    yyjson_val *slot_count = obj_get(action, "slot_count");
+    if (slot_count != NULL && (!yyjson_is_int(slot_count) || yyjson_get_int(slot_count) < 0))
+        return validation_error(ctx, json_path, "%s slot_count must be non-negative", type);
+    const char *output_keys[] = {"count_key", "registered_count_key", "status_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *index = obj_get(action, "index");
+    if (index != NULL && (!yyjson_is_int(index) || yyjson_get_int(index) < 0))
+        return validation_error(ctx, json_path, "%s index must be non-negative", type);
+    yyjson_val *index_key = obj_get(action, "index_key");
+    if (index_key != NULL && (!yyjson_is_str(index_key) || yyjson_get_str(index_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s index_key must be a non-empty string", type);
+    yyjson_val *collection = obj_get(action, "collection");
+    if (collection != NULL && (!yyjson_is_str(collection) || yyjson_get_str(collection)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s collection must be a non-empty string", type);
+    return true;
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {

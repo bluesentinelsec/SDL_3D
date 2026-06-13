@@ -408,6 +408,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     if (runtime->owns_assets)
         slayer3d_asset_resolver_destroy(runtime->assets);
     SDL_free(runtime->base_dir);
+    SDL_free(runtime->file_base_dir);
     SDL_free(runtime->scenes);
     SDL_free(runtime->script_entries);
     SDL_free(runtime->signals);

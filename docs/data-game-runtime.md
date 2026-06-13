@@ -293,6 +293,14 @@ This keeps the shell data-authored while still giving users a stable CLI:
 `--project` selects the editor project, `--input` selects a `.slayermap.json`
 file for `open`, and `--output` selects the save target.
 
+When game data is loaded directly from a filesystem path, the runtime also
+remembers that file's parent directory as a filesystem source root even though
+normal asset-relative paths still use the resolver's virtual asset namespace.
+Data-authored editor actions such as `editor.texture.scan` can therefore use
+project-relative fallbacks like `textures` during tests or direct runner
+launches, while the editor host can override those paths through injected
+`editor.asset_source.*` scene state.
+
 For low-level debugging, the same launch can be written directly with the
 generic runner:
 

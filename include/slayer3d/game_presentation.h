@@ -55,6 +55,7 @@ extern "C"
     {
         slayer3d_texture2d texture;   /**< Loaded texture. */
         const char *image_id;         /**< Runtime-owned image asset id. */
+        char *source_path;            /**< Owned direct path or sprite id used to load this image. */
         const char *effect;           /**< Optional sprite-backed effect id. */
         float effect_delay;           /**< Seconds to wait before effect starts. */
         float effect_duration;        /**< Seconds used to ramp the effect. */

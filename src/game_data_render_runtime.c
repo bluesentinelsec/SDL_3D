@@ -137,6 +137,24 @@ bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtim
     if (runtime == NULL || id == NULL || out_image == NULL)
         return false;
 
+    const char slot_prefix[] = "image.editor_shell.texture.slot_";
+    if (SDL_strncmp(id, slot_prefix, sizeof(slot_prefix) - 1U) == 0)
+    {
+        const char *index_text = id + sizeof(slot_prefix) - 1U;
+        if (index_text[0] >= '0' && index_text[0] <= '9' && index_text[1] == '\0')
+        {
+            char key[96];
+            SDL_snprintf(key, sizeof(key), "editor.texture.slot.%c.path", index_text[0]);
+            const char *path = slayer3d_properties_get_string(runtime->scene_state, key, NULL);
+            if (path != NULL && path[0] != '\0')
+            {
+                out_image->id = id;
+                out_image->path = path;
+                return true;
+            }
+        }
+    }
+
     yyjson_val *image = find_image_json(runtime, id);
     if (!yyjson_is_obj(image))
         return false;

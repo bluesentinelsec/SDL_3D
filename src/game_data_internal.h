@@ -76,6 +76,7 @@ typedef struct slayer3d_game_data_runtime
     slayer3d_asset_resolver *assets;
     bool owns_assets;
     char *base_dir;
+    char *file_base_dir;
     slayer3d_storage_config storage_config;
     scene_entry *scenes;
     int scene_count;
