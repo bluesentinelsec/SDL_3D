@@ -614,6 +614,630 @@ static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtim
     return true;
 }
 
+static bool editor_model_extension_supported(const char *filename)
+{
+    const char *dot = filename != NULL ? SDL_strrchr(filename, '.') : NULL;
+    if (dot == NULL || dot[1] == '\0')
+        return false;
+    return SDL_strcasecmp(dot, ".obj") == 0 || SDL_strcasecmp(dot, ".gltf") == 0 || SDL_strcasecmp(dot, ".glb") == 0 ||
+           SDL_strcasecmp(dot, ".fbx") == 0;
+}
+
+typedef struct editor_actor_scan_entry
+{
+    char *filename;
+    char *path;
+    char *relative_path;
+    char id[96];
+    char label[96];
+    char model[128];
+    char mesh[48];
+    char name_prefix[128];
+    char archetype[128];
+    char group[64];
+    char tool_mode[48];
+    char classname[96];
+    char role[64];
+    char sensor_profile[64];
+    slayer3d_color color;
+    slayer3d_vec3 scale;
+    int sort_order;
+    bool scanned_model;
+} editor_actor_scan_entry;
+
+typedef struct editor_actor_scan_list
+{
+    editor_actor_scan_entry *entries;
+    int count;
+    int capacity;
+} editor_actor_scan_list;
+
+static void editor_actor_scan_list_free(editor_actor_scan_list *list)
+{
+    if (list == NULL)
+        return;
+    for (int i = 0; i < list->count; ++i)
+    {
+        SDL_free(list->entries[i].filename);
+        SDL_free(list->entries[i].path);
+        SDL_free(list->entries[i].relative_path);
+    }
+    SDL_free(list->entries);
+    SDL_zero(*list);
+}
+
+static int SDLCALL editor_actor_scan_entry_compare(const void *a, const void *b)
+{
+    const editor_actor_scan_entry *ea = (const editor_actor_scan_entry *)a;
+    const editor_actor_scan_entry *eb = (const editor_actor_scan_entry *)b;
+    if (ea->sort_order < eb->sort_order)
+        return -1;
+    if (ea->sort_order > eb->sort_order)
+        return 1;
+    return SDL_strcasecmp(ea->label, eb->label);
+}
+
+static bool editor_actor_scan_list_append_blank(editor_actor_scan_list *list, editor_actor_scan_entry **out_entry)
+{
+    if (out_entry != NULL)
+        *out_entry = NULL;
+    if (list == NULL || out_entry == NULL)
+        return false;
+    if (list->count >= list->capacity)
+    {
+        const int next_capacity = list->capacity > 0 ? list->capacity * 2 : 8;
+        editor_actor_scan_entry *next =
+            (editor_actor_scan_entry *)SDL_realloc(list->entries, (size_t)next_capacity * sizeof(*next));
+        if (next == NULL)
+            return false;
+        SDL_memset(next + list->capacity, 0, (size_t)(next_capacity - list->capacity) * sizeof(*next));
+        list->entries = next;
+        list->capacity = next_capacity;
+    }
+    editor_actor_scan_entry *entry = &list->entries[list->count++];
+    SDL_zero(*entry);
+    *out_entry = entry;
+    return true;
+}
+
+static bool editor_actor_scan_list_append_builtin(editor_actor_scan_list *list, const char *id, const char *label,
+                                                  const char *mesh, const char *model, const char *name_prefix,
+                                                  const char *archetype, const char *group, const char *tool_mode,
+                                                  const char *classname, const char *role, const char *sensor_profile,
+                                                  slayer3d_color color, slayer3d_vec3 scale, int sort_order)
+{
+    editor_actor_scan_entry *entry = NULL;
+    if (!editor_actor_scan_list_append_blank(list, &entry))
+        return false;
+    SDL_strlcpy(entry->id, id != NULL ? id : "", sizeof(entry->id));
+    SDL_strlcpy(entry->label, label != NULL ? label : "", sizeof(entry->label));
+    SDL_strlcpy(entry->mesh, mesh != NULL ? mesh : "box", sizeof(entry->mesh));
+    SDL_strlcpy(entry->model, model != NULL ? model : "", sizeof(entry->model));
+    SDL_strlcpy(entry->name_prefix, name_prefix != NULL ? name_prefix : "actor.editor_shell",
+                sizeof(entry->name_prefix));
+    SDL_strlcpy(entry->archetype, archetype != NULL ? archetype : "", sizeof(entry->archetype));
+    SDL_strlcpy(entry->group, group != NULL ? group : "Actors", sizeof(entry->group));
+    SDL_strlcpy(entry->tool_mode, tool_mode != NULL ? tool_mode : "actor_selected", sizeof(entry->tool_mode));
+    SDL_strlcpy(entry->classname, classname != NULL ? classname : id, sizeof(entry->classname));
+    SDL_strlcpy(entry->role, role != NULL ? role : "actor", sizeof(entry->role));
+    SDL_strlcpy(entry->sensor_profile, sensor_profile != NULL ? sensor_profile : "", sizeof(entry->sensor_profile));
+    entry->color = color;
+    entry->scale = scale;
+    entry->sort_order = sort_order;
+    return entry->id[0] != '\0' && entry->label[0] != '\0';
+}
+
+static bool editor_actor_scan_model_id_used(const editor_actor_scan_list *list, const char *model)
+{
+    if (list == NULL || model == NULL || model[0] == '\0')
+        return false;
+    for (int i = 0; i < list->count; ++i)
+    {
+        if (list->entries[i].model[0] != '\0' && SDL_strcmp(list->entries[i].model, model) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool editor_model_asset_id_for_filename(const slayer3d_game_data_runtime *runtime, const char *filename,
+                                               char *buffer, size_t buffer_size)
+{
+    if (buffer != NULL && buffer_size > 0U)
+        buffer[0] = '\0';
+    yyjson_val *models = obj_get(obj_get(runtime_root(runtime), "assets"), "models");
+    for (size_t i = 0; yyjson_is_arr(models) && i < yyjson_arr_size(models); ++i)
+    {
+        yyjson_val *model = yyjson_arr_get(models, i);
+        const char *id = json_string(model, "id", NULL);
+        const char *path = json_string(model, "path", NULL);
+        if (id == NULL || path == NULL)
+            continue;
+        if (SDL_strcasecmp(editor_basename(path), filename) == 0)
+        {
+            SDL_strlcpy(buffer, id, buffer_size);
+            return buffer != NULL && buffer[0] != '\0';
+        }
+    }
+    return false;
+}
+
+static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, slayer3d_game_data_runtime *runtime,
+                                                const char *directory, const char *relative_directory,
+                                                const char *filename, const char *model_prefix)
+{
+    if (list == NULL || directory == NULL || filename == NULL || !editor_model_extension_supported(filename))
+        return true;
+
+    char slug[96];
+    char label[96];
+    char model[128];
+    editor_texture_slug_from_filename(filename, slug, sizeof(slug));
+    editor_texture_label_from_filename(filename, label, sizeof(label));
+    if (!editor_model_asset_id_for_filename(runtime, filename, model, sizeof(model)))
+        SDL_snprintf(model, sizeof(model), "%s%s", model_prefix != NULL ? model_prefix : "model.project.actor.", slug);
+    if (editor_actor_scan_model_id_used(list, model))
+        return true;
+
+    editor_actor_scan_entry *entry = NULL;
+    if (!editor_actor_scan_list_append_blank(list, &entry))
+        return false;
+    entry->filename = SDL_strdup(filename);
+    entry->path = editor_path_join(directory, filename);
+    entry->relative_path = editor_path_join(relative_directory != NULL ? relative_directory : "", filename);
+    SDL_strlcpy(entry->id, slug, sizeof(entry->id));
+    SDL_strlcpy(entry->label, label, sizeof(entry->label));
+    SDL_strlcpy(entry->mesh, "box", sizeof(entry->mesh));
+    SDL_strlcpy(entry->model, model, sizeof(entry->model));
+    SDL_snprintf(entry->name_prefix, sizeof(entry->name_prefix), "actor.editor_shell.%s", slug);
+    SDL_strlcpy(entry->group, "Meshes", sizeof(entry->group));
+    SDL_strlcpy(entry->tool_mode, "actor_model", sizeof(entry->tool_mode));
+    SDL_strlcpy(entry->classname, slug, sizeof(entry->classname));
+    SDL_strlcpy(entry->role, "actor", sizeof(entry->role));
+    SDL_strlcpy(entry->sensor_profile, "model", sizeof(entry->sensor_profile));
+    entry->color = (slayer3d_color){112, 178, 255, 210};
+    entry->scale = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    entry->sort_order = 1000 + list->count;
+    entry->scanned_model = true;
+    if (entry->filename == NULL || entry->path == NULL || entry->relative_path == NULL)
+    {
+        SDL_free(entry->filename);
+        SDL_free(entry->path);
+        SDL_free(entry->relative_path);
+        --list->count;
+        SDL_zero(*entry);
+        return false;
+    }
+    return true;
+}
+
+typedef struct editor_actor_enumerate_context
+{
+    editor_actor_scan_list *list;
+    slayer3d_game_data_runtime *runtime;
+    const char *relative_directory;
+    const char *model_prefix;
+    bool ok;
+} editor_actor_enumerate_context;
+
+static SDL_EnumerationResult SDLCALL editor_actor_enumerate_directory_entry(void *userdata, const char *dirname,
+                                                                            const char *fname)
+{
+    editor_actor_enumerate_context *ctx = (editor_actor_enumerate_context *)userdata;
+    if (ctx == NULL || ctx->list == NULL)
+        return SDL_ENUM_FAILURE;
+    char *path = editor_path_join(dirname, fname);
+    SDL_PathInfo file_info;
+    SDL_zero(file_info);
+    const bool is_file = path != NULL && SDL_GetPathInfo(path, &file_info) && file_info.type == SDL_PATHTYPE_FILE;
+    SDL_free(path);
+    if (!is_file)
+        return SDL_ENUM_CONTINUE;
+    if (!editor_actor_scan_list_append_model(ctx->list, ctx->runtime, dirname, ctx->relative_directory, fname,
+                                             ctx->model_prefix))
+    {
+        ctx->ok = false;
+        return SDL_ENUM_FAILURE;
+    }
+    return SDL_ENUM_CONTINUE;
+}
+
+static bool editor_scan_actor_model_directory(slayer3d_game_data_runtime *runtime, const char *directory,
+                                              const char *relative_directory, const char *model_prefix,
+                                              editor_actor_scan_list *list)
+{
+    if (directory == NULL || directory[0] == '\0' || list == NULL)
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (!SDL_GetPathInfo(directory, &info) || info.type != SDL_PATHTYPE_DIRECTORY)
+        return false;
+
+    editor_actor_enumerate_context enumerate_ctx = {list, runtime, relative_directory, model_prefix, true};
+    return SDL_EnumerateDirectory(directory, editor_actor_enumerate_directory_entry, &enumerate_ctx) &&
+           enumerate_ctx.ok;
+}
+
+static bool editor_actor_collection_publish_row(slayer3d_game_data_runtime *runtime, const char *collection,
+                                                int row_index, const editor_actor_scan_entry *entry)
+{
+    if (runtime == NULL || collection == NULL || entry == NULL)
+        return false;
+    return slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "id", entry->id) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "label", entry->label) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "mesh", entry->mesh) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "model", entry->model) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "name_prefix",
+                                                            entry->name_prefix) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "archetype",
+                                                            entry->archetype) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "group", entry->group) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "tool_mode",
+                                                            entry->tool_mode) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "classname",
+                                                            entry->classname) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "role", entry->role) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "sensor_profile",
+                                                            entry->sensor_profile) &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "path",
+                                                            entry->path != NULL ? entry->path : "") &&
+           slayer3d_game_data_runtime_collection_set_string(runtime, collection, row_index, "relative_path",
+                                                            entry->relative_path != NULL ? entry->relative_path : "") &&
+           slayer3d_game_data_runtime_collection_set_int(runtime, collection, row_index, "color_r", entry->color.r) &&
+           slayer3d_game_data_runtime_collection_set_int(runtime, collection, row_index, "color_g", entry->color.g) &&
+           slayer3d_game_data_runtime_collection_set_int(runtime, collection, row_index, "color_b", entry->color.b) &&
+           slayer3d_game_data_runtime_collection_set_int(runtime, collection, row_index, "color_a", entry->color.a) &&
+           slayer3d_game_data_runtime_collection_set_float(runtime, collection, row_index, "scale_x", entry->scale.x) &&
+           slayer3d_game_data_runtime_collection_set_float(runtime, collection, row_index, "scale_y", entry->scale.y) &&
+           slayer3d_game_data_runtime_collection_set_float(runtime, collection, row_index, "scale_z", entry->scale.z) &&
+           slayer3d_game_data_runtime_collection_set_bool(runtime, collection, row_index, "scanned_model",
+                                                          entry->scanned_model);
+}
+
+static void editor_actor_clear_slots(slayer3d_properties *scene_state, int slot_count)
+{
+    for (int i = 0; scene_state != NULL && i < slot_count; ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.id", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.label", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.model", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.group", i);
+        slayer3d_properties_set_string(scene_state, key, "");
+        SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.available", i);
+        slayer3d_properties_set_bool(scene_state, key, false);
+    }
+}
+
+static void editor_actor_publish_slot(slayer3d_properties *scene_state, int slot_index,
+                                      const editor_actor_scan_entry *entry)
+{
+    if (scene_state == NULL || entry == NULL)
+        return;
+    char key[128];
+    SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.id", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->id);
+    SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.label", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->label);
+    SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.model", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->model);
+    SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.group", slot_index);
+    slayer3d_properties_set_string(scene_state, key, entry->group);
+    SDL_snprintf(key, sizeof(key), "editor.actor.slot.%d.available", slot_index);
+    slayer3d_properties_set_bool(scene_state, key, true);
+}
+
+static const slayer3d_value *editor_actor_collection_value(const runtime_collection *collection, int row_index,
+                                                           const char *field)
+{
+    if (collection == NULL || row_index < 0 || row_index >= collection->row_count || field == NULL ||
+        collection->rows[row_index] == NULL)
+    {
+        return NULL;
+    }
+    return slayer3d_properties_get_value(collection->rows[row_index], field);
+}
+
+static int editor_actor_collection_int(const runtime_collection *collection, int row_index, const char *field,
+                                       int fallback)
+{
+    const slayer3d_value *value = editor_actor_collection_value(collection, row_index, field);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SLAYER3D_VALUE_INT)
+        return value->as_int;
+    if (value->type == SLAYER3D_VALUE_FLOAT)
+        return (int)value->as_float;
+    return fallback;
+}
+
+static float editor_actor_collection_float(const runtime_collection *collection, int row_index, const char *field,
+                                           float fallback)
+{
+    const slayer3d_value *value = editor_actor_collection_value(collection, row_index, field);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SLAYER3D_VALUE_FLOAT)
+        return value->as_float;
+    if (value->type == SLAYER3D_VALUE_INT)
+        return (float)value->as_int;
+    return fallback;
+}
+
+static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runtime, const char *collection_name,
+                                               int index)
+{
+    const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
+    char id[128];
+    char label[128];
+    char tool_mode[64];
+    if (!runtime_collection_field_to_string(collection, index, "id", id, sizeof(id)) || id[0] == '\0')
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "actor slot is empty");
+        return true;
+    }
+    if (!runtime_collection_field_to_string(collection, index, "label", label, sizeof(label)))
+        SDL_strlcpy(label, "actor", sizeof(label));
+    if (!runtime_collection_field_to_string(collection, index, "tool_mode", tool_mode, sizeof(tool_mode)) ||
+        tool_mode[0] == '\0')
+    {
+        SDL_strlcpy(tool_mode, "actor_selected", sizeof(tool_mode));
+    }
+
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", index);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
+    char message[192];
+    SDL_snprintf(message, sizeof(message), "selected actor %s", label);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    return true;
+}
+
+static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *directory_key = json_string(action, "directory_key", "editor.asset_source.models.path");
+    const char *relative_directory_key =
+        json_string(action, "relative_directory_key", "editor.asset_source.models.relative");
+    const char *fallback_directory = json_string(action, "directory", "models");
+    const char *fallback_relative_directory = json_string(action, "relative_directory", "models");
+    const char *collection = json_string(action, "collection", "editor.actors");
+    const char *model_prefix = json_string(action, "model_prefix", "model.project.actor.");
+    const int slot_count = SDL_max(0, json_int(action, "slot_count", 6));
+    const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
+    const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
+    char *resolved_fallback_directory = NULL;
+    if (directory == NULL || directory[0] == '\0')
+    {
+        resolved_fallback_directory = editor_resolve_directory(runtime, fallback_directory);
+        directory = resolved_fallback_directory != NULL ? resolved_fallback_directory : "";
+    }
+    if (relative_directory == NULL || relative_directory[0] == '\0')
+        relative_directory = fallback_relative_directory != NULL ? fallback_relative_directory : "";
+
+    editor_actor_clear_slots(runtime->scene_state, slot_count);
+    slayer3d_game_data_runtime_collection_clear(runtime, collection);
+
+    editor_actor_scan_list list;
+    SDL_zero(list);
+    bool ok = editor_actor_scan_list_append_builtin(
+        &list, "player_capsule", "Player", "capsule", "", "actor.editor_shell.player",
+        "actor.editor_shell.player_placeholder", "Placeholders", "actor_player", "player_start_placeholder", "player",
+        "player", (slayer3d_color){80, 235, 130, 205}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 0);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "opponent_rectangle", "Opponent", "rectangle", "", "actor.editor_shell.opponent",
+                   "actor.editor_shell.opponent_placeholder", "Placeholders", "actor_opponent", "opponent_placeholder",
+                   "opponent", "enemy", (slayer3d_color){235, 128, 84, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "simple_robot", "Robot", "box", "model.editor_shell.simple_robot", "actor.editor_shell.robot",
+                   "actor.editor_shell.simple_robot", "Meshes", "actor_robot", "simple_robot", "actor", "robot",
+                   (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 2);
+    const bool scanned = editor_scan_actor_model_directory(runtime, directory, relative_directory, model_prefix, &list);
+    if (ok && list.count > 1)
+        SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);
+
+    int published_count = 0;
+    int selected_index = -1;
+    const char *current_actor = slayer3d_properties_get_string(runtime->scene_state, "editor.actor.selected", "");
+    for (int i = 0; ok && i < list.count; ++i)
+    {
+        const editor_actor_scan_entry *entry = &list.entries[i];
+        ok = editor_actor_collection_publish_row(runtime, collection, published_count, entry);
+        if (!ok)
+            break;
+        if (published_count < slot_count)
+            editor_actor_publish_slot(runtime->scene_state, published_count, entry);
+        if (current_actor != NULL && current_actor[0] != '\0' && SDL_strcmp(current_actor, entry->id) == 0)
+            selected_index = published_count;
+        ++published_count;
+    }
+
+    if (ok && published_count > 0)
+    {
+        if (selected_index < 0)
+            selected_index = 0;
+        (void)editor_actor_select_collection_row(runtime, collection, selected_index);
+    }
+    else
+    {
+        slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", -1);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", "");
+    }
+
+    char status[128];
+    if (!ok)
+        SDL_strlcpy(status, "actor browser allocation failed", sizeof(status));
+    else
+        SDL_snprintf(status, sizeof(status), "loaded %d actor%s%s", published_count, published_count == 1 ? "" : "s",
+                     scanned ? "" : " (model directory unavailable)");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.browser.count", ok ? published_count : 0);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.scan.status", status);
+    editor_set_int_output(runtime->scene_state, outputs, "count_key", ok ? published_count : 0);
+    editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
+    editor_actor_scan_list_free(&list);
+    SDL_free(resolved_fallback_directory);
+    return true;
+}
+
+static bool execute_editor_actor_select_index_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    const char *collection_name = json_string(action, "collection", "editor.actors");
+    const char *index_key = json_string(action, "index_key", NULL);
+    const int index = index_key != NULL ? slayer3d_properties_get_int(runtime->scene_state, index_key, 0)
+                                        : json_int(action, "index", 0);
+    const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
+    char model[128];
+    if (runtime_collection_field_to_string(collection, index, "model", model, sizeof(model)) && model[0] != '\0')
+    {
+        char warmup_key[192];
+        SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.model.%s.pending", model);
+        if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "actor model loading");
+            return true;
+        }
+        SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.model.%s.failed", model);
+        if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "actor model unavailable");
+            return true;
+        }
+    }
+    return editor_actor_select_collection_row(runtime, collection_name, index);
+}
+
+static void editor_actor_publish_place_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
+                                               const char *message, const char *name)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
+    editor_set_string_output(scene_state, outputs, "actor_key", ok ? name : "");
+    editor_set_bool_output(scene_state, outputs, "dirty_key", runtime != NULL ? runtime->editor_actor_dirty : false);
+    editor_set_int_output(scene_state, outputs, "revision_key",
+                          runtime != NULL ? (int)runtime->editor_actor_revision : 0);
+    editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_actor_count : 0);
+}
+
+static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL || runtime->scene_state == NULL)
+    {
+        editor_actor_publish_place_outputs(runtime, outputs, false, "actor placement requires runtime", "");
+        return false;
+    }
+
+    const char *collection_name = json_string(action, "collection", "editor.actors");
+    const char *index_key = json_string(action, "index_key", "editor.actor.selected_index");
+    const int index = slayer3d_properties_get_int(runtime->scene_state, index_key, 0);
+    const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
+    char id[128];
+    char label[128];
+    char name_prefix[128];
+    char scene[128];
+    char archetype[128];
+    char mesh[64];
+    char model[128];
+    char group[96];
+    char classname[128];
+    char role[96];
+    char sensor_profile[96];
+    char relative_path[256];
+    if (!runtime_collection_field_to_string(collection, index, "id", id, sizeof(id)) || id[0] == '\0')
+    {
+        editor_actor_publish_place_outputs(runtime, outputs, false, "select an actor before placing", "");
+        return true;
+    }
+    (void)runtime_collection_field_to_string(collection, index, "label", label, sizeof(label));
+    (void)runtime_collection_field_to_string(collection, index, "name_prefix", name_prefix, sizeof(name_prefix));
+    (void)runtime_collection_field_to_string(collection, index, "archetype", archetype, sizeof(archetype));
+    (void)runtime_collection_field_to_string(collection, index, "mesh", mesh, sizeof(mesh));
+    (void)runtime_collection_field_to_string(collection, index, "model", model, sizeof(model));
+    (void)runtime_collection_field_to_string(collection, index, "group", group, sizeof(group));
+    (void)runtime_collection_field_to_string(collection, index, "classname", classname, sizeof(classname));
+    (void)runtime_collection_field_to_string(collection, index, "role", role, sizeof(role));
+    (void)runtime_collection_field_to_string(collection, index, "sensor_profile", sensor_profile,
+                                             sizeof(sensor_profile));
+    (void)runtime_collection_field_to_string(collection, index, "relative_path", relative_path, sizeof(relative_path));
+    SDL_strlcpy(scene, json_string(action, "scene", ""), sizeof(scene));
+
+    slayer3d_properties *properties = slayer3d_properties_create();
+    if (properties == NULL)
+    {
+        editor_actor_publish_place_outputs(runtime, outputs, false, "failed to allocate actor properties", "");
+        return true;
+    }
+    slayer3d_properties_set_string(properties, "classname", classname[0] != '\0' ? classname : id);
+    slayer3d_properties_set_string(properties, "role", role[0] != '\0' ? role : "actor");
+    if (sensor_profile[0] != '\0')
+        slayer3d_properties_set_string(properties, "sensor_profile", sensor_profile);
+    slayer3d_properties_set_string(properties, "actor_browser_id", id);
+    if (model[0] != '\0')
+        slayer3d_properties_set_string(properties, "model", model);
+    if (relative_path[0] != '\0')
+        slayer3d_properties_set_string(properties, "model_path", relative_path);
+
+    slayer3d_game_data_place_editor_actor_desc desc;
+    SDL_zero(desc);
+    desc.name_prefix = name_prefix[0] != '\0' ? name_prefix : "actor.editor_shell";
+    desc.scene = scene[0] != '\0' ? scene : NULL;
+    desc.display_name = label[0] != '\0' ? label : id;
+    desc.archetype = archetype[0] != '\0' ? archetype : NULL;
+    desc.mesh = mesh[0] != '\0' ? mesh : "box";
+    desc.model = model[0] != '\0' ? model : NULL;
+    desc.group = group[0] != '\0' ? group : "Actors";
+    desc.scale = slayer3d_vec3_make(editor_actor_collection_float(collection, index, "scale_x", 1.0f),
+                                    editor_actor_collection_float(collection, index, "scale_y", 1.0f),
+                                    editor_actor_collection_float(collection, index, "scale_z", 1.0f));
+    desc.has_scale = true;
+    desc.color =
+        (slayer3d_color){(Uint8)SDL_clamp(editor_actor_collection_int(collection, index, "color_r", 120), 0, 255),
+                         (Uint8)SDL_clamp(editor_actor_collection_int(collection, index, "color_g", 200), 0, 255),
+                         (Uint8)SDL_clamp(editor_actor_collection_int(collection, index, "color_b", 255), 0, 255),
+                         (Uint8)SDL_clamp(editor_actor_collection_int(collection, index, "color_a", 210), 0, 255)};
+    desc.has_color = true;
+    desc.properties = properties;
+    const char *position_from = json_string(action, "position_from", "placement_preview");
+    if (SDL_strcmp(position_from, "placement_preview") == 0)
+    {
+        desc.position = runtime->editor_placement_preview.anchor;
+        desc.has_position = editor_placement_preview_active_for_scene(runtime);
+    }
+    else if (SDL_strcmp(position_from, "selection_point") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit)
+        {
+            desc.position = selection.point;
+            desc.has_position = true;
+        }
+    }
+
+    char actor_name[128];
+    char error[192];
+    const bool ok =
+        slayer3d_game_data_place_editor_actor(runtime, &desc, actor_name, sizeof(actor_name), error, sizeof(error));
+    slayer3d_properties_destroy(properties);
+    char message[192];
+    if (ok)
+        SDL_snprintf(message, sizeof(message), "%s actor placed", label[0] != '\0' ? label : id);
+    editor_actor_publish_place_outputs(runtime, outputs, ok, ok ? message : error, ok ? actor_name : "");
+    return true;
+}
+
 static char *debug_parent_directory(const char *path)
 {
     if (path == NULL)
@@ -1538,6 +2162,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.texture.select_index") == 0)
         return execute_editor_texture_select_index_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.actor.scan") == 0)
+        return execute_editor_actor_scan_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.actor.select_index") == 0)
+        return execute_editor_actor_select_index_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.actor.place_selected") == 0)
+        return execute_editor_actor_place_selected_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);

@@ -174,12 +174,30 @@ bool slayer3d_game_data_get_model_asset(const slayer3d_game_data_runtime *runtim
         return false;
 
     yyjson_val *model = find_model_json(runtime, id);
-    if (!yyjson_is_obj(model))
-        return false;
+    if (yyjson_is_obj(model))
+    {
+        out_model->id = json_string(model, "id", NULL);
+        out_model->path = json_string(model, "path", NULL);
+        if (out_model->id != NULL && out_model->path != NULL)
+            return true;
+    }
 
-    out_model->id = json_string(model, "id", NULL);
-    out_model->path = json_string(model, "path", NULL);
-    return out_model->id != NULL && out_model->path != NULL;
+    const runtime_collection *actor_models = find_runtime_collection_const(runtime, "editor.actors");
+    for (int i = 0; actor_models != NULL && i < actor_models->row_count; ++i)
+    {
+        slayer3d_properties *row = actor_models->rows[i];
+        const char *model_id = slayer3d_properties_get_string(row, "model", NULL);
+        if (model_id == NULL || SDL_strcmp(model_id, id) != 0)
+            continue;
+        const char *path = slayer3d_properties_get_string(row, "path", NULL);
+        if (path != NULL && path[0] != '\0')
+        {
+            out_model->id = model_id;
+            out_model->path = path;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool slayer3d_game_data_for_each_model_asset(const slayer3d_game_data_runtime *runtime,

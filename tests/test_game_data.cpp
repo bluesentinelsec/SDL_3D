@@ -18269,6 +18269,60 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path model_root = unique_test_dir("editor_actor_model_source");
+    const std::filesystem::path model_dir = model_root / "models";
+    std::filesystem::create_directories(model_dir);
+    write_text(model_dir / "alpha_guard.obj", "o AlphaGuard\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+    write_text(model_dir / "notes.txt", "ignored");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", model_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
+
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 4);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 4 actors");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.3.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Alpha Guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.model", ""),
+                 "model.project.actor.alpha_guard");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.4.available", true));
+
+    slayer3d_game_data_model_asset scanned_model{};
+    ASSERT_TRUE(slayer3d_game_data_get_model_asset(runtime, "model.project.actor.alpha_guard", &scanned_model));
+    EXPECT_STREQ(scanned_model.path, (model_dir / "alpha_guard.obj").string().c_str());
+
+    emit_signal("signal.editor.actor.select_slot.3");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 3);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "alpha_guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_model");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "alpha_guard");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(model_root);
+}
+
 TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFailed)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

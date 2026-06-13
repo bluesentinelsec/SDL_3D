@@ -1782,6 +1782,47 @@ action updates `editor.palette.material.cursor`, `editor.texture.material`, and
 `asset_warmup.ui_image.image.editor_shell.texture.slot_0.pending` prevents
 selecting textures that are still loading or failed.
 
+Use `editor.actor.scan` to populate the editor Actor browser from built-in
+primitive actors plus a configured model directory. By default it reads
+`editor.asset_source.models.path` and `editor.asset_source.models.relative`,
+falling back to `models` relative to the loaded game-data file. The scan
+publishes rows into a runtime collection and mirrors the first page into
+`editor.actor.slot.N.*` scene-state keys so authored UI can bind labels,
+selection buttons, and model previews. Supported model files currently include
+`.obj`, `.gltf`, `.glb`, and `.fbx`.
+
+```json
+{
+  "type": "editor.actor.scan",
+  "collection": "editor.actors",
+  "slot_count": 6,
+  "outputs": {
+    "count_key": "editor.actor.browser.count",
+    "status_key": "editor.actor.scan.status"
+  }
+}
+```
+
+Rows contain generic placement metadata such as `id`, `label`, `group`, `mesh`,
+`model`, `name_prefix`, `classname`, `role`, `sensor_profile`, `color_*`,
+`scale_*`, `path`, and `relative_path`. Scanned model rows get stable model ids
+such as `model.project.actor.alpha_guard`; runtime rendering resolves those ids
+from the actor browser collection while placed map data can preserve the
+project-relative `model_path` property.
+
+Use `editor.actor.select_index` to choose a scanned actor row by index. It
+updates `editor.actor.selected_index`, `editor.actor.selected`,
+`editor.palette.game_object.cursor`, `editor.mode`, and `editor.tool.mode`. If a
+model-backed row is still warming up or has failed, selection is held back and
+`editor.tool.last_action` reports `actor model loading` or
+`actor model unavailable`.
+
+Use `editor.actor.place_selected` to place the currently selected actor row into
+an editor scene. The action copies the row's generic defaults into the placed
+actor, including mesh/model, display group, color/alpha, scale, class/role
+properties, `actor_browser_id`, and project-relative `model_path` when present.
+Position can come from `placement_preview` or `selection_point`.
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted

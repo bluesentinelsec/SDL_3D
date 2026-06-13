@@ -66,7 +66,11 @@ static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
 static bool editor_actor_select_action(const char *action)
 {
     static const char *prefix = "editor.actor.select.";
-    return action != NULL && SDL_strncmp(action, prefix, SDL_strlen(prefix)) == 0 && action[SDL_strlen(prefix)] != '\0';
+    static const char *slot_prefix = "editor.actor.select_slot.";
+    return action != NULL &&
+           ((SDL_strncmp(action, prefix, SDL_strlen(prefix)) == 0 && action[SDL_strlen(prefix)] != '\0') ||
+            (SDL_strncmp(action, slot_prefix, SDL_strlen(slot_prefix)) == 0 &&
+             action[SDL_strlen(slot_prefix)] != '\0'));
 }
 
 static bool editor_actor_placement_mode(const slayer3d_game_data_runtime *runtime)
