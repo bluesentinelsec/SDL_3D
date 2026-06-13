@@ -50,6 +50,11 @@ data/
     options.scene.json
   scripts/
     rules.lua
+  textures/
+  models/
+  sprites/
+  skyboxes/
+  effects/
   images/
   audio/
   shaders/
@@ -57,6 +62,11 @@ data/
 
 This is guidance, not a required exact tree. Use fewer files for small games
 and add folders only when they make ownership clearer.
+
+Brush-editor projects may also include a `slayer3d.project.json` manifest at
+the project root. Its optional `asset_sources` object points the standalone
+editor at texture, model, sprite, skybox, and effect directories. Keep those
+paths project-relative where possible so saved map references remain portable.
 
 ## Root File Responsibilities
 

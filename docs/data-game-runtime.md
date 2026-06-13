@@ -277,10 +277,19 @@ identity errors remain hard failures because stale runtime brush geometry must
 not become the shipped level.
 
 The manifest currently carries `data_root`, `editor_entry`, optional
-`media_root`, and optional `test_run_output`. The editor host translates those
-fields into a normal runner launch and injects `editor.command`,
-`editor.input.path`, `editor.save.path`, and `editor.test_run.path` as scene
-state. This keeps the shell data-authored while still giving users a stable CLI:
+`media_root`, optional `asset_sources`, and optional `test_run_output`.
+`asset_sources` may define `textures`, `models`, `sprites`, `skyboxes`, and
+`effects` directories. Missing entries default to the same directory name under
+`media_root` when `media_root` is present, or to project-local directories with
+those names otherwise. Missing directories do not abort editor startup; the host
+publishes `editor.asset_source.<kind>.available` and
+`editor.asset_source.any_missing` so data-authored UI can surface path controls.
+
+The editor host translates the manifest into a normal runner launch and injects
+`editor.command`, `editor.input.path`, `editor.save.path`,
+`editor.test_run.path`, `editor.project.dir`, `editor.project.data_root`, and
+`editor.asset_source.<kind>.path` / `.relative` / `.available` as scene state.
+This keeps the shell data-authored while still giving users a stable CLI:
 `--project` selects the editor project, `--input` selects a `.slayermap.json`
 file for `open`, and `--output` selects the save target.
 

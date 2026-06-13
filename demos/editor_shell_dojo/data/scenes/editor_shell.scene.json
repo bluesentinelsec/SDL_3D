@@ -1461,6 +1461,106 @@
         ]
       },
       {
+        "id": "ui.editor_shell.asset_sources.panel",
+        "type": "panel",
+        "x": 930,
+        "y": 420,
+        "w": 338,
+        "h": 106,
+        "layer": 120,
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "editor.asset_source.any_missing",
+          "op": "==",
+          "value": true,
+          "default": false
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.asset_sources.title",
+            "type": "label",
+            "x": 10,
+            "y": 7,
+            "w": 318,
+            "h": 18,
+            "text": "Missing Asset Sources",
+            "text_scale": 0.42,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.asset_sources.textures",
+            "type": "label",
+            "x": 10,
+            "y": 27,
+            "w": 318,
+            "h": 14,
+            "format": "textures: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.asset_source.textures.relative", "default": "textures" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.asset_source.textures.available", "op": "==", "value": false, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.asset_sources.models",
+            "type": "label",
+            "x": 10,
+            "y": 41,
+            "w": 318,
+            "h": 14,
+            "format": "models: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.asset_source.models.relative", "default": "models" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.asset_source.models.available", "op": "==", "value": false, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.asset_sources.sprites",
+            "type": "label",
+            "x": 10,
+            "y": 55,
+            "w": 318,
+            "h": 14,
+            "format": "sprites: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.asset_source.sprites.relative", "default": "sprites" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.asset_source.sprites.available", "op": "==", "value": false, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.asset_sources.skyboxes",
+            "type": "label",
+            "x": 10,
+            "y": 69,
+            "w": 318,
+            "h": 14,
+            "format": "skyboxes: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.asset_source.skyboxes.relative", "default": "skyboxes" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.asset_source.skyboxes.available", "op": "==", "value": false, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.asset_sources.effects",
+            "type": "label",
+            "x": 10,
+            "y": 83,
+            "w": 318,
+            "h": 14,
+            "format": "effects: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.asset_source.effects.relative", "default": "effects" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.asset_source.effects.available", "op": "==", "value": false, "default": true }
+          }
+        ]
+      },
+      {
         "id": "ui.editor_shell.console.panel",
         "type": "panel",
         "x": 0,

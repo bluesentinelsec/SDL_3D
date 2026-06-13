@@ -4,5 +4,12 @@
   "data_root": "data",
   "editor_entry": "asset://editor_shell_dojo.game.json",
   "media_root": "../../media",
+  "asset_sources": {
+    "textures": "data/textures",
+    "models": "data/models",
+    "sprites": "../../media/sprites",
+    "skyboxes": "data/skyboxes",
+    "effects": "data/effects"
+  },
   "test_run_output": "../../build/editor_shell_dojo/test-run.json"
 }
