@@ -711,7 +711,7 @@
         "x": 12,
         "y": 92,
         "w": 308,
-        "h": 460,
+        "h": 612,
         "layer": 120,
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
         "children": [
@@ -862,11 +862,133 @@
             ]
           },
           {
+            "id": "ui.editor_shell.left_inspector.properties.title",
+            "type": "label",
+            "x": 12,
+            "y": 246,
+            "w": 272,
+            "h": 18,
+            "layer": 121,
+            "text": "Properties"
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property0",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 274,
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property0.label",
+                "type": "label",
+                "w": 96,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.key", "default": "" }]
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property0.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.value", "default": "" }]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property1",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 300,
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property1.label",
+                "type": "label",
+                "w": 96,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.key", "default": "" }]
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property1.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.value", "default": "" }]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property2",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 326,
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property2.label",
+                "type": "label",
+                "w": 96,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.key", "default": "" }]
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property2.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.value", "default": "" }]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property3",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 352,
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property3.label",
+                "type": "label",
+                "w": 96,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.key", "default": "" }]
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property3.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.value", "default": "" }]
+              }
+            ]
+          },
+          {
             "id": "ui.editor_shell.left_inspector.row.vertex",
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 244,
+            "y": 384,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -887,7 +1009,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 274,
+            "y": 414,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -913,7 +1035,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 304,
+            "y": 444,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -934,7 +1056,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 334,
+            "y": 474,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -959,7 +1081,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 424,
+            "y": 564,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -984,7 +1106,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 364,
+            "y": 504,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -1005,7 +1127,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 394,
+            "y": 534,
             "w": 272,
             "h": 26,
             "layer": 121,

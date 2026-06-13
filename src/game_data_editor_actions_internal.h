@@ -59,6 +59,9 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
 bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const slayer3d_properties *payload);
+bool slayer3d_game_data_remove_editor_property_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
                                        const char *message, bool publish_result);
 bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer, size_t buffer_size);

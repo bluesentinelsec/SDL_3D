@@ -147,6 +147,8 @@ bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec
                          slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
+void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_editor_selection *selection, int slot_count);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,

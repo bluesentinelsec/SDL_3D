@@ -1823,6 +1823,25 @@ actor, including mesh/model, display group, color/alpha, scale, class/role
 properties, `actor_browser_id`, and project-relative `model_path` when present.
 Position can come from `placement_preview` or `selection_point`.
 
+Use `editor.property.set` and `editor.property.remove` to mutate arbitrary
+designer-authored key/value pairs on editor objects. The first implementation
+supports `target_type: "editor_actor"` with `target` or `target_from_state`, and
+`target_type: "selection"` for the selected editor actor. Keys can come from
+`key` or `key_from_state`; values can be scalar JSON, vec3/color arrays,
+`value_from_state`, or `value_from_payload`. Selection publishing mirrors the
+first property slots into `editor.property.slot.N.key`, `.type`, `.value`, and
+`.available` for generic inspector UI.
+
+```json
+{
+  "type": "editor.property.set",
+  "target_type": "editor_actor",
+  "target_from_state": "editor.selection.element",
+  "key": "opens_when",
+  "value": "all_enemies_dead"
+}
+```
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted
@@ -1846,9 +1865,10 @@ brush editing state exactly. Native editor hosts can call
 `slayer3d_game_data_export_editable_level_map_json()` or
 `slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
 successful native save marks both the selected brush world and player-start
-collection clean at their current revisions. Map export requires a source-backed
-brush world and runs source/compiled identity checks before writing JSON, so
-stale runtime-only brush data cannot become the saved level.
+collection clean at their current revisions, and marks placed editor actors clean
+after their editable data is written. Map export requires a source-backed brush
+world and runs source/compiled identity checks before writing JSON, so stale
+runtime-only brush data cannot become the saved level.
 
 ```json
 {

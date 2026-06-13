@@ -997,6 +997,8 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.actor.scan", validate_editor_actor_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.select_index", validate_editor_actor_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.place_selected", validate_editor_actor_place_selected_action),
+        ACTION_RULE_EXACT_HANDLER("editor.property.set", validate_editor_property_set_action),
+        ACTION_RULE_EXACT_HANDLER("editor.property.remove", validate_editor_property_remove_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.shear_selected", validate_editor_selection_shear_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.run", validate_editor_selection_run_action),
         ACTION_RULE_EXACT_HANDLER("editor.command.preview", validate_editor_command_preview_action),

@@ -67,6 +67,55 @@ static bool export_add_optional_string(yyjson_mut_doc *doc, yyjson_mut_val *obj,
     return value == NULL || value[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, key, value);
 }
 
+static bool export_add_property_value(yyjson_mut_doc *doc, yyjson_mut_val *properties, const char *key,
+                                      const slayer3d_value *value)
+{
+    if (doc == NULL || properties == NULL || key == NULL || value == NULL)
+        return false;
+    switch (value->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        return yyjson_mut_obj_add_int(doc, properties, key, value->as_int);
+    case SLAYER3D_VALUE_FLOAT:
+        return yyjson_mut_obj_add_real(doc, properties, key, value->as_float);
+    case SLAYER3D_VALUE_BOOL:
+        return yyjson_mut_obj_add_bool(doc, properties, key, value->as_bool);
+    case SLAYER3D_VALUE_VEC3:
+        return export_add_vec3(doc, properties, key, value->as_vec3);
+    case SLAYER3D_VALUE_STRING:
+        return yyjson_mut_obj_add_strcpy(doc, properties, key, value->as_string != NULL ? value->as_string : "");
+    case SLAYER3D_VALUE_COLOR: {
+        yyjson_mut_val *arr = yyjson_mut_arr(doc);
+        return arr != NULL && yyjson_mut_arr_add_uint(doc, arr, value->as_color.r) &&
+               yyjson_mut_arr_add_uint(doc, arr, value->as_color.g) &&
+               yyjson_mut_arr_add_uint(doc, arr, value->as_color.b) &&
+               yyjson_mut_arr_add_uint(doc, arr, value->as_color.a) &&
+               yyjson_mut_obj_add_val(doc, properties, key, arr);
+    }
+    }
+    return false;
+}
+
+static bool export_add_properties(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key,
+                                  const slayer3d_properties *properties)
+{
+    yyjson_mut_val *json = yyjson_mut_obj(doc);
+    if (json == NULL || !yyjson_mut_obj_add_val(doc, obj, key, json))
+        return false;
+    const int count = properties != NULL ? slayer3d_properties_count(properties) : 0;
+    for (int i = 0; i < count; ++i)
+    {
+        const char *property_key = NULL;
+        slayer3d_value_type type = SLAYER3D_VALUE_STRING;
+        if (!slayer3d_properties_get_key_at(properties, i, &property_key, &type) || property_key == NULL)
+            continue;
+        const slayer3d_value *value = slayer3d_properties_get_value(properties, property_key);
+        if (!export_add_property_value(doc, json, property_key, value))
+            return false;
+    }
+    return true;
+}
+
 static bool export_add_string_array(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key,
                                     const char *const *values, int count)
 {
@@ -476,6 +525,35 @@ static bool export_add_player_start(yyjson_mut_doc *doc, yyjson_mut_val *starts,
     return true;
 }
 
+static bool export_add_color(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_color value)
+{
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    return arr != NULL && yyjson_mut_arr_add_uint(doc, arr, value.r) && yyjson_mut_arr_add_uint(doc, arr, value.g) &&
+           yyjson_mut_arr_add_uint(doc, arr, value.b) && yyjson_mut_arr_add_uint(doc, arr, value.a) &&
+           yyjson_mut_obj_add_val(doc, obj, key, arr);
+}
+
+static bool export_add_editor_actor(yyjson_mut_doc *doc, yyjson_mut_val *actors, const editor_actor_runtime *actor)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(actors, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "name", actor->name != NULL ? actor->name : "") ||
+        !export_add_optional_string(doc, obj, "scene", actor->scene) ||
+        !export_add_optional_string(doc, obj, "display_name", actor->display_name) ||
+        !export_add_optional_string(doc, obj, "archetype", actor->archetype) ||
+        !export_add_optional_string(doc, obj, "mesh", actor->mesh) ||
+        !export_add_optional_string(doc, obj, "model", actor->model) ||
+        !export_add_optional_string(doc, obj, "group", actor->group) ||
+        !export_add_vec3(doc, obj, "position", actor->position) ||
+        !export_add_vec3(doc, obj, "rotation", actor->rotation) || !export_add_vec3(doc, obj, "scale", actor->scale) ||
+        !export_add_color(doc, obj, "color", actor->color) ||
+        !export_add_properties(doc, obj, "properties", actor->properties))
+    {
+        return false;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_export_player_starts_fragment_json(const slayer3d_game_data_runtime *runtime, char **out_json,
                                                            size_t *out_size, char *error_buffer, int error_buffer_size)
 {
@@ -557,7 +635,8 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
     yyjson_mut_val *worlds = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *sources = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *starts = doc != NULL ? yyjson_mut_arr(doc) : NULL;
-    if (doc == NULL || root == NULL || worlds == NULL || sources == NULL || starts == NULL)
+    yyjson_mut_val *actors = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    if (doc == NULL || root == NULL || worlds == NULL || sources == NULL || starts == NULL || actors == NULL)
     {
         yyjson_mut_doc_free(doc);
         set_error(error_buffer, error_buffer_size, "failed to allocate editable level export document");
@@ -570,9 +649,12 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
               export_add_brush_world(doc, worlds, &world_runtime->desc) &&
               yyjson_mut_obj_add_val(doc, root, "editor_brush_sources", sources) &&
               export_add_editor_brush_source_world(doc, sources, world_runtime) &&
-              yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts);
+              yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts) &&
+              yyjson_mut_obj_add_val(doc, root, "editor_actors", actors);
     for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
         ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);
+    for (int i = 0; ok && i < runtime->editor_actor_count; ++i)
+        ok = export_add_editor_actor(doc, actors, &runtime->editor_actors[i]);
 
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
@@ -778,6 +860,8 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
         return false;
     if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
         return false;
+    if (runtime != NULL)
+        runtime->editor_actor_dirty = false;
     if (out_size != NULL)
         *out_size = size;
     return true;
@@ -1036,6 +1120,8 @@ bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime 
         return false;
     if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
         return false;
+    if (runtime != NULL)
+        runtime->editor_actor_dirty = false;
     if (out_size != NULL)
         *out_size = size;
     return true;

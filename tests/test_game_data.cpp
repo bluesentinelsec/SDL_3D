@@ -322,6 +322,10 @@ extern "C"
                                                           slayer3d_vec3 delta);
     bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                            const slayer3d_properties *payload);
+    bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                            const slayer3d_properties *payload);
+    void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_editor_selection *selection, int slot_count);
     bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                 const slayer3d_properties *payload);
     bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -18321,6 +18325,162 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(model_root);
+}
+
+TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *actor_properties = slayer3d_properties_create();
+    ASSERT_NE(actor_properties, nullptr);
+    slayer3d_properties_set_string(actor_properties, "role", "door");
+    slayer3d_properties_set_int(actor_properties, "health", 100);
+    slayer3d_game_data_place_editor_actor_desc desc{};
+    desc.name = "actor.editor_shell.door.test";
+    desc.display_name = "Test Door";
+    desc.archetype = "actor.test.door";
+    desc.mesh = "box";
+    desc.group = "Gameplay";
+    desc.position = slayer3d_vec3_make(1.0f, 2.0f, 3.0f);
+    desc.has_position = true;
+    desc.scale = slayer3d_vec3_make(1.5f, 2.0f, 0.5f);
+    desc.has_scale = true;
+    desc.properties = actor_properties;
+    char placed_name[128]{};
+    ASSERT_TRUE(
+        slayer3d_game_data_place_editor_actor(runtime, &desc, placed_name, sizeof(placed_name), error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(placed_name, "actor.editor_shell.door.test");
+    slayer3d_properties_destroy(actor_properties);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "test.editor.actor.target", "actor.editor_shell.door.test");
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.set",
+      "target_type": "editor_actor",
+      "target_from_state": "test.editor.actor.target",
+      "key": "locked",
+      "value": true,
+      "outputs": {
+        "valid_key": "test.editor.property.valid",
+        "message_key": "test.editor.property.message",
+        "target_key": "test.editor.property.target",
+        "key_key": "test.editor.property.key"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.editor.property.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.editor.property.target", ""),
+                 "actor.editor_shell.door.test");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.editor.property.key", ""), "locked");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.set",
+      "target_type": "editor_actor",
+      "target": "actor.editor_shell.door.test",
+      "key": "tint",
+      "value": [32, 64, 96, 192]
+    })json"));
+    slayer3d_game_data_editor_actor actor{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.editor_shell.door.test", &actor));
+    ASSERT_NE(actor.properties, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(actor.properties, "locked", false));
+    const slayer3d_value *tint = slayer3d_properties_get_value(actor.properties, "tint");
+    ASSERT_NE(tint, nullptr);
+    ASSERT_EQ(tint->type, SLAYER3D_VALUE_COLOR);
+    EXPECT_EQ(tint->as_color.r, 32);
+    EXPECT_EQ(tint->as_color.a, 192);
+
+    slayer3d_game_data_editor_selection selection{};
+    selection.hit = true;
+    selection.type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    selection.world_name = "editor_actors";
+    selection.element_name = "actor.editor_shell.door.test";
+    publish_editor_selection_properties(runtime, &selection, 6);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.type", ""), "editor_actor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.name", ""),
+                 "actor.editor_shell.door.test");
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.property.count", 0), 4);
+    bool saw_locked = false;
+    bool saw_tint = false;
+    for (int i = 0; i < 6; ++i)
+    {
+        char key_name[96];
+        char value_name[96];
+        SDL_snprintf(key_name, sizeof(key_name), "editor.property.slot.%d.key", i);
+        SDL_snprintf(value_name, sizeof(value_name), "editor.property.slot.%d.value", i);
+        const char *key = slayer3d_properties_get_string(scene_state, key_name, "");
+        const char *value = slayer3d_properties_get_string(scene_state, value_name, "");
+        if (SDL_strcmp(key, "locked") == 0 && SDL_strcmp(value, "true") == 0)
+            saw_locked = true;
+        if (SDL_strcmp(key, "tint") == 0 && SDL_strcmp(value, "32, 64, 96, 192") == 0)
+            saw_tint = true;
+    }
+    EXPECT_TRUE(saw_locked);
+    EXPECT_TRUE(saw_tint);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *export_doc = yyjson_read(export_json, export_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(export_doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(export_doc);
+    yyjson_val *actors = yyjson_obj_get(root, "editor_actors");
+    ASSERT_TRUE(yyjson_is_arr(actors));
+    yyjson_val *exported_actor = nullptr;
+    for (size_t i = 0; i < yyjson_arr_size(actors); ++i)
+    {
+        yyjson_val *candidate = yyjson_arr_get(actors, i);
+        if (SDL_strcmp(yyjson_get_str(yyjson_obj_get(candidate, "name")), "actor.editor_shell.door.test") == 0)
+        {
+            exported_actor = candidate;
+            break;
+        }
+    }
+    ASSERT_NE(exported_actor, nullptr);
+    yyjson_val *exported_properties = yyjson_obj_get(exported_actor, "properties");
+    ASSERT_TRUE(yyjson_is_obj(exported_properties));
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(exported_properties, "locked")));
+    EXPECT_EQ((int)yyjson_get_sint(yyjson_obj_get(exported_properties, "health")), 100);
+    yyjson_val *exported_tint = yyjson_obj_get(exported_properties, "tint");
+    ASSERT_TRUE(yyjson_is_arr(exported_tint));
+    EXPECT_EQ((int)yyjson_get_uint(yyjson_arr_get(exported_tint, 0)), 32);
+    EXPECT_EQ((int)yyjson_get_uint(yyjson_arr_get(exported_tint, 3)), 192);
+    yyjson_doc_free(export_doc);
+    SDL_free(export_json);
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.remove",
+      "target_type": "editor_actor",
+      "target": "actor.editor_shell.door.test",
+      "key": "locked"
+    })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.editor_shell.door.test", &actor));
+    EXPECT_EQ(slayer3d_properties_get_value(actor.properties, "locked"), nullptr);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFailed)
