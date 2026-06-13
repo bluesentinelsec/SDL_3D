@@ -782,3 +782,261 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
         *out_size = size;
     return true;
 }
+
+static double map_color_channel(float value)
+{
+    if (value < 0.0f)
+        value = 0.0f;
+    if (value > 1.0f)
+        value = 1.0f;
+    return (double)(int)((double)value * 255.0 + 0.5);
+}
+
+static bool export_add_map_color(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec4 value)
+{
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    return arr != NULL && yyjson_mut_arr_add_real(doc, arr, map_color_channel(value.x)) &&
+           yyjson_mut_arr_add_real(doc, arr, map_color_channel(value.y)) &&
+           yyjson_mut_arr_add_real(doc, arr, map_color_channel(value.z)) &&
+           yyjson_mut_arr_add_real(doc, arr, map_color_channel(value.w)) && yyjson_mut_obj_add_val(doc, obj, key, arr);
+}
+
+static bool export_add_map_materials(yyjson_mut_doc *doc, yyjson_mut_val *materials,
+                                     const slayer3d_game_data_brush_world *world)
+{
+    if (doc == NULL || materials == NULL || world == NULL)
+        return false;
+    for (int i = 0; i < world->material_count; ++i)
+    {
+        const slayer3d_game_data_brush_material *material = &world->materials[i];
+        if (material->name == NULL || material->name[0] == '\0')
+            continue;
+        yyjson_mut_val *obj = yyjson_mut_obj(doc);
+        if (obj == NULL || !yyjson_mut_arr_add_val(materials, obj) ||
+            !yyjson_mut_obj_add_strcpy(doc, obj, "id", material->name) ||
+            !export_add_optional_string(doc, obj, "texture", material->texture) ||
+            !export_add_map_color(doc, obj, "color", material->albedo))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool export_add_map_plane(yyjson_mut_doc *doc, yyjson_mut_val *planes,
+                                 const slayer3d_game_data_brush_world *world, const slayer3d_game_data_brush_face *face)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(planes, obj) || !export_add_vec3(doc, obj, "normal", face->normal) ||
+        !yyjson_mut_obj_add_real(doc, obj, "distance", face->distance))
+    {
+        return false;
+    }
+
+    const char *material = face->material_name;
+    if ((material == NULL || material[0] == '\0') && face->material_index >= 0 &&
+        face->material_index < world->material_count)
+    {
+        material = world->materials[face->material_index].name;
+    }
+    return material == NULL || material[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, "material", material);
+}
+
+static bool export_add_map_brushes(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
+                                   const slayer3d_game_data_brush_world *world)
+{
+    if (doc == NULL || brushes == NULL || world == NULL)
+        return false;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[i];
+        yyjson_mut_val *obj = yyjson_mut_obj(doc);
+        yyjson_mut_val *geometry = yyjson_mut_obj(doc);
+        yyjson_mut_val *planes = yyjson_mut_arr(doc);
+        yyjson_mut_val *properties = yyjson_mut_obj(doc);
+        const char *id = brush->name != NULL && brush->name[0] != '\0' ? brush->name : "brush";
+        if (obj == NULL || geometry == NULL || planes == NULL || properties == NULL ||
+            !yyjson_mut_arr_add_val(brushes, obj) || !yyjson_mut_obj_add_strcpy(doc, obj, "id", id) ||
+            !yyjson_mut_obj_add_val(doc, obj, "geometry", geometry) ||
+            !yyjson_mut_obj_add_strcpy(doc, geometry, "kind", "planes") ||
+            !yyjson_mut_obj_add_val(doc, geometry, "planes", planes) ||
+            !yyjson_mut_obj_add_val(doc, obj, "properties", properties) ||
+            !yyjson_mut_obj_add_strcpy(doc, properties, "brush_world", world->name != NULL ? world->name : ""))
+        {
+            return false;
+        }
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            if (!export_add_map_plane(doc, planes, world, &brush->faces[face_index]))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool export_add_map_actor_position(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key,
+                                          slayer3d_vec3 value)
+{
+    return export_add_vec3(doc, obj, key, value);
+}
+
+static bool export_add_map_player_start_actor(yyjson_mut_doc *doc, yyjson_mut_val *actors,
+                                              const editor_player_start_runtime *start)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *transform = yyjson_mut_obj(doc);
+    yyjson_mut_val *rotation = yyjson_mut_arr(doc);
+    yyjson_mut_val *properties = yyjson_mut_obj(doc);
+    if (obj == NULL || transform == NULL || rotation == NULL || properties == NULL ||
+        !yyjson_mut_arr_add_val(actors, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "id", start->name != NULL ? start->name : "player_start") ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "archetype", "player_start") ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "primitive", "capsule") ||
+        !yyjson_mut_obj_add_val(doc, obj, "transform", transform) ||
+        !export_add_map_actor_position(doc, transform, "position", start->position) ||
+        !yyjson_mut_arr_add_real(doc, rotation, start->pitch) || !yyjson_mut_arr_add_real(doc, rotation, start->yaw) ||
+        !yyjson_mut_arr_add_real(doc, rotation, 0.0) || !yyjson_mut_obj_add_val(doc, transform, "rotation", rotation) ||
+        !yyjson_mut_obj_add_val(doc, obj, "properties", properties))
+    {
+        return false;
+    }
+    return export_add_optional_string(doc, properties, "scene", start->scene) &&
+           export_add_optional_string(doc, properties, "target", start->target);
+}
+
+static bool export_add_map_player_start_actors(yyjson_mut_doc *doc, yyjson_mut_val *actors,
+                                               const slayer3d_game_data_runtime *runtime)
+{
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        if (!export_add_map_player_start_actor(doc, actors, &runtime->editor_player_starts[i]))
+            return false;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_runtime *runtime,
+                                                       const char *world_name, char **out_json, size_t *out_size,
+                                                       char *error_buffer, int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || out_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editable level map export requires runtime and output");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
+        return false;
+    }
+
+    char *fragment_json = NULL;
+    size_t fragment_size = 0u;
+    if (!slayer3d_game_data_export_editable_level_fragment_json(runtime, world_name, &fragment_json, &fragment_size,
+                                                                error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    yyjson_doc *fragment_doc = yyjson_read(fragment_json, fragment_size, 0);
+    yyjson_val *fragment_root = fragment_doc != NULL ? yyjson_doc_get_root(fragment_doc) : NULL;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *metadata = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *materials = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *brushes = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *actors = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *editor = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *fragment_copy = doc != NULL ? yyjson_val_mut_copy(doc, fragment_root) : NULL;
+    if (fragment_doc == NULL || doc == NULL || root == NULL || metadata == NULL || materials == NULL ||
+        brushes == NULL || actors == NULL || editor == NULL || fragment_copy == NULL)
+    {
+        yyjson_doc_free(fragment_doc);
+        yyjson_mut_doc_free(doc);
+        SDL_free(fragment_json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate Slayer3D map export document");
+        return false;
+    }
+
+    yyjson_mut_doc_set_root(doc, root);
+    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "format", SLAYER3D_MAP_FORMAT_ID) &&
+              yyjson_mut_obj_add_int(doc, root, "version", SLAYER3D_MAP_FORMAT_VERSION) &&
+              yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
+              yyjson_mut_obj_add_strcpy(doc, metadata, "id", world_name != NULL ? world_name : "") &&
+              yyjson_mut_obj_add_strcpy(doc, metadata, "name", world_name != NULL ? world_name : "Untitled Map") &&
+              yyjson_mut_obj_add_strcpy(doc, root, "coordinate_system", "y_up") &&
+              yyjson_mut_obj_add_val(doc, root, "materials", materials) &&
+              export_add_map_materials(doc, materials, &world_runtime->desc) &&
+              yyjson_mut_obj_add_val(doc, root, "brushes", brushes) &&
+              export_add_map_brushes(doc, brushes, &world_runtime->desc) &&
+              yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
+              export_add_map_player_start_actors(doc, actors, runtime) &&
+              yyjson_mut_obj_add_val(doc, root, "editor", editor) &&
+              yyjson_mut_obj_add_strcpy(doc, editor, "source_format", "slayer3d.fragment.v0") &&
+              yyjson_mut_obj_add_val(doc, editor, "editable_level_fragment", fragment_copy);
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_doc_free(fragment_doc);
+    yyjson_mut_doc_free(doc);
+    SDL_free(fragment_json);
+    if (json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to write Slayer3D map JSON");
+        return false;
+    }
+
+    if (!slayer3d_map_validate_json(json, size, NULL, error_buffer, error_buffer_size))
+    {
+        free(json);
+        return false;
+    }
+
+    char *copy = (char *)SDL_malloc(size + 1u);
+    if (copy == NULL)
+    {
+        free(json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate Slayer3D map JSON");
+        return false;
+    }
+    SDL_memcpy(copy, json, size + 1u);
+    free(json);
+    *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                     const char *path, size_t *out_size, char *error_buffer,
+                                                     int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+
+    char *json = NULL;
+    size_t size = 0u;
+    if (!slayer3d_game_data_export_editable_level_map_json(runtime, world_name, &json, &size, error_buffer,
+                                                           error_buffer_size))
+    {
+        return false;
+    }
+
+    const bool ok = editor_save_bytes_atomic(path, json, size, "Slayer3D map", error_buffer, error_buffer_size);
+    SDL_free(json);
+    if (!ok)
+        return false;
+    if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
+        return false;
+    if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
+        return false;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}

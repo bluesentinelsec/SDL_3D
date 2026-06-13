@@ -86,10 +86,24 @@
             "bindings": []
           },
           {
+            "name": "action.editor.open",
+            "bindings": [
+              { "device": "keyboard", "key": "O", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "O", "modifiers": ["gui"] }
+            ]
+          },
+          {
             "name": "action.editor.export",
             "bindings": [
               { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
               { "device": "keyboard", "key": "S", "modifiers": ["gui"] }
+            ]
+          },
+          {
+            "name": "action.editor.save_as",
+            "bindings": [
+              { "device": "keyboard", "key": "S", "modifiers": ["ctrl", "shift"] },
+              { "device": "keyboard", "key": "S", "modifiers": ["gui", "shift"] }
             ]
           },
           {
@@ -328,7 +342,9 @@
     "signal.editor.actor.viewer.toggle",
     "signal.editor.actor.group.placeholders.toggle",
     "signal.editor.actor.group.models.toggle",
+    "signal.editor.open",
     "signal.editor.export",
+    "signal.editor.save_as",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
   ],
@@ -411,8 +427,18 @@
       },
       {
         "type": "sensor.input_pressed",
+        "action": "action.editor.open",
+        "on_pressed": "signal.editor.open"
+      },
+      {
+        "type": "sensor.input_pressed",
         "action": "action.editor.export",
         "on_pressed": "signal.editor.export"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.save_as",
+        "on_pressed": "signal.editor.save_as"
       },
       {
         "type": "sensor.input_pressed",
@@ -500,7 +526,7 @@
         "signal": "signal.editor.scene.enter",
         "actions": [
           {
-            "type": "editor.level.load",
+            "type": "editor.map.load",
             "world": "brush.editor_shell.target",
             "path_from_state": "editor.input.path",
             "optional": true,
@@ -2113,10 +2139,48 @@
         ]
       },
       {
+        "signal": "signal.editor.open",
+        "actions": [
+          {
+            "type": "editor.map.load",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.input.path",
+            "outputs": {
+              "valid_key": "editor.load.valid",
+              "message_key": "editor.load.message",
+              "path_key": "editor.load.path",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.load.valid", "op": "==", "value": true },
+            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "opened map from disk" }],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "open failed: {editor.load.message}"
+              }
+            ]
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
         "signal": "signal.editor.export",
         "actions": [
           {
-            "type": "editor.level.export",
+            "type": "editor.map.export",
             "world": "brush.editor_shell.target",
             "outputs": {
               "valid_key": "editor.export.valid",
@@ -2136,10 +2200,10 @@
             }
           },
           {
-            "type": "editor.level.save",
+            "type": "editor.map.save",
             "world": "brush.editor_shell.target",
             "path_from_state": "editor.save.path",
-            "message": "editable level saved",
+            "message": "map saved",
             "outputs": {
               "valid_key": "editor.save.valid",
               "message_key": "editor.save.message",
@@ -2160,12 +2224,52 @@
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.save.valid", "op": "==", "value": true },
-            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "saved level to disk" }],
+            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "saved map to disk" }],
             "else": [
               {
                 "type": "scene_state.set",
                 "key": "editor.tool.last_action",
                 "value": "save failed: {editor.save.message}"
+              }
+            ]
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.save_as",
+        "actions": [
+          {
+            "type": "editor.map.save",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.save_as.path",
+            "message": "map saved",
+            "outputs": {
+              "valid_key": "editor.save.valid",
+              "message_key": "editor.save.message",
+              "path_key": "editor.save.path",
+              "size_key": "editor.save.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.save.valid", "op": "==", "value": true },
+            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "saved map as {editor.save.path}" }],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "save as failed: {editor.save.message}"
               }
             ]
           },

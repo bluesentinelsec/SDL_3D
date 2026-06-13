@@ -699,6 +699,32 @@ extern "C"
                                                               int error_buffer_size);
 
     /**
+     * @brief Export one editable level as a standalone Slayer3D map JSON document.
+     *
+     * The exported document uses the public `slayer3d.map` format and embeds
+     * the lossless editable level fragment in `editor.editable_level_fragment`.
+     * Top-level materials, brushes, and player-start actors are also emitted so
+     * generic tools can inspect the authored level without understanding the
+     * editor-only fragment contract. The returned string is allocated with
+     * SDL_malloc and must be released with SDL_free().
+     */
+    bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_runtime *runtime,
+                                                           const char *world_name, char **out_json, size_t *out_size,
+                                                           char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Atomically save one editable level as a standalone Slayer3D map file.
+     *
+     * This saves the same JSON produced by
+     * @ref slayer3d_game_data_export_editable_level_map_json. On success, both
+     * the selected brush world and the player-start collection are marked saved
+     * at their current revisions and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const char *path, size_t *out_size, char *error_buffer,
+                                                         int error_buffer_size);
+
+    /**
      * @brief Load an editable level fragment JSON buffer into an existing editor runtime.
      *
      * This performs the same import as
@@ -729,6 +755,28 @@ extern "C"
     bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
                                                               const char *world_name, const char *path,
                                                               char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a Slayer3D map JSON buffer into an existing editor runtime.
+     *
+     * The map is validated through the public map APIs, then
+     * `editor.editable_level_fragment` is imported into @p world_name. This
+     * preserves the current editor source model while the standalone map format
+     * evolves toward direct runtime construction.
+     */
+    bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const void *json, size_t json_size, const char *source_path,
+                                                         char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a Slayer3D map file into an existing editor runtime.
+     *
+     * The file must be a valid `slayer3d.map` JSON document containing
+     * `editor.editable_level_fragment`. On success both runtime collections are
+     * marked clean and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_load_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const char *path, char *error_buffer, int error_buffer_size);
 
     /** @brief Descriptor for creating an editor test-run handoff manifest. */
     typedef struct slayer3d_game_data_editor_test_run_desc

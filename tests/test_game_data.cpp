@@ -11358,6 +11358,48 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("requires exactly one of path or path_from_state"), std::string::npos) << error;
 
+    write_text(dir / "bad_map_save_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Map Save Action" },
+  "world": { "name": "world.bad_editor_map_save_action", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "world.editable",
+      "materials": [{ "name": "mat.default", "albedo": [1, 1, 1, 1] }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.default" }
+          ]
+        }
+      ]
+    }
+  ],
+  "signals": ["signal.editor.save"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.save",
+        "actions": [
+          { "type": "editor.map.save", "world": "world.editable" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_map_save_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires exactly one of path or path_from_state"), std::string::npos) << error;
+
     write_text(dir / "bad_test_run_save_manifest_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -17812,7 +17854,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
     ASSERT_NE(export_json, nullptr);
-    EXPECT_NE(std::string(export_json).find("\"schema\": \"slayer3d.fragment.v0\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"format\": \"slayer3d.map\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editable_level_fragment\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"material\": \"mat.editor.texture.wall_metal\""), std::string::npos);
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.export.size", 0), 0);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
@@ -22424,16 +22467,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                  "test-run manifest disabled");
 
     const std::filesystem::path save_dir = unique_test_dir("editor_shell_dojo_save");
-    const std::filesystem::path save_path = save_dir / "level.fragment.json";
+    const std::filesystem::path save_path = save_dir / "level.slayermap.json";
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.save.path",
                                    save_path.string().c_str());
     slayer3d_signal_emit(bus, export_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""), "editable level saved");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""), "map saved");
     EXPECT_TRUE(std::filesystem::exists(save_path));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
     ASSERT_NE(export_json, nullptr);
+    EXPECT_NE(std::string(export_json).find("\"format\": \"slayer3d.map\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editable_level_fragment\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"editor_brush_sources\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"coordinate_system\": \"fixed_millimeters\""), std::string::npos);
@@ -24827,7 +24872,7 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     const std::string save_path_string = "/tmp/level.fragment.json";
 #else
     const std::filesystem::path save_dir = unique_test_dir("editable_level_reload");
-    const std::filesystem::path save_path = save_dir / "level.fragment.json";
+    const std::filesystem::path save_path = save_dir / "level.slayermap.json";
     const std::string save_path_string = save_path.string();
 #endif
     char error[512]{};
@@ -28294,7 +28339,7 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
         "/tmp/mvp-graybox-save-source.json", error, sizeof(error)))
         << error;
     size_t saved_size = 0u;
-    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
         runtime, "brush.editor_shell.target", save_path.string().c_str(), &saved_size, error, sizeof(error)))
         << error;
     EXPECT_GT(saved_size, 0u);
@@ -28330,7 +28375,7 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "editable level loaded");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "map loaded");
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     EXPECT_EQ(world.brush_count, 15);
     expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
@@ -31384,7 +31429,7 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
     const std::string root = dojo_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
     const std::filesystem::path save_dir = unique_test_dir("editor_shell_open_load");
-    const std::filesystem::path save_path = save_dir / "level.fragment.json";
+    const std::filesystem::path save_path = save_dir / "level.slayermap.json";
     const std::string save_path_string = save_path.string();
     char error[512]{};
 
@@ -31402,7 +31447,7 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
     box.max = slayer3d_vec3_make(24.0f, 0.0f, 24.0f);
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(source, &box, nullptr, 0, error, sizeof(error))) << error;
     size_t saved_size = 0;
-    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
         source, "brush.editor_shell.target", save_path_string.c_str(), &saved_size, error, sizeof(error)))
         << error;
     slayer3d_game_data_destroy(source);
@@ -31434,7 +31479,7 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(data);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "editable level loaded");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "map loaded");
 
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(data, "brush.editor_shell.target", &world));
@@ -40355,6 +40400,62 @@ TEST(GameDataRuntime, SlayerMapLoadWriteAndReloadFile)
     EXPECT_NE(saved_text.find("\"custom\""), std::string::npos);
     EXPECT_NE(saved_text.find("\"value\": 42"), std::string::npos);
     slayer3d_map_destroy(reloaded);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
+{
+    const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");
+    const std::filesystem::path map_path = dir / "saved.slayermap.json";
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    size_t saved_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
+        runtime, "brush.editor_shell.target", map_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    EXPECT_GT(saved_size, 0u);
+    EXPECT_TRUE(std::filesystem::exists(map_path));
+
+    const std::string map_text = read_text(map_path);
+    EXPECT_NE(map_text.find("\"format\": \"slayer3d.map\""), std::string::npos);
+    EXPECT_NE(map_text.find("\"editable_level_fragment\""), std::string::npos);
+    EXPECT_NE(map_text.find("\"brushes\""), std::string::npos);
+    EXPECT_NE(map_text.find("\"actors\""), std::string::npos);
+
+    slayer3d_map_document *map_doc = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &map_doc, error, sizeof(error))) << error;
+    EXPECT_EQ(slayer3d_map_get_version(map_doc), SLAYER3D_MAP_FORMAT_VERSION);
+    slayer3d_map_destroy(map_doc);
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), roundtrip_session, &roundtrip_runtime, error,
+                                             sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_map_file(roundtrip_runtime, "brush.editor_shell.target",
+                                                                map_path.string().c_str(), error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world_editor_state state{};
+    ASSERT_TRUE(
+        slayer3d_game_data_get_brush_world_editor_state(roundtrip_runtime, "brush.editor_shell.target", &state));
+    EXPECT_FALSE(state.dirty);
+    ASSERT_NE(state.source_path, nullptr);
+    EXPECT_STREQ(state.source_path, map_path.string().c_str());
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 

@@ -1766,23 +1766,22 @@ their write commits. Authored save actions are available for controlled editor
 shells, but they require explicit filesystem paths and never accept `asset://`
 destinations.
 
-Use `editor.level.export` when the editable artifact needs both blockout brush
-geometry and test-run player starts. It serializes a single fragment containing
-the selected `brush_worlds` entry and the runtime `editor_player_starts`
-collection. Native editor hosts can call
-`slayer3d_game_data_export_editable_level_fragment_json()` or
-`slayer3d_game_data_save_editable_level_fragment_file()` for the same canonical
-JSON. A successful native save marks both the selected brush world and
-player-start collection clean at their current revisions. This is the preferred
-first milestone save path for blockout editors because reloading one fragment
-restores floors, walls, ceilings, face materials, and player starts together.
-Editable-level export requires a source-backed brush world and runs
-source/compiled identity checks before writing JSON, so stale runtime-only brush
-data cannot become the saved level.
+Use `editor.map.export` when the editor should publish the standalone
+`.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
+including top-level materials, brushes, and player-start actors for generic
+inspection. It also embeds the lossless editable fragment under
+`editor.editable_level_fragment`, so reopening the map restores source-backed
+brush editing state exactly. Native editor hosts can call
+`slayer3d_game_data_export_editable_level_map_json()` or
+`slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
+successful native save marks both the selected brush world and player-start
+collection clean at their current revisions. Map export requires a source-backed
+brush world and runs source/compiled identity checks before writing JSON, so
+stale runtime-only brush data cannot become the saved level.
 
 ```json
 {
-  "type": "editor.level.export",
+  "type": "editor.map.export",
   "world": "brush.level.blockout",
   "outputs": {
     "valid_key": "editor.export.valid",
@@ -1795,16 +1794,16 @@ data cannot become the saved level.
 }
 ```
 
-Use `editor.level.save` for the same unified artifact when an authored editor
+Use `editor.map.save` for the same unified artifact when an authored editor
 shell is allowed to write a filesystem path directly. `path` is a literal host
 path; `path_from_state` reads the path from scene state so a host/editor UI can
 choose the destination. Exactly one must be provided. The action writes
 atomically, creates parent directories, and publishes the same brush/player-start
-revision state as `editor.level.export`.
+revision state as `editor.map.export`.
 
 ```json
 {
-  "type": "editor.level.save",
+  "type": "editor.map.save",
   "world": "brush.level.blockout",
   "path_from_state": "editor.save.path",
   "outputs": {
@@ -1816,20 +1815,19 @@ revision state as `editor.level.export`.
 }
 ```
 
-Use `editor.level.load` to replace an editor runtime's authored starter level
-with an editable fragment from disk. This is intended for editor hosts that pass
-`editor.input.path` at launch time. The fragment must use
-`schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
-matches `world`; `editor_brush_sources` records the canonical editor source
-model for the same world and is compiled into runtime brushes on import.
-Runtime-only editable fragments are rejected. Import validates source/compiled
-identity before replacing the live runtime world, and `editor_player_starts`
-replaces the runtime player-start collection. Set `optional: true` when the same
-editor scene should also support new/blank sessions with no input file.
+Use `editor.map.load` to replace an editor runtime's authored starter level with
+a `.slayermap.json` file from disk. This is intended for editor hosts that pass
+`editor.input.path` at launch time. The map is validated through the public map
+APIs, then `editor.editable_level_fragment` is imported into the selected world.
+Runtime-only fragments remain rejected by the fragment importer. Import
+validates source/compiled identity before replacing the live runtime world, and
+`editor_player_starts` replaces the runtime player-start collection. Set
+`optional: true` when the same editor scene should also support new/blank
+sessions with no input file.
 
 ```json
 {
-  "type": "editor.level.load",
+  "type": "editor.map.load",
   "world": "brush.level.blockout",
   "path_from_state": "editor.input.path",
   "optional": true,
@@ -1840,6 +1838,11 @@ editor scene should also support new/blank sessions with no input file.
   }
 }
 ```
+
+The lower-level `editor.level.export`, `editor.level.save`, and
+`editor.level.load` actions still exist for tooling that deliberately wants the
+embedded `slayer3d.fragment.v0` document instead of the standalone map
+container.
 
 Use `editor.test_run.prepare` to publish a game-agnostic handoff manifest for
 launching the generic runner from an editor-selected scene or player start. The
@@ -1853,9 +1856,9 @@ For UI copy/paste affordances, `editor.test_run.prepare` and
 `editor.test_run.save_manifest` can also author `runner`, one mount option
 (`root`, `pack`, or `embedded`), and optional `media`. When `command_key` is
 present in `outputs`, the action publishes a quoted runner command string.
-Authored editor shells should usually run `editor.level.save` immediately before
-test-run preparation so the runner sees the latest blockout fragment rather than
-the last manually saved revision. If the runtime contains source-backed brush
+Authored editor shells should usually run `editor.map.save` immediately before
+test-run preparation so the runner sees the latest blockout map rather than the
+last manually saved revision. If the runtime contains source-backed brush
 worlds, source/compiled identity must validate before the handoff manifest is
 exported.
 

@@ -57,6 +57,12 @@ bool validate_editor_level_save_action(validation_context *ctx, yyjson_val *acti
                                        validation_names *names, const char *type);
 bool validate_editor_level_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                        validation_names *names, const char *type);
+bool validate_editor_map_export_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+bool validate_editor_map_save_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type);
+bool validate_editor_map_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type);
 bool validate_editor_test_run_prepare_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                              validation_names *names, const char *type);
 bool validate_editor_test_run_save_manifest_action(validation_context *ctx, yyjson_val *action, const char *json_path,

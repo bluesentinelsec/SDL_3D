@@ -54,6 +54,12 @@ Editor-only state must live under `editor`. Runtime consumers may ignore this
 field. Examples include viewport layout, selected tool, collapsed inspector
 groups, asset browser scroll state, and non-runtime authoring hints.
 
+The current Slayer3D editor writes source-backed graybox state by embedding its
+editable fragment at `editor.editable_level_fragment`. The root-level
+`materials`, `brushes`, and `actors` fields are emitted for generic map
+inspection and future runtime materialization, while the embedded fragment is the
+lossless path used by the editor's open/save workflow today.
+
 ## Root Fields
 
 - `format`: Required string. Must be `slayer3d.map`.

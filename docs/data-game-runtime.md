@@ -240,25 +240,26 @@ launches a data-authored editor project, injects editor input/output paths as
 scene state, and leaves the actual tool behavior in JSON/Lua.
 
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```
 
 Projects are described by `slayer3d.project.json` manifests. `new` starts from
-the project's empty editor scene; `open` loads an existing editable fragment and
+the project's empty editor scene; `open` loads an existing Slayer3D map and
 saves back to `--input` unless `--output` is supplied:
 
 ```sh
-build/debug/slayer3d_editor open --project path/to/project --input path/to/level.fragment.json
+build/debug/slayer3d_editor open --project path/to/project --input path/to/level.slayermap.json
 ```
 
-For the current graybox editor workflow, the saved file is a source-backed
-editable level fragment. The editor source model is the truth: brush creation,
-movement, resizing, duplication, deletion, save/reopen, and test-run handoff all
-operate on `editor_brush_sources`, then compile runtime brush geometry from that
-source. A typical blockout loop is:
+For the current graybox editor workflow, the saved file is a `.slayermap.json`
+document that embeds the source-backed editable level fragment. The editor
+source model is the truth: brush creation, movement, resizing, duplication,
+deletion, save/reopen, and test-run handoff all operate on
+`editor_brush_sources`, then compile runtime brush geometry from that source. A
+typical blockout loop is:
 
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```
 
 Inside the editor, use Brush Tool and Select mode to create and edit floors,
@@ -266,7 +267,7 @@ walls, ceilings, pits, platforms, and corridors, place a player start, then save
 with the normal save command. Reopen the same source fragment with:
 
 ```sh
-build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.fragment.json
+build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.slayermap.json
 ```
 
 The editor test-run command validates the source model, warns about leaks,
@@ -280,8 +281,8 @@ The manifest currently carries `data_root`, `editor_entry`, optional
 fields into a normal runner launch and injects `editor.command`,
 `editor.input.path`, `editor.save.path`, and `editor.test_run.path` as scene
 state. This keeps the shell data-authored while still giving users a stable CLI:
-`--project` selects the editor project, `--input` selects the editable fragment
-for `open`, and `--output` selects the save target.
+`--project` selects the editor project, `--input` selects a `.slayermap.json`
+file for `open`, and `--output` selects the save target.
 
 For low-level debugging, the same launch can be written directly with the
 generic runner:
@@ -291,8 +292,8 @@ build/debug/slayer3d_runner \
   --root demos/editor_shell_dojo/data \
   --data asset://editor_shell_dojo.game.json \
   --state editor.command=open \
-  --state editor.input.path=/tmp/level.fragment.json \
-  --state editor.save.path=/tmp/level.fragment.json
+  --state editor.input.path=/tmp/level.slayermap.json \
+  --state editor.save.path=/tmp/level.slayermap.json
 ```
 
 The fused executable path is still the same generic runner. The game data is
