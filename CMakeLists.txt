@@ -321,6 +321,7 @@ target_sources(
         src/input.c
         src/lighting.c
         src/logic.c
+        src/map.c
         src/math.c
         src/font.c
         src/fps_mover.c

@@ -373,6 +373,18 @@ struct DiagnosticCapture
     std::vector<CapturedDiagnostic> diagnostics;
 };
 
+struct CapturedMapDiagnostic
+{
+    slayer3d_map_diagnostic_severity severity = SLAYER3D_MAP_DIAGNOSTIC_WARNING;
+    std::string path;
+    std::string message;
+};
+
+struct MapDiagnosticCapture
+{
+    std::vector<CapturedMapDiagnostic> diagnostics;
+};
+
 struct CapturedLogMessage
 {
     int category = -1;
@@ -783,6 +795,14 @@ void capture_diagnostic(void *userdata, slayer3d_game_data_diagnostic_severity s
                         const char *message)
 {
     auto *capture = static_cast<DiagnosticCapture *>(userdata);
+    capture->diagnostics.push_back(
+        {severity, json_path != nullptr ? json_path : "", message != nullptr ? message : ""});
+}
+
+void capture_map_diagnostic(void *userdata, slayer3d_map_diagnostic_severity severity, const char *json_path,
+                            const char *message)
+{
+    auto *capture = static_cast<MapDiagnosticCapture *>(userdata);
     capture->diagnostics.push_back(
         {severity, json_path != nullptr ? json_path : "", message != nullptr ? message : ""});
 }
@@ -39971,6 +39991,225 @@ TEST(GameDataRuntime, ValidationReportsWarningsWithoutFailingByDefault)
     options.treat_warnings_as_errors = true;
     EXPECT_FALSE(slayer3d_game_data_validate_file(path.c_str(), &options, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unsupported component type"), std::string::npos);
+}
+
+TEST(GameDataRuntime, SlayerMapValidatesInitialFormat)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "map.test",
+    "name": "Test Map",
+    "author": "Slayer3D"
+  },
+  "units": "meters",
+  "coordinate_system": "y_up",
+  "assets": {
+    "textures": [
+      { "id": "tex.floor", "path": "textures/floor.png" }
+    ],
+    "models": [
+      { "id": "model.enemy", "path": "models/enemy.glb" }
+    ]
+  },
+  "materials": [
+    {
+      "id": "mat.floor",
+      "texture": "tex.floor",
+      "color": [180, 180, 180, 255],
+      "tint": [255, 255, 255, 255],
+      "properties": {
+        "footstep": "concrete"
+      }
+    }
+  ],
+  "brushes": [
+    {
+      "id": "brush.floor",
+      "geometry": {
+        "kind": "box",
+        "min": [-4, 0, -4],
+        "max": [4, 0.25, 4]
+      },
+      "material": "mat.floor",
+      "color": [128, 128, 128, 255],
+      "faces": [
+        {
+          "side": "top",
+          "material": "mat.floor",
+          "normal": [0, 1, 0],
+          "properties": {
+            "sound": "stone"
+          }
+        }
+      ],
+      "properties": {
+        "graybox_role": "floor"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.enemy.1",
+      "archetype": "enemy.grunt",
+      "model": "model.enemy",
+      "primitive": "capsule",
+      "transform": {
+        "position": [1, 0.25, 1],
+        "rotation": [0, 90, 0],
+        "scale": [1, 1, 1],
+        "facing": [0, 0, 1]
+      },
+      "color": [255, 80, 80, 200],
+      "properties": {
+        "health": 100,
+        "team": "enemy"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "connection.enemy_unlocks_floor",
+      "from": { "entity": "actor.enemy.1", "event": "killed" },
+      "to": { "entity": "brush.floor", "action": "unlock" },
+      "properties": {
+        "condition": "all_enemies_dead"
+      }
+    }
+  ],
+  "properties": {
+    "music": "audio/test.ogg"
+  },
+  "editor": {
+    "camera": { "position": [4, 4, 4] }
+  },
+  "x_game_specific": {
+    "difficulty": "hard"
+  }
+})json";
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_map_validate_json(map_json, SDL_strlen(map_json), nullptr, error, sizeof(error))) << error;
+}
+
+TEST(GameDataRuntime, SlayerMapRejectsInvalidDocuments)
+{
+    struct Case
+    {
+        const char *name;
+        const char *json;
+        const char *expected;
+    };
+    const Case cases[] = {{"format", R"json({"format":"wrong","version":1})json", "format must be 'slayer3d.map'"},
+                          {"duplicate_object",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "object.same", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] } }
+  ],
+  "actors": [
+    { "id": "object.same", "primitive": "capsule" }
+  ]
+})json",
+                           "duplicate object id"},
+                          {"unknown_material",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    {
+      "id": "brush.one",
+      "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] },
+      "material": "mat.missing"
+    }
+  ]
+})json",
+                           "unknown material reference"},
+                          {"unknown_connection_endpoint",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "actors": [
+    { "id": "actor.one", "primitive": "box" }
+  ],
+  "connections": [
+    {
+      "from": { "entity": "actor.one", "event": "triggered" },
+      "to": { "entity": "actor.missing", "action": "open" }
+    }
+  ]
+})json",
+                           "unknown connection endpoint entity"},
+                          {"bad_box",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "brush.bad", "geometry": { "kind": "box", "min": [1, 0, 0], "max": [1, 1, 1] } }
+  ]
+})json",
+                           "box geometry max must be greater than min"}};
+
+    for (const Case &test_case : cases)
+    {
+        char error[512]{};
+        EXPECT_FALSE(
+            slayer3d_map_validate_json(test_case.json, SDL_strlen(test_case.json), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected), std::string::npos) << test_case.name << ": " << error;
+    }
+}
+
+TEST(GameDataRuntime, SlayerMapValidateFileReadsMapJson)
+{
+    const std::filesystem::path dir = unique_test_dir("slayermap_validate_file");
+    write_text(dir / "level.slayermap.json",
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "brush.one", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] } }
+  ]
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(
+        slayer3d_map_validate_file((dir / "level.slayermap.json").string().c_str(), nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(slayer3d_map_validate_file(nullptr, nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("map path must be non-empty"), std::string::npos);
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SlayerMapWarnsOnAbsoluteAssetPaths)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "assets": {
+    "textures": [
+      { "id": "tex.floor", "path": "/tmp/floor.png" }
+    ]
+  }
+})json";
+
+    MapDiagnosticCapture capture;
+    slayer3d_map_validation_options options{};
+    options.diagnostic = capture_map_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_map_validate_json(map_json, SDL_strlen(map_json), &options, error, sizeof(error))) << error;
+    ASSERT_EQ(capture.diagnostics.size(), 1u);
+    EXPECT_EQ(capture.diagnostics[0].severity, SLAYER3D_MAP_DIAGNOSTIC_WARNING);
+    EXPECT_NE(capture.diagnostics[0].message.find("project-relative path"), std::string::npos);
+
+    options.treat_warnings_as_errors = true;
+    EXPECT_FALSE(slayer3d_map_validate_json(map_json, SDL_strlen(map_json), &options, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("project-relative path"), std::string::npos);
 }
 
 TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)

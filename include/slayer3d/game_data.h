@@ -50,6 +50,7 @@
 #include "slayer3d/game_data_world_runtime.h"
 #include "slayer3d/level.h"
 #include "slayer3d/lighting.h"
+#include "slayer3d/map.h"
 #include "slayer3d/model.h"
 #include "slayer3d/network.h"
 #include "slayer3d/network_replication.h"

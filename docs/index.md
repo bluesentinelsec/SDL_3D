@@ -16,6 +16,8 @@ data-authored games running on a generic SDL-powered runtime.
 
 - [Game Data JSON](game-data-json.md): root game schema, fragments, scenes,
   actors, input, logic, arcade shooter primitives, networking, and validation.
+- [Slayer3D Map Format](slayer3d-map-format.md): standalone brush level map
+  structure, assets, materials, actors, properties, and editor metadata.
 - [Retained UI Widgets](ui-widgets.md): data-authored UI layout, styling,
   dropdowns, dynamic text, and editor/game UI guidance.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper

@@ -1,0 +1,233 @@
+# Slayer3D Map Format
+
+Slayer3D maps are authored level documents. They describe reusable level
+content such as brush geometry, materials, actor instances, asset references,
+generic properties, and object connections. They are intentionally separate
+from full game data files: a map is level content that a game or tool can load
+and interpret, not a complete game runtime configuration.
+
+The initial format is JSON and should use the `.slayermap.json` extension. The
+schema is also published at
+[`docs/schemas/slayer3d-map.schema.json`](schemas/slayer3d-map.schema.json).
+
+## Versioning
+
+Every map has a stable format id and integer version:
+
+```json
+{
+  "format": "slayer3d.map",
+  "version": 1
+}
+```
+
+Readers must reject unknown major versions. Writers should preserve unknown
+top-level fields and unknown object fields when possible so project-specific
+data survives editor round trips. Project-specific extensions should prefer
+namespaced fields such as `x_my_game`.
+
+## Runtime Data vs Editor Data
+
+Runtime map data lives in the root document under fields such as `assets`,
+`materials`, `brushes`, `actors`, `connections`, and `properties`.
+
+Editor-only state must live under `editor`. Runtime consumers may ignore this
+field. Examples include viewport layout, selected tool, collapsed inspector
+groups, asset browser scroll state, and non-runtime authoring hints.
+
+## Root Fields
+
+- `format`: Required string. Must be `slayer3d.map`.
+- `version`: Required integer. Version `1` is the current initial format.
+- `metadata`: Optional object with `id`, `name`, `author`, and `description`.
+- `units`: Optional string, either `meters` or `source_units`.
+- `coordinate_system`: Optional string. The initial format uses `y_up`.
+- `assets`: Optional asset catalogs for textures, models, sprites, and skyboxes.
+- `materials`: Optional material definitions used by brushes and faces.
+- `brushes`: Optional array of authored brush geometry.
+- `actors`: Optional array of placed gameplay/editor actors.
+- `connections`: Optional generic links between authored objects.
+- `properties`: Optional arbitrary map-level key-value properties.
+- `prefabs`: Reserved for prefab definitions and linked instances in a later
+  slice.
+- `lights`: Reserved for dynamic and baked light authoring in a later slice.
+- `effects`: Reserved for particles, fog, fire/smoke markers, and similar
+  effect primitives in a later slice.
+- `skybox`: Reserved for map-level skybox selection in a later slice.
+- `editor`: Optional editor-only metadata.
+
+## Asset References
+
+Asset entries use stable ids and project-relative paths:
+
+```json
+{
+  "assets": {
+    "textures": [
+      { "id": "tex.floor.concrete", "path": "textures/concrete_floor.png" }
+    ],
+    "models": [
+      { "id": "model.enemy.capsule", "path": "models/enemy_capsule.glb" }
+    ],
+    "sprites": [],
+    "skyboxes": []
+  }
+}
+```
+
+Object fields may reference either a declared asset id or a project-relative
+path. Portable maps should prefer declared asset ids. Absolute paths and URI
+strings are warnings because they are not portable between machines.
+
+## Materials
+
+Materials provide reusable brush appearance:
+
+```json
+{
+  "materials": [
+    {
+      "id": "mat.floor",
+      "texture": "tex.floor.concrete",
+      "color": [180, 180, 180, 255],
+      "tint": [255, 255, 255, 255],
+      "properties": {
+        "footstep": "concrete"
+      }
+    }
+  ]
+}
+```
+
+`color` is useful for untextured grayboxing. `tint` is an explicit texture
+modulation value and should not be applied unless an editor/game workflow opts
+into tinting. RGBA values use numeric channels in the `0..255` range.
+
+## Brushes
+
+Brushes are authored world geometry. Version 1 supports simple box geometry and
+plane-defined convex brushes:
+
+```json
+{
+  "brushes": [
+    {
+      "id": "brush.floor.1",
+      "geometry": {
+        "kind": "box",
+        "min": [-4, 0, -4],
+        "max": [4, 0.25, 4]
+      },
+      "material": "mat.floor",
+      "color": [128, 128, 128, 255],
+      "properties": {
+        "graybox_role": "floor"
+      }
+    }
+  ]
+}
+```
+
+Face-specific material/color/tint overrides may be represented with `faces`.
+The editor may use side labels such as `top`, `bottom`, `north`, `south`,
+`east`, and `west` for box brushes, or normals for more general brush forms.
+
+## Actors
+
+Actors are generic placed entities. They may represent gameplay actors,
+triggers, spawn points, pickups, markers, or project-specific concepts the
+editor does not explicitly understand.
+
+```json
+{
+  "actors": [
+    {
+      "id": "actor.enemy.1",
+      "archetype": "enemy.grunt",
+      "model": "model.enemy.capsule",
+      "primitive": "capsule",
+      "transform": {
+        "position": [2, 0.25, 1],
+        "rotation": [0, 90, 0],
+        "scale": [1, 1, 1],
+        "facing": [1, 0, 0]
+      },
+      "color": [255, 80, 80, 180],
+      "properties": {
+        "health": 100,
+        "team": "enemy"
+      }
+    }
+  ]
+}
+```
+
+`properties` values may be strings, numbers, booleans, arrays, objects, or null.
+This is the primary escape hatch for emergent gameplay data.
+
+## Connections
+
+Connections are optional generic links between authored objects:
+
+```json
+{
+  "connections": [
+    {
+      "id": "connection.room1.complete_unlocks_door",
+      "from": { "entity": "actor.room1.sensor", "event": "completed" },
+      "to": { "entity": "brush.door.1", "action": "unlock" },
+      "properties": {
+        "condition": "all_enemies_dead"
+      }
+    }
+  ]
+}
+```
+
+Games may ignore, extend, or reinterpret connections. If an endpoint references
+an object outside the map, set `external: true` on that endpoint.
+
+## Minimal Example
+
+```json
+{
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "example.graybox",
+    "name": "Graybox Example"
+  },
+  "units": "meters",
+  "coordinate_system": "y_up",
+  "assets": {
+    "textures": [
+      { "id": "tex.floor", "path": "textures/floor.png" }
+    ]
+  },
+  "materials": [
+    { "id": "mat.floor", "texture": "tex.floor" }
+  ],
+  "brushes": [
+    {
+      "id": "brush.floor",
+      "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 0.25, 4] },
+      "material": "mat.floor"
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.player_start",
+      "archetype": "player_start",
+      "primitive": "capsule",
+      "transform": { "position": [0, 0.25, 0], "facing": [0, 0, 1] }
+    }
+  ],
+  "properties": {
+    "music": "audio/level_theme.ogg"
+  },
+  "editor": {
+    "camera": { "position": [6, 5, 6], "target": [0, 0, 0] }
+  }
+}
+```
+
