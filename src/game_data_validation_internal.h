@@ -140,6 +140,7 @@ bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, con
 bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_editor_actors(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
                                      const char *json_path);
 bool validation_mouse_button_name_valid(const char *name);

@@ -122,6 +122,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
     {
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS;
     }
+    if (SDL_strcmp(value != NULL ? value : "", "actors") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS;
     if (SDL_strcmp(value != NULL ? value : "", "markers") == 0 ||
         SDL_strcmp(value != NULL ? value : "", "diagnostic_markers") == 0)
     {
@@ -2070,6 +2072,53 @@ static bool emit_editor_debug_player_start_marker(const slayer3d_game_data_runti
     return true;
 }
 
+static slayer3d_bounding_box editor_debug_actor_bounds(const editor_actor_runtime *actor)
+{
+    slayer3d_vec3 scale = actor != NULL && slayer3d_vec3_length_squared(actor->scale) > 0.000001f
+                              ? actor->scale
+                              : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    slayer3d_vec3 half = slayer3d_vec3_make(0.5f * scale.x, 0.5f * scale.y, 0.5f * scale.z);
+    const char *mesh = actor != NULL ? actor->mesh : NULL;
+    if (mesh != NULL && SDL_strcmp(mesh, "capsule") == 0)
+        half = slayer3d_vec3_make(0.35f * scale.x, 0.9f * scale.y, 0.35f * scale.z);
+    else if (mesh != NULL && SDL_strcmp(mesh, "rectangle") == 0)
+        half = slayer3d_vec3_make(0.45f * scale.x, 0.9f * scale.y, 0.25f * scale.z);
+
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(actor->position.x - half.x, actor->position.y, actor->position.z - half.z);
+    bounds.max =
+        slayer3d_vec3_make(actor->position.x + half.x, actor->position.y + half.y * 2.0f, actor->position.z + half.z);
+    return bounds;
+}
+
+static bool emit_editor_debug_actor_markers(const slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_editor_debug_desc *desc,
+                                            slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL)
+        return false;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE;
+    context.world_name = "editor_actors";
+    context.face_index = -1;
+
+    for (int actor_index = 0; actor_index < runtime->editor_actor_count; ++actor_index)
+    {
+        const editor_actor_runtime *actor = &runtime->editor_actors[actor_index];
+        if (actor->name == NULL || actor->name[0] == '\0')
+            continue;
+        context.element_name = actor->name;
+        context.color = actor->color.a > 0 ? actor->color : (slayer3d_color){120, 200, 255, 210};
+        if (!emit_editor_debug_bounds(&context, editor_debug_actor_bounds(actor)))
+            return true;
+    }
+    return true;
+}
+
 static bool editor_rotate_tool_selection_bounds(const slayer3d_game_data_runtime *runtime,
                                                 slayer3d_bounding_box *out_bounds)
 {
@@ -2679,6 +2728,11 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
 
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS) != 0u &&
         !emit_editor_debug_player_start_marker(runtime, desc, callback, userdata))
+    {
+        return true;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS) != 0u &&
+        !emit_editor_debug_actor_markers(runtime, desc, callback, userdata))
     {
         return true;
     }

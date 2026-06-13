@@ -322,6 +322,12 @@
     "signal.editor.texture.paint.mode.brush",
     "signal.editor.texture.paint.mode.face",
     "signal.editor.texture.viewer.toggle",
+    "signal.editor.actor.select.player_capsule",
+    "signal.editor.actor.select.opponent_rectangle",
+    "signal.editor.actor.select.simple_robot",
+    "signal.editor.actor.viewer.toggle",
+    "signal.editor.actor.group.placeholders.toggle",
+    "signal.editor.actor.group.models.toggle",
     "signal.editor.export",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
@@ -722,9 +728,61 @@
         "signal": "signal.editor.palette.game_object",
         "actions": [
           { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
-          { "type": "scene_state.set", "key": "editor.palette.active", "value": "game_object" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "game object palette opened" }
+          { "type": "scene_state.set", "key": "editor.actor.selected", "value": "player_capsule" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor placement mode" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select.player_capsule",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
+          { "type": "scene_state.set", "key": "editor.actor.selected", "value": "player_capsule" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player capsule actor selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select.opponent_rectangle",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_opponent" },
+          { "type": "scene_state.set", "key": "editor.actor.selected", "value": "opponent_rectangle" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "opponent rectangle actor selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select.simple_robot",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_robot" },
+          { "type": "scene_state.set", "key": "editor.actor.selected", "value": "simple_robot" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "simple robot actor selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.viewer.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.actor.viewer.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor viewer toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.group.placeholders.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.actor.group.placeholders.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor placeholders group toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.group.models.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.actor.group.models.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor models group toggled" }
         ]
       },
       {
@@ -737,6 +795,15 @@
               { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
               { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "palette closed" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+              { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor viewer closed" }
             ]
           }
         ]
@@ -1343,6 +1410,21 @@
               "default": "select"
             },
             "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_player" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_opponent" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_robot" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
           }
         ]
       },
@@ -1351,7 +1433,115 @@
         "actions": [
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_player" },
+            "then": [
+              {
+                "type": "editor.actor.place",
+                "name_prefix": "actor.editor_shell.player",
+                "scene": "scene.editor_shell.dojo",
+                "display_name": "Player Capsule",
+                "archetype": "actor.editor_shell.player_placeholder",
+                "mesh": "capsule",
+                "group": "Player",
+                "position_from": "placement_preview",
+                "rotation": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "color": [80, 235, 130, 205],
+                "properties": {
+                  "classname": "player_start_placeholder",
+                  "role": "player",
+                  "sensor_profile": "player"
+                },
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player capsule actor placed" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_opponent" },
+            "then": [
+              {
+                "type": "editor.actor.place",
+                "name_prefix": "actor.editor_shell.opponent",
+                "scene": "scene.editor_shell.dojo",
+                "display_name": "Opponent Rectangle",
+                "archetype": "actor.editor_shell.opponent_placeholder",
+                "mesh": "rectangle",
+                "group": "Opponents",
+                "position_from": "placement_preview",
+                "rotation": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "color": [235, 128, 84, 190],
+                "properties": {
+                  "classname": "opponent_placeholder",
+                  "role": "opponent",
+                  "sensor_profile": "enemy"
+                },
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "opponent rectangle actor placed" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_robot" },
+            "then": [
+              {
+                "type": "editor.actor.place",
+                "name_prefix": "actor.editor_shell.robot",
+                "scene": "scene.editor_shell.dojo",
+                "display_name": "Simple Robot",
+                "archetype": "actor.editor_shell.simple_robot",
+                "mesh": "box",
+                "model": "model.editor_shell.simple_robot",
+                "group": "Meshes",
+                "position_from": "placement_preview",
+                "rotation": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+                "color": [112, 178, 255, 210],
+                "properties": {
+                  "classname": "simple_robot",
+                  "role": "actor",
+                  "sensor_profile": "robot"
+                },
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "simple robot actor placed" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
+                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "actor_player" },
+                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "actor_opponent" },
+                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "actor_robot" }
+              ]
+            },
             "then": [
               {
                 "type": "branch",
@@ -2138,6 +2328,63 @@
     ]
   },
   "editor_player_starts": [],
+  "editor_actors": [],
+  "actor_archetypes": [
+    {
+      "name": "actor.editor_shell.player_placeholder",
+      "active": true,
+      "tags": ["editor", "player", "placeholder"],
+      "properties": {
+        "classname": { "type": "string", "value": "player_start_placeholder" },
+        "role": { "type": "string", "value": "player" }
+      },
+      "components": [
+        {
+          "type": "render.mesh_primitive",
+          "primitive": "capsule",
+          "radius": 0.35,
+          "height": 1.8,
+          "color": [80, 235, 130, 205],
+          "lighting": false
+        }
+      ]
+    },
+    {
+      "name": "actor.editor_shell.opponent_placeholder",
+      "active": true,
+      "tags": ["editor", "opponent", "placeholder"],
+      "properties": {
+        "classname": { "type": "string", "value": "opponent_placeholder" },
+        "role": { "type": "string", "value": "opponent" }
+      },
+      "components": [
+        {
+          "type": "render.cube",
+          "size": [0.9, 1.8, 0.5],
+          "color": [235, 128, 84, 190],
+          "lighting": false
+        }
+      ]
+    },
+    {
+      "name": "actor.editor_shell.simple_robot",
+      "active": true,
+      "tags": ["editor", "robot", "model"],
+      "properties": {
+        "classname": { "type": "string", "value": "simple_robot" },
+        "role": { "type": "string", "value": "actor" }
+      },
+      "components": [
+        {
+          "type": "render.model",
+          "model": "model.editor_shell.simple_robot",
+          "scale": [1.0, 1.0, 1.0],
+          "color": [112, 178, 255, 210],
+          "lighting": true
+        }
+      ]
+    }
+  ],
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",

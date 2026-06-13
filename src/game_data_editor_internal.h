@@ -122,6 +122,8 @@ bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *ru
 bool pick_editor_player_start(const slayer3d_game_data_runtime *runtime,
                               const slayer3d_game_data_world_trace_desc *trace,
                               slayer3d_game_data_editor_selection *out_selection);
+bool pick_editor_actor(const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_world_trace_desc *trace,
+                       slayer3d_game_data_editor_selection *out_selection);
 bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                      const slayer3d_game_data_world_trace_desc *trace,
                                      slayer3d_game_data_editor_selection *out_selection);

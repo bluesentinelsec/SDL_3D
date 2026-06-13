@@ -885,11 +885,14 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         if (runtime == NULL || runtime->scene_state == NULL)
             return false;
         if (editor_mode_is_paint(runtime) ||
-            slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.viewer.active", false))
+            slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.viewer.active", false) ||
+            slayer3d_properties_get_bool(runtime->scene_state, "editor.actor.viewer.active", false))
         {
             slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.collapsed", false);
             (void)slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);
             return true;
         }
@@ -1055,6 +1058,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.player_start.delete") == 0)
         return slayer3d_game_data_delete_editor_player_start_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.actor.place") == 0)
+        return slayer3d_game_data_place_editor_actor_action(runtime, action);
 
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {

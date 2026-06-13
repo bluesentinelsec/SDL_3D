@@ -246,6 +246,30 @@
           "snap_mode": "nearest",
           "size": [0.5, 1.8, 0.5],
           "message": "player start preview"
+        },
+        {
+          "mode": "actor_player",
+          "kind": "actor",
+          "snap": 0.25,
+          "snap_mode": "nearest",
+          "size": [0.7, 1.8, 0.7],
+          "message": "player capsule actor preview"
+        },
+        {
+          "mode": "actor_opponent",
+          "kind": "actor",
+          "snap": 0.25,
+          "snap_mode": "nearest",
+          "size": [0.9, 1.8, 0.5],
+          "message": "opponent rectangle actor preview"
+        },
+        {
+          "mode": "actor_robot",
+          "kind": "actor",
+          "snap": 0.25,
+          "snap_mode": "nearest",
+          "size": [0.8, 1.6, 0.8],
+          "message": "simple robot actor preview"
         }
       ]
     },
@@ -356,6 +380,30 @@
           "label": "Player",
           "category": "things",
           "description": "play-test spawn marker"
+        },
+        {
+          "mode": "actor_player",
+          "preview": "actor_player",
+          "kind": "actor",
+          "label": "Player Capsule",
+          "category": "actors/player",
+          "description": "capsule placeholder for the player actor"
+        },
+        {
+          "mode": "actor_opponent",
+          "preview": "actor_opponent",
+          "kind": "actor",
+          "label": "Opponent Rect",
+          "category": "actors/opponents",
+          "description": "rectangle placeholder for an opponent actor"
+        },
+        {
+          "mode": "actor_robot",
+          "preview": "actor_robot",
+          "kind": "actor",
+          "label": "Simple Robot",
+          "category": "actors/models",
+          "description": "model-backed actor placement"
         }
       ]
     },
@@ -371,6 +419,7 @@
         "work_plane_grid",
         "world_bounds",
         "player_starts",
+        "actors",
         "selection_bounds",
         "selection_face",
         "vertex_handles",
@@ -446,6 +495,17 @@
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.actors.button",
+            "type": "button",
+            "w": 86,
+            "h": 28,
+            "text": "Actors (g)",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.palette.game_object",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false }
+          },
           { "id": "ui.editor_shell.toolbar.tools.button", "type": "button", "w": 76, "h": 28, "text": "Tools", "interactive": true },
           { "id": "ui.editor_shell.toolbar.view.button", "type": "button", "w": 70, "h": 28, "text": "View", "interactive": true },
           { "id": "ui.editor_shell.toolbar.run.button", "type": "button", "w": 64, "h": 28, "text": "Run", "interactive": true },
@@ -1100,6 +1160,247 @@
           "conditions": [
             { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
             { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "id": "ui.editor_shell.actor_viewer.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 1030,
+        "y": 92,
+        "w": 238,
+        "h": 460,
+        "layer": 120,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.actor_viewer.header",
+            "type": "panel",
+            "x": 8,
+            "y": 8,
+            "w": 222,
+            "h": 34,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.actor_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Actors" },
+              {
+                "id": "ui.editor_shell.actor_viewer.collapse.button",
+                "type": "button",
+                "x": 164,
+                "y": 4,
+                "w": 50,
+                "h": 24,
+                "text": "hide",
+                "text_scale": 0.42,
+                "interactive": true,
+                "action": "editor.actor.viewer.toggle"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.actor_viewer.list.panel",
+            "type": "panel",
+            "x": 10,
+            "y": 52,
+            "w": 218,
+            "h": 396,
+            "layer": 121,
+            "children": [
+              {
+                "id": "ui.editor_shell.actor_viewer.group.placeholders.button",
+                "type": "button",
+                "x": 10,
+                "y": 10,
+                "w": 186,
+                "h": 26,
+                "text": "Placeholders",
+                "text_scale": 0.42,
+                "interactive": true,
+                "action": "editor.actor.group.placeholders.toggle",
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.player_capsule.button",
+                "type": "button",
+                "x": 14,
+                "y": 48,
+                "w": 82,
+                "h": 82,
+                "text": "",
+                "interactive": true,
+                "action": "editor.actor.select.player_capsule",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "player_capsule", "default": "player_capsule" },
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.player_capsule.preview.body",
+                "type": "panel",
+                "x": 43,
+                "y": 65,
+                "w": 24,
+                "h": 48,
+                "color": [80, 235, 130, 205],
+                "border_color": [170, 255, 200, 255],
+                "border_thickness": 1,
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 123
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.player_capsule.label",
+                "type": "label",
+                "x": 10,
+                "y": 132,
+                "w": 90,
+                "h": 18,
+                "text": "Player",
+                "text_scale": 0.38,
+                "align": "center",
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.opponent_rectangle.button",
+                "type": "button",
+                "x": 108,
+                "y": 48,
+                "w": 82,
+                "h": 82,
+                "text": "",
+                "interactive": true,
+                "action": "editor.actor.select.opponent_rectangle",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "opponent_rectangle" },
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.opponent_rectangle.preview.body",
+                "type": "panel",
+                "x": 132,
+                "y": 69,
+                "w": 34,
+                "h": 42,
+                "color": [235, 128, 84, 190],
+                "border_color": [255, 196, 150, 255],
+                "border_thickness": 1,
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 123
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.opponent_rectangle.label",
+                "type": "label",
+                "x": 104,
+                "y": 132,
+                "w": 90,
+                "h": 18,
+                "text": "Opponent",
+                "text_scale": 0.38,
+                "align": "center",
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.group.models.button",
+                "type": "button",
+                "x": 10,
+                "y": 168,
+                "w": 186,
+                "h": 26,
+                "text": "Meshes",
+                "text_scale": 0.42,
+                "interactive": true,
+                "action": "editor.actor.group.models.toggle",
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.simple_robot.button",
+                "type": "button",
+                "x": 14,
+                "y": 206,
+                "w": 82,
+                "h": 82,
+                "text": "",
+                "interactive": true,
+                "action": "editor.actor.select.simple_robot",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "simple_robot" },
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.simple_robot.preview.body",
+                "type": "panel",
+                "x": 42,
+                "y": 230,
+                "w": 28,
+                "h": 38,
+                "color": [112, 178, 255, 210],
+                "border_color": [190, 228, 255, 255],
+                "border_thickness": 1,
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 123
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.simple_robot.ready_badge",
+                "type": "panel",
+                "x": 25,
+                "y": 217,
+                "w": 14,
+                "h": 14,
+                "color": [64, 235, 150, 245],
+                "border_color": [172, 255, 210, 255],
+                "border_thickness": 1,
+                "visible_if": {
+                  "type": "all",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
+                    { "type": "scene_state.compare", "key": "asset_warmup.model.model.editor_shell.simple_robot.ready", "op": "==", "value": true, "default": false }
+                  ]
+                },
+                "layer": 124
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.simple_robot.label",
+                "type": "label",
+                "x": 10,
+                "y": 290,
+                "w": 90,
+                "h": 18,
+                "text": "Robot",
+                "text_scale": 0.38,
+                "align": "center",
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              { "id": "ui.editor_shell.actor_viewer.scroll.track", "type": "panel", "x": 198, "y": 10, "w": 10, "h": 354, "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.scroll.thumb", "type": "panel", "x": 200, "y": 14, "w": 6, "h": 330, "layer": 123 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ui.editor_shell.actor_viewer.collapsed",
+        "type": "button",
+        "x": 1116,
+        "y": 92,
+        "w": 152,
+        "h": 32,
+        "text": "Actors",
+        "text_scale": 0.48,
+        "interactive": true,
+        "action": "editor.actor.viewer.toggle",
+        "layer": 120,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": true, "default": false }
           ]
         }
       },

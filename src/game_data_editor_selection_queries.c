@@ -122,6 +122,25 @@ static slayer3d_bounding_box editor_player_start_bounds(const editor_player_star
     return bounds;
 }
 
+static slayer3d_bounding_box editor_actor_bounds(const editor_actor_runtime *actor)
+{
+    const slayer3d_vec3 scale = actor != NULL && slayer3d_vec3_length_squared(actor->scale) > 0.000001f
+                                    ? actor->scale
+                                    : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    slayer3d_vec3 half = slayer3d_vec3_make(0.5f * scale.x, 0.5f * scale.y, 0.5f * scale.z);
+    const char *mesh = actor != NULL ? actor->mesh : NULL;
+    if (mesh != NULL && SDL_strcmp(mesh, "capsule") == 0)
+        half = slayer3d_vec3_make(0.35f * scale.x, 0.9f * scale.y, 0.35f * scale.z);
+    else if (mesh != NULL && SDL_strcmp(mesh, "rectangle") == 0)
+        half = slayer3d_vec3_make(0.45f * scale.x, 0.9f * scale.y, 0.25f * scale.z);
+
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(actor->position.x - half.x, actor->position.y, actor->position.z - half.z);
+    bounds.max =
+        slayer3d_vec3_make(actor->position.x + half.x, actor->position.y + half.y * 2.0f, actor->position.z + half.z);
+    return bounds;
+}
+
 static bool editor_segment_aabb_intersection(slayer3d_vec3 start, slayer3d_vec3 end, slayer3d_bounding_box bounds,
                                              float *out_fraction)
 {
@@ -203,6 +222,53 @@ bool pick_editor_player_start(const slayer3d_game_data_runtime *runtime,
     out_selection->world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     out_selection->element_name = best_start->name;
     out_selection->element_index = (int)(best_start - runtime->editor_player_starts);
+    out_selection->face_index = -1;
+    out_selection->fraction = best_fraction;
+    out_selection->point = slayer3d_vec3_add(
+        trace->start, slayer3d_vec3_scale(slayer3d_vec3_sub(trace->end, trace->start), best_fraction));
+    out_selection->normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    out_selection->bounds = best_bounds;
+    out_selection->has_bounds = true;
+    return true;
+}
+
+bool pick_editor_actor(const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_world_trace_desc *trace,
+                       slayer3d_game_data_editor_selection *out_selection)
+{
+    if (runtime == NULL || trace == NULL || out_selection == NULL)
+        return false;
+
+    float best_fraction = 1.0f;
+    const editor_actor_runtime *best_actor = NULL;
+    slayer3d_bounding_box best_bounds;
+    SDL_zero(best_bounds);
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        const editor_actor_runtime *actor = &runtime->editor_actors[i];
+        if (actor->name == NULL || actor->name[0] == '\0')
+            continue;
+        const slayer3d_bounding_box bounds = editor_actor_bounds(actor);
+        float fraction = 1.0f;
+        if (!editor_segment_aabb_intersection(trace->start, trace->end, bounds, &fraction))
+            continue;
+        if (best_actor == NULL || fraction < best_fraction)
+        {
+            best_actor = actor;
+            best_fraction = fraction;
+            best_bounds = bounds;
+        }
+    }
+
+    if (best_actor == NULL)
+        return false;
+
+    init_editor_selection(out_selection);
+    out_selection->hit = true;
+    out_selection->type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    out_selection->world_name = "editor_actors";
+    out_selection->world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    out_selection->element_name = best_actor->name;
+    out_selection->element_index = (int)(best_actor - runtime->editor_actors);
     out_selection->face_index = -1;
     out_selection->fraction = best_fraction;
     out_selection->point = slayer3d_vec3_add(

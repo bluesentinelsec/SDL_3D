@@ -235,6 +235,7 @@ static bool import_section_name_allowed(const char *name)
                                           "brush_worlds",
                                           "editor_brush_sources",
                                           "editor_player_starts",
+                                          "editor_actors",
                                           "sector_navigation",
                                           "sector_doors",
                                           "sector_platforms",

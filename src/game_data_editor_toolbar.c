@@ -58,6 +58,35 @@ static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hi
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
 }
 
+static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
+}
+
+static bool editor_actor_select_action(const char *action)
+{
+    static const char *prefix = "editor.actor.select.";
+    return action != NULL && SDL_strncmp(action, prefix, SDL_strlen(prefix)) == 0 && action[SDL_strlen(prefix)] != '\0';
+}
+
+static bool editor_actor_placement_mode(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const char *mode = slayer3d_properties_get_string(runtime->scene_state, "editor.tool.mode", "");
+    return mode != NULL && SDL_strncmp(mode, "actor_", 6) == 0;
+}
+
+static bool editor_emit_signal(slayer3d_game_data_runtime *runtime, const char *signal)
+{
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
+    if (bus == NULL || signal_id < 0)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, NULL);
+    return true;
+}
+
 static bool editor_texture_select_action_is_blocked(slayer3d_game_data_runtime *runtime, const char *action)
 {
     static const char *prefix = "editor.texture.select.";
@@ -213,6 +242,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
@@ -235,31 +266,22 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
         (SDL_strcmp(action, "editor.brush.duplicate") == 0 || SDL_strcmp(action, "editor.brush.flip_vertical") == 0 ||
          SDL_strcmp(action, "editor.brush.flip_horizontal") == 0))
     {
-        slayer3d_signal_bus *bus = runtime_bus(runtime);
         const char *signal = "signal.editor.brush.duplicate";
         if (SDL_strcmp(action, "editor.brush.flip_horizontal") == 0)
             signal = "signal.editor.brush.flip_horizontal";
         else if (SDL_strcmp(action, "editor.brush.flip_vertical") == 0)
             signal = "signal.editor.brush.flip_vertical";
-        const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
-        if (bus != NULL && signal_id >= 0)
-        {
-            slayer3d_signal_emit(bus, signal_id, NULL);
+        if (editor_emit_signal(runtime, signal))
             return true;
-        }
     }
     if (runtime != NULL &&
-        (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0))
+        (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
+         SDL_strncmp(action, "editor.actor.", 13) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
-        slayer3d_signal_bus *bus = runtime_bus(runtime);
-        const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
-        if (bus != NULL && signal_id >= 0)
-        {
-            slayer3d_signal_emit(bus, signal_id, NULL);
+        if (editor_emit_signal(runtime, signal))
             return true;
-        }
     }
     return false;
 }
@@ -279,19 +301,48 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         return true;
 
     const bool clicked = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
-    if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit))
+    if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
+        editor_hit_is_actor_viewer(hit))
     {
         if (out_consumed != NULL)
             *out_consumed = true;
+        if (released || !left_down)
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
         if (clicked && hit->action[0] != '\0' && !editor_texture_select_action_is_blocked(runtime, hit->action))
+        {
             (void)editor_apply_tool_action(runtime, hit->action);
+            if (editor_actor_select_action(hit->action))
+            {
+                slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", true);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                               "drag actor into viewport");
+            }
+        }
         slayer3d_ui_layout_destroy(layout);
         return true;
     }
     slayer3d_ui_layout_destroy(layout);
+
+    if (slayer3d_properties_get_bool(runtime->scene_state, "editor.actor.drag.active", false))
+    {
+        if (released || !left_down)
+        {
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
+            if (released && editor_actor_placement_mode(runtime) &&
+                slayer3d_properties_get_bool(runtime->scene_state, "editor.placement_preview.active", false))
+            {
+                if (out_consumed != NULL)
+                    *out_consumed = true;
+                (void)editor_emit_signal(runtime, "signal.editor.command.commit");
+                return true;
+            }
+        }
+    }
 
     for (size_t i = 0, count = yyjson_arr_size(buttons); i < count; ++i)
     {

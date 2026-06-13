@@ -1014,6 +1014,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.player_start.place", validate_editor_player_start_place_action),
         ACTION_RULE_EXACT_HANDLER("editor.player_start.apply", validate_editor_player_start_apply_action),
         ACTION_RULE_EXACT_HANDLER("editor.player_start.delete", validate_editor_player_start_delete_action),
+        ACTION_RULE_EXACT_HANDLER("editor.actor.place", validate_editor_actor_place_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.start", validate_network_direct_connect_start_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.cancel", validate_network_named_session_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.observe", validate_network_named_session_action),

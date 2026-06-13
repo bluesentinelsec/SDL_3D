@@ -115,6 +115,11 @@ typedef struct slayer3d_game_data_runtime
     Uint64 editor_player_start_revision;
     Uint64 editor_player_start_saved_revision;
     bool editor_player_start_dirty;
+    editor_actor_runtime *editor_actors;
+    int editor_actor_count;
+    int editor_actor_capacity;
+    Uint64 editor_actor_revision;
+    bool editor_actor_dirty;
     slayer3d_game_data_brush_diagnostics brush_diagnostics;
     Uint64 world_model_trace_count;
     Uint64 world_model_point_query_count;
@@ -396,6 +401,8 @@ bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *e
 bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_editor_player_starts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                                int error_buffer_size);
+bool load_editor_actors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                        int error_buffer_size);
 bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);

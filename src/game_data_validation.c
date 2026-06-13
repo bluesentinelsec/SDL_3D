@@ -624,9 +624,10 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_editor_brush_sources(ctx, root, names) && validate_editor_player_starts(ctx, root, names) &&
-           validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&
-           validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
-           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_editor_actors(ctx, root, names) && validate_sector_doors(ctx, root, names) &&
+           validate_sector_platforms(ctx, root, names) && validate_actor_archetypes_and_pools(ctx, root, names) &&
+           validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
+           validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_settings(ctx, root) &&
            validate_render_effects(ctx, root, names) && validate_lights(ctx, root, names) &&
            validate_haptics(ctx, root, names) && validate_editor_metadata_tree(ctx, root, names) &&

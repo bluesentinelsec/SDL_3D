@@ -145,6 +145,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_PREVIEW_EDGE = 40,
         /** @brief Dedicated editor origin axis line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ORIGIN_AXIS = 41,
+        /** @brief Editor-authored actor placement marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE = 42,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -181,6 +183,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES = 1u << 14,
         /** @brief Emit shear tool bounds side handles. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES = 1u << 15,
+        /** @brief Emit editor-authored actor placement markers. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS = 1u << 16,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -191,7 +195,7 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */

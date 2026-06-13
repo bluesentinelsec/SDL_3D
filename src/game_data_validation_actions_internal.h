@@ -77,5 +77,7 @@ bool validate_editor_player_start_apply_action(validation_context *ctx, yyjson_v
                                                validation_names *names, const char *type);
 bool validate_editor_player_start_delete_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                 validation_names *names, const char *type);
+bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
 
 #endif

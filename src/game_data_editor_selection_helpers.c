@@ -120,7 +120,8 @@ bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
     if (!editor_selection_is_selectable_brush(hover_selection))
     {
         if (hover_selection != NULL && hover_selection->hit &&
-            hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
+            (hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START ||
+             hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR))
         {
             clear_editor_selected_brushes(runtime);
             runtime->editor_active_selection = *hover_selection;

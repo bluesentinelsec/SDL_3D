@@ -354,6 +354,53 @@ bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, va
     return ok;
 }
 
+bool validate_editor_actors(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *actors = obj_get(root, "editor_actors");
+    if (actors == NULL)
+        return true;
+    if (!yyjson_is_arr(actors))
+        return validation_error(ctx, "$.editor_actors", "editor_actors must be an array");
+
+    name_table actor_names;
+    SDL_zero(actor_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(actors); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.editor_actors[%zu]", i);
+        yyjson_val *actor = yyjson_arr_get(actors, i);
+        if (!yyjson_is_obj(actor))
+        {
+            ok = validation_error(ctx, path, "editor actor entries must be objects");
+            break;
+        }
+        const char *scene = json_string(actor, "scene");
+        const char *archetype = json_string(actor, "archetype");
+        const char *model = json_string(actor, "model");
+        yyjson_val *position = obj_get(actor, "position");
+        yyjson_val *rotation = obj_get(actor, "rotation");
+        yyjson_val *scale = obj_get(actor, "scale");
+        yyjson_val *color = obj_get(actor, "color");
+        yyjson_val *properties = obj_get(actor, "properties");
+        ok = require_unique_name(ctx, &actor_names, "editor actor", json_string(actor, "name"), path) &&
+             (scene == NULL || require_ref(ctx, &names->scenes, "scene", scene, path)) &&
+             (archetype == NULL || require_ref(ctx, &names->actor_archetypes, "actor archetype", archetype, path)) &&
+             (model == NULL || require_ref(ctx, &names->models, "model", model, path)) &&
+             (position == NULL || is_exact_vec_array(position, 3)) &&
+             (rotation == NULL || is_exact_vec_array(rotation, 3)) &&
+             (scale == NULL ||
+              (is_exact_vec_array(scale, 3) && yyjson_get_num(yyjson_arr_get(scale, 0)) > 0.0 &&
+               yyjson_get_num(yyjson_arr_get(scale, 1)) > 0.0 && yyjson_get_num(yyjson_arr_get(scale, 2)) > 0.0)) &&
+             (color == NULL || is_exact_vec3_or_vec4_array(color)) && (properties == NULL || yyjson_is_obj(properties));
+        if (!ok && !ctx->failed)
+            ok = validation_error(ctx, path,
+                                  "editor actor requires valid name, transform, color, properties, and references");
+    }
+    name_table_destroy(&actor_names);
+    return ok;
+}
+
 static bool is_exact_int_vec3_array(yyjson_val *value)
 {
     if (!yyjson_is_arr(value) || yyjson_arr_size(value) != 3u)

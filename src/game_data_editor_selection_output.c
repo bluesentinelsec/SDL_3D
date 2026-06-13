@@ -18,6 +18,8 @@ const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
         return "brush_world";
     if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
         return "editor_player_start";
+    if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+        return "editor_actor";
     return "none";
 }
 

@@ -921,7 +921,7 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     preview->anchor = anchor;
     preview->snap = snap;
     preview->has_bounds = true;
-    if (SDL_strcmp(preview->kind, "player_start") == 0)
+    if (SDL_strcmp(preview->kind, "player_start") == 0 || SDL_strcmp(preview->kind, "actor") == 0)
     {
         const slayer3d_vec3 size = json_vec3(preview_json, "size", slayer3d_vec3_make(0.5f, 1.8f, 0.5f));
         preview->bounds.min = slayer3d_vec3_make(anchor.x - size.x * 0.5f, anchor.y, anchor.z - size.z * 0.5f);
