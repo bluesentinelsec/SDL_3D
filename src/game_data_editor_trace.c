@@ -394,25 +394,24 @@ bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, 
 
     slayer3d_game_data_editor_selection world_selection;
     slayer3d_game_data_editor_selection player_start_selection;
+    slayer3d_game_data_editor_selection actor_selection;
     init_editor_selection(&world_selection);
     init_editor_selection(&player_start_selection);
+    init_editor_selection(&actor_selection);
     if (!slayer3d_game_data_pick_editor_world_model(runtime, trace, &world_selection))
         return editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection);
     const bool player_start_hit = pick_editor_player_start(runtime, trace, &player_start_selection);
-    if (world_selection.hit && player_start_hit)
-    {
-        *out_selection =
-            player_start_selection.fraction <= world_selection.fraction ? player_start_selection : world_selection;
-        return true;
-    }
-    if (player_start_hit)
-    {
-        *out_selection = player_start_selection;
-        return true;
-    }
+    const bool actor_hit = pick_editor_actor(runtime, trace, &actor_selection);
+    const slayer3d_game_data_editor_selection *best = NULL;
     if (world_selection.hit)
+        best = &world_selection;
+    if (player_start_hit)
+        best = best == NULL || player_start_selection.fraction <= best->fraction ? &player_start_selection : best;
+    if (actor_hit)
+        best = best == NULL || actor_selection.fraction <= best->fraction ? &actor_selection : best;
+    if (best != NULL)
     {
-        *out_selection = world_selection;
+        *out_selection = *best;
         return true;
     }
     if (editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection))

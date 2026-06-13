@@ -49,7 +49,8 @@ static bool editor_debug_flag_name_valid(const char *value)
                              SDL_strcmp(value, "diagnostic_markers") == 0 || SDL_strcmp(value, "selection_face") == 0 ||
                              SDL_strcmp(value, "vertex_handles") == 0 || SDL_strcmp(value, "edge_handles") == 0 ||
                              SDL_strcmp(value, "rotate_handles") == 0 || SDL_strcmp(value, "scale_handles") == 0 ||
-                             SDL_strcmp(value, "shear_handles") == 0 || SDL_strcmp(value, "clip_preview") == 0);
+                             SDL_strcmp(value, "shear_handles") == 0 || SDL_strcmp(value, "clip_preview") == 0 ||
+                             SDL_strcmp(value, "actors") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
@@ -365,9 +366,9 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         const char *kind = json_string(preview, "kind");
         if (kind == NULL)
             kind = "box";
-        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0)
+        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0 && SDL_strcmp(kind, "actor") != 0)
             return validation_error(ctx, preview_path,
-                                    "scene editor placement preview kind must be box or player_start");
+                                    "scene editor placement preview kind must be box, player_start, or actor");
         static const char *const preview_string_fields[] = {"axis_key", "grid_size_key", "auto_axis_camera",
                                                             "auto_axis_view_key", "auto_axis_view"};
         for (size_t field_index = 0; field_index < SDL_arraysize(preview_string_fields); ++field_index)
@@ -414,7 +415,7 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         yyjson_val *grid_size = obj_get(preview, "grid_size");
         if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
             return validation_error(ctx, preview_path, "scene editor placement preview grid_size must be positive");
-        if (SDL_strcmp(kind, "player_start") == 0)
+        if (SDL_strcmp(kind, "player_start") == 0 || SDL_strcmp(kind, "actor") == 0)
         {
             yyjson_val *size = obj_get(preview, "size");
             if (size != NULL &&
@@ -422,7 +423,7 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
                  yyjson_get_num(yyjson_arr_get(size, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(size, 2)) <= 0.0))
             {
                 return validation_error(ctx, preview_path,
-                                        "scene editor placement player_start size must be a positive vec3");
+                                        "scene editor placement marker size must be a positive vec3");
             }
             continue;
         }
@@ -521,9 +522,10 @@ static bool validate_scene_editor_palette(validation_context *ctx, yyjson_val *p
         }
 
         const char *kind = json_string_default(entry, "kind", "box");
-        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0 && SDL_strcmp(kind, "thing") != 0)
+        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0 && SDL_strcmp(kind, "thing") != 0 &&
+            SDL_strcmp(kind, "actor") != 0)
             return validation_error(ctx, entry_path,
-                                    "scene editor palette entry kind must be box, player_start, or thing");
+                                    "scene editor palette entry kind must be box, player_start, thing, or actor");
 
         const char *preview = json_string_default(entry, "preview", json_string(entry, "mode"));
         if (!scene_editor_placement_has_preview_mode(placement, preview))

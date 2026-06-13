@@ -14,6 +14,7 @@
 #include "slayer3d/game_data_brush.h"
 #include "slayer3d/game_data_editor.h"
 #include "slayer3d/game_data_world_model.h"
+#include "slayer3d/properties.h"
 #include "slayer3d/types.h"
 
 #ifdef __cplusplus
@@ -303,6 +304,103 @@ extern "C"
     bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
                                              size_t out_brush_name_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief Runtime-authored actor placement marker for editor workflows. */
+    typedef struct slayer3d_game_data_editor_actor
+    {
+        /** @brief Stable actor placement name. Pointer is runtime-owned. */
+        const char *name;
+        /** @brief Scene where this actor placement is valid, or NULL for scene-agnostic actors. */
+        const char *scene;
+        /** @brief Human-facing label for the actor palette/inspector. */
+        const char *display_name;
+        /** @brief Actor archetype id to instantiate when exported/test-run. */
+        const char *archetype;
+        /** @brief Editor mesh primitive name, such as capsule, box, or rectangle. */
+        const char *mesh;
+        /** @brief Optional render model asset id for finished models. */
+        const char *model;
+        /** @brief Palette category/group, such as Player, Opponents, or Sensors. */
+        const char *group;
+        /** @brief Actor world position in meters. */
+        slayer3d_vec3 position;
+        /** @brief Euler rotation in radians. */
+        slayer3d_vec3 rotation;
+        /** @brief Per-axis actor scale. */
+        slayer3d_vec3 scale;
+        /** @brief Editor display color, including alpha/transparency. */
+        slayer3d_color color;
+        /** @brief Arbitrary designer-authored properties. Pointer is runtime-owned. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_editor_actor;
+
+    /** @brief Editor save state for actor placement markers. */
+    typedef struct slayer3d_game_data_editor_actor_state
+    {
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Number of editor actors currently loaded in the runtime. */
+        int count;
+    } slayer3d_game_data_editor_actor_state;
+
+    /** @brief Descriptor for creating or updating one editor actor placement. */
+    typedef struct slayer3d_game_data_place_editor_actor_desc
+    {
+        /** @brief Actor placement name. Optional when @p name_prefix is provided. */
+        const char *name;
+        /** @brief Prefix used to generate a unique placement name when @p name is omitted. */
+        const char *name_prefix;
+        /** @brief Optional scene reference. Defaults to the active scene when omitted. */
+        const char *scene;
+        /** @brief Human-facing label for the actor palette/inspector. */
+        const char *display_name;
+        /** @brief Actor archetype id to instantiate when exported/test-run. */
+        const char *archetype;
+        /** @brief Editor mesh primitive name, such as capsule, box, or rectangle. */
+        const char *mesh;
+        /** @brief Optional render model asset id for finished models. */
+        const char *model;
+        /** @brief Palette category/group. */
+        const char *group;
+        /** @brief Actor position. Used only when @p has_position is true. */
+        slayer3d_vec3 position;
+        /** @brief Whether @p position is explicit. Defaults to selection point or placement preview. */
+        bool has_position;
+        /** @brief Actor Euler rotation in radians. */
+        slayer3d_vec3 rotation;
+        /** @brief Whether @p rotation is explicit. */
+        bool has_rotation;
+        /** @brief Actor scale. */
+        slayer3d_vec3 scale;
+        /** @brief Whether @p scale is explicit. */
+        bool has_scale;
+        /** @brief Editor display color, including alpha/transparency. */
+        slayer3d_color color;
+        /** @brief Whether @p color is explicit. */
+        bool has_color;
+        /** @brief Optional arbitrary designer-authored properties to copy into the actor. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_place_editor_actor_desc;
+
+    /**
+     * @brief Query one editor actor placement by name.
+     *
+     * Returned pointers are runtime-owned and remain valid until editor actors
+     * are mutated or the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_editor_actor(const slayer3d_game_data_runtime *runtime, const char *name,
+                                             slayer3d_game_data_editor_actor *out_actor);
+
+    /** @brief Query editor save state for runtime actor placements. */
+    bool slayer3d_game_data_get_editor_actor_state(const slayer3d_game_data_runtime *runtime,
+                                                   slayer3d_game_data_editor_actor_state *out_state);
+
+    /** @brief Create or update one runtime editor actor placement. */
+    bool slayer3d_game_data_place_editor_actor(slayer3d_game_data_runtime *runtime,
+                                               const slayer3d_game_data_place_editor_actor_desc *desc, char *out_name,
+                                               size_t out_name_size, char *error_buffer, int error_buffer_size);
 
     /** @brief Runtime-authored player start marker for editor and test-run workflows. */
     typedef struct slayer3d_game_data_editor_player_start

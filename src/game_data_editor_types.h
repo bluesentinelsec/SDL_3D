@@ -43,6 +43,22 @@ typedef struct editor_placement_preview_state
     char source_warning[256];
 } editor_placement_preview_state;
 
+typedef struct editor_actor_runtime
+{
+    char *name;
+    char *scene;
+    char *display_name;
+    char *archetype;
+    char *mesh;
+    char *model;
+    char *group;
+    slayer3d_vec3 position;
+    slayer3d_vec3 rotation;
+    slayer3d_vec3 scale;
+    slayer3d_color color;
+    slayer3d_properties *properties;
+} editor_actor_runtime;
+
 typedef enum editor_drag_create_phase
 {
     EDITOR_DRAG_CREATE_IDLE = 0,

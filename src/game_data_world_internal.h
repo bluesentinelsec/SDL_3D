@@ -41,6 +41,7 @@ brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime
 void editor_brush_world_mark_dirty(brush_world_runtime *world_runtime);
 const editor_player_start_runtime *find_editor_player_start(const slayer3d_game_data_runtime *runtime,
                                                             const char *name);
+const editor_actor_runtime *find_editor_actor(const slayer3d_game_data_runtime *runtime, const char *name);
 slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const char *variant,
                                                                          const slayer3d_level **out_level,
                                                                          const sector_level_runtime *level,

@@ -31,6 +31,8 @@ extern "C"
         SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD = 2,
         /** @brief Editor-authored player-start marker selected by tooling. */
         SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START = 3,
+        /** @brief Editor-authored actor placement marker selected by tooling. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR = 4,
     } slayer3d_game_data_world_model_type;
 
     enum

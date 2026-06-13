@@ -1042,3 +1042,52 @@ bool validate_editor_player_start_delete_action(validation_context *ctx, yyjson_
                                  "dirty_key", "revision_key", "saved_revision_key"};
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
+
+bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    const char *name = json_string(action, "name");
+    const char *name_prefix = json_string(action, "name_prefix");
+    if ((name == NULL || name[0] == '\0') && (name_prefix == NULL || name_prefix[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires name or name_prefix", type);
+    const char *scene = json_string(action, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    static const char *const optional_string_fields[] = {"name",  "name_prefix", "display_name",  "archetype", "mesh",
+                                                         "model", "group",       "position_from", "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_string_fields); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_string_fields[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_string_fields[i]), field_path,
+                                                      "editor.actor.place field"))
+            return false;
+    }
+    const char *position_from = json_string(action, "position_from");
+    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+        SDL_strcmp(position_from, "placement_preview") != 0)
+    {
+        return validation_error(ctx, json_path, "%s position_from must be selection_point or placement_preview", type);
+    }
+    yyjson_val *position = obj_get(action, "position");
+    if (position != NULL && !is_exact_vec_array(position, 3))
+        return validation_error(ctx, json_path, "%s position must be a vec3", type);
+    if (position != NULL && position_from != NULL)
+        return validation_error(ctx, json_path, "%s requires position or position_from, not both", type);
+    yyjson_val *rotation = obj_get(action, "rotation");
+    yyjson_val *scale = obj_get(action, "scale");
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *properties = obj_get(action, "properties");
+    if (rotation != NULL && !is_exact_vec_array(rotation, 3))
+        return validation_error(ctx, json_path, "%s rotation must be a vec3", type);
+    if (scale != NULL &&
+        (!is_exact_vec_array(scale, 3) || yyjson_get_num(yyjson_arr_get(scale, 0)) <= 0.0 ||
+         yyjson_get_num(yyjson_arr_get(scale, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(scale, 2)) <= 0.0))
+        return validation_error(ctx, json_path, "%s scale must be a positive vec3", type);
+    if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+        return validation_error(ctx, json_path, "%s color must be a color array", type);
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    const char *output_keys[] = {"valid_key", "message_key", "actor_key", "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
