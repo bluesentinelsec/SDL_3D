@@ -17739,6 +17739,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
 
     slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.editor.palette.material"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.editor.texture.paint.mode.face"),
+                         nullptr);
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.palette.active", "");
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
@@ -18024,7 +18026,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
 
     emit_signal("signal.editor.palette.material");
     emit_signal("signal.editor.texture.select.rock_floor");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
 
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
@@ -18035,7 +18037,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "paint");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "selection");
     EXPECT_EQ(face_material_count("mat.editor.texture.rock_floor"), 0);
 
     SDL_Event down{};
@@ -18048,8 +18050,8 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.paint.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "painted 1 face with mat.editor.texture.rock_floor");
-    EXPECT_EQ(face_material_count("mat.editor.texture.rock_floor"), 1);
+                 "painted 6 faces with mat.editor.texture.rock_floor");
+    EXPECT_EQ(face_material_count("mat.editor.texture.rock_floor"), 6);
 
     SDL_Event up{};
     up.type = SDL_EVENT_MOUSE_BUTTON_UP;
@@ -18061,20 +18063,21 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
     emit_signal("signal.editor.texture.select.lava");
-    emit_signal("signal.editor.texture.paint.mode.brush");
+    emit_signal("signal.editor.texture.paint.mode.face");
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 4);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "selection");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "face");
 
     slayer3d_input_process_event(input, &down);
     slayer3d_input_update(input, 5);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.paint.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "painted 6 faces with mat.editor.texture.lava");
-    EXPECT_EQ(face_material_count("mat.editor.texture.lava"), 6);
+                 "painted 1 face with mat.editor.texture.lava");
+    EXPECT_EQ(face_material_count("mat.editor.texture.lava"), 1);
+    EXPECT_EQ(face_material_count("mat.editor.texture.rock_floor"), 5);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
 
     slayer3d_game_data_destroy(runtime);
@@ -18397,7 +18400,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", "open"), "");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", false));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.palette.material.page", -1), 0);
     std::vector<std::string> thumbnails = visible_thumbnail_names();
     EXPECT_EQ(thumbnails.size(), 6U);

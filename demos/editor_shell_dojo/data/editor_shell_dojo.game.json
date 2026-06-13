@@ -527,7 +527,7 @@
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
-          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
@@ -711,7 +711,7 @@
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
-          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
@@ -1035,7 +1035,7 @@
             "then": [
               {
                 "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "face" },
+                "if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "brush" },
                 "then": [
                   {
                     "type": "editor.command.preview",
