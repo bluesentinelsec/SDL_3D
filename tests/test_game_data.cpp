@@ -19755,6 +19755,39 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_input_update(input, input_tick++);
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+    auto drag_editor = [&](float start_x, float start_y, float end_x, float end_y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = start_x;
+        motion.motion.y = start_y;
+        slayer3d_input_process_event(input, &motion);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = start_x;
+        down.button.y = start_y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        motion.motion.x = end_x;
+        motion.motion.y = end_y;
+        slayer3d_input_process_event(input, &motion);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = end_x;
+        up.button.y = end_y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
     struct HitSummary
     {
         std::string id;
@@ -19840,8 +19873,26 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     click_editor(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        60.0f);
-    emit_signal("signal.editor.inspector.scroll.up");
+        120.0f);
+    slayer3d_properties_set_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f);
+
+    RectSummary thumb0 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0");
+    ASSERT_TRUE(thumb0.found);
+    drag_editor(thumb0.x + thumb0.w * 0.5f, thumb0.y + thumb0.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
+                scroll_track.y + scroll_track.h - 4.0f);
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
+        180.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
+                                              "editor.inspector.scroll.drag.active", true));
+
+    RectSummary thumb3 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.3");
+    ASSERT_TRUE(thumb3.found);
+    drag_editor(thumb3.x + thumb3.w * 0.5f, thumb3.y + thumb3.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
+                scroll_track.y + 4.0f);
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
+        0.0f);
 
     slayer3d_game_data_brush_world world_before{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world_before));
@@ -33272,7 +33323,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_FALSE(collapsed_capture.inspector_panel);
     EXPECT_FALSE(collapsed_capture.inspector_header);
     EXPECT_TRUE(collapsed_capture.inspector_collapsed);
-    EXPECT_TRUE(collapsed_capture.inspector_collapsed_label);
+    EXPECT_FALSE(collapsed_capture.inspector_collapsed_label);
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", false);
 
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");

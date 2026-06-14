@@ -1274,8 +1274,7 @@
         "text_scale": 0.42,
         "interactive": true,
         "action": "editor.inspector.toggle",
-        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false },
-        "children": [{ "id": "ui.editor_shell.left_inspector.collapsed.label", "type": "label", "w": "fill", "h": "fill", "text": "Inspector" }]
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false }
       },
       {
         "id": "ui.editor_shell.texture_viewer.panel",
