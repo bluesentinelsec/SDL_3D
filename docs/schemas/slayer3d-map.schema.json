@@ -155,6 +155,7 @@
         "texture": { "type": "string", "minLength": 1 },
         "color": { "$ref": "#/$defs/rgba" },
         "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
         "properties": { "$ref": "#/$defs/properties" }
       }
     },
@@ -175,7 +176,10 @@
       "properties": {
         "normal": { "$ref": "#/$defs/vec3" },
         "distance": { "type": "number" },
-        "material": { "type": "string", "minLength": 1 }
+        "material": { "type": "string", "minLength": 1 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" }
       }
     },
     "planeGeometry": {
@@ -200,6 +204,7 @@
         "material": { "type": "string", "minLength": 1 },
         "color": { "$ref": "#/$defs/rgba" },
         "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
         "properties": { "$ref": "#/$defs/properties" }
       }
     },
@@ -217,6 +222,8 @@
         },
         "material": { "type": "string", "minLength": 1 },
         "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
         "faces": {
           "type": "array",
           "items": { "$ref": "#/$defs/face" }

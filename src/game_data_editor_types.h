@@ -79,6 +79,14 @@ typedef struct editor_prefab_runtime
     slayer3d_properties *properties;
 } editor_prefab_runtime;
 
+typedef struct editor_brush_visual_override_runtime
+{
+    bool has_color;
+    slayer3d_color color;
+    bool tint_enabled;
+    slayer3d_color tint;
+} editor_brush_visual_override_runtime;
+
 typedef struct editor_connection_endpoint_runtime
 {
     char *entity;
@@ -223,6 +231,8 @@ typedef struct editor_brush_source_box_runtime
     char *prefab;
     char *material;
     char *face_materials[6];
+    editor_brush_visual_override_runtime visual;
+    editor_brush_visual_override_runtime face_visuals[6];
     int min[3];
     int max[3];
     int vertex_count;

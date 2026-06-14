@@ -778,6 +778,10 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             }
             if (!load_editor_metadata(obj_get(brush_json, "editor"), &brush->editor, error_buffer, error_buffer_size))
                 return false;
+            const bool brush_has_color = obj_get(brush_json, "color") != NULL;
+            const slayer3d_color brush_color = json_color(brush_json, "color", (slayer3d_color){180, 184, 192, 255});
+            const bool brush_tint_enabled = json_bool(brush_json, "tint_enabled", obj_get(brush_json, "tint") != NULL);
+            const slayer3d_color brush_tint = json_color(brush_json, "tint", (slayer3d_color){255, 255, 255, 255});
 
             const char **tags =
                 brush->tag_count > 0 ? (const char **)SDL_calloc((size_t)brush->tag_count, sizeof(*tags)) : NULL;
@@ -819,6 +823,13 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                 face->uv_rotation_degrees = json_float(uv_json, "rotation_degrees", 0.0f);
                 face->surface_flags =
                     brush_flags_from_json(obj_get(face_json, "surface_flags"), brush_surface_flag_from_string, 0u);
+                face->has_color = obj_get(face_json, "color") != NULL || brush_has_color;
+                face->color =
+                    obj_get(face_json, "color") != NULL ? json_color(face_json, "color", brush_color) : brush_color;
+                face->tint_enabled =
+                    json_bool(face_json, "tint_enabled", obj_get(face_json, "tint") != NULL || brush_tint_enabled);
+                face->tint =
+                    obj_get(face_json, "tint") != NULL ? json_color(face_json, "tint", brush_tint) : brush_tint;
                 if (!load_editor_metadata(obj_get(face_json, "editor"), &face->editor, error_buffer, error_buffer_size))
                     return false;
             }

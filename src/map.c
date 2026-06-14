@@ -464,9 +464,13 @@ static bool map_validate_plane_geometry(map_validation_context *ctx, yyjson_val 
         char plane_path[MAP_PATH_MAX];
         char normal_path[MAP_PATH_MAX];
         char distance_path[MAP_PATH_MAX];
+        char color_path[MAP_PATH_MAX];
+        char tint_path[MAP_PATH_MAX];
         map_format_path(plane_path, sizeof(plane_path), "%s[%zu]", planes_path, i);
         map_format_path(normal_path, sizeof(normal_path), "%s.normal", plane_path);
         map_format_path(distance_path, sizeof(distance_path), "%s.distance", plane_path);
+        map_format_path(color_path, sizeof(color_path), "%s.color", plane_path);
+        map_format_path(tint_path, sizeof(tint_path), "%s.tint", plane_path);
         yyjson_val *plane = yyjson_arr_get(planes, i);
         if (!yyjson_is_obj(plane))
             return map_error(ctx, plane_path, "plane entry must be an object");
@@ -475,7 +479,9 @@ static bool map_validate_plane_geometry(map_validation_context *ctx, yyjson_val 
         yyjson_val *distance = map_obj_get(plane, "distance");
         if (!yyjson_is_num(distance))
             return map_error(ctx, distance_path, "plane distance must be a number");
-        if (!map_validate_material_reference(ctx, plane, "material", plane_path))
+        if (!map_validate_material_reference(ctx, plane, "material", plane_path) ||
+            !map_validate_optional_color(ctx, plane, "color", color_path, "plane color") ||
+            !map_validate_optional_color(ctx, plane, "tint", tint_path, "plane tint"))
             return false;
     }
     return true;

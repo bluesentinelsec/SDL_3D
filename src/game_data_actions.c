@@ -2165,6 +2165,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.brush.paint") == 0)
         return slayer3d_game_data_paint_selected_editor_brushes(runtime, action, payload);
 
+    if (SDL_strcmp(type, "editor.brush.color") == 0)
+        return slayer3d_game_data_color_selected_editor_brushes(runtime, action, payload);
+
     if (SDL_strcmp(type, "editor.texture.scan") == 0)
         return execute_editor_texture_scan_action(runtime, action);
 

@@ -39,6 +39,8 @@ bool validate_editor_brush_duplicate_action(validation_context *ctx, yyjson_val 
                                             validation_names *names, const char *type);
 bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
+bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
 bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                          validation_names *names, const char *type);
 bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,

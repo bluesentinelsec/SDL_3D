@@ -170,6 +170,8 @@ bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_run
                                                           bool use_last_offset);
 bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                       const slayer3d_properties *payload);
+bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                      const slayer3d_properties *payload);
 int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);

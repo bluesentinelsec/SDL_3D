@@ -71,6 +71,9 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
             return false;
         }
     }
+    dest->visual = source->visual;
+    for (int i = 0; i < 6; ++i)
+        dest->face_visuals[i] = source->face_visuals[i];
     for (int i = 0; i < 3; ++i)
     {
         dest->min[i] = source->min[i];

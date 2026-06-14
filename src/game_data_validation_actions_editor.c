@@ -30,9 +30,10 @@ static bool validation_float_finite(float value)
 
 static bool editor_command_name_valid(const char *value)
 {
-    return value != NULL && (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "rotate") == 0 ||
-                             SDL_strcmp(value, "paint") == 0 || SDL_strcmp(value, "resize") == 0 ||
-                             SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
+    return value != NULL &&
+           (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "rotate") == 0 ||
+            SDL_strcmp(value, "paint") == 0 || SDL_strcmp(value, "color") == 0 || SDL_strcmp(value, "resize") == 0 ||
+            SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
 }
 
 static bool editor_command_target_name_valid(const char *value)
@@ -510,6 +511,45 @@ bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *act
         return validation_error(ctx, json_path, "%s material_key must be a non-empty string", type);
     if (material == NULL && material_key == NULL)
         return validation_error(ctx, json_path, "%s requires material or material_key", type);
+
+    const char *output_keys[] = {
+        "valid_key",      "event_key",       "message_key", "transaction_id_key", "undo_count_key",    "redo_count_key",
+        "command_key",    "target_key",      "world_key",   "element_key",        "face_index_key",    "bounds_min_key",
+        "bounds_max_key", "source_path_key", "dirty_key",   "revision_key",       "saved_revision_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)) &&
+           validate_optional_action_branches(ctx, action, json_path, names, false);
+}
+
+bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    const char *target = json_string(action, "target");
+    if (target == NULL)
+        target = "selection";
+    if (SDL_strcmp(target, "selection") != 0 && SDL_strcmp(target, "face") != 0)
+        return validation_error(ctx, json_path, "%s target must be selection or face", type);
+
+    yyjson_val *role = obj_get(action, "role");
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *color_key = obj_get(action, "color_key");
+    yyjson_val *tint = obj_get(action, "tint");
+    yyjson_val *tint_key = obj_get(action, "tint_key");
+    yyjson_val *tint_enabled = obj_get(action, "tint_enabled");
+    if (role != NULL && (!yyjson_is_str(role) || yyjson_get_str(role)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s role must be a non-empty string", type);
+    if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 255.0)))
+        return validation_error(ctx, json_path, "%s color must be a numeric RGB or RGBA array in 0..255", type);
+    if (color_key != NULL && (!yyjson_is_str(color_key) || yyjson_get_str(color_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s color_key must be a non-empty string", type);
+    if (tint != NULL && (!is_exact_vec3_or_vec4_array(tint) || !numeric_array_values_in_range(tint, 0.0, 255.0)))
+        return validation_error(ctx, json_path, "%s tint must be a numeric RGB or RGBA array in 0..255", type);
+    if (tint_key != NULL && (!yyjson_is_str(tint_key) || yyjson_get_str(tint_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s tint_key must be a non-empty string", type);
+    if (tint_enabled != NULL && !yyjson_is_bool(tint_enabled))
+        return validation_error(ctx, json_path, "%s tint_enabled must be a boolean", type);
+    if (role == NULL && color == NULL && color_key == NULL && tint == NULL && tint_key == NULL && tint_enabled == NULL)
+        return validation_error(ctx, json_path, "%s requires color, color_key, role, tint, tint_key, or tint_enabled",
+                                type);
 
     const char *output_keys[] = {
         "valid_key",      "event_key",       "message_key", "transaction_id_key", "undo_count_key",    "redo_count_key",

@@ -12,6 +12,8 @@
 
 #include <stdlib.h>
 
+static bool export_add_color(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_color value);
+
 static bool export_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec3 value)
 {
     yyjson_mut_val *arr = yyjson_mut_arr(doc);
@@ -242,6 +244,27 @@ static bool export_add_source_face_material_overrides(yyjson_mut_doc *doc, yyjso
     return face_materials_obj == NULL || yyjson_mut_obj_add_val(doc, obj, "face_materials", face_materials_obj);
 }
 
+static bool export_add_source_face_visuals(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                           const editor_brush_source_box_runtime *box, bool tint)
+{
+    yyjson_mut_val *values_obj = NULL;
+    for (size_t i = 0; box != NULL && i < SDL_arraysize(editor_source_face_keys); ++i)
+    {
+        const editor_brush_visual_override_runtime *visual = &box->face_visuals[i];
+        if ((tint && !visual->tint_enabled) || (!tint && !visual->has_color))
+            continue;
+        if (values_obj == NULL)
+        {
+            values_obj = yyjson_mut_obj(doc);
+            if (values_obj == NULL)
+                return false;
+        }
+        if (!export_add_color(doc, values_obj, editor_source_face_keys[i], tint ? visual->tint : visual->color))
+            return false;
+    }
+    return values_obj == NULL || yyjson_mut_obj_add_val(doc, obj, tint ? "face_tints" : "face_colors", values_obj);
+}
+
 static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *boxes,
                                         const editor_brush_source_box_runtime *box)
 {
@@ -255,11 +278,16 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
            yyjson_mut_obj_add_strcpy(doc, obj, "kind", box->vertex_count > 0 ? "convex" : "box") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "prefab", box->prefab != NULL ? box->prefab : "box") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "material", box->material != NULL ? box->material : "") &&
+           (!box->visual.has_color || export_add_color(doc, obj, "color", box->visual.color)) &&
+           (!box->visual.tint_enabled || (yyjson_mut_obj_add_bool(doc, obj, "tint_enabled", true) &&
+                                          export_add_color(doc, obj, "tint", box->visual.tint))) &&
            (box->vertex_count > 0 ||
             (export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
              export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]))) &&
            export_add_source_vertices(doc, obj, box) &&
            export_add_source_face_material_overrides(doc, obj, box->material, face_materials) &&
+           export_add_source_face_visuals(doc, obj, box, false) &&
+           export_add_source_face_visuals(doc, obj, box, true) &&
            export_add_brush_contents(doc, obj,
                                      box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
 }
@@ -345,6 +373,9 @@ static bool export_add_brush_face(yyjson_mut_doc *doc, yyjson_mut_val *faces,
            export_add_vec2_values(doc, uv, "offset", face->uv_offset[0], face->uv_offset[1]) &&
            yyjson_mut_obj_add_real(doc, uv, "rotation_degrees", face->uv_rotation_degrees) &&
            export_add_surface_flags(doc, obj, face->surface_flags) &&
+           (!face->has_color || export_add_color(doc, obj, "color", face->color)) &&
+           (!face->tint_enabled || (yyjson_mut_obj_add_bool(doc, obj, "tint_enabled", true) &&
+                                    export_add_color(doc, obj, "tint", face->tint))) &&
            export_add_editor_metadata(doc, obj, &face->editor);
 }
 
@@ -992,7 +1023,10 @@ static bool export_add_map_plane(yyjson_mut_doc *doc, yyjson_mut_val *planes,
     {
         material = world->materials[face->material_index].name;
     }
-    return material == NULL || material[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, "material", material);
+    return (material == NULL || material[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, "material", material)) &&
+           (!face->has_color || export_add_color(doc, obj, "color", face->color)) &&
+           (!face->tint_enabled || (yyjson_mut_obj_add_bool(doc, obj, "tint_enabled", true) &&
+                                    export_add_color(doc, obj, "tint", face->tint)));
 }
 
 static bool export_add_map_brushes(yyjson_mut_doc *doc, yyjson_mut_val *brushes,

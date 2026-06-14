@@ -1769,6 +1769,8 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
             SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "delete") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "paint") == 0 && SDL_strcmp(entry->target, "face") == 0) ||
+           (SDL_strcmp(entry->command, "color") == 0 &&
+            (SDL_strcmp(entry->target, "element") == 0 || SDL_strcmp(entry->target, "face") == 0)) ||
            ((SDL_strcmp(entry->command, "resize") == 0 || SDL_strcmp(entry->command, "extrude") == 0) &&
             SDL_strcmp(entry->target, "face") == 0);
 }
@@ -1873,6 +1875,28 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
             return false;
         }
         if (!apply_editor_brush_paint(runtime, entry, forward))
+        {
+            free_current_editor_selection_snapshots(selected_snapshots, selected_snapshot_count, &active_snapshot);
+            return false;
+        }
+        refresh_editor_selections_from_snapshots(runtime, selected_snapshots, selected_snapshot_count,
+                                                 &active_snapshot);
+        free_current_editor_selection_snapshots(selected_snapshots, selected_snapshot_count, &active_snapshot);
+        update_active_editor_selection_material_for_transaction(runtime, entry, forward, active_face_matches);
+        sync_editor_selection_after_transaction(runtime, entry, forward);
+        return true;
+    }
+    if (SDL_strcmp(entry->command, "color") == 0)
+    {
+        editor_selection_identity_snapshot selected_snapshots[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+        editor_selection_identity_snapshot active_snapshot;
+        int selected_snapshot_count = 0;
+        if (!capture_current_editor_selection_snapshots(runtime, selected_snapshots, &selected_snapshot_count,
+                                                        &active_snapshot))
+        {
+            return false;
+        }
+        if (!apply_editor_brush_scale(runtime, entry, forward))
         {
             free_current_editor_selection_snapshots(selected_snapshots, selected_snapshot_count, &active_snapshot);
             return false;
@@ -3160,6 +3184,320 @@ fail: {
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", fail_message);
     publish_editor_transaction(runtime, outputs, "commit", false, NULL, fail_message);
     free_editor_paint_selection_targets(selection_targets, selection_target_count);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, fail_message);
+}
+}
+
+typedef struct editor_brush_color_request
+{
+    bool set_color;
+    slayer3d_color color;
+    bool set_tint;
+    bool tint_enabled;
+    slayer3d_color tint;
+} editor_brush_color_request;
+
+static bool editor_graybox_role_color(const char *role, slayer3d_color *out_color)
+{
+    if (role == NULL || out_color == NULL)
+        return false;
+    if (SDL_strcmp(role, "floor") == 0)
+        *out_color = (slayer3d_color){110, 122, 132, 255};
+    else if (SDL_strcmp(role, "wall") == 0)
+        *out_color = (slayer3d_color){145, 152, 160, 255};
+    else if (SDL_strcmp(role, "ceiling") == 0)
+        *out_color = (slayer3d_color){118, 126, 138, 255};
+    else if (SDL_strcmp(role, "trim") == 0)
+        *out_color = (slayer3d_color){84, 96, 118, 255};
+    else if (SDL_strcmp(role, "hazard") == 0)
+        *out_color = (slayer3d_color){235, 86, 56, 220};
+    else if (SDL_strcmp(role, "trigger") == 0)
+        *out_color = (slayer3d_color){80, 220, 255, 120};
+    else if (SDL_strcmp(role, "placeholder") == 0)
+        *out_color = (slayer3d_color){170, 174, 184, 255};
+    else
+        return false;
+    return true;
+}
+
+static editor_brush_color_request editor_brush_color_request_from_action(slayer3d_game_data_runtime *runtime,
+                                                                         yyjson_val *action)
+{
+    editor_brush_color_request request;
+    SDL_zero(request);
+    request.color = (slayer3d_color){180, 184, 192, 255};
+    request.tint = (slayer3d_color){255, 255, 255, 255};
+
+    const char *role = json_string(action, "role", NULL);
+    if (editor_graybox_role_color(role, &request.color))
+        request.set_color = true;
+
+    if (obj_get(action, "color") != NULL)
+    {
+        request.set_color = true;
+        request.color = json_color(action, "color", request.color);
+    }
+    const char *color_key = json_string(action, "color_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && color_key != NULL && color_key[0] != '\0')
+    {
+        request.set_color = true;
+        request.color = slayer3d_properties_get_color(runtime->scene_state, color_key, request.color);
+    }
+
+    if (obj_get(action, "tint") != NULL)
+    {
+        request.set_tint = true;
+        request.tint_enabled = true;
+        request.tint = json_color(action, "tint", request.tint);
+    }
+    const char *tint_key = json_string(action, "tint_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && tint_key != NULL && tint_key[0] != '\0')
+    {
+        request.set_tint = true;
+        request.tint_enabled = true;
+        request.tint = slayer3d_properties_get_color(runtime->scene_state, tint_key, request.tint);
+    }
+    if (obj_get(action, "tint_enabled") != NULL)
+    {
+        request.set_tint = true;
+        request.tint_enabled = json_bool(action, "tint_enabled", request.tint_enabled);
+    }
+    return request;
+}
+
+static bool editor_brush_color_request_valid(const editor_brush_color_request *request)
+{
+    return request != NULL && (request->set_color || request->set_tint);
+}
+
+static void editor_apply_visual_request(editor_brush_visual_override_runtime *visual,
+                                        const editor_brush_color_request *request)
+{
+    if (visual == NULL || request == NULL)
+        return;
+    if (request->set_color)
+    {
+        visual->has_color = true;
+        visual->color = request->color;
+    }
+    if (request->set_tint)
+    {
+        visual->tint_enabled = request->tint_enabled;
+        visual->tint = request->tint_enabled ? request->tint : (slayer3d_color){255, 255, 255, 255};
+    }
+}
+
+static bool append_editor_brush_color_transaction(slayer3d_game_data_runtime *runtime, const char *active_scene,
+                                                  const brush_world_runtime *world_runtime,
+                                                  const slayer3d_game_data_editor_selection *selection,
+                                                  const char *element_stable_id, int source_face_index,
+                                                  const editor_brush_color_request *request,
+                                                  editor_command_transaction_entry **out_entry)
+{
+    if (out_entry != NULL)
+        *out_entry = NULL;
+    if (runtime == NULL || active_scene == NULL || world_runtime == NULL || selection == NULL ||
+        !editor_brush_color_request_valid(request))
+    {
+        return false;
+    }
+
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    if (entry == NULL)
+        return false;
+    const bool face_target = source_face_index >= 0;
+    if (!editor_prepare_transaction_common(entry, active_scene, "color", face_target ? "face" : "element",
+                                           selection->world_name, selection->element_name) ||
+        !copy_editor_transaction_string(element_stable_id, &entry->element_stable_id))
+    {
+        return false;
+    }
+    if (face_target)
+    {
+        const slayer3d_game_data_brush_face *face =
+            selection->face_index >= 0 && selection->element_index >= 0 &&
+                    selection->element_index < world_runtime->desc.brush_count &&
+                    selection->face_index < world_runtime->desc.brushes[selection->element_index].face_count
+                ? &world_runtime->desc.brushes[selection->element_index].faces[selection->face_index]
+                : NULL;
+        if (!copy_editor_transaction_string(face != NULL ? editor_metadata_stable_id(&face->editor) : NULL,
+                                            &entry->face_stable_id))
+        {
+            return false;
+        }
+        entry->face_index = selection->face_index;
+    }
+
+    const char *brush_identity =
+        element_stable_id != NULL && element_stable_id[0] != '\0' ? element_stable_id : selection->element_name;
+    if (!editor_brush_world_copy_source_box_by_identity(world_runtime, brush_identity, &entry->source_box_snapshot,
+                                                        &entry->brush_index, NULL, 0))
+    {
+        return false;
+    }
+    entry->has_source_box_snapshot = true;
+    if (!copy_editor_brush_source_box_runtime(&entry->source_box_snapshot, &entry->source_box_after_snapshot))
+        return false;
+    entry->has_source_box_after_snapshot = true;
+    if (face_target)
+        editor_apply_visual_request(&entry->source_box_after_snapshot.face_visuals[source_face_index], request);
+    else
+        editor_apply_visual_request(&entry->source_box_after_snapshot.visual, request);
+
+    entry->has_bounds = selection->has_bounds;
+    entry->bounds = selection->has_bounds ? selection->bounds
+                                          : (slayer3d_bounding_box){slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                                    slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
+    SDL_snprintf(entry->message, sizeof(entry->message), face_target ? "colored %s face %d" : "colored %s",
+                 selection->element_name != NULL ? selection->element_name : "brush", source_face_index);
+    if (out_entry != NULL)
+        *out_entry = entry;
+    return true;
+}
+
+bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                      const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+
+    const editor_brush_color_request request = editor_brush_color_request_from_action(runtime, action);
+    if (!editor_brush_color_request_valid(&request))
+    {
+        const char *message = json_string(action, "invalid_message", "choose a brush color or texture tint");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        if (runtime->scene_state != NULL)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
+
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    const char *target = json_string(action, "target", "selection");
+    if (active_scene == NULL)
+        return false;
+
+    editor_command_history_state *history = &runtime->editor_command_history;
+    const int first_entry = history->count;
+    editor_command_transaction_entry *last_entry = NULL;
+    int applied_count = 0;
+    int colored_count = 0;
+
+    if (SDL_strcmp(target, "face") == 0)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_active_selection);
+        if (!transaction_editor_selection_is_selectable_brush(&selection) || selection.face_index < 0)
+        {
+            const char *message = json_string(action, "invalid_message", "select a brush face before coloring");
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            if (runtime->scene_state != NULL)
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection.world_name);
+        const char *element_stable_id = editor_metadata_stable_id(selection.element_editor);
+        const int source_face_index = editor_brush_world_source_box_face_index_for_identity(
+            world_runtime,
+            element_stable_id != NULL && element_stable_id[0] != '\0' ? element_stable_id : selection.element_name,
+            selection.face_index, editor_metadata_stable_id(selection.face_editor));
+        if (world_runtime == NULL || source_face_index < 0 ||
+            !append_editor_brush_color_transaction(runtime, active_scene, world_runtime, &selection, element_stable_id,
+                                                   source_face_index, &request, &last_entry) ||
+            !apply_editor_transaction_mutation(runtime, last_entry, true))
+        {
+            goto fail;
+        }
+        applied_count = 1;
+        colored_count = 1;
+    }
+    else
+    {
+        if (runtime->editor_selected_brush_scene == NULL ||
+            SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0 ||
+            runtime->editor_selected_brush_count <= 0)
+        {
+            const char *message = json_string(action, "invalid_message", "select brushes before coloring");
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            if (runtime->scene_state != NULL)
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+
+        editor_paint_selection_target *selection_targets = (editor_paint_selection_target *)SDL_calloc(
+            (size_t)runtime->editor_selected_brush_count, sizeof(*selection_targets));
+        if (selection_targets == NULL)
+            goto fail;
+        int selection_target_count = runtime->editor_selected_brush_count;
+        for (int i = 0; i < selection_target_count; ++i)
+        {
+            const slayer3d_game_data_editor_selection selection =
+                resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+            if (!transaction_editor_selection_is_selectable_brush(&selection))
+            {
+                free_editor_paint_selection_targets(selection_targets, selection_target_count);
+                goto fail;
+            }
+            if (!copy_editor_transaction_string(selection.world_name, &selection_targets[i].world_name) ||
+                !copy_editor_transaction_string(selection.element_name, &selection_targets[i].element_name) ||
+                !copy_editor_transaction_string(editor_metadata_stable_id(selection.element_editor),
+                                                &selection_targets[i].element_stable_id))
+            {
+                free_editor_paint_selection_targets(selection_targets, selection_target_count);
+                goto fail;
+            }
+        }
+        for (int i = 0; i < selection_target_count; ++i)
+        {
+            const editor_paint_selection_target *target_selection = &selection_targets[i];
+            slayer3d_game_data_editor_selection selection;
+            init_editor_selection(&selection);
+            const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, target_selection->world_name);
+            refresh_editor_brush_selection_for_identity(world_runtime, &selection, target_selection->element_name,
+                                                        target_selection->element_stable_id, -1, NULL);
+            if (!selection.hit ||
+                !append_editor_brush_color_transaction(runtime, active_scene, world_runtime, &selection,
+                                                       target_selection->element_stable_id, -1, &request,
+                                                       &last_entry) ||
+                !apply_editor_transaction_mutation(runtime, last_entry, true))
+            {
+                free_editor_paint_selection_targets(selection_targets, selection_target_count);
+                goto fail;
+            }
+            applied_count++;
+            colored_count++;
+        }
+        free_editor_paint_selection_targets(selection_targets, selection_target_count);
+    }
+
+    if (colored_count <= 0)
+        goto fail;
+
+    publish_editor_transaction_selection_state(runtime);
+    char message[160];
+    SDL_snprintf(message, sizeof(message), colored_count == 1 ? "colored 1 brush" : "colored %d brushes",
+                 colored_count);
+    if (runtime->scene_state != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    publish_editor_transaction(runtime, outputs, "commit", true, last_entry, message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", true, last_entry,
+                                               message);
+
+fail: {
+    const char *fail_message = json_string(action, "invalid_message", "selected brush color failed");
+    for (int rollback = first_entry + applied_count - 1; rollback >= first_entry; --rollback)
+        (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+    for (int clear = first_entry; clear < history->count; ++clear)
+        free_editor_command_transaction_entry(&history->entries[clear]);
+    history->count = first_entry;
+    history->cursor = first_entry;
+    if (runtime->scene_state != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", fail_message);
+    publish_editor_transaction(runtime, outputs, "commit", false, NULL, fail_message);
     return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, fail_message);
 }
 }

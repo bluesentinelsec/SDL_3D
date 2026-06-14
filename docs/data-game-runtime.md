@@ -258,6 +258,12 @@ deletion, save/reopen, and test-run handoff all operate on
 `editor_brush_sources`, then compile runtime brush geometry from that source. A
 typical blockout loop is:
 
+Source-backed brushes may also carry RGBA graybox colors and explicit texture
+tints. Untextured brushes render with their authored color, while textured
+brushes keep their normal texture appearance unless a tint override is enabled.
+This lets designers color-code floors, walls, triggers, and hazards during
+grayboxing without losing that intent when textures are applied later.
+
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```

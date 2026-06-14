@@ -131,6 +131,48 @@ static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box,
     return true;
 }
 
+static bool copy_source_face_visuals(editor_brush_source_box_runtime *out_box, yyjson_val *values, bool tint,
+                                     char *error_buffer, int error_buffer_size)
+{
+    if (out_box == NULL || values == NULL)
+        return true;
+    if (!yyjson_is_obj(values))
+    {
+        set_error(error_buffer, error_buffer_size,
+                  tint ? "editor brush source face_tints must be an object"
+                       : "editor brush source face_colors must be an object");
+        return false;
+    }
+
+    size_t index = 0;
+    size_t max = 0;
+    yyjson_val *key = NULL;
+    yyjson_val *value = NULL;
+    yyjson_obj_foreach(values, index, max, key, value)
+    {
+        const int face_index = source_box_face_index_from_key(yyjson_get_str(key));
+        if (face_index < 0 || !yyjson_is_arr(value) || yyjson_arr_size(value) < 3u)
+        {
+            set_error(error_buffer, error_buffer_size,
+                      tint ? "editor brush source face_tints requires px/nx/py/ny/pz/nz color entries"
+                           : "editor brush source face_colors requires px/nx/py/ny/pz/nz color entries");
+            return false;
+        }
+        editor_brush_visual_override_runtime *visual = &out_box->face_visuals[face_index];
+        if (tint)
+        {
+            visual->tint_enabled = true;
+            visual->tint = json_color_value(value, (slayer3d_color){255, 255, 255, 255});
+        }
+        else
+        {
+            visual->has_color = true;
+            visual->color = json_color_value(value, (slayer3d_color){180, 184, 192, 255});
+        }
+    }
+    return true;
+}
+
 static int find_editor_source_box_index_by_identity(const brush_world_runtime *world_runtime,
                                                     const char *brush_identity)
 {
@@ -1042,12 +1084,24 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
     }
     if (!copy_source_string(&out_box->stable_id, stable_id) || !copy_source_string(&out_box->name, name) ||
         !copy_source_string(&out_box->prefab, prefab) || !copy_source_string(&out_box->material, material) ||
-        !copy_source_face_materials(out_box, obj_get(box, "face_materials"), error_buffer, error_buffer_size))
+        !copy_source_face_materials(out_box, obj_get(box, "face_materials"), error_buffer, error_buffer_size) ||
+        !copy_source_face_visuals(out_box, obj_get(box, "face_colors"), false, error_buffer, error_buffer_size) ||
+        !copy_source_face_visuals(out_box, obj_get(box, "face_tints"), true, error_buffer, error_buffer_size))
     {
         free_editor_brush_source_box(out_box);
         if (error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
             set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source box");
         return false;
+    }
+    if (obj_get(box, "color") != NULL)
+    {
+        out_box->visual.has_color = true;
+        out_box->visual.color = json_color(box, "color", (slayer3d_color){180, 184, 192, 255});
+    }
+    if (json_bool(box, "tint_enabled", obj_get(box, "tint") != NULL))
+    {
+        out_box->visual.tint_enabled = true;
+        out_box->visual.tint = json_color(box, "tint", (slayer3d_color){255, 255, 255, 255});
     }
     if (is_convex)
     {
@@ -1317,6 +1371,30 @@ static void init_source_box_face(slayer3d_game_data_brush_face *face, slayer3d_v
     face->uv_scale[1] = 1.0f;
 }
 
+static void apply_source_box_face_visual(slayer3d_game_data_brush_face *face,
+                                         const editor_brush_source_box_runtime *box, int source_face_index)
+{
+    if (face == NULL || box == NULL)
+        return;
+    face->has_color = box->visual.has_color;
+    face->color = box->visual.color;
+    face->tint_enabled = box->visual.tint_enabled;
+    face->tint = box->visual.tint;
+    if (source_face_index < 0 || source_face_index >= (int)SDL_arraysize(box->face_visuals))
+        return;
+    const editor_brush_visual_override_runtime *visual = &box->face_visuals[source_face_index];
+    if (visual->has_color)
+    {
+        face->has_color = true;
+        face->color = visual->color;
+    }
+    if (visual->tint_enabled)
+    {
+        face->tint_enabled = true;
+        face->tint = visual->tint;
+    }
+}
+
 static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
                                         const editor_brush_source_box_runtime *box, slayer3d_game_data_brush *out_brush,
                                         char *error_buffer, int error_buffer_size)
@@ -1389,6 +1467,7 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
 
     for (int i = 0; i < out_brush->face_count; ++i)
     {
+        apply_source_box_face_visual(&faces[i], box, i);
         char face_stable_id[320];
         SDL_snprintf(face_stable_id, sizeof(face_stable_id), "%s.face.%s",
                      box->stable_id != NULL ? box->stable_id : box->name, editor_brush_source_box_face_keys[i]);
@@ -1717,6 +1796,7 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
             return false;
         }
         init_source_box_face(&faces[face_index], plane->normal, plane->distance, material_index, material_name);
+        apply_source_box_face_visual(&faces[face_index], box, plane->source_face_index);
 
         char face_stable_id[320];
         if (plane->source_face_index >= 0)

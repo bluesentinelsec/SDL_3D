@@ -1203,6 +1203,12 @@ Convex sources are used after topology edits add, remove, or merge vertices.
 `material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
+`color` stores an optional RGBA graybox color for the source brush, and
+`face_colors` can override individual generated faces with the same face keys.
+Brush colors are used for untextured rendering and remain authored when a
+texture material is later applied. Textured brushes render normally unless an
+explicit `tint`/`face_tints` override is enabled; tints are RGBA and can be used
+for texture color modulation or transparency previews.
 
 Each source box must have a unique `stable_id` and a unique brush `name` within
 its source world. When `name` is omitted, it defaults to `stable_id`. The
@@ -1291,8 +1297,12 @@ missing.
           "kind": "box",
           "prefab": "floor",
           "material": "mat.editor.floor",
+          "color": [110, 122, 132, 255],
           "face_materials": {
             "px": "mat.editor.trim"
+          },
+          "face_tints": {
+            "px": [255, 220, 120, 192]
           },
           "min": [0, -200, 0],
           "max": [8000, 0, 8000],
@@ -1664,8 +1674,8 @@ then switch to the authored play/test scene with `scene.set`.
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the
-authored world. Supported `command` values are `translate`, `paint`, `resize`,
-`extrude`, and `delete`; supported `target` values are `selection`, `world`,
+authored world. Supported `command` values are `translate`, `paint`, `color`,
+`resize`, `extrude`, and `delete`; supported `target` values are `selection`, `world`,
 `element`, `face`, and `material`. Paint previews require a `material` string
 naming a material in the selected brush world's material palette. Resize and
 extrude previews currently target brush faces and use `distance` along the
@@ -1687,6 +1697,40 @@ shrink it.
     "face_stable_id_key": "editor.command_preview.face_stable_id",
     "bounds_min_key": "editor.command_preview.bounds_min",
     "bounds_max_key": "editor.command_preview.bounds_max"
+  }
+}
+```
+
+Use `editor.brush.color` to author stylized graybox colors and explicit texture
+tints against the active selected brushes. `target: "selection"` updates the
+selected source brushes' default color/tint; `target: "face"` updates the active
+source face override. `color` and `tint` are RGB/RGBA arrays in 0..255. `role`
+can be one of the editor default graybox roles (`floor`, `wall`, `ceiling`,
+`trim`, `hazard`, `trigger`, or `placeholder`) and expands to a conventional
+RGBA color. Brush colors do not alter textured rendering by default; set
+`tint` or `tint_enabled` when a textured face should be modulated or have
+explicit alpha.
+
+```json
+{
+  "type": "editor.brush.color",
+  "target": "selection",
+  "role": "floor",
+  "outputs": {
+    "valid_key": "editor.brush.color.valid",
+    "message_key": "editor.brush.color.message"
+  }
+}
+```
+
+```json
+{
+  "type": "editor.brush.color",
+  "target": "face",
+  "tint": [255, 128, 64, 160],
+  "outputs": {
+    "valid_key": "editor.brush.tint.valid",
+    "message_key": "editor.brush.tint.message"
   }
 }
 ```

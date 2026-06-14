@@ -111,6 +111,13 @@ extern "C"
         char first_issue[256];
         char first_issue_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
     } editor_brush_source_vertex_diagnostics;
+    typedef struct editor_brush_visual_override_runtime
+    {
+        bool has_color;
+        slayer3d_color color;
+        bool tint_enabled;
+        slayer3d_color tint;
+    } editor_brush_visual_override_runtime;
     typedef struct editor_brush_source_box_runtime
     {
         char *stable_id;
@@ -118,6 +125,8 @@ extern "C"
         char *prefab;
         char *material;
         char *face_materials[6];
+        editor_brush_visual_override_runtime visual;
+        editor_brush_visual_override_runtime face_visuals[6];
         int min[3];
         int max[3];
         int vertex_count;
@@ -18048,6 +18057,251 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     EXPECT_EQ(active_selection.face_index, face_paint_index);
     EXPECT_STREQ(active_selection.material_name, "mat.editor.texture.rock_floor");
 
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.brush.color",
+      "target": "selection",
+      "role": "floor",
+      "outputs": { "valid_key": "test.brush.color.valid" }
+    })json"));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.brush.color.valid", false));
+
+    auto expect_mesh_color = [](const slayer3d_game_data_brush_world &world, const char *material_name,
+                                slayer3d_color expected, bool require_all) {
+        ASSERT_NE(world.render_model, nullptr);
+        int material_index = -1;
+        for (int i = 0; i < world.render_model->material_count; ++i)
+        {
+            const slayer3d_material &material = world.render_model->materials[i];
+            if (material.name != nullptr && SDL_strcmp(material.name, material_name) == 0)
+            {
+                material_index = i;
+                break;
+            }
+        }
+        ASSERT_GE(material_index, 0) << material_name;
+        bool saw_match = false;
+        bool saw_vertex = false;
+        const float expected_rgba[4] = {(float)expected.r / 255.0f, (float)expected.g / 255.0f,
+                                        (float)expected.b / 255.0f, (float)expected.a / 255.0f};
+        for (int mesh_index = 0; mesh_index < world.render_model->mesh_count; ++mesh_index)
+        {
+            const slayer3d_mesh &mesh = world.render_model->meshes[mesh_index];
+            if (mesh.material_index != material_index || mesh.colors == nullptr)
+                continue;
+            for (int vertex = 0; vertex < mesh.vertex_count; ++vertex)
+            {
+                saw_vertex = true;
+                const bool match = std::fabs(mesh.colors[vertex * 4 + 0] - expected_rgba[0]) < 0.002f &&
+                                   std::fabs(mesh.colors[vertex * 4 + 1] - expected_rgba[1]) < 0.002f &&
+                                   std::fabs(mesh.colors[vertex * 4 + 2] - expected_rgba[2]) < 0.002f &&
+                                   std::fabs(mesh.colors[vertex * 4 + 3] - expected_rgba[3]) < 0.002f;
+                saw_match = saw_match || match;
+                if (require_all)
+                    EXPECT_TRUE(match);
+            }
+        }
+        EXPECT_TRUE(saw_vertex);
+        EXPECT_TRUE(saw_match);
+    };
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+    {
+        EXPECT_TRUE(world.brushes[0].faces[i].has_color);
+        EXPECT_EQ(world.brushes[0].faces[i].color.r, 110);
+        EXPECT_EQ(world.brushes[0].faces[i].color.g, 122);
+        EXPECT_EQ(world.brushes[0].faces[i].color.b, 132);
+        EXPECT_EQ(world.brushes[0].faces[i].color.a, 255);
+        EXPECT_FALSE(world.brushes[0].faces[i].tint_enabled);
+    }
+    expect_mesh_color(world, "mat.editor.wall", (slayer3d_color){110, 122, 132, 255}, true);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int select_wall_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.texture.select.wall_metal");
+    const int paint_selection_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.texture.paint.selection");
+    ASSERT_GE(select_wall_signal, 0);
+    ASSERT_GE(paint_selection_signal, 0);
+    slayer3d_signal_emit(bus, select_wall_signal, nullptr);
+    slayer3d_signal_emit(bus, paint_selection_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+    {
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.wall_metal");
+        EXPECT_TRUE(world.brushes[0].faces[i].has_color);
+        EXPECT_FALSE(world.brushes[0].faces[i].tint_enabled);
+    }
+    expect_mesh_color(world, "mat.editor.texture.wall_metal", (slayer3d_color){255, 255, 255, 255}, true);
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.brush.color",
+      "target": "face",
+      "tint": [255, 128, 64, 128],
+      "outputs": { "valid_key": "test.brush.tint.valid" }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.brush.tint.valid", false));
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_GE(active_selection.face_index, 0);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_LT(active_selection.face_index, world.brushes[0].face_count);
+    const slayer3d_game_data_brush_face &tinted_face = world.brushes[0].faces[active_selection.face_index];
+    const int tinted_face_index = active_selection.face_index;
+    EXPECT_TRUE(tinted_face.tint_enabled);
+    EXPECT_EQ(tinted_face.tint.r, 255);
+    EXPECT_EQ(tinted_face.tint.g, 128);
+    EXPECT_EQ(tinted_face.tint.b, 64);
+    EXPECT_EQ(tinted_face.tint.a, 128);
+    expect_mesh_color(world, "mat.editor.texture.wall_metal", (slayer3d_color){255, 128, 64, 128}, false);
+
+    char *fragment_json = nullptr;
+    size_t fragment_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &fragment_json, &fragment_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *fragment_doc = yyjson_read(fragment_json, fragment_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(fragment_doc, nullptr);
+    yyjson_val *fragment_root = yyjson_doc_get_root(fragment_doc);
+    yyjson_val *sources = yyjson_obj_get(fragment_root, "editor_brush_sources");
+    ASSERT_TRUE(yyjson_is_arr(sources));
+    yyjson_val *boxes = yyjson_obj_get(yyjson_arr_get(sources, 0), "boxes");
+    ASSERT_TRUE(yyjson_is_arr(boxes));
+    yyjson_val *box = yyjson_arr_get(boxes, 0);
+    ASSERT_TRUE(yyjson_is_obj(box));
+    yyjson_val *color = yyjson_obj_get(box, "color");
+    ASSERT_TRUE(yyjson_is_arr(color));
+    EXPECT_EQ((int)yyjson_get_uint(yyjson_arr_get(color, 0)), 110);
+    yyjson_val *face_tints = yyjson_obj_get(box, "face_tints");
+    ASSERT_TRUE(yyjson_is_obj(face_tints));
+    EXPECT_GT(yyjson_obj_size(face_tints), 0u);
+    yyjson_mut_doc *roundtrip_fragment_doc = yyjson_mut_doc_new(nullptr);
+    ASSERT_NE(roundtrip_fragment_doc, nullptr);
+    yyjson_mut_val *roundtrip_fragment_root = yyjson_mut_obj(roundtrip_fragment_doc);
+    ASSERT_NE(roundtrip_fragment_root, nullptr);
+    yyjson_mut_doc_set_root(roundtrip_fragment_doc, roundtrip_fragment_root);
+    ASSERT_TRUE(
+        yyjson_mut_obj_add_str(roundtrip_fragment_doc, roundtrip_fragment_root, "schema", "slayer3d.fragment.v0"));
+    ASSERT_TRUE(yyjson_mut_obj_add_val(
+        roundtrip_fragment_doc, roundtrip_fragment_root, "brush_worlds",
+        yyjson_val_mut_copy(roundtrip_fragment_doc, yyjson_obj_get(fragment_root, "brush_worlds"))));
+    ASSERT_TRUE(yyjson_mut_obj_add_val(roundtrip_fragment_doc, roundtrip_fragment_root, "editor_brush_sources",
+                                       yyjson_val_mut_copy(roundtrip_fragment_doc, sources)));
+    size_t roundtrip_fragment_size = 0u;
+    char *roundtrip_fragment_json = yyjson_mut_write(
+        roundtrip_fragment_doc, YYJSON_WRITE_PRETTY | YYJSON_WRITE_ESCAPE_UNICODE, &roundtrip_fragment_size);
+    ASSERT_NE(roundtrip_fragment_json, nullptr);
+    yyjson_doc_free(fragment_doc);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+    yyjson_doc *map_doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(map_doc, nullptr);
+    yyjson_val *map_brushes = yyjson_obj_get(yyjson_doc_get_root(map_doc), "brushes");
+    ASSERT_TRUE(yyjson_is_arr(map_brushes));
+    yyjson_val *map_planes = yyjson_obj_get(yyjson_obj_get(yyjson_arr_get(map_brushes, 0), "geometry"), "planes");
+    ASSERT_TRUE(yyjson_is_arr(map_planes));
+    bool saw_map_color = false;
+    bool saw_map_tint = false;
+    for (size_t i = 0; i < yyjson_arr_size(map_planes); ++i)
+    {
+        yyjson_val *plane = yyjson_arr_get(map_planes, i);
+        yyjson_val *plane_color = yyjson_obj_get(plane, "color");
+        yyjson_val *plane_tint = yyjson_obj_get(plane, "tint");
+        saw_map_color = saw_map_color ||
+                        (yyjson_is_arr(plane_color) && (int)yyjson_get_uint(yyjson_arr_get(plane_color, 0)) == 110 &&
+                         (int)yyjson_get_uint(yyjson_arr_get(plane_color, 1)) == 122);
+        saw_map_tint =
+            saw_map_tint || (yyjson_is_arr(plane_tint) && (int)yyjson_get_uint(yyjson_arr_get(plane_tint, 0)) == 255 &&
+                             (int)yyjson_get_uint(yyjson_arr_get(plane_tint, 1)) == 128 &&
+                             (int)yyjson_get_uint(yyjson_arr_get(plane_tint, 3)) == 128);
+    }
+    EXPECT_TRUE(saw_map_color);
+    EXPECT_TRUE(saw_map_tint);
+    yyjson_doc_free(map_doc);
+    SDL_free(map_json);
+
+    const std::filesystem::path export_dir = unique_test_dir("editor_brush_colors_roundtrip");
+    write_text(export_dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    const std::filesystem::path exported_textures_dir = export_dir / "textures";
+    std::filesystem::create_directories(exported_textures_dir);
+    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
+    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
+                                     "lava.jpg", "radioactive-crate.png"})
+    {
+        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+    write_text(export_dir / "world.fragment.json", roundtrip_fragment_json);
+    write_text(export_dir / "roundtrip.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "imports": [{ "path": "world.fragment.json" }],
+  "metadata": { "name": "Roundtrip Brush Colors" },
+  "world": { "name": "world.roundtrip", "kind": "brush" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+    })json");
+    SDL_free(fragment_json);
+    free(roundtrip_fragment_json);
+    yyjson_mut_doc_free(roundtrip_fragment_doc);
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((export_dir / "roundtrip.game.json").string().c_str(), roundtrip_session,
+                                             &roundtrip_runtime, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world roundtrip_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor_shell.target", &roundtrip_world));
+    ASSERT_EQ(roundtrip_world.brush_count, 1);
+    ASSERT_GE(roundtrip_world.brushes[0].face_count, 6);
+    EXPECT_TRUE(roundtrip_world.brushes[0].faces[0].has_color);
+    EXPECT_EQ(roundtrip_world.brushes[0].faces[0].color.g, 122);
+    ASSERT_LT(tinted_face_index, roundtrip_world.brushes[0].face_count);
+    EXPECT_TRUE(roundtrip_world.brushes[0].faces[tinted_face_index].tint_enabled);
+    EXPECT_EQ(roundtrip_world.brushes[0].faces[tinted_face_index].tint.a, 128);
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    remove_test_dir(export_dir);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
