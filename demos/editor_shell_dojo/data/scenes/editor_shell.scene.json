@@ -804,7 +804,7 @@
             "h": 28,
             "layer": 121,
             "selected": true,
-            "children": [{ "id": "ui.editor_shell.left_inspector.tab.map.label", "type": "label", "w": "fill", "h": "fill", "text": "Map" }]
+            "children": [{ "id": "ui.editor_shell.left_inspector.tab.map.label", "type": "label", "w": "fill", "h": "fill", "text": "Object" }]
           },
           {
             "id": "ui.editor_shell.left_inspector.entity.tab",
@@ -815,7 +815,7 @@
             "w": 82,
             "h": 28,
             "layer": 121,
-            "children": [{ "id": "ui.editor_shell.left_inspector.tab.entity.label", "type": "label", "w": "fill", "h": "fill", "text": "Entity" }]
+            "children": [{ "id": "ui.editor_shell.left_inspector.tab.entity.label", "type": "label", "w": "fill", "h": "fill", "text": "Data" }]
           },
           {
             "id": "ui.editor_shell.left_inspector.face.tab",
@@ -839,8 +839,15 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.name.label", "type": "label", "w": 96, "h": "fill", "text": "Name" },
-              { "id": "ui.editor_shell.left_inspector.row.name.value", "type": "label", "w": "fill", "h": "fill", "text": "Untitled Map" }
+              { "id": "ui.editor_shell.left_inspector.row.name.label", "type": "label", "w": 96, "h": "fill", "text": "Object" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.name.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.title", "default": "No selection" }]
+              }
             ]
           },
           {
@@ -854,14 +861,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.selection.label", "type": "label", "w": 96, "h": "fill", "text": "Selection" },
+              { "id": "ui.editor_shell.left_inspector.row.selection.label", "type": "label", "w": 96, "h": "fill", "text": "Type" },
               {
                 "id": "ui.editor_shell.left_inspector.row.selection.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.selection.element", "default": "none" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.kind", "default": "none" }]
               }
             ]
           },
@@ -876,14 +883,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.brushes.label", "type": "label", "w": 96, "h": "fill", "text": "Hover" },
+              { "id": "ui.editor_shell.left_inspector.row.brushes.label", "type": "label", "w": 96, "h": "fill", "text": "Count" },
               {
                 "id": "ui.editor_shell.left_inspector.row.brushes.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.hover.element", "default": "none" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.count", "default": "0 selected" }]
               }
             ]
           },
@@ -898,18 +905,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.status.label", "type": "label", "w": 96, "h": "fill", "text": "Dims" },
+              { "id": "ui.editor_shell.left_inspector.row.status.label", "type": "label", "w": 96, "h": "fill", "text": "Size / Scale" },
               {
                 "id": "ui.editor_shell.left_inspector.row.status.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
-                "format": "%s x %s x %s",
-                "bindings": [
-                  { "type": "scene_state", "key": "editor.hover.dimension_x", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.hover.dimension_y", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.hover.dimension_z", "default": 0.0 }
-                ]
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.size", "default": "" }]
               }
             ]
           },
@@ -931,7 +934,7 @@
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.hover.element_stable_id", "default": "none" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.id", "default": "" }]
               }
             ]
           },
@@ -944,7 +947,7 @@
             "w": 272,
             "h": 18,
             "layer": 121,
-            "text": "Properties"
+            "text": "Gameplay Data"
           },
           {
             "id": "ui.editor_shell.left_inspector.connection.source.button",
@@ -1101,14 +1104,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.vertex.label", "type": "label", "w": 96, "h": "fill", "text": "Vertex" },
+              { "id": "ui.editor_shell.left_inspector.row.vertex.label", "type": "label", "w": 96, "h": "fill", "text": "Position" },
               {
                 "id": "ui.editor_shell.left_inspector.row.vertex.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.vertex.hover.vertex", "default": "none" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.position", "default": "" }]
               }
             ]
           },
@@ -1123,19 +1126,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.vertex_coord.label", "type": "label", "w": 96, "h": "fill", "text": "Vtx Pos" },
+              { "id": "ui.editor_shell.left_inspector.row.vertex_coord.label", "type": "label", "w": 96, "h": "fill", "text": "Bounds" },
               {
                 "id": "ui.editor_shell.left_inspector.row.vertex_coord.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
-                "format": "%s, %s, %s (%s)",
-                "bindings": [
-                  { "type": "scene_state", "key": "editor.vertex.hover.x", "default": 0 },
-                  { "type": "scene_state", "key": "editor.vertex.hover.y", "default": 0 },
-                  { "type": "scene_state", "key": "editor.vertex.hover.z", "default": 0 },
-                  { "type": "scene_state", "key": "editor.vertex.hover.shared_count", "default": 0 }
-                ]
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.bounds", "default": "" }]
               }
             ]
           },
@@ -1150,14 +1148,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Preview" },
+              { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Mat / Mesh" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.placement_preview.message", "default": "none" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.material", "default": "" }]
               }
             ]
           },
@@ -1172,18 +1170,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_dims.label", "type": "label", "w": 96, "h": "fill", "text": "Preview Dims" },
+              { "id": "ui.editor_shell.left_inspector.row.preview_dims.label", "type": "label", "w": 96, "h": "fill", "text": "Face / Rot" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview_dims.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
-                "format": "%s x %s x %s",
-                "bindings": [
-                  { "type": "scene_state", "key": "editor.placement_preview.dimension_x", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.placement_preview.dimension_y", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.placement_preview.dimension_z", "default": 0.0 }
-                ]
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.face", "default": "" }]
               }
             ]
           },
@@ -1198,17 +1192,16 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Move" },
+              { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Prefab / Group" },
               {
                 "id": "ui.editor_shell.left_inspector.row.move_delta.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
-                "format": "%s, %s, %s",
+                "format": "%s / %s",
                 "bindings": [
-                  { "type": "scene_state", "key": "editor.brush.drag.delta_x", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.brush.drag.delta_y", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.brush.drag.delta_z", "default": 0.0 }
+                  { "type": "scene_state", "key": "editor.inspector.selection.prefab", "default": "" },
+                  { "type": "scene_state", "key": "editor.inspector.selection.tags", "default": "" }
                 ]
               }
             ]
@@ -1224,14 +1217,14 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Preview State" },
+              { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Contents / Type" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview_state.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.placement_preview.state", "default": "idle" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.contents", "default": "" }]
               }
             ]
           },
@@ -1246,7 +1239,7 @@
             "h": 26,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Grid / Axis" },
+              { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Color / Tint" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.value",
                 "type": "label",
@@ -1254,8 +1247,8 @@
                 "h": "fill",
                 "format": "%s / %s",
                 "bindings": [
-                  { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.0 },
-                  { "type": "scene_state", "key": "editor.placement_preview.axis", "default": "none" }
+                  { "type": "scene_state", "key": "editor.inspector.selection.color", "default": "" },
+                  { "type": "scene_state", "key": "editor.inspector.selection.tint", "default": "" }
                 ]
               }
             ]

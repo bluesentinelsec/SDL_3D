@@ -25153,6 +25153,12 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     EXPECT_NEAR(active_selection.bounds.max.x - active_selection.bounds.min.x, 1.0f, 0.001f);
     EXPECT_NEAR(active_selection.bounds.max.y - active_selection.bounds.min.y, 1.0f, 0.001f);
     EXPECT_NEAR(active_selection.bounds.max.z - active_selection.bounds.min.z, 1.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""),
+                 first_result.brush_name);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.count", ""), "1 selected");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.size", ""),
+                 "1.000, 1.000, 1.000");
 
     SDL_SetModState(SDL_KMOD_CTRL);
     ASSERT_TRUE(editor_select_mode_primary_click(runtime, &second_selection));
@@ -25161,6 +25167,13 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.multiple", false));
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.element_name, second_result.brush_name);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Brushes");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "2 Brushes");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.count", ""), "2 selected");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.position", ""),
+                 "1.500, 0.500, 0.500");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.size", ""),
+                 "3.000, 1.000, 1.000");
 
     SDL_SetModState(SDL_KMOD_GUI);
     ASSERT_TRUE(editor_select_mode_primary_click(runtime, &first_selection));
@@ -25188,6 +25201,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     ASSERT_TRUE(editor_select_mode_primary_click(runtime, &empty_selection));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
     EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "No selection");
 
     SDL_SetModState(SDL_KMOD_NONE);
     slayer3d_game_data_destroy(runtime);
