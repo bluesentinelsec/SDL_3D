@@ -63,6 +63,16 @@ static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
 }
 
+static bool editor_hit_is_left_inspector(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.");
+}
+
+static bool editor_hit_is_console(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.console.");
+}
+
 static bool editor_actor_select_action(const char *action)
 {
     static const char *prefix = "editor.actor.select.";
@@ -280,7 +290,7 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
     }
     if (runtime != NULL &&
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
-         SDL_strncmp(action, "editor.actor.", 13) == 0))
+         SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
@@ -311,7 +321,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
     if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
-        editor_hit_is_actor_viewer(hit))
+        editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) || editor_hit_is_console(hit))
     {
         if (out_consumed != NULL)
             *out_consumed = true;

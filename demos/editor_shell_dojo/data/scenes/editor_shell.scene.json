@@ -726,10 +726,66 @@
             "layer": 121,
             "children": [
               { "id": "ui.editor_shell.left_inspector.title", "type": "label", "x": 14, "y": 6, "w": 120, "h": 20, "text": "Inspector" },
-              { "id": "ui.editor_shell.left_inspector.scroll.up", "type": "button", "x": 194, "y": 5, "w": 24, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.up" },
-              { "id": "ui.editor_shell.left_inspector.scroll.down", "type": "button", "x": 222, "y": 5, "w": 24, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.down" },
-              { "id": "ui.editor_shell.left_inspector.toggle", "type": "button", "x": 250, "y": 5, "w": 34, "h": 24, "text": "I", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.toggle" }
+              { "id": "ui.editor_shell.left_inspector.scroll.up", "type": "button", "x": 184, "y": 5, "w": 24, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.up" },
+              { "id": "ui.editor_shell.left_inspector.scroll.down", "type": "button", "x": 212, "y": 5, "w": 24, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.down" },
+              { "id": "ui.editor_shell.left_inspector.toggle", "type": "button", "x": 242, "y": 5, "w": 42, "h": 24, "text": "hide", "text_scale": 0.38, "interactive": true, "action": "editor.inspector.toggle" }
             ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.scroll.track",
+            "type": "panel",
+            "x": 288,
+            "y": 94,
+            "w": 8,
+            "h": 318,
+            "layer": 122,
+            "color": [18, 26, 36, 230],
+            "border_color": [68, 92, 124, 235],
+            "border_thickness": 1
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.scroll.thumb.0",
+            "type": "panel",
+            "x": 290,
+            "y": 98,
+            "w": 4,
+            "h": 66,
+            "layer": 123,
+            "color": [92, 140, 198, 245],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 0.0, "default": 0.0 }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.scroll.thumb.1",
+            "type": "panel",
+            "x": 290,
+            "y": 180,
+            "w": 4,
+            "h": 66,
+            "layer": 123,
+            "color": [92, 140, 198, 245],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 60.0, "default": 0.0 }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.scroll.thumb.2",
+            "type": "panel",
+            "x": 290,
+            "y": 262,
+            "w": 4,
+            "h": 66,
+            "layer": 123,
+            "color": [92, 140, 198, 245],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 120.0, "default": 0.0 }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.scroll.thumb.3",
+            "type": "panel",
+            "x": 290,
+            "y": 344,
+            "w": 4,
+            "h": 66,
+            "layer": 123,
+            "color": [92, 140, 198, 245],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 180.0, "default": 0.0 }
           },
           {
             "id": "ui.editor_shell.left_inspector.map.tab",
@@ -1198,14 +1254,18 @@
       },
       {
         "id": "ui.editor_shell.left_inspector.collapsed",
-        "type": "panel",
+        "type": "button",
         "x": 12,
         "y": 92,
-        "w": 140,
+        "w": 102,
         "h": 32,
         "layer": 120,
+        "text": "Inspector",
+        "text_scale": 0.42,
+        "interactive": true,
+        "action": "editor.inspector.toggle",
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false },
-        "children": [{ "id": "ui.editor_shell.left_inspector.collapsed.label", "type": "label", "w": "fill", "h": "fill", "text": "Inspector  I" }]
+        "children": [{ "id": "ui.editor_shell.left_inspector.collapsed.label", "type": "label", "w": "fill", "h": "fill", "text": "Inspector" }]
       },
       {
         "id": "ui.editor_shell.texture_viewer.panel",

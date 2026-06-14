@@ -19720,6 +19720,36 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
         return capture.names;
     };
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    int input_tick = 1;
+    auto click_editor = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = x;
+        down.button.y = y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = x;
+        up.button.y = y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
 
     emit_signal("signal.editor.scene.enter");
     RectSummary inspector = visible_frame("ui.editor_shell.left_inspector.panel");
@@ -19731,24 +19761,56 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     std::vector<std::string> text_names = visible_text_names();
     EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
               text_names.end());
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.track").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0").found);
 
-    emit_signal("signal.editor.inspector.scroll.down");
-    emit_signal("signal.editor.inspector.scroll.down");
-    emit_signal("signal.editor.inspector.scroll.down");
+    RectSummary scroll_down = visible_frame("ui.editor_shell.left_inspector.scroll.down");
+    ASSERT_TRUE(scroll_down.found);
+    click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
+        60.0f);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.1").found);
+
+    click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
+    click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         180.0f);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.3").found);
     text_names = visible_text_names();
     EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
               text_names.end());
 
-    emit_signal("signal.editor.inspector.scroll.up");
-    emit_signal("signal.editor.inspector.scroll.up");
-    emit_signal("signal.editor.inspector.scroll.up");
-    emit_signal("signal.editor.inspector.scroll.up");
+    RectSummary scroll_up = visible_frame("ui.editor_shell.left_inspector.scroll.up");
+    ASSERT_TRUE(scroll_up.found);
+    click_editor(scroll_up.x + scroll_up.w * 0.5f, scroll_up.y + scroll_up.h * 0.5f);
+    click_editor(scroll_up.x + scroll_up.w * 0.5f, scroll_up.y + scroll_up.h * 0.5f);
+    click_editor(scroll_up.x + scroll_up.w * 0.5f, scroll_up.y + scroll_up.h * 0.5f);
+    click_editor(scroll_up.x + scroll_up.w * 0.5f, scroll_up.y + scroll_up.h * 0.5f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
         0.0f);
+
+    slayer3d_game_data_brush_world world_before{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world_before));
+    click_editor(inspector.x + 32.0f, inspector.y + 140.0f);
+    slayer3d_game_data_brush_world world_after{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world_after));
+    EXPECT_EQ(world_after.brush_count, world_before.brush_count);
+
+    RectSummary toggle = visible_frame("ui.editor_shell.left_inspector.toggle");
+    ASSERT_TRUE(toggle.found);
+    click_editor(toggle.x + toggle.w * 0.5f, toggle.y + toggle.h * 0.5f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
+                                             "editor.inspector.collapsed", false));
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.panel").found);
+    RectSummary collapsed = visible_frame("ui.editor_shell.left_inspector.collapsed");
+    ASSERT_TRUE(collapsed.found);
+    click_editor(collapsed.x + collapsed.w * 0.5f, collapsed.y + collapsed.h * 0.5f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
+                                              "editor.inspector.collapsed", true));
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.panel").found);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
