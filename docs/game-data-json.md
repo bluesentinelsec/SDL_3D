@@ -1961,17 +1961,62 @@ destinations.
 Use `editor.map.export` when the editor should publish the standalone
 `.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
 including top-level materials, brushes, player-start actors, editor actors,
-generic prefabs, and connections for inspection or game loading. It also embeds
-the lossless editable fragment under
+generic prefabs, lights, skyboxes, and connections for inspection or game
+loading. It also embeds the lossless editable fragment under
 `editor.editable_level_fragment`, so reopening the map restores source-backed
 brush editing state exactly. Native editor hosts can call
 `slayer3d_game_data_export_editable_level_map_json()` or
 `slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
 successful native save marks both the selected brush world and player-start
 collection clean at their current revisions, and marks placed editor actors,
-prefabs, and connections clean after their editable data is written. Map export requires a
-source-backed brush world and runs source/compiled identity checks before
-writing JSON, so stale runtime-only brush data cannot become the saved level.
+prefabs, and connections clean after their editable data is written. Map export
+requires a source-backed brush world and runs source/compiled identity checks
+before writing JSON, so stale runtime-only brush data cannot become the saved
+level.
+
+Placed editor actors whose properties identify them as lights are also emitted
+as normalized top-level `lights` entries. Set `role` to `light`,
+`baked_light`, or `static_light`, or provide `light_type`, to opt an actor into
+light export. The exported light preserves the actor transform and generic
+properties, gets its own stable light id, and records `source_actor` so runtimes
+can correlate it with the original marker when needed. Light export supports
+`light_kind` (`dynamic`, `baked`, or `both`),
+`light_type` (`point`, `spot`, or `directional`), `light_color`,
+`light_intensity`, `light_range`, `light_direction`, `casts_shadow`,
+`inner_angle_degrees`, `outer_angle_degrees`, and `bake_group`.
+
+Map-level `skybox` data may reference a configured skybox asset or explicit
+cube-face image references:
+
+```json
+{
+  "skybox": {
+    "id": "skybox.main",
+    "asset": "skybox.sky_17",
+    "size": 400,
+    "properties": { "mood": "dusk" }
+  }
+}
+```
+
+```json
+{
+  "lights": [
+    {
+      "id": "light.room_key",
+      "kind": "dynamic",
+      "type": "spot",
+      "transform": { "position": [4.0, 3.0, -2.0] },
+      "direction": [0.0, -1.0, 0.25],
+      "color": [255, 200, 128, 255],
+      "intensity": 2.5,
+      "range": 12.0,
+      "casts_shadow": true,
+      "properties": { "switch_group": "room_a" }
+    }
+  ]
+}
+```
 
 ```json
 {

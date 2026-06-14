@@ -57,16 +57,20 @@
       "items": { "$ref": "#/$defs/prefab" }
     },
     "lights": {
-      "description": "Reserved for authored dynamic and baked light data.",
-      "type": "array"
+      "description": "Authored dynamic/runtime and baked/build-time light markers.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/light" }
     },
     "effects": {
       "description": "Reserved for authored particles, fog, and other effect primitives.",
       "type": "array"
     },
     "skybox": {
-      "description": "Reserved for map-level skybox selection.",
-      "type": ["string", "object"]
+      "description": "Map-level skybox selection.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/skybox" }
+      ]
     },
     "editor": {
       "description": "Editor-only state that runtime consumers may ignore.",
@@ -253,7 +257,7 @@
         "prefab": { "type": "string", "minLength": 1 },
         "prefab_linked": { "type": "boolean" },
         "primitive": {
-          "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger"]
+          "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger", "light"]
         },
         "transform": { "$ref": "#/$defs/transform" },
         "color": { "$ref": "#/$defs/rgba" },
@@ -286,6 +290,55 @@
           "type": "array",
           "items": { "$ref": "#/$defs/actor" }
         }
+      }
+    },
+    "light": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source_actor": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["dynamic", "baked", "both"] },
+        "type": { "enum": ["directional", "point", "spot"] },
+        "transform": { "$ref": "#/$defs/transform" },
+        "direction": { "$ref": "#/$defs/vec3" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "intensity": { "type": "number", "minimum": 0 },
+        "range": { "type": "number", "exclusiveMinimum": 0 },
+        "inner_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
+        "outer_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
+        "casts_shadow": { "type": "boolean" },
+        "bake_group": { "type": "string", "minLength": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "skyboxFaces": {
+      "type": "object",
+      "required": ["pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"],
+      "additionalProperties": true,
+      "properties": {
+        "pos_x": { "type": "string", "minLength": 1 },
+        "neg_x": { "type": "string", "minLength": 1 },
+        "pos_y": { "type": "string", "minLength": 1 },
+        "neg_y": { "type": "string", "minLength": 1 },
+        "pos_z": { "type": "string", "minLength": 1 },
+        "neg_z": { "type": "string", "minLength": 1 }
+      }
+    },
+    "skybox": {
+      "type": "object",
+      "additionalProperties": true,
+      "anyOf": [
+        { "required": ["asset"] },
+        { "required": ["faces"] }
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "asset": { "type": "string", "minLength": 1 },
+        "faces": { "$ref": "#/$defs/skyboxFaces" },
+        "size": { "type": "number", "exclusiveMinimum": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
       }
     },
     "connectionEndpoint": {

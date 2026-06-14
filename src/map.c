@@ -596,10 +596,11 @@ static bool map_validate_primitive(map_validation_context *ctx, yyjson_val *acto
     const char *value = yyjson_get_str(primitive);
     if (SDL_strcmp(value, "box") == 0 || SDL_strcmp(value, "cube") == 0 || SDL_strcmp(value, "capsule") == 0 ||
         SDL_strcmp(value, "sphere") == 0 || SDL_strcmp(value, "cylinder") == 0 || SDL_strcmp(value, "rectangle") == 0 ||
-        SDL_strcmp(value, "billboard") == 0 || SDL_strcmp(value, "trigger") == 0)
+        SDL_strcmp(value, "billboard") == 0 || SDL_strcmp(value, "trigger") == 0 || SDL_strcmp(value, "light") == 0)
         return true;
     return map_error(ctx, path,
-                     "actor primitive must be box, cube, capsule, sphere, cylinder, rectangle, billboard, or trigger");
+                     "actor primitive must be box, cube, capsule, sphere, cylinder, rectangle, billboard, trigger, or "
+                     "light");
 }
 
 static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
@@ -698,6 +699,158 @@ static bool map_validate_prefabs(map_validation_context *ctx, yyjson_val *root)
     return ok;
 }
 
+static bool map_validate_light_kind(map_validation_context *ctx, yyjson_val *light, const char *path)
+{
+    yyjson_val *kind = map_obj_get(light, "kind");
+    if (kind == NULL)
+        return true;
+    if (!yyjson_is_str(kind) || yyjson_get_str(kind)[0] == '\0')
+        return map_error(ctx, path, "light kind must be dynamic, baked, or both");
+    const char *value = yyjson_get_str(kind);
+    if (SDL_strcmp(value, "dynamic") == 0 || SDL_strcmp(value, "baked") == 0 || SDL_strcmp(value, "both") == 0)
+        return true;
+    return map_error(ctx, path, "light kind must be dynamic, baked, or both");
+}
+
+static bool map_validate_light_type(map_validation_context *ctx, yyjson_val *light, const char *path)
+{
+    yyjson_val *type = map_obj_get(light, "type");
+    if (!yyjson_is_str(type) || yyjson_get_str(type)[0] == '\0')
+        return map_error(ctx, path, "light type must be directional, point, or spot");
+    const char *value = yyjson_get_str(type);
+    if (SDL_strcmp(value, "directional") == 0 || SDL_strcmp(value, "point") == 0 || SDL_strcmp(value, "spot") == 0)
+        return true;
+    return map_error(ctx, path, "light type must be directional, point, or spot");
+}
+
+static bool map_validate_optional_non_negative_number(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                      const char *json_path, const char *description)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0)
+        return map_error(ctx, json_path, "%s must be a non-negative number", description);
+    return true;
+}
+
+static bool map_validate_optional_positive_number(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                  const char *json_path, const char *description)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0)
+        return map_error(ctx, json_path, "%s must be a positive number", description);
+    return true;
+}
+
+static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *lights = map_obj_get(root, "lights");
+    if (lights == NULL)
+        return true;
+    if (!yyjson_is_arr(lights))
+        return map_error(ctx, "$.lights", "lights must be an array");
+    for (size_t i = 0, count = yyjson_arr_size(lights); i < count; ++i)
+    {
+        char path[MAP_PATH_MAX];
+        char id_path[MAP_PATH_MAX];
+        char source_actor_path[MAP_PATH_MAX];
+        char kind_path[MAP_PATH_MAX];
+        char type_path[MAP_PATH_MAX];
+        char transform_path[MAP_PATH_MAX];
+        char direction_path[MAP_PATH_MAX];
+        char color_path[MAP_PATH_MAX];
+        char intensity_path[MAP_PATH_MAX];
+        char range_path[MAP_PATH_MAX];
+        char inner_path[MAP_PATH_MAX];
+        char outer_path[MAP_PATH_MAX];
+        map_format_path(path, sizeof(path), "$.lights[%zu]", i);
+        map_format_path(id_path, sizeof(id_path), "%s.id", path);
+        map_format_path(source_actor_path, sizeof(source_actor_path), "%s.source_actor", path);
+        map_format_path(kind_path, sizeof(kind_path), "%s.kind", path);
+        map_format_path(type_path, sizeof(type_path), "%s.type", path);
+        map_format_path(transform_path, sizeof(transform_path), "%s.transform", path);
+        map_format_path(direction_path, sizeof(direction_path), "%s.direction", path);
+        map_format_path(color_path, sizeof(color_path), "%s.color", path);
+        map_format_path(intensity_path, sizeof(intensity_path), "%s.intensity", path);
+        map_format_path(range_path, sizeof(range_path), "%s.range", path);
+        map_format_path(inner_path, sizeof(inner_path), "%s.inner_angle_degrees", path);
+        map_format_path(outer_path, sizeof(outer_path), "%s.outer_angle_degrees", path);
+        yyjson_val *light = yyjson_arr_get(lights, i);
+        if (!yyjson_is_obj(light))
+            return map_error(ctx, path, "light entry must be an object");
+        yyjson_val *casts_shadow = map_obj_get(light, "casts_shadow");
+        const char *source_actor = map_json_string(light, "source_actor");
+        if (!map_require_non_empty_string(ctx, light, "id", id_path, "light id") ||
+            !map_add_unique(ctx, &ctx->object_ids, "object", map_json_string(light, "id"), path) ||
+            !map_optional_non_empty_string(ctx, light, "source_actor", source_actor_path, "light source actor") ||
+            (source_actor != NULL && !map_name_table_contains(&ctx->object_ids, source_actor) &&
+             !map_error(ctx, source_actor_path, "unknown light source_actor '%s'", source_actor)) ||
+            !map_validate_light_kind(ctx, light, kind_path) || !map_validate_light_type(ctx, light, type_path) ||
+            !map_validate_transform(ctx, map_obj_get(light, "transform"), transform_path) ||
+            !map_validate_optional_vec3(ctx, light, "direction", direction_path, "light direction") ||
+            !map_validate_optional_color(ctx, light, "color", color_path, "light color") ||
+            !map_validate_optional_non_negative_number(ctx, light, "intensity", intensity_path, "light intensity") ||
+            !map_validate_optional_positive_number(ctx, light, "range", range_path, "light range") ||
+            !map_validate_optional_positive_number(ctx, light, "inner_angle_degrees", inner_path,
+                                                   "light inner angle") ||
+            !map_validate_optional_positive_number(ctx, light, "outer_angle_degrees", outer_path,
+                                                   "light outer angle") ||
+            (casts_shadow != NULL && !yyjson_is_bool(casts_shadow) &&
+             !map_error(ctx, path, "light casts_shadow must be a boolean")) ||
+            !map_optional_non_empty_string(ctx, light, "bake_group", path, "light bake group") ||
+            !map_validate_properties(ctx, map_obj_get(light, "properties"), path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool map_validate_skybox_faces(map_validation_context *ctx, yyjson_val *faces, const char *path)
+{
+    if (!yyjson_is_obj(faces))
+        return map_error(ctx, path, "skybox faces must be an object");
+    static const char *const keys[] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        char face_path[MAP_PATH_MAX];
+        map_format_path(face_path, sizeof(face_path), "%s.%s", path, keys[i]);
+        if (!map_validate_asset_reference(ctx, faces, keys[i], face_path, "skybox face"))
+            return false;
+        if (map_obj_get(faces, keys[i]) == NULL)
+            return map_error(ctx, face_path, "skybox face is required when faces are authored");
+    }
+    return true;
+}
+
+static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *skybox = map_obj_get(root, "skybox");
+    if (skybox == NULL)
+        return true;
+    if (yyjson_is_str(skybox))
+        return map_validate_project_relative_reference(ctx, yyjson_get_str(skybox), "$.skybox", "skybox");
+    if (!yyjson_is_obj(skybox))
+        return map_error(ctx, "$.skybox", "skybox must be an object or non-empty asset id/path");
+    yyjson_val *size = map_obj_get(skybox, "size");
+    yyjson_val *faces = map_obj_get(skybox, "faces");
+    if (!map_optional_non_empty_string(ctx, skybox, "id", "$.skybox.id", "skybox id") ||
+        !map_validate_asset_reference(ctx, skybox, "asset", "$.skybox.asset", "skybox asset") ||
+        (faces != NULL && !map_validate_skybox_faces(ctx, faces, "$.skybox.faces")) ||
+        (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 1.0) &&
+         !map_error(ctx, "$.skybox.size", "skybox size must be greater than 1")) ||
+        !map_validate_properties(ctx, map_obj_get(skybox, "properties"), "$.skybox"))
+    {
+        return false;
+    }
+    if (faces == NULL && map_obj_get(skybox, "asset") == NULL)
+        return map_error(ctx, "$.skybox", "skybox requires either asset or faces");
+    return true;
+}
+
 static bool map_validate_connection_endpoint(map_validation_context *ctx, yyjson_val *endpoint, const char *path,
                                              const char *label, const char *event_or_action_key)
 {
@@ -784,7 +937,7 @@ static bool map_validate_root(map_validation_context *ctx, yyjson_val *root)
 
     return map_validate_metadata(ctx, root) && map_validate_assets(ctx, root) && map_validate_materials(ctx, root) &&
            map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) && map_validate_prefabs(ctx, root) &&
-           map_validate_connections(ctx, root) &&
+           map_validate_lights(ctx, root) && map_validate_skybox(ctx, root) && map_validate_connections(ctx, root) &&
            map_validate_properties(ctx, map_obj_get(root, "properties"), "$.properties");
 }
 

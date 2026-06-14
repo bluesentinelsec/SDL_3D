@@ -1160,6 +1160,141 @@ static bool export_add_map_editor_actors(yyjson_mut_doc *doc, yyjson_mut_val *ac
     return true;
 }
 
+static const slayer3d_value *editor_actor_property(const editor_actor_runtime *actor, const char *key)
+{
+    return actor != NULL && actor->properties != NULL ? slayer3d_properties_get_value(actor->properties, key) : NULL;
+}
+
+static const char *editor_actor_property_string(const editor_actor_runtime *actor, const char *key,
+                                                const char *fallback)
+{
+    return actor != NULL && actor->properties != NULL ? slayer3d_properties_get_string(actor->properties, key, fallback)
+                                                      : fallback;
+}
+
+static float editor_actor_property_float(const editor_actor_runtime *actor, const char *key, float fallback)
+{
+    return actor != NULL && actor->properties != NULL ? slayer3d_properties_get_float(actor->properties, key, fallback)
+                                                      : fallback;
+}
+
+static bool editor_actor_property_bool(const editor_actor_runtime *actor, const char *key, bool fallback)
+{
+    return actor != NULL && actor->properties != NULL ? slayer3d_properties_get_bool(actor->properties, key, fallback)
+                                                      : fallback;
+}
+
+static slayer3d_vec3 editor_actor_property_vec3(const editor_actor_runtime *actor, const char *key,
+                                                slayer3d_vec3 fallback)
+{
+    return actor != NULL && actor->properties != NULL ? slayer3d_properties_get_vec3(actor->properties, key, fallback)
+                                                      : fallback;
+}
+
+static bool editor_actor_light_exportable(const editor_actor_runtime *actor)
+{
+    const char *role = editor_actor_property_string(actor, "role", "");
+    const char *light_type = editor_actor_property_string(actor, "light_type", "");
+    return actor != NULL && ((role != NULL && (SDL_strcmp(role, "light") == 0 || SDL_strcmp(role, "baked_light") == 0 ||
+                                               SDL_strcmp(role, "static_light") == 0)) ||
+                             (light_type != NULL && light_type[0] != '\0'));
+}
+
+static bool export_add_map_editor_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, const editor_actor_runtime *actor)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *transform = yyjson_mut_obj(doc);
+    char light_id[192];
+    SDL_snprintf(light_id, sizeof(light_id), "%s.light", actor->name != NULL ? actor->name : "light");
+    if (obj == NULL || transform == NULL || !yyjson_mut_arr_add_val(lights, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "id", light_id) ||
+        !export_add_optional_string(doc, obj, "source_actor", actor->name) ||
+        !yyjson_mut_obj_add_val(doc, obj, "transform", transform) ||
+        !export_add_vec3(doc, transform, "position", actor->position) ||
+        !export_add_vec3(doc, transform, "rotation", actor->rotation) ||
+        !export_add_vec3(doc, transform, "scale", actor->scale))
+    {
+        return false;
+    }
+
+    const char *role = editor_actor_property_string(actor, "role", "");
+    const char *kind = editor_actor_property_string(actor, "light_kind", NULL);
+    if (kind == NULL || kind[0] == '\0')
+    {
+        kind = (role != NULL && (SDL_strcmp(role, "baked_light") == 0 || SDL_strcmp(role, "static_light") == 0))
+                   ? "baked"
+                   : "dynamic";
+    }
+    const char *type = editor_actor_property_string(actor, "light_type", "point");
+    if (type == NULL || type[0] == '\0')
+        type = "point";
+
+    slayer3d_color color = actor->color;
+    const slayer3d_value *color_value = editor_actor_property(actor, "light_color");
+    if (color_value != NULL && color_value->type == SLAYER3D_VALUE_COLOR)
+        color = color_value->as_color;
+
+    const slayer3d_vec3 default_direction = slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
+    const slayer3d_vec3 direction = editor_actor_property_vec3(actor, "light_direction", default_direction);
+    if (!yyjson_mut_obj_add_strcpy(doc, obj, "kind", kind) || !yyjson_mut_obj_add_strcpy(doc, obj, "type", type) ||
+        !export_add_color(doc, obj, "color", color) ||
+        !yyjson_mut_obj_add_real(doc, obj, "intensity", editor_actor_property_float(actor, "light_intensity", 1.0f)) ||
+        !yyjson_mut_obj_add_real(doc, obj, "range", editor_actor_property_float(actor, "light_range", 8.0f)) ||
+        !export_add_vec3(doc, obj, "direction", direction) ||
+        !yyjson_mut_obj_add_bool(doc, obj, "casts_shadow", editor_actor_property_bool(actor, "casts_shadow", false)))
+    {
+        return false;
+    }
+    const float inner_angle = editor_actor_property_float(actor, "inner_angle_degrees", -1.0f);
+    const float outer_angle = editor_actor_property_float(actor, "outer_angle_degrees", -1.0f);
+    if (inner_angle >= 0.0f && !yyjson_mut_obj_add_real(doc, obj, "inner_angle_degrees", inner_angle))
+        return false;
+    if (outer_angle >= 0.0f && !yyjson_mut_obj_add_real(doc, obj, "outer_angle_degrees", outer_angle))
+        return false;
+    if (!export_add_optional_string(doc, obj, "bake_group", editor_actor_property_string(actor, "bake_group", NULL)) ||
+        !export_add_properties(doc, obj, "properties", actor->properties))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool export_add_map_lights(yyjson_mut_doc *doc, yyjson_mut_val *lights,
+                                  const slayer3d_game_data_runtime *runtime)
+{
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        const editor_actor_runtime *actor = &runtime->editor_actors[i];
+        if (editor_actor_light_exportable(actor) && !export_add_map_editor_light(doc, lights, actor))
+            return false;
+    }
+    return true;
+}
+
+static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_game_data_runtime *runtime)
+{
+    slayer3d_game_data_scene_skybox skybox;
+    if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
+        return true;
+
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *faces = yyjson_mut_obj(doc);
+    if (obj == NULL || faces == NULL || !yyjson_mut_obj_add_val(doc, root, "skybox", obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "id", "active_scene_skybox") ||
+        !yyjson_mut_obj_add_val(doc, obj, "faces", faces) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_x", skybox.pos_x) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_x", skybox.neg_x) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_y", skybox.pos_y) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_y", skybox.neg_y) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_z", skybox.pos_z) ||
+        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_z", skybox.neg_z) ||
+        !yyjson_mut_obj_add_real(doc, obj, "size", skybox.size))
+    {
+        return false;
+    }
+    return true;
+}
+
 static bool export_add_map_connections(yyjson_mut_doc *doc, yyjson_mut_val *connections,
                                        const slayer3d_game_data_runtime *runtime)
 {
@@ -1219,13 +1354,14 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
     yyjson_mut_val *materials = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *brushes = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *actors = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *lights = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *connections = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *prefabs = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *editor = doc != NULL ? yyjson_mut_obj(doc) : NULL;
     yyjson_mut_val *fragment_copy = doc != NULL ? yyjson_val_mut_copy(doc, fragment_root) : NULL;
     if (fragment_doc == NULL || doc == NULL || root == NULL || metadata == NULL || materials == NULL ||
-        brushes == NULL || actors == NULL || connections == NULL || prefabs == NULL || editor == NULL ||
-        fragment_copy == NULL)
+        brushes == NULL || actors == NULL || lights == NULL || connections == NULL || prefabs == NULL ||
+        editor == NULL || fragment_copy == NULL)
     {
         yyjson_doc_free(fragment_doc);
         yyjson_mut_doc_free(doc);
@@ -1248,6 +1384,8 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
               yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
               export_add_map_player_start_actors(doc, actors, runtime) &&
               export_add_map_editor_actors(doc, actors, runtime) &&
+              yyjson_mut_obj_add_val(doc, root, "lights", lights) && export_add_map_lights(doc, lights, runtime) &&
+              export_add_map_skybox(doc, root, runtime) &&
               yyjson_mut_obj_add_val(doc, root, "connections", connections) &&
               export_add_map_connections(doc, connections, runtime) &&
               yyjson_mut_obj_add_val(doc, root, "prefabs", prefabs) && export_add_map_prefabs(doc, prefabs, runtime) &&

@@ -264,6 +264,13 @@ brushes keep their normal texture appearance unless a tint override is enabled.
 This lets designers color-code floors, walls, triggers, and hazards during
 grayboxing without losing that intent when textures are applied later.
 
+Slayer3D maps also carry normalized light and skybox authoring data. Light
+markers remain generic editor actors while editing, then export as top-level
+`lights` entries with dynamic/baked intent, type, transform, color, range, and
+arbitrary properties. Active scene skybox data exports as a top-level `skybox`
+object when present, so game runtimes can consume environment selection without
+understanding the editor-only fragment.
+
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```

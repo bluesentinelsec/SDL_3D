@@ -18148,7 +18148,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
         EXPECT_EQ(world.brushes[0].faces[i].color.a, 255);
         EXPECT_FALSE(world.brushes[0].faces[i].tint_enabled);
     }
-    expect_mesh_color(world, "mat.editor.wall", (slayer3d_color){110, 122, 132, 255}, true);
+    expect_mesh_color(world, "mat.editor.wall", slayer3d_color{110, 122, 132, 255}, true);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -18165,7 +18165,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
         EXPECT_TRUE(world.brushes[0].faces[i].has_color);
         EXPECT_FALSE(world.brushes[0].faces[i].tint_enabled);
     }
-    expect_mesh_color(world, "mat.editor.texture.wall_metal", (slayer3d_color){255, 255, 255, 255}, true);
+    expect_mesh_color(world, "mat.editor.texture.wall_metal", slayer3d_color{255, 255, 255, 255}, true);
 
     ASSERT_TRUE(execute_json_action(R"json({
       "type": "editor.brush.color",
@@ -18186,7 +18186,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
     EXPECT_EQ(tinted_face.tint.g, 128);
     EXPECT_EQ(tinted_face.tint.b, 64);
     EXPECT_EQ(tinted_face.tint.a, 128);
-    expect_mesh_color(world, "mat.editor.texture.wall_metal", (slayer3d_color){255, 128, 64, 128}, false);
+    expect_mesh_color(world, "mat.editor.texture.wall_metal", slayer3d_color{255, 128, 64, 128}, false);
 
     char *fragment_json = nullptr;
     size_t fragment_size = 0u;
@@ -18584,6 +18584,131 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(model_root);
+}
+
+TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *light_properties = slayer3d_properties_create();
+    ASSERT_NE(light_properties, nullptr);
+    slayer3d_properties_set_string(light_properties, "role", "light");
+    slayer3d_properties_set_string(light_properties, "light_kind", "dynamic");
+    slayer3d_properties_set_string(light_properties, "light_type", "spot");
+    slayer3d_properties_set_float(light_properties, "light_intensity", 2.5f);
+    slayer3d_properties_set_float(light_properties, "light_range", 12.0f);
+    slayer3d_properties_set_vec3(light_properties, "light_direction", slayer3d_vec3_make(0.0f, -1.0f, 0.25f));
+    slayer3d_properties_set_color(light_properties, "light_color", slayer3d_color{255, 200, 128, 255});
+    slayer3d_properties_set_bool(light_properties, "casts_shadow", true);
+    slayer3d_properties_set_float(light_properties, "inner_angle_degrees", 25.0f);
+    slayer3d_properties_set_float(light_properties, "outer_angle_degrees", 40.0f);
+    slayer3d_properties_set_string(light_properties, "bake_group", "room_a");
+
+    slayer3d_game_data_place_editor_actor_desc desc{};
+    desc.name = "light.editor_shell.key_spot";
+    desc.display_name = "Key Spot";
+    desc.mesh = "sphere";
+    desc.group = "Lights";
+    desc.position = slayer3d_vec3_make(4.0f, 3.0f, -2.0f);
+    desc.has_position = true;
+    desc.scale = slayer3d_vec3_make(0.35f, 0.35f, 0.35f);
+    desc.has_scale = true;
+    desc.color = slayer3d_color{255, 200, 128, 220};
+    desc.has_color = true;
+    desc.properties = light_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &desc, nullptr, 0u, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(light_properties);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+
+    yyjson_doc *doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *lights = yyjson_obj_get(root, "lights");
+    ASSERT_TRUE(yyjson_is_arr(lights));
+    ASSERT_EQ(yyjson_arr_size(lights), 1u);
+    yyjson_val *light = yyjson_arr_get(lights, 0);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "id")), "light.editor_shell.key_spot.light");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "source_actor")), "light.editor_shell.key_spot");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "kind")), "dynamic");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "type")), "spot");
+    EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(light, "intensity")), 2.5, 0.001);
+    EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(light, "range")), 12.0, 0.001);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(light, "casts_shadow")));
+    yyjson_val *light_color = yyjson_obj_get(light, "color");
+    ASSERT_TRUE(yyjson_is_arr(light_color));
+    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(light_color, 0)), 255u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(light_color, 1)), 200u);
+    yyjson_val *transform = yyjson_obj_get(light, "transform");
+    ASSERT_TRUE(yyjson_is_obj(transform));
+    yyjson_val *position = yyjson_obj_get(transform, "position");
+    ASSERT_TRUE(yyjson_is_arr(position));
+    EXPECT_NEAR(yyjson_get_real(yyjson_arr_get(position, 0)), 4.0, 0.001);
+    yyjson_doc_free(doc);
+    SDL_free(map_json);
+
+    const char *valid_skybox_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "assets": {
+        "skyboxes": [{ "id": "skybox.sky_17", "path": "skyboxes/sky_17" }]
+      },
+      "lights": [
+        {
+          "id": "light.sun",
+          "kind": "baked",
+          "type": "directional",
+          "direction": [0, -1, 0],
+          "color": [255, 244, 220, 255],
+          "intensity": 1.2,
+          "properties": { "designer_note": "build-time sun" }
+        }
+      ],
+      "skybox": {
+        "id": "skybox.main",
+        "asset": "skybox.sky_17",
+        "size": 400,
+        "properties": { "mood": "dusk" }
+      }
+    })json";
+    ASSERT_TRUE(
+        slayer3d_map_validate_json(valid_skybox_map, SDL_strlen(valid_skybox_map), nullptr, error, sizeof(error)))
+        << error;
+
+    const char *invalid_light_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "lights": [{ "id": "light.bad", "type": "laser", "range": -1 }]
+    })json";
+    EXPECT_FALSE(
+        slayer3d_map_validate_json(invalid_light_map, SDL_strlen(invalid_light_map), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("light type"), std::string::npos) << error;
+
+    const char *invalid_skybox_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "skybox": { "id": "skybox.bad", "size": 400 }
+    })json";
+    EXPECT_FALSE(
+        slayer3d_map_validate_json(invalid_skybox_map, SDL_strlen(invalid_skybox_map), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("skybox requires"), std::string::npos) << error;
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties)

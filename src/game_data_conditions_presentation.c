@@ -121,7 +121,8 @@ bool set_property_from_value(slayer3d_properties *props, const char *key, const 
         slayer3d_properties_set_vec3(props, key, value->as_vec3);
         return true;
     case SLAYER3D_VALUE_COLOR:
-        return false;
+        slayer3d_properties_set_color(props, key, value->as_color);
+        return true;
     }
     return false;
 }
