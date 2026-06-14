@@ -291,6 +291,8 @@
     "signal.editor.selection.clear",
     "signal.editor.escape",
     "signal.editor.inspector.toggle",
+    "signal.editor.inspector.scroll.up",
+    "signal.editor.inspector.scroll.down",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.clip.cycle_keep_mode",
@@ -581,6 +583,7 @@
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
+          { "type": "scene_state.set", "key": "editor.inspector.scroll", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.clip.active", "value": false },
           { "type": "scene_state.set", "key": "editor.clip.operation_active", "value": false },
@@ -1282,6 +1285,20 @@
           { "type": "scene_state.toggle", "key": "editor.inspector.collapsed", "default": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector toggled" },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.scroll.up",
+        "actions": [
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled up" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.scroll.down",
+        "actions": [
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
         ]
       },
       {

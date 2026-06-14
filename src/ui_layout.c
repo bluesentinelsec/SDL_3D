@@ -18,8 +18,11 @@ typedef struct ui_layout_node
     slayer3d_ui_layout_size_mode height_mode;
     slayer3d_ui_layout_rect local_rect;
     slayer3d_ui_layout_rect resolved_rect;
+    bool has_resolved_clip_rect;
+    slayer3d_ui_layout_rect resolved_clip_rect;
     float padding;
     float gap;
+    bool clip_children;
     int layer;
     int resolved_layer;
     bool interactive;
@@ -170,6 +173,33 @@ static bool ui_layout_type_interactive(slayer3d_ui_layout_node_type type)
            type == SLAYER3D_UI_LAYOUT_NODE_TAB_STRIP;
 }
 
+static bool ui_layout_rect_intersection(slayer3d_ui_layout_rect a, slayer3d_ui_layout_rect b,
+                                        slayer3d_ui_layout_rect *out_rect)
+{
+    const float min_x = SDL_max(a.x, b.x);
+    const float min_y = SDL_max(a.y, b.y);
+    const float max_x = SDL_min(a.x + a.w, b.x + b.w);
+    const float max_y = SDL_min(a.y + a.h, b.y + b.h);
+    if (max_x <= min_x || max_y <= min_y)
+    {
+        if (out_rect != NULL)
+            *out_rect = (slayer3d_ui_layout_rect){min_x, min_y, 0.0f, 0.0f};
+        return false;
+    }
+    if (out_rect != NULL)
+        *out_rect = (slayer3d_ui_layout_rect){min_x, min_y, max_x - min_x, max_y - min_y};
+    return true;
+}
+
+static bool ui_layout_clip_allows_rect(bool has_clip_rect, slayer3d_ui_layout_rect clip_rect,
+                                       slayer3d_ui_layout_rect rect)
+{
+    if (!has_clip_rect)
+        return true;
+    slayer3d_ui_layout_rect ignored;
+    return ui_layout_rect_intersection(clip_rect, rect, &ignored);
+}
+
 static bool ui_layout_text_valid(const char *text)
 {
     return text == NULL || SDL_strlen(text) < SLAYER3D_UI_LAYOUT_TEXT_MAX;
@@ -282,6 +312,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->local_rect = desc->rect;
     node->padding = desc->padding;
     node->gap = desc->gap;
+    node->clip_children = desc->clip_children;
     node->layer = desc->layer;
     node->resolved_layer = desc->layer;
     ui_layout_copy_text(node->text, desc->text);
@@ -430,6 +461,21 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         child->resolved = true;
         child->resolving = false;
         child->resolved_layer = SDL_max(child->layer, parent->resolved_layer + 1);
+        child->has_resolved_clip_rect = parent->has_resolved_clip_rect;
+        child->resolved_clip_rect = parent->resolved_clip_rect;
+        if (parent->clip_children)
+        {
+            if (child->has_resolved_clip_rect)
+            {
+                child->has_resolved_clip_rect =
+                    ui_layout_rect_intersection(child->resolved_clip_rect, content, &child->resolved_clip_rect);
+            }
+            else
+            {
+                child->has_resolved_clip_rect = true;
+                child->resolved_clip_rect = content;
+            }
+        }
         if (!ui_layout_resolve_children(model, i, viewport_w, viewport_h))
             return false;
     }
@@ -457,6 +503,7 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
         node->resolved_rect.w = ui_layout_node_width(node, viewport_w);
         node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
         node->resolved_layer = node->layer;
+        node->has_resolved_clip_rect = false;
         node->resolved = true;
         node->resolving = false;
         return ui_layout_resolve_children(model, index, viewport_w, viewport_h);
@@ -479,6 +526,8 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->type = node->type;
         resolved->axis = node->axis;
         resolved->rect = node->resolved_rect;
+        resolved->has_clip_rect = node->has_resolved_clip_rect;
+        resolved->clip_rect = node->resolved_clip_rect;
         resolved->layer = node->resolved_layer;
         resolved->interactive = node->interactive;
         ui_layout_copy_text(resolved->text, node->text);
@@ -551,11 +600,12 @@ static bool ui_layout_id_matches(const char *a, const char *b)
 
 static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
                                            slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
-                                           const char *text, const char *font, bool selected, bool popup,
-                                           int option_index, slayer3d_color text_color, bool has_text_color,
-                                           float text_scale, slayer3d_ui_layout_text_align text_align,
-                                           slayer3d_color fill_color, bool has_fill_color, slayer3d_color border_color,
-                                           bool has_border_color, float border_thickness)
+                                           bool has_clip_rect, slayer3d_ui_layout_rect clip_rect, const char *text,
+                                           const char *font, bool selected, bool popup, int option_index,
+                                           slayer3d_color text_color, bool has_text_color, float text_scale,
+                                           slayer3d_ui_layout_text_align text_align, slayer3d_color fill_color,
+                                           bool has_fill_color, slayer3d_color border_color, bool has_border_color,
+                                           float border_thickness)
 {
     slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
     SDL_zero(*render);
@@ -563,6 +613,8 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
     ui_layout_copy_id(render->owner_id, owner_id != NULL ? owner_id : id);
     render->type = type;
     render->rect = rect;
+    render->has_clip_rect = has_clip_rect;
+    render->clip_rect = clip_rect;
     render->layer = layer;
     ui_layout_copy_text(render->text, text);
     ui_layout_copy_font(render->font, font);
@@ -584,7 +636,8 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
 
 static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
                                        slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
-                                       const char *action, bool selected, int option_index)
+                                       bool has_clip_rect, slayer3d_ui_layout_rect clip_rect, const char *action,
+                                       bool selected, int option_index)
 {
     slayer3d_ui_layout_hit_region *hit = &model->hit_regions[model->hit_region_count++];
     SDL_zero(*hit);
@@ -592,6 +645,8 @@ static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const ch
     ui_layout_copy_id(hit->owner_id, owner_id != NULL ? owner_id : id);
     hit->type = type;
     hit->rect = rect;
+    hit->has_clip_rect = has_clip_rect;
+    hit->clip_rect = clip_rect;
     hit->layer = layer;
     ui_layout_copy_action(hit->action, action);
     hit->hovered = ui_layout_id_matches(model->hover_id, id);
@@ -627,9 +682,9 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
     const int popup_layer = node->resolved_layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
     const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
-                                   "", node->font, false, true, -1, (slayer3d_color){0}, false, 0.0f,
-                                   SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, (slayer3d_color){0}, false, (slayer3d_color){0},
-                                   false, 0.0f);
+                                   false, (slayer3d_ui_layout_rect){0}, "", node->font, false, true, -1,
+                                   (slayer3d_color){0}, false, 0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO,
+                                   (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f);
 
     const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
     for (int i = 0; i < node->option_count; ++i)
@@ -644,11 +699,12 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
         };
         const bool selected = i == node->selected_index;
         ui_layout_store_render_command(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                       popup_layer + 1, node->options[i], node->font, selected, false, i,
-                                       node->text_color, node->has_text_color, node->text_scale, node->text_align,
-                                       (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f);
+                                       popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->options[i],
+                                       node->font, selected, false, i, node->text_color, node->has_text_color,
+                                       node->text_scale, node->text_align, (slayer3d_color){0}, false,
+                                       (slayer3d_color){0}, false, 0.0f);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                   popup_layer + 1, node->action, selected, i);
+                                   popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->action, selected, i);
     }
     return true;
 }
@@ -663,15 +719,20 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
     {
         const slayer3d_ui_layout_resolved_node *node = &model->resolved_nodes[i];
         const ui_layout_node *source = &model->nodes[i];
-        ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer, node->text,
-                                       node->font, node->selected, false, -1, node->text_color, node->has_text_color,
-                                       node->text_scale, node->text_align, node->fill_color, node->has_fill_color,
-                                       node->border_color, node->has_border_color, node->border_thickness);
-
-        if (node->interactive)
+        const bool visible_in_clip = ui_layout_clip_allows_rect(node->has_clip_rect, node->clip_rect, node->rect);
+        if (visible_in_clip)
         {
-            ui_layout_store_hit_region(model, node->id, node->id, node->type, node->rect, node->layer, node->action,
-                                       node->selected, -1);
+            ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer,
+                                           node->has_clip_rect, node->clip_rect, node->text, node->font, node->selected,
+                                           false, -1, node->text_color, node->has_text_color, node->text_scale,
+                                           node->text_align, node->fill_color, node->has_fill_color, node->border_color,
+                                           node->has_border_color, node->border_thickness);
+        }
+
+        if (node->interactive && visible_in_clip)
+        {
+            ui_layout_store_hit_region(model, node->id, node->id, node->type, node->rect, node->layer,
+                                       node->has_clip_rect, node->clip_rect, node->action, node->selected, -1);
         }
         if (source->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && !ui_layout_compile_dropdown(model, source))
             return false;
@@ -781,8 +842,11 @@ const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_
     for (int i = model->hit_region_count - 1; i >= 0; --i)
     {
         const slayer3d_ui_layout_hit_region *region = &model->hit_regions[i];
-        if (ui_layout_rect_contains(region->rect, x, y))
+        if (ui_layout_rect_contains(region->rect, x, y) &&
+            (!region->has_clip_rect || ui_layout_rect_contains(region->clip_rect, x, y)))
+        {
             return region;
+        }
     }
     return NULL;
 }

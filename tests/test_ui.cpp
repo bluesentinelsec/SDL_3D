@@ -261,6 +261,58 @@ TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedClipChildrenConstrainsRenderingAndHitTesting)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "panel";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {10.0f, 20.0f, 100.0f, 50.0f};
+    panel.padding = 5.0f;
+    panel.clip_children = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    slayer3d_ui_layout_node_desc inside{};
+    inside.id = "inside";
+    inside.parent_id = "panel";
+    inside.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    inside.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    inside.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    inside.rect = {10.0f, 10.0f, 30.0f, 20.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &inside));
+
+    slayer3d_ui_layout_node_desc overflow{};
+    overflow.id = "overflow";
+    overflow.parent_id = "panel";
+    overflow.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    overflow.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    overflow.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    overflow.rect = {10.0f, 70.0f, 30.0f, 20.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &overflow));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    const slayer3d_ui_layout_render_command *inside_render = find_render_command(layout, "inside");
+    ASSERT_NE(inside_render, nullptr);
+    EXPECT_TRUE(inside_render->has_clip_rect);
+    EXPECT_FLOAT_EQ(inside_render->clip_rect.x, 15.0f);
+    EXPECT_FLOAT_EQ(inside_render->clip_rect.y, 25.0f);
+    EXPECT_FLOAT_EQ(inside_render->clip_rect.w, 90.0f);
+    EXPECT_FLOAT_EQ(inside_render->clip_rect.h, 40.0f);
+
+    EXPECT_EQ(find_render_command(layout, "overflow"), nullptr);
+    EXPECT_NE(find_hit_region(layout, "inside"), nullptr);
+    EXPECT_EQ(find_hit_region(layout, "overflow"), nullptr);
+    EXPECT_NE(slayer3d_ui_layout_hit_test(layout, 30.0f, 40.0f), nullptr);
+    EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 30.0f, 100.0f), nullptr);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
 {
     slayer3d_ui_layout_model *layout = nullptr;

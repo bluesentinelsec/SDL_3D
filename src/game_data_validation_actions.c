@@ -901,6 +901,8 @@ static bool validate_adapter_invoke_action(validation_context *ctx, yyjson_val *
                                            validation_names *names, const char *type);
 static bool validate_branch_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                    validation_names *names, const char *type);
+static bool validate_scene_state_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type);
 
 // clang-format off
 #define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
@@ -965,6 +967,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
                                   validate_input_clear_network_input_overrides_action),
         ACTION_RULE_EXACT_HANDLER("scene_state.set", validate_scene_state_set_action),
         ACTION_RULE_EXACT_HANDLER("scene_state.toggle", validate_scene_state_toggle_action),
+        ACTION_RULE_EXACT_HANDLER("scene_state.add", validate_scene_state_add_action),
         ACTION_RULE_EXACT_HANDLER("scene_state.cycle", validate_scene_state_cycle_action),
         ACTION_RULE_EXACT_HANDLER("console.write", validate_console_write_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.clear", validate_noop_action),
@@ -1719,6 +1722,28 @@ static bool validate_scene_state_toggle_action(validation_context *ctx, yyjson_v
     return true;
 }
 
+static bool validate_scene_state_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "scene_state.add requires a non-empty key");
+    yyjson_val *value = obj_get(action, "value");
+    if (!yyjson_is_num(value))
+        return validation_error(ctx, json_path, "scene_state.add requires a numeric value");
+    yyjson_val *default_value = obj_get(action, "default");
+    if (default_value != NULL && !yyjson_is_num(default_value))
+        return validation_error(ctx, json_path, "scene_state.add default must be numeric");
+    yyjson_val *min_value = obj_get(action, "min");
+    if (min_value != NULL && !yyjson_is_num(min_value))
+        return validation_error(ctx, json_path, "scene_state.add min must be numeric");
+    yyjson_val *max_value = obj_get(action, "max");
+    if (max_value != NULL && !yyjson_is_num(max_value))
+        return validation_error(ctx, json_path, "scene_state.add max must be numeric");
+    return true;
+}
+
 static bool validate_scene_state_cycle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                               validation_names *names, const char *type)
 {
@@ -1770,9 +1795,9 @@ static bool validate_console_write_action(validation_context *ctx, yyjson_val *a
         return validation_error(ctx, json_path, "console.write count_key must be a non-empty string");
     yyjson_val *line_count = obj_get(action, "line_count");
     if (line_count != NULL &&
-        (!yyjson_is_int(line_count) || yyjson_get_int(line_count) < 1 || yyjson_get_int(line_count) > 8))
+        (!yyjson_is_int(line_count) || yyjson_get_int(line_count) < 1 || yyjson_get_int(line_count) > 64))
     {
-        return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 8");
+        return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 64");
     }
     return true;
 }

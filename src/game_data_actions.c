@@ -1409,10 +1409,10 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
 
     const char *line_key_prefix = json_string(action, "line_key_prefix", "editor.console.line");
-    int line_count = json_int(action, "line_count", 5);
-    line_count = SDL_clamp(line_count, 1, 8);
+    int line_count = json_int(action, "line_count", 16);
+    line_count = SDL_clamp(line_count, 1, 64);
 
-    char previous[8][512];
+    char previous[64][512];
     SDL_zeroa(previous);
     for (int i = 0; i < line_count; ++i)
     {
@@ -2029,6 +2029,34 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
             return false;
         const bool current = scene_state_bool(runtime, key, json_bool(action, "default", false));
         slayer3d_properties_set_bool(runtime->scene_state, key, !current);
+        return true;
+    }
+
+    if (SDL_strcmp(type, "scene_state.add") == 0)
+    {
+        const char *key = json_string(action, "key", NULL);
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+            return false;
+
+        const float delta = json_float(action, "value", 0.0f);
+        const float fallback = json_float(action, "default", 0.0f);
+        float value = fallback;
+        const slayer3d_value *current = slayer3d_properties_get_value(runtime->scene_state, key);
+        if (current != NULL && current->type == SLAYER3D_VALUE_FLOAT)
+            value = current->as_float;
+        else if (current != NULL && current->type == SLAYER3D_VALUE_INT)
+            value = (float)current->as_int;
+        else if (current != NULL)
+            return false;
+
+        value += delta;
+        yyjson_val *min_value = obj_get(action, "min");
+        yyjson_val *max_value = obj_get(action, "max");
+        if (yyjson_is_num(min_value))
+            value = SDL_max(value, (float)yyjson_get_num(min_value));
+        if (yyjson_is_num(max_value))
+            value = SDL_min(value, (float)yyjson_get_num(max_value));
+        slayer3d_properties_set_float(runtime->scene_state, key, value);
         return true;
     }
 

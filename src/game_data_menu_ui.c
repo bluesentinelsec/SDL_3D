@@ -1829,6 +1829,12 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
         text.color = command->has_text_color ? command->text_color
                                              : (command->selected ? (slayer3d_color){255, 255, 255, 255}
                                                                   : (slayer3d_color){215, 224, 238, 245});
+        text.has_clip_rect = command->has_clip_rect;
+        text.clip_x = command->clip_rect.x;
+        text.clip_y = command->clip_rect.y;
+        text.clip_w = command->clip_rect.w;
+        text.clip_h = command->clip_rect.h;
+        text.clip_normalized = false;
         ok = callback(userdata, &text);
     }
 
@@ -1966,6 +1972,36 @@ static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float
     return callback(userdata, &rect);
 }
 
+static bool emit_ui_rect_from_values_clipped(yyjson_val *source, const char *name, float x, float y, float w, float h,
+                                             slayer3d_color color, bool has_clip_rect,
+                                             slayer3d_ui_layout_rect clip_rect, slayer3d_game_data_ui_rect_fn callback,
+                                             void *userdata)
+{
+    if (color.a == 0 || w <= 0.0f || h <= 0.0f)
+        return true;
+
+    slayer3d_game_data_ui_rect rect;
+    SDL_zero(rect);
+    rect.name = name;
+    rect.visible = "always";
+    rect.x = x;
+    rect.y = y;
+    rect.w = w;
+    rect.h = h;
+    rect.normalized = json_bool(source, "normalized", false);
+    rect.align = parse_ui_align(json_string(source, "align", NULL), SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
+    rect.valign = parse_ui_valign(json_string(source, "valign", NULL), SLAYER3D_GAME_DATA_UI_VALIGN_TOP);
+    rect.scale = json_float(source, "scale", 1.0f);
+    rect.color = color;
+    rect.has_clip_rect = has_clip_rect;
+    rect.clip_x = clip_rect.x;
+    rect.clip_y = clip_rect.y;
+    rect.clip_w = clip_rect.w;
+    rect.clip_h = clip_rect.h;
+    rect.clip_normalized = false;
+    return callback(userdata, &rect);
+}
+
 static bool emit_ui_panel_rects(const slayer3d_game_data_runtime *runtime, yyjson_val *panel,
                                 slayer3d_game_data_ui_rect_fn callback, void *userdata)
 {
@@ -2006,16 +2042,19 @@ static bool for_each_ui_panel_rect_root(const slayer3d_game_data_runtime *runtim
 }
 
 static bool emit_retained_ui_rect_border(const char *name, const slayer3d_ui_layout_rect *rect, float border,
-                                         slayer3d_color color, slayer3d_game_data_ui_rect_fn callback, void *userdata)
+                                         slayer3d_color color, bool has_clip_rect, slayer3d_ui_layout_rect clip_rect,
+                                         slayer3d_game_data_ui_rect_fn callback, void *userdata)
 {
     if (name == NULL || rect == NULL || border <= 0.0f || color.a == 0)
         return true;
-    return emit_ui_rect_from_values(NULL, name, rect->x, rect->y, rect->w, border, color, callback, userdata) &&
-           emit_ui_rect_from_values(NULL, name, rect->x, rect->y + rect->h - border, rect->w, border, color, callback,
-                                    userdata) &&
-           emit_ui_rect_from_values(NULL, name, rect->x, rect->y, border, rect->h, color, callback, userdata) &&
-           emit_ui_rect_from_values(NULL, name, rect->x + rect->w - border, rect->y, border, rect->h, color, callback,
-                                    userdata);
+    return emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y, rect->w, border, color, has_clip_rect,
+                                            clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y + rect->h - border, rect->w, border, color,
+                                            has_clip_rect, clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y, border, rect->h, color, has_clip_rect,
+                                            clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped(NULL, name, rect->x + rect->w - border, rect->y, border, rect->h, color,
+                                            has_clip_rect, clip_rect, callback, userdata);
 }
 
 static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_command *command)
@@ -2116,16 +2155,19 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
         const slayer3d_color border = retained_ui_command_border(command);
         const float border_thickness =
             command->border_thickness > 0.0f ? command->border_thickness : (command->selected ? 3.0f : 1.0f);
-        ok = emit_ui_rect_from_values(NULL, name, command->rect.x, command->rect.y, command->rect.w, command->rect.h,
-                                      fill, callback, userdata) &&
-             emit_retained_ui_rect_border(name, &command->rect, border_thickness, border, callback, userdata);
+        ok = emit_ui_rect_from_values_clipped(NULL, name, command->rect.x, command->rect.y, command->rect.w,
+                                              command->rect.h, fill, command->has_clip_rect, command->clip_rect,
+                                              callback, userdata) &&
+             emit_retained_ui_rect_border(name, &command->rect, border_thickness, border, command->has_clip_rect,
+                                          command->clip_rect, callback, userdata);
         if (ok && command->selected)
         {
             char selected_name[SLAYER3D_UI_LAYOUT_ID_MAX];
             if (retained_ui_selected_name(command->id, selected_name, sizeof(selected_name)))
             {
                 ok = emit_retained_ui_rect_border(selected_name, &command->rect, 4.0f,
-                                                  (slayer3d_color){96, 255, 128, 255}, callback, userdata);
+                                                  (slayer3d_color){96, 255, 128, 255}, command->has_clip_rect,
+                                                  command->clip_rect, callback, userdata);
             }
         }
     }

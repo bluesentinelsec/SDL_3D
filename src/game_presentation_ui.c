@@ -40,6 +40,80 @@ typedef struct ui_rect_draw_context
     bool ok;
 } ui_rect_draw_context;
 
+typedef struct ui_scissor_scope
+{
+    bool active;
+    bool had_previous;
+    SDL_Rect previous;
+} ui_scissor_scope;
+
+static bool ui_rect_intersect_sdl(SDL_Rect a, SDL_Rect b, SDL_Rect *out_rect)
+{
+    const int min_x = SDL_max(a.x, b.x);
+    const int min_y = SDL_max(a.y, b.y);
+    const int max_x = SDL_min(a.x + a.w, b.x + b.w);
+    const int max_y = SDL_min(a.y + a.h, b.y + b.h);
+    if (max_x <= min_x || max_y <= min_y)
+    {
+        if (out_rect != NULL)
+            *out_rect = (SDL_Rect){min_x, min_y, 0, 0};
+        return false;
+    }
+    if (out_rect != NULL)
+        *out_rect = (SDL_Rect){min_x, min_y, max_x - min_x, max_y - min_y};
+    return true;
+}
+
+static bool ui_push_clip_rect(slayer3d_render_context *renderer, bool has_clip_rect, float clip_x, float clip_y,
+                              float clip_w, float clip_h, bool clip_normalized, ui_scissor_scope *scope)
+{
+    if (scope != NULL)
+        SDL_zero(*scope);
+    if (renderer == NULL || scope == NULL || !has_clip_rect)
+        return true;
+
+    const int render_w = slayer3d_get_render_context_width(renderer);
+    const int render_h = slayer3d_get_render_context_height(renderer);
+    if (render_w <= 0 || render_h <= 0)
+        return false;
+
+    float x = clip_normalized ? clip_x * (float)render_w : clip_x;
+    float y = clip_normalized ? clip_y * (float)render_h : clip_y;
+    float w = clip_normalized ? clip_w * (float)render_w : clip_w;
+    float h = clip_normalized ? clip_h * (float)render_h : clip_h;
+    if (w <= 0.0f || h <= 0.0f)
+        return false;
+
+    SDL_Rect clip = {
+        (int)SDL_floorf(x),
+        (int)SDL_floorf(y),
+        (int)SDL_ceilf(x + w) - (int)SDL_floorf(x),
+        (int)SDL_ceilf(y + h) - (int)SDL_floorf(y),
+    };
+    if (clip.w <= 0 || clip.h <= 0)
+        return false;
+
+    scope->had_previous = slayer3d_is_scissor_enabled(renderer);
+    if (scope->had_previous && !slayer3d_get_scissor_rect(renderer, &scope->previous))
+        return false;
+    if (scope->had_previous && !ui_rect_intersect_sdl(scope->previous, clip, &clip))
+        return false;
+    if (!slayer3d_set_scissor_rect(renderer, &clip))
+        return false;
+    scope->active = true;
+    return true;
+}
+
+static void ui_pop_clip_rect(slayer3d_render_context *renderer, const ui_scissor_scope *scope)
+{
+    if (renderer == NULL || scope == NULL || !scope->active)
+        return;
+    if (scope->had_previous)
+        (void)slayer3d_set_scissor_rect(renderer, &scope->previous);
+    else
+        (void)slayer3d_set_scissor_rect(renderer, NULL);
+}
+
 static Uint32 ui_image_hash_string(const char *s)
 {
     Uint32 h = 2166136261u;
@@ -125,8 +199,15 @@ static bool draw_ui_text(void *userdata, const slayer3d_game_data_ui_text *text)
         x -= text_w * scale;
     }
 
+    ui_scissor_scope clip_scope;
+    if (!ui_push_clip_rect(draw->renderer, resolved.has_clip_rect, resolved.clip_x, resolved.clip_y, resolved.clip_w,
+                           resolved.clip_h, resolved.clip_normalized, &clip_scope))
+    {
+        return true;
+    }
     if (!slayer3d_draw_text_overlay_scaled(draw->renderer, font, content, x, y, scale, color))
         draw->ok = false;
+    ui_pop_clip_rect(draw->renderer, &clip_scope);
     return true;
 }
 
@@ -228,6 +309,12 @@ static bool draw_ui_image(void *userdata, const slayer3d_game_data_ui_image *ima
     const Uint32 effect_seed = ui_image_hash_string(resolved.name);
     const bool has_custom_shader = (entry->shader_vertex_source != NULL && entry->shader_vertex_source[0] != '\0') ||
                                    (entry->shader_fragment_source != NULL && entry->shader_fragment_source[0] != '\0');
+    ui_scissor_scope clip_scope;
+    if (!ui_push_clip_rect(draw->renderer, resolved.has_clip_rect, resolved.clip_x, resolved.clip_y, resolved.clip_w,
+                           resolved.clip_h, resolved.clip_normalized, &clip_scope))
+    {
+        return true;
+    }
     const bool drawn = has_custom_shader
                            ? slayer3d_draw_texture_overlay_shader(
                                  draw->renderer, texture, x, y, w, h, resolved.color, effect, effect_progress,
@@ -236,6 +323,7 @@ static bool draw_ui_image(void *userdata, const slayer3d_game_data_ui_image *ima
                                                            effect_progress, effect_seed);
     if (!drawn)
         draw->ok = false;
+    ui_pop_clip_rect(draw->renderer, &clip_scope);
     return true;
 }
 
@@ -299,8 +387,15 @@ static bool draw_ui_rect(void *userdata, const slayer3d_game_data_ui_rect *rect)
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_rect_rect(&resolved, width, height, &x, &y, &w, &h);
+    ui_scissor_scope clip_scope;
+    if (!ui_push_clip_rect(draw->renderer, resolved.has_clip_rect, resolved.clip_x, resolved.clip_y, resolved.clip_w,
+                           resolved.clip_h, resolved.clip_normalized, &clip_scope))
+    {
+        return true;
+    }
     if (!slayer3d_draw_rect_overlay(draw->renderer, x, y, w, h, color))
         draw->ok = false;
+    ui_pop_clip_rect(draw->renderer, &clip_scope);
     return true;
 }
 

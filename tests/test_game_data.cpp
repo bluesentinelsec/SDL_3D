@@ -19641,6 +19641,119 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    struct RectSummary
+    {
+        bool found = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+    };
+    auto visible_frame = [&](const char *target_name) {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            const char *target = nullptr;
+            RectSummary rect;
+        } capture{runtime, target_name, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || rect == nullptr || rect->name == nullptr ||
+                SDL_strcmp(rect->name, capture->target) != 0)
+            {
+                return true;
+            }
+            slayer3d_game_data_ui_rect resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &resolved, &visible) || !visible)
+                return true;
+            if (!capture->rect.found || resolved.w * resolved.h > capture->rect.w * capture->rect.h)
+            {
+                capture->rect.found = true;
+                capture->rect.x = resolved.x;
+                capture->rect.y = resolved.y;
+                capture->rect.w = resolved.w;
+                capture->rect.h = resolved.h;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        return capture.rect;
+    };
+    auto visible_text_names = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || text == nullptr || text->name == nullptr)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.names;
+    };
+
+    emit_signal("signal.editor.scene.enter");
+    RectSummary inspector = visible_frame("ui.editor_shell.left_inspector.panel");
+    RectSummary console = visible_frame("ui.editor_shell.console.panel");
+    ASSERT_TRUE(inspector.found);
+    ASSERT_TRUE(console.found);
+    EXPECT_LE(inspector.y + inspector.h, console.y);
+
+    std::vector<std::string> text_names = visible_text_names();
+    EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
+              text_names.end());
+
+    emit_signal("signal.editor.inspector.scroll.down");
+    emit_signal("signal.editor.inspector.scroll.down");
+    emit_signal("signal.editor.inspector.scroll.down");
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
+        180.0f);
+    text_names = visible_text_names();
+    EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
+              text_names.end());
+
+    emit_signal("signal.editor.inspector.scroll.up");
+    emit_signal("signal.editor.inspector.scroll.up");
+    emit_signal("signal.editor.inspector.scroll.up");
+    emit_signal("signal.editor.inspector.scroll.up");
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
+        0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirectory)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
