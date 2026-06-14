@@ -713,6 +713,7 @@
         "w": 308,
         "h": 430,
         "clip_children": true,
+        "interactive": true,
         "layer": 120,
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
         "children": [
@@ -741,7 +742,9 @@
             "layer": 122,
             "color": [18, 26, 36, 230],
             "border_color": [68, 92, 124, 235],
-            "border_thickness": 1
+            "border_thickness": 1,
+            "interactive": true,
+            "action": "editor.inspector.scroll.down"
           },
           {
             "id": "ui.editor_shell.left_inspector.scroll.thumb.0",
@@ -752,6 +755,7 @@
             "h": 66,
             "layer": 123,
             "color": [92, 140, 198, 245],
+            "interactive": true,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 0.0, "default": 0.0 }
           },
           {
@@ -763,6 +767,7 @@
             "h": 66,
             "layer": 123,
             "color": [92, 140, 198, 245],
+            "interactive": true,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 60.0, "default": 0.0 }
           },
           {
@@ -774,6 +779,7 @@
             "h": 66,
             "layer": 123,
             "color": [92, 140, 198, 245],
+            "interactive": true,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 120.0, "default": 0.0 }
           },
           {
@@ -785,6 +791,7 @@
             "h": 66,
             "layer": 123,
             "color": [92, 140, 198, 245],
+            "interactive": true,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.scroll", "op": "==", "value": 180.0, "default": 0.0 }
           },
           {
@@ -792,6 +799,7 @@
             "type": "button",
             "x": 12,
             "y": 52,
+            "scroll_y_key": "editor.inspector.scroll",
             "w": 82,
             "h": 28,
             "layer": 121,
@@ -803,6 +811,7 @@
             "type": "button",
             "x": 98,
             "y": 52,
+            "scroll_y_key": "editor.inspector.scroll",
             "w": 82,
             "h": 28,
             "layer": 121,
@@ -813,6 +822,7 @@
             "type": "button",
             "x": 184,
             "y": 52,
+            "scroll_y_key": "editor.inspector.scroll",
             "w": 82,
             "h": 28,
             "layer": 121,

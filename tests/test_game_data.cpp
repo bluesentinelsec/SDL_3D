@@ -37,6 +37,7 @@ extern "C"
 #include "slayer3d/properties.h"
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/timer_pool.h"
+#include "slayer3d/ui_layout.h"
 
     typedef struct brush_world_runtime brush_world_runtime;
 #define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
@@ -202,6 +203,10 @@ extern "C"
         char diagnostic[256];
     } editor_brush_source_clip_result;
     yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
+    bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
+                                                          float viewport_h,
+                                                          const slayer3d_game_data_ui_metrics *metrics,
+                                                          slayer3d_ui_layout_model *layout);
     void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                          const slayer3d_game_data_editor_selection *hover_selection);
     bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
@@ -19750,6 +19755,27 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_input_update(input, input_tick++);
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+    struct HitSummary
+    {
+        std::string id;
+        std::string action;
+    };
+    auto retained_ui_hit = [&](float x, float y) {
+        HitSummary result;
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return result;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
+        if (hit != nullptr)
+        {
+            result.id = hit->id;
+            result.action = hit->action;
+        }
+        slayer3d_ui_layout_destroy(layout);
+        return result;
+    };
 
     emit_signal("signal.editor.scene.enter");
     RectSummary inspector = visible_frame("ui.editor_shell.left_inspector.panel");
@@ -19761,8 +19787,19 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     std::vector<std::string> text_names = visible_text_names();
     EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
               text_names.end());
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.track").found);
+    RectSummary scroll_track = visible_frame("ui.editor_shell.left_inspector.scroll.track");
+    EXPECT_TRUE(scroll_track.found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0").found);
+    RectSummary map_tab_initial = visible_frame("ui.editor_shell.left_inspector.map.tab");
+    RectSummary entity_tab_initial = visible_frame("ui.editor_shell.left_inspector.entity.tab");
+    RectSummary face_tab_initial = visible_frame("ui.editor_shell.left_inspector.face.tab");
+    ASSERT_TRUE(map_tab_initial.found);
+    ASSERT_TRUE(entity_tab_initial.found);
+    ASSERT_TRUE(face_tab_initial.found);
+    EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");
+    HitSummary track_hit = retained_ui_hit(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
+    EXPECT_EQ(track_hit.id, "ui.editor_shell.left_inspector.scroll.track");
+    EXPECT_EQ(track_hit.action, "editor.inspector.scroll.down");
 
     RectSummary scroll_down = visible_frame("ui.editor_shell.left_inspector.scroll.down");
     ASSERT_TRUE(scroll_down.found);
@@ -19771,6 +19808,15 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         60.0f);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.1").found);
+    RectSummary map_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.map.tab");
+    RectSummary entity_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.entity.tab");
+    RectSummary face_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.face.tab");
+    ASSERT_TRUE(map_tab_scrolled.found);
+    ASSERT_TRUE(entity_tab_scrolled.found);
+    ASSERT_TRUE(face_tab_scrolled.found);
+    EXPECT_LT(map_tab_scrolled.y, map_tab_initial.y);
+    EXPECT_LT(entity_tab_scrolled.y, entity_tab_initial.y);
+    EXPECT_LT(face_tab_scrolled.y, face_tab_initial.y);
 
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
@@ -19791,6 +19837,11 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
         0.0f);
+    click_editor(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
+    EXPECT_FLOAT_EQ(
+        slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
+        60.0f);
+    emit_signal("signal.editor.inspector.scroll.up");
 
     slayer3d_game_data_brush_world world_before{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world_before));
