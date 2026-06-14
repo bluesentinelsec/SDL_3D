@@ -1842,6 +1842,30 @@ first property slots into `editor.property.slot.N.key`, `.type`, `.value`, and
 }
 ```
 
+Use `editor.connection.mark_source` and `editor.connection.add` to author
+generic event links between editor actors. Connections are intentionally data
+driven: a source endpoint has an entity and event, a target endpoint has an
+entity and action, and optional `properties` can carry game-specific meaning.
+Games can ignore, extend, or reinterpret this data when loading a Slayer3D map.
+
+`editor.connection.mark_source` records the selected actor, or an explicit
+`target`, into `editor.connection.source.entity` with an `event` such as
+`enter`, `activate`, or any game-specific event name. `editor.connection.add`
+can then connect that stored source to the selected actor or to an explicit
+`to_entity`. The editor shell uses this for a simple `Source` then `Connect`
+workflow in the inspector.
+
+```json
+{
+  "type": "editor.connection.add",
+  "from_entity_from_state": "editor.connection.source.entity",
+  "from_event_from_state": "editor.connection.source.event",
+  "to_entity": "actor.room1.door",
+  "to_action": "open",
+  "properties": { "condition": "player_inside" }
+}
+```
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted
@@ -1858,17 +1882,17 @@ destinations.
 
 Use `editor.map.export` when the editor should publish the standalone
 `.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
-including top-level materials, brushes, and player-start actors for generic
-inspection. It also embeds the lossless editable fragment under
+including top-level materials, brushes, player-start actors, editor actors, and
+generic connections for inspection or game loading. It also embeds the lossless editable fragment under
 `editor.editable_level_fragment`, so reopening the map restores source-backed
 brush editing state exactly. Native editor hosts can call
 `slayer3d_game_data_export_editable_level_map_json()` or
 `slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
 successful native save marks both the selected brush world and player-start
-collection clean at their current revisions, and marks placed editor actors clean
-after their editable data is written. Map export requires a source-backed brush
-world and runs source/compiled identity checks before writing JSON, so stale
-runtime-only brush data cannot become the saved level.
+collection clean at their current revisions, and marks placed editor actors and
+connections clean after their editable data is written. Map export requires a
+source-backed brush world and runs source/compiled identity checks before
+writing JSON, so stale runtime-only brush data cannot become the saved level.
 
 ```json
 {

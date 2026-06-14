@@ -106,6 +106,8 @@ static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
     runtime->brush_worlds = NULL;
     runtime->brush_world_count = 0;
     free_editor_player_starts_runtime(runtime);
+    free_editor_actors_runtime(runtime);
+    free_editor_connections_runtime(runtime);
     SDL_free(runtime->editor_player_start_source_path);
     runtime->editor_player_start_source_path = NULL;
 }
@@ -147,7 +149,9 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         return false;
     }
     if (!load_brush_worlds(staged, root, error_buffer, error_buffer_size) ||
-        !load_editor_player_starts(staged, root, error_buffer, error_buffer_size))
+        !load_editor_player_starts(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_actors(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_connections(staged, root, error_buffer, error_buffer_size))
     {
         free_staged_import_runtime(staged);
         SDL_free(staged);
@@ -215,6 +219,26 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
     staged->editor_player_starts = NULL;
     staged->editor_player_start_count = 0;
     staged->editor_player_start_capacity = 0;
+
+    free_editor_actors_runtime(runtime);
+    runtime->editor_actors = staged->editor_actors;
+    runtime->editor_actor_count = staged->editor_actor_count;
+    runtime->editor_actor_capacity = staged->editor_actor_capacity;
+    runtime->editor_actor_revision = staged->editor_actor_revision;
+    runtime->editor_actor_dirty = staged->editor_actor_dirty;
+    staged->editor_actors = NULL;
+    staged->editor_actor_count = 0;
+    staged->editor_actor_capacity = 0;
+
+    free_editor_connections_runtime(runtime);
+    runtime->editor_connections = staged->editor_connections;
+    runtime->editor_connection_count = staged->editor_connection_count;
+    runtime->editor_connection_capacity = staged->editor_connection_capacity;
+    runtime->editor_connection_revision = staged->editor_connection_revision;
+    runtime->editor_connection_dirty = staged->editor_connection_dirty;
+    staged->editor_connections = NULL;
+    staged->editor_connection_count = 0;
+    staged->editor_connection_capacity = 0;
 
     free_staged_import_runtime(staged);
     SDL_free(staged);

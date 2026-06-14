@@ -49,6 +49,10 @@ bool validate_editor_actor_select_index_action(validation_context *ctx, yyjson_v
                                                validation_names *names, const char *type);
 bool validate_editor_actor_place_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                  validation_names *names, const char *type);
+bool validate_editor_connection_mark_source_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type);
+bool validate_editor_connection_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type);
 bool validate_editor_property_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                          validation_names *names, const char *type);
 bool validate_editor_property_remove_action(validation_context *ctx, yyjson_val *action, const char *json_path,

@@ -602,6 +602,70 @@ bool validate_editor_actor_place_selected_action(validation_context *ctx, yyjson
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_connection_mark_source_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"target", "target_from_state", "event", "event_from_state",
+                                                   "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_strings[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_strings[i]), field_path, type))
+            return false;
+    }
+    if (obj_get(action, "target") != NULL && obj_get(action, "target_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires target or target_from_state, not both", type);
+    if (obj_get(action, "event") != NULL && obj_get(action, "event_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires event or event_from_state, not both", type);
+    const char *output_keys[] = {"valid_key",  "message_key", "connection_key", "source_key",
+                                 "target_key", "dirty_key",   "revision_key",   "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_connection_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"id",          "id_prefix",
+                                                   "from_entity", "from_entity_from_state",
+                                                   "from_event",  "from_event_from_state",
+                                                   "to_entity",   "to_entity_from_state",
+                                                   "to_action",   "to_action_from_state",
+                                                   "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_strings[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_strings[i]), field_path, type))
+            return false;
+    }
+    if (obj_get(action, "from_entity") != NULL && obj_get(action, "from_entity_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires from_entity or from_entity_from_state, not both", type);
+    if (obj_get(action, "from_event") != NULL && obj_get(action, "from_event_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires from_event or from_event_from_state, not both", type);
+    if (obj_get(action, "to_entity") != NULL && obj_get(action, "to_entity_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires to_entity or to_entity_from_state, not both", type);
+    if (obj_get(action, "to_action") != NULL && obj_get(action, "to_action_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires to_action or to_action_from_state, not both", type);
+    yyjson_val *to_from_selection = obj_get(action, "to_from_selection");
+    if (to_from_selection != NULL && !yyjson_is_bool(to_from_selection))
+        return validation_error(ctx, json_path, "%s to_from_selection must be bool", type);
+    yyjson_val *from_external = obj_get(action, "from_external");
+    yyjson_val *to_external = obj_get(action, "to_external");
+    if (from_external != NULL && !yyjson_is_bool(from_external))
+        return validation_error(ctx, json_path, "%s from_external must be bool", type);
+    if (to_external != NULL && !yyjson_is_bool(to_external))
+        return validation_error(ctx, json_path, "%s to_external must be bool", type);
+    yyjson_val *properties = obj_get(action, "properties");
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    const char *output_keys[] = {"valid_key",  "message_key", "connection_key", "source_key",
+                                 "target_key", "dirty_key",   "revision_key",   "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
 static bool validate_editor_property_target(validation_context *ctx, yyjson_val *action, const char *json_path,
                                             const char *type)
 {

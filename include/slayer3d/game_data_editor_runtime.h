@@ -402,6 +402,77 @@ extern "C"
                                                const slayer3d_game_data_place_editor_actor_desc *desc, char *out_name,
                                                size_t out_name_size, char *error_buffer, int error_buffer_size);
 
+    /** @brief One endpoint in an editor-authored generic connection. */
+    typedef struct slayer3d_game_data_editor_connection_endpoint
+    {
+        /** @brief Referenced object/entity id, or external id when @p external is true. */
+        const char *entity;
+        /** @brief Source-side event name, used by connection sources. */
+        const char *event;
+        /** @brief Target-side action name, used by connection targets. */
+        const char *action;
+        /** @brief True when the endpoint is intentionally outside this map. */
+        bool external;
+    } slayer3d_game_data_editor_connection_endpoint;
+
+    /** @brief Runtime-authored generic connection between editor objects. */
+    typedef struct slayer3d_game_data_editor_connection
+    {
+        /** @brief Stable connection id. Pointer is runtime-owned. */
+        const char *id;
+        /** @brief Source endpoint. */
+        slayer3d_game_data_editor_connection_endpoint from;
+        /** @brief Target endpoint. */
+        slayer3d_game_data_editor_connection_endpoint to;
+        /** @brief Arbitrary designer-authored connection properties. Pointer is runtime-owned. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_editor_connection;
+
+    /** @brief Editor save state for generic connections. */
+    typedef struct slayer3d_game_data_editor_connection_state
+    {
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Number of editor connections currently loaded in the runtime. */
+        int count;
+    } slayer3d_game_data_editor_connection_state;
+
+    /** @brief Descriptor for creating or updating one generic editor connection. */
+    typedef struct slayer3d_game_data_place_editor_connection_desc
+    {
+        /** @brief Connection id. Optional when @p id_prefix is provided. */
+        const char *id;
+        /** @brief Prefix used to generate a unique connection id when @p id is omitted. */
+        const char *id_prefix;
+        /** @brief Source endpoint. */
+        slayer3d_game_data_editor_connection_endpoint from;
+        /** @brief Target endpoint. */
+        slayer3d_game_data_editor_connection_endpoint to;
+        /** @brief Optional arbitrary designer-authored connection properties to copy. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_place_editor_connection_desc;
+
+    /**
+     * @brief Query one editor connection by id.
+     *
+     * Returned pointers are runtime-owned and remain valid until editor
+     * connections are mutated or the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_editor_connection(const slayer3d_game_data_runtime *runtime, const char *id,
+                                                  slayer3d_game_data_editor_connection *out_connection);
+
+    /** @brief Query editor save state for runtime generic connections. */
+    bool slayer3d_game_data_get_editor_connection_state(const slayer3d_game_data_runtime *runtime,
+                                                        slayer3d_game_data_editor_connection_state *out_state);
+
+    /** @brief Create or update one runtime generic editor connection. */
+    bool slayer3d_game_data_place_editor_connection(slayer3d_game_data_runtime *runtime,
+                                                    const slayer3d_game_data_place_editor_connection_desc *desc,
+                                                    char *out_id, size_t out_id_size, char *error_buffer,
+                                                    int error_buffer_size);
+
     /** @brief Runtime-authored player start marker for editor and test-run workflows. */
     typedef struct slayer3d_game_data_editor_player_start
     {

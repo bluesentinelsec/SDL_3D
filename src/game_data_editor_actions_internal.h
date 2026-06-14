@@ -59,6 +59,8 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
 bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_mark_editor_connection_source_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_place_editor_connection_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                    const slayer3d_properties *payload);
 bool slayer3d_game_data_remove_editor_property_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -68,6 +70,7 @@ bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_run
 void free_brush_world_runtime(brush_world_runtime *world_runtime);
 void free_editor_player_starts_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_actors_runtime(slayer3d_game_data_runtime *runtime);
+void free_editor_connections_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_command_history(editor_command_history_state *history);
 slayer3d_bounding_box editor_resized_preview_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 normal, float distance);
 void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,

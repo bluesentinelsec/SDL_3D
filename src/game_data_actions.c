@@ -1037,9 +1037,17 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    "actor.editor_shell.opponent_placeholder", "Placeholders", "actor_opponent", "opponent_placeholder",
                    "opponent", "enemy", (slayer3d_color){235, 128, 84, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1);
     ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "trigger_volume", "Trigger", "box", "", "actor.editor_shell.trigger",
+                   "actor.editor_shell.trigger_volume", "Placeholders", "actor_trigger", "trigger_volume", "trigger",
+                   "volume", (slayer3d_color){80, 220, 255, 135}, slayer3d_vec3_make(2.0f, 1.0f, 2.0f), 2);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "sensor_volume", "Sensor", "box", "", "actor.editor_shell.sensor",
+                   "actor.editor_shell.sensor_volume", "Placeholders", "actor_sensor", "sensor_volume", "sensor",
+                   "volume", (slayer3d_color){210, 120, 255, 135}, slayer3d_vec3_make(2.0f, 1.0f, 2.0f), 3);
+    ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "simple_robot", "Robot", "box", "model.editor_shell.simple_robot", "actor.editor_shell.robot",
                    "actor.editor_shell.simple_robot", "Meshes", "actor_robot", "simple_robot", "actor", "robot",
-                   (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 2);
+                   (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 4);
     const bool scanned = editor_scan_actor_model_directory(runtime, directory, relative_directory, model_prefix, &list);
     if (ok && list.count > 1)
         SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);
@@ -2171,6 +2179,12 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.actor.place_selected") == 0)
         return execute_editor_actor_place_selected_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.connection.mark_source") == 0)
+        return slayer3d_game_data_mark_editor_connection_source_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.connection.add") == 0)
+        return slayer3d_game_data_place_editor_connection_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.property.set") == 0)
         return slayer3d_game_data_set_editor_property_action(runtime, action, payload);

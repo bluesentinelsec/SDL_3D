@@ -414,6 +414,7 @@ bool slayer3d_game_data_load_asset_with_options(slayer3d_asset_resolver *assets,
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
               load_editor_player_starts(runtime, root, error_buffer, error_buffer_size) &&
               load_editor_actors(runtime, root, error_buffer, error_buffer_size) &&
+              load_editor_connections(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&

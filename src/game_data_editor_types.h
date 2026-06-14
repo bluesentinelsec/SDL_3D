@@ -59,6 +59,22 @@ typedef struct editor_actor_runtime
     slayer3d_properties *properties;
 } editor_actor_runtime;
 
+typedef struct editor_connection_endpoint_runtime
+{
+    char *entity;
+    char *event;
+    char *action;
+    bool external;
+} editor_connection_endpoint_runtime;
+
+typedef struct editor_connection_runtime
+{
+    char *id;
+    editor_connection_endpoint_runtime from;
+    editor_connection_endpoint_runtime to;
+    slayer3d_properties *properties;
+} editor_connection_runtime;
+
 typedef enum editor_drag_create_phase
 {
     EDITOR_DRAG_CREATE_IDLE = 0,

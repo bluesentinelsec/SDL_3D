@@ -346,6 +346,8 @@
     "signal.editor.actor.select.player_capsule",
     "signal.editor.actor.select.opponent_rectangle",
     "signal.editor.actor.select.simple_robot",
+    "signal.editor.connection.mark_source",
+    "signal.editor.connection.add_to_selection",
     "signal.editor.actor.select_slot.0",
     "signal.editor.actor.select_slot.1",
     "signal.editor.actor.select_slot.2",
@@ -808,7 +810,7 @@
       {
         "signal": "signal.editor.actor.select.simple_robot",
         "actions": [
-          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 2 }
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 4 }
         ]
       },
       {
@@ -881,6 +883,44 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.actor.group.models.collapsed", "default": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor models group toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.connection.mark_source",
+        "actions": [
+          {
+            "type": "editor.connection.mark_source",
+            "event": "activate",
+            "outputs": {
+              "valid_key": "editor.connection.valid",
+              "message_key": "editor.connection.message",
+              "source_key": "editor.connection.source.entity",
+              "count_key": "editor.connection.count"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor.connection.message}" }
+        ]
+      },
+      {
+        "signal": "signal.editor.connection.add_to_selection",
+        "actions": [
+          {
+            "type": "editor.connection.add",
+            "from_entity_from_state": "editor.connection.source.entity",
+            "from_event_from_state": "editor.connection.source.event",
+            "to_from_selection": true,
+            "to_action": "trigger",
+            "properties": { "kind": "generic" },
+            "outputs": {
+              "valid_key": "editor.connection.valid",
+              "message_key": "editor.connection.message",
+              "connection_key": "editor.connection.last",
+              "source_key": "editor.connection.last.source",
+              "target_key": "editor.connection.last.target",
+              "count_key": "editor.connection.count"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor.connection.message}" }
         ]
       },
       {
@@ -2585,6 +2625,7 @@
   },
   "editor_player_starts": [],
   "editor_actors": [],
+  "editor_connections": [],
   "actor_archetypes": [
     {
       "name": "actor.editor_shell.player_placeholder",

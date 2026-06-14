@@ -31,6 +31,7 @@ extern "C"
 #include "slayer3d/game_data.h"
 #include "slayer3d/game_presentation.h"
 #include "slayer3d/image.h"
+#include "slayer3d/map.h"
 #include "slayer3d/math.h"
 #include "slayer3d/model.h"
 #include "slayer3d/properties.h"
@@ -18304,20 +18305,24 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
 
     emit_signal("signal.editor.palette.game_object");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 4);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 4 actors");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.3.available", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Alpha Guard");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.model", ""),
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 6);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 6 actors");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.5.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.label", ""), "Alpha Guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.model", ""),
                  "model.project.actor.alpha_guard");
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.4.available", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.6.available", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.3.available", false));
 
     slayer3d_game_data_model_asset scanned_model{};
     ASSERT_TRUE(slayer3d_game_data_get_model_asset(runtime, "model.project.actor.alpha_guard", &scanned_model));
     EXPECT_STREQ(scanned_model.path, (model_dir / "alpha_guard.obj").string().c_str());
 
-    emit_signal("signal.editor.actor.select_slot.3");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 3);
+    emit_signal("signal.editor.actor.select_slot.5");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 5);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "alpha_guard");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_model");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "alpha_guard");
@@ -18478,6 +18483,158 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
     })json"));
     ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.editor_shell.door.test", &actor));
     EXPECT_EQ(slayer3d_properties_get_value(actor.properties, "locked"), nullptr);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *trigger_properties = slayer3d_properties_create();
+    ASSERT_NE(trigger_properties, nullptr);
+    slayer3d_properties_set_string(trigger_properties, "role", "trigger");
+    slayer3d_properties_set_string(trigger_properties, "sensor_profile", "volume");
+    slayer3d_game_data_place_editor_actor_desc trigger_desc{};
+    trigger_desc.name = "actor.editor_shell.trigger.test";
+    trigger_desc.display_name = "Test Trigger";
+    trigger_desc.archetype = "actor.test.trigger";
+    trigger_desc.mesh = "box";
+    trigger_desc.group = "Sensors";
+    trigger_desc.position = slayer3d_vec3_make(0.0f, 0.5f, 0.0f);
+    trigger_desc.has_position = true;
+    trigger_desc.scale = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    trigger_desc.has_scale = true;
+    trigger_desc.properties = trigger_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &trigger_desc, nullptr, 0u, error, sizeof(error)))
+        << error;
+    slayer3d_properties_destroy(trigger_properties);
+
+    slayer3d_properties *door_properties = slayer3d_properties_create();
+    ASSERT_NE(door_properties, nullptr);
+    slayer3d_properties_set_string(door_properties, "role", "door");
+    slayer3d_game_data_place_editor_actor_desc door_desc{};
+    door_desc.name = "actor.editor_shell.door.test";
+    door_desc.display_name = "Test Door";
+    door_desc.archetype = "actor.test.door";
+    door_desc.mesh = "box";
+    door_desc.group = "Gameplay";
+    door_desc.position = slayer3d_vec3_make(4.0f, 0.5f, 0.0f);
+    door_desc.has_position = true;
+    door_desc.properties = door_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &door_desc, nullptr, 0u, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(door_properties);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.connection.mark_source",
+      "target": "actor.editor_shell.trigger.test",
+      "event": "enter",
+      "outputs": {
+        "valid_key": "test.editor.connection.source.valid",
+        "source_key": "test.editor.connection.source"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.editor.connection.source.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.connection.source.entity", ""),
+                 "actor.editor_shell.trigger.test");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.connection.source.event", ""), "enter");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.connection.add",
+      "id": "connection.editor_shell.trigger_to_door.test",
+      "from_entity_from_state": "editor.connection.source.entity",
+      "from_event_from_state": "editor.connection.source.event",
+      "to_entity": "actor.editor_shell.door.test",
+      "to_action": "open",
+      "to_from_selection": false,
+      "properties": { "condition": "player_inside", "priority": 3 },
+      "outputs": {
+        "valid_key": "test.editor.connection.valid",
+        "connection_key": "test.editor.connection.id",
+        "count_key": "test.editor.connection.count"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.editor.connection.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.editor.connection.id", ""),
+                 "connection.editor_shell.trigger_to_door.test");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.editor.connection.count", 0), 1);
+
+    slayer3d_game_data_editor_connection_state connection_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_connection_state(runtime, &connection_state));
+    EXPECT_TRUE(connection_state.dirty);
+    EXPECT_EQ(connection_state.count, 1);
+    slayer3d_game_data_editor_connection connection{};
+    ASSERT_TRUE(
+        slayer3d_game_data_get_editor_connection(runtime, "connection.editor_shell.trigger_to_door.test", &connection));
+    EXPECT_STREQ(connection.from.entity, "actor.editor_shell.trigger.test");
+    EXPECT_STREQ(connection.from.event, "enter");
+    EXPECT_STREQ(connection.to.entity, "actor.editor_shell.door.test");
+    EXPECT_STREQ(connection.to.action, "open");
+    ASSERT_NE(connection.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(connection.properties, "condition", ""), "player_inside");
+    EXPECT_EQ(slayer3d_properties_get_int(connection.properties, "priority", 0), 3);
+
+    char *fragment_json = nullptr;
+    size_t fragment_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &fragment_json, &fragment_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *fragment_doc = yyjson_read(fragment_json, fragment_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(fragment_doc, nullptr);
+    yyjson_val *fragment_root = yyjson_doc_get_root(fragment_doc);
+    yyjson_val *editor_connections = yyjson_obj_get(fragment_root, "editor_connections");
+    ASSERT_TRUE(yyjson_is_arr(editor_connections));
+    ASSERT_EQ(yyjson_arr_size(editor_connections), 1u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(editor_connections, 0), "id")),
+                 "connection.editor_shell.trigger_to_door.test");
+    yyjson_doc_free(fragment_doc);
+    SDL_free(fragment_json);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+    yyjson_doc *map_doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(map_doc, nullptr);
+    yyjson_val *map_root = yyjson_doc_get_root(map_doc);
+    yyjson_val *actors = yyjson_obj_get(map_root, "actors");
+    yyjson_val *connections = yyjson_obj_get(map_root, "connections");
+    ASSERT_TRUE(yyjson_is_arr(actors));
+    ASSERT_TRUE(yyjson_is_arr(connections));
+    EXPECT_GE(yyjson_arr_size(actors), 2u);
+    ASSERT_EQ(yyjson_arr_size(connections), 1u);
+    yyjson_val *map_connection = yyjson_arr_get(connections, 0);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(map_connection, "id")), "connection.editor_shell.trigger_to_door.test");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_obj_get(map_connection, "from"), "entity")),
+                 "actor.editor_shell.trigger.test");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_obj_get(map_connection, "to"), "entity")),
+                 "actor.editor_shell.door.test");
+    yyjson_doc_free(map_doc);
+    SDL_free(map_json);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

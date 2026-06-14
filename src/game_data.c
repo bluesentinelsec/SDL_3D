@@ -374,6 +374,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         free_brush_world_runtime(&runtime->brush_worlds[i]);
     free_editor_player_starts_runtime(runtime);
     free_editor_actors_runtime(runtime);
+    free_editor_connections_runtime(runtime);
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);

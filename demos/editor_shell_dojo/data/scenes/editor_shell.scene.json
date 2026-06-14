@@ -872,6 +872,32 @@
             "text": "Properties"
           },
           {
+            "id": "ui.editor_shell.left_inspector.connection.source.button",
+            "type": "button",
+            "x": 166,
+            "y": 242,
+            "w": 54,
+            "h": 24,
+            "text": "Source",
+            "text_scale": 0.36,
+            "interactive": true,
+            "action": "editor.connection.mark_source",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.connection.connect.button",
+            "type": "button",
+            "x": 224,
+            "y": 242,
+            "w": 60,
+            "h": 24,
+            "text": "Connect",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.connection.add_to_selection",
+            "layer": 121
+          },
+          {
             "id": "ui.editor_shell.left_inspector.row.property0",
             "type": "panel",
             "layout": "row",
@@ -1457,10 +1483,92 @@
                 "layer": 122
               },
               {
+                "id": "ui.editor_shell.actor_viewer.trigger_volume.button",
+                "type": "button",
+                "x": 14,
+                "y": 154,
+                "w": 82,
+                "h": 82,
+                "text": "",
+                "interactive": true,
+                "action": "editor.actor.select_slot.2",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "trigger_volume" },
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.trigger_volume.preview.body",
+                "type": "panel",
+                "x": 32,
+                "y": 174,
+                "w": 46,
+                "h": 42,
+                "color": [80, 220, 255, 135],
+                "border_color": [170, 245, 255, 255],
+                "border_thickness": 1,
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 123
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.trigger_volume.label",
+                "type": "label",
+                "x": 10,
+                "y": 238,
+                "w": 90,
+                "h": 18,
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.2.label", "default": "Trigger" }],
+                "text_scale": 0.38,
+                "align": "center",
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.sensor_volume.button",
+                "type": "button",
+                "x": 108,
+                "y": 154,
+                "w": 82,
+                "h": 82,
+                "text": "",
+                "interactive": true,
+                "action": "editor.actor.select_slot.3",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "sensor_volume" },
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.sensor_volume.preview.body",
+                "type": "panel",
+                "x": 126,
+                "y": 174,
+                "w": 46,
+                "h": 42,
+                "color": [210, 120, 255, 135],
+                "border_color": [238, 190, 255, 255],
+                "border_thickness": 1,
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 123
+              },
+              {
+                "id": "ui.editor_shell.actor_viewer.sensor_volume.label",
+                "type": "label",
+                "x": 104,
+                "y": 238,
+                "w": 90,
+                "h": 18,
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.3.label", "default": "Sensor" }],
+                "text_scale": 0.38,
+                "align": "center",
+                "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.placeholders.collapsed", "op": "==", "value": false, "default": false },
+                "layer": 122
+              },
+              {
                 "id": "ui.editor_shell.actor_viewer.group.models.button",
                 "type": "button",
                 "x": 10,
-                "y": 168,
+                "y": 274,
                 "w": 186,
                 "h": 26,
                 "text": "Meshes",
@@ -1473,12 +1581,12 @@
                 "id": "ui.editor_shell.actor_viewer.simple_robot.button",
                 "type": "button",
                 "x": 14,
-                "y": 206,
+                "y": 312,
                 "w": 82,
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.2",
+                "action": "editor.actor.select_slot.4",
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "simple_robot" },
                 "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
                 "layer": 122
@@ -1487,7 +1595,7 @@
                 "id": "ui.editor_shell.actor_viewer.simple_robot.preview.body",
                 "type": "panel",
                 "x": 42,
-                "y": 230,
+                "y": 336,
                 "w": 28,
                 "h": 38,
                 "color": [112, 178, 255, 210],
@@ -1500,7 +1608,7 @@
                 "id": "ui.editor_shell.actor_viewer.simple_robot.ready_badge",
                 "type": "panel",
                 "x": 25,
-                "y": 217,
+                "y": 323,
                 "w": 14,
                 "h": 14,
                 "color": [64, 235, 150, 245],
@@ -1519,41 +1627,41 @@
                 "id": "ui.editor_shell.actor_viewer.simple_robot.label",
                 "type": "label",
                 "x": 10,
-                "y": 290,
+                "y": 396,
                 "w": 90,
                 "h": 18,
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.2.label", "default": "Robot" }],
+                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.4.label", "default": "Robot" }],
                 "text_scale": 0.38,
                 "align": "center",
                 "visible_if": { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
                 "layer": 122
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_3.button",
+                "id": "ui.editor_shell.actor_viewer.model_slot_5.button",
                 "type": "button",
                 "x": 108,
-                "y": 206,
+                "y": 312,
                 "w": 82,
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.3",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected_index", "op": "==", "value": 3, "default": -1 },
+                "action": "editor.actor.select_slot.5",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected_index", "op": "==", "value": 5, "default": -1 },
                 "visible_if": {
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.3.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.5.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 122
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_3.preview.body",
+                "id": "ui.editor_shell.actor_viewer.model_slot_5.preview.body",
                 "type": "panel",
                 "x": 136,
-                "y": 230,
+                "y": 336,
                 "w": 28,
                 "h": 38,
                 "color": [112, 178, 255, 210],
@@ -1563,27 +1671,27 @@
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.3.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.5.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 123
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_3.label",
+                "id": "ui.editor_shell.actor_viewer.model_slot_5.label",
                 "type": "label",
                 "x": 104,
-                "y": 290,
+                "y": 396,
                 "w": 90,
                 "h": 18,
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.3.label", "default": "Model" }],
+                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.5.label", "default": "Model" }],
                 "text_scale": 0.38,
                 "align": "center",
                 "visible_if": {
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.3.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.5.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 122

@@ -592,6 +592,473 @@ bool load_editor_actors(slayer3d_game_data_runtime *runtime, yyjson_val *root, c
     return true;
 }
 
+static editor_connection_runtime *find_editor_connection_mutable(slayer3d_game_data_runtime *runtime, const char *id)
+{
+    if (runtime == NULL || id == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->editor_connection_count; ++i)
+    {
+        if (runtime->editor_connections[i].id != NULL && SDL_strcmp(runtime->editor_connections[i].id, id) == 0)
+            return &runtime->editor_connections[i];
+    }
+    return NULL;
+}
+
+static const editor_connection_runtime *find_editor_connection(const slayer3d_game_data_runtime *runtime,
+                                                               const char *id)
+{
+    return find_editor_connection_mutable((slayer3d_game_data_runtime *)runtime, id);
+}
+
+static bool ensure_editor_connection_capacity(slayer3d_game_data_runtime *runtime, int required_capacity)
+{
+    if (runtime == NULL || required_capacity <= runtime->editor_connection_capacity)
+        return runtime != NULL;
+    int capacity = runtime->editor_connection_capacity > 0 ? runtime->editor_connection_capacity : 8;
+    while (capacity < required_capacity)
+        capacity *= 2;
+    editor_connection_runtime *connections =
+        (editor_connection_runtime *)SDL_realloc(runtime->editor_connections, (size_t)capacity * sizeof(*connections));
+    if (connections == NULL)
+        return false;
+    SDL_memset(connections + runtime->editor_connection_capacity, 0,
+               (size_t)(capacity - runtime->editor_connection_capacity) * sizeof(*connections));
+    runtime->editor_connections = connections;
+    runtime->editor_connection_capacity = capacity;
+    return true;
+}
+
+static bool editor_connection_id_exists(const slayer3d_game_data_runtime *runtime, const char *id)
+{
+    return find_editor_connection(runtime, id) != NULL;
+}
+
+static bool generate_editor_connection_id(const slayer3d_game_data_runtime *runtime, const char *prefix, char *buffer,
+                                          size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    const char *base = prefix != NULL && prefix[0] != '\0' ? prefix : "connection.editor";
+    for (int i = 1; i < 100000; ++i)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s.%d", base, i);
+        if (!editor_connection_id_exists(runtime, buffer))
+            return true;
+    }
+    buffer[0] = '\0';
+    return false;
+}
+
+static void free_editor_connection_endpoint(editor_connection_endpoint_runtime *endpoint)
+{
+    if (endpoint == NULL)
+        return;
+    SDL_free(endpoint->entity);
+    SDL_free(endpoint->event);
+    SDL_free(endpoint->action);
+    SDL_zero(*endpoint);
+}
+
+static void free_editor_connection_entry(editor_connection_runtime *connection)
+{
+    if (connection == NULL)
+        return;
+    SDL_free(connection->id);
+    free_editor_connection_endpoint(&connection->from);
+    free_editor_connection_endpoint(&connection->to);
+    slayer3d_properties_destroy(connection->properties);
+    SDL_zero(*connection);
+}
+
+void free_editor_connections_runtime(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < runtime->editor_connection_count; ++i)
+        free_editor_connection_entry(&runtime->editor_connections[i]);
+    SDL_free(runtime->editor_connections);
+    runtime->editor_connections = NULL;
+    runtime->editor_connection_count = 0;
+    runtime->editor_connection_capacity = 0;
+    runtime->editor_connection_revision = 0;
+    runtime->editor_connection_dirty = false;
+}
+
+static void mark_editor_connections_dirty(slayer3d_game_data_runtime *runtime)
+{
+    runtime->editor_connection_revision++;
+    runtime->editor_connection_dirty = true;
+}
+
+static bool copy_editor_connection_endpoint(const slayer3d_game_data_editor_connection_endpoint *source,
+                                            editor_connection_endpoint_runtime *dest)
+{
+    if (source == NULL || dest == NULL)
+        return false;
+    editor_connection_endpoint_runtime copy;
+    SDL_zero(copy);
+    copy.external = source->external;
+    if (!duplicate_optional_string(source->entity, &copy.entity) ||
+        !duplicate_optional_string(source->event, &copy.event) ||
+        !duplicate_optional_string(source->action, &copy.action))
+    {
+        free_editor_connection_endpoint(&copy);
+        return false;
+    }
+    free_editor_connection_endpoint(dest);
+    *dest = copy;
+    return true;
+}
+
+static bool editor_connection_endpoint_valid(const slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_editor_connection_endpoint *endpoint,
+                                             const char *label, char *error_buffer, int error_buffer_size)
+{
+    if (endpoint == NULL || endpoint->entity == NULL || endpoint->entity[0] == '\0')
+    {
+        set_errorf(error_buffer, error_buffer_size, "connection %s endpoint requires an entity", label);
+        return false;
+    }
+    if (!endpoint->external && find_editor_actor(runtime, endpoint->entity) == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "connection %s actor '%s' not found", label, endpoint->entity);
+        return false;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_get_editor_connection(const slayer3d_game_data_runtime *runtime, const char *id,
+                                              slayer3d_game_data_editor_connection *out_connection)
+{
+    if (out_connection != NULL)
+        SDL_zero(*out_connection);
+    const editor_connection_runtime *connection = find_editor_connection(runtime, id);
+    if (connection == NULL || out_connection == NULL)
+        return false;
+    out_connection->id = connection->id;
+    out_connection->from.entity = connection->from.entity;
+    out_connection->from.event = connection->from.event;
+    out_connection->from.action = connection->from.action;
+    out_connection->from.external = connection->from.external;
+    out_connection->to.entity = connection->to.entity;
+    out_connection->to.event = connection->to.event;
+    out_connection->to.action = connection->to.action;
+    out_connection->to.external = connection->to.external;
+    out_connection->properties = connection->properties;
+    return true;
+}
+
+bool slayer3d_game_data_get_editor_connection_state(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_editor_connection_state *out_state)
+{
+    if (out_state != NULL)
+        SDL_zero(*out_state);
+    if (runtime == NULL || out_state == NULL)
+        return false;
+    out_state->dirty = runtime->editor_connection_dirty;
+    out_state->revision = runtime->editor_connection_revision;
+    out_state->count = runtime->editor_connection_count;
+    return true;
+}
+
+bool slayer3d_game_data_place_editor_connection(slayer3d_game_data_runtime *runtime,
+                                                const slayer3d_game_data_place_editor_connection_desc *desc,
+                                                char *out_id, size_t out_id_size, char *error_buffer,
+                                                int error_buffer_size)
+{
+    if (out_id != NULL && out_id_size > 0U)
+        out_id[0] = '\0';
+    if (runtime == NULL || desc == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "connection placement requires a runtime and descriptor");
+        return false;
+    }
+    if (!editor_connection_endpoint_valid(runtime, &desc->from, "source", error_buffer, error_buffer_size) ||
+        !editor_connection_endpoint_valid(runtime, &desc->to, "target", error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    char generated_id[160];
+    const char *id = desc->id;
+    if (id == NULL || id[0] == '\0')
+    {
+        if (!generate_editor_connection_id(runtime, desc->id_prefix, generated_id, sizeof(generated_id)))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to generate editor connection id");
+            return false;
+        }
+        id = generated_id;
+    }
+
+    slayer3d_properties *properties = NULL;
+    if (!copy_properties(desc->properties, &properties))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate connection properties");
+        return false;
+    }
+
+    char *id_copy = NULL;
+    if (!duplicate_optional_string(id, &id_copy))
+    {
+        slayer3d_properties_destroy(properties);
+        set_error(error_buffer, error_buffer_size, "failed to allocate connection id");
+        return false;
+    }
+
+    editor_connection_endpoint_runtime from_copy;
+    editor_connection_endpoint_runtime to_copy;
+    SDL_zero(from_copy);
+    SDL_zero(to_copy);
+    if (!copy_editor_connection_endpoint(&desc->from, &from_copy) ||
+        !copy_editor_connection_endpoint(&desc->to, &to_copy))
+    {
+        SDL_free(id_copy);
+        slayer3d_properties_destroy(properties);
+        free_editor_connection_endpoint(&from_copy);
+        free_editor_connection_endpoint(&to_copy);
+        set_error(error_buffer, error_buffer_size, "failed to allocate connection endpoints");
+        return false;
+    }
+
+    editor_connection_runtime *entry = find_editor_connection_mutable(runtime, id);
+    if (entry == NULL)
+    {
+        if (!ensure_editor_connection_capacity(runtime, runtime->editor_connection_count + 1))
+        {
+            SDL_free(id_copy);
+            slayer3d_properties_destroy(properties);
+            free_editor_connection_endpoint(&from_copy);
+            free_editor_connection_endpoint(&to_copy);
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor connection");
+            return false;
+        }
+        entry = &runtime->editor_connections[runtime->editor_connection_count++];
+    }
+
+    SDL_free(entry->id);
+    free_editor_connection_endpoint(&entry->from);
+    free_editor_connection_endpoint(&entry->to);
+    slayer3d_properties_destroy(entry->properties);
+    entry->id = id_copy;
+    entry->from = from_copy;
+    entry->to = to_copy;
+    entry->properties = properties;
+    mark_editor_connections_dirty(runtime);
+    if (out_id != NULL && out_id_size > 0U)
+        SDL_strlcpy(out_id, id, out_id_size);
+    return true;
+}
+
+static slayer3d_game_data_editor_connection_endpoint editor_connection_endpoint_from_json(yyjson_val *json,
+                                                                                          const char *event_fallback,
+                                                                                          const char *action_fallback)
+{
+    slayer3d_game_data_editor_connection_endpoint endpoint;
+    SDL_zero(endpoint);
+    endpoint.entity = json_string(json, "entity", NULL);
+    endpoint.event = json_string(json, "event", event_fallback);
+    endpoint.action = json_string(json, "action", action_fallback);
+    endpoint.external = json_bool(json, "external", false);
+    return endpoint;
+}
+
+bool load_editor_connections(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                             int error_buffer_size)
+{
+    yyjson_val *connections = obj_get(root, "editor_connections");
+    if (connections == NULL)
+        return true;
+    if (runtime == NULL || !yyjson_is_arr(connections))
+    {
+        set_error(error_buffer, error_buffer_size, "editor_connections must be an array");
+        return false;
+    }
+
+    for (size_t i = 0; i < yyjson_arr_size(connections); ++i)
+    {
+        yyjson_val *json = yyjson_arr_get(connections, i);
+        if (!yyjson_is_obj(json))
+        {
+            set_error(error_buffer, error_buffer_size, "editor connection entry must be an object");
+            return false;
+        }
+        yyjson_val *from = obj_get(json, "from");
+        yyjson_val *to = obj_get(json, "to");
+        if (!yyjson_is_obj(from) || !yyjson_is_obj(to))
+        {
+            set_error(error_buffer, error_buffer_size, "editor connection requires from and to endpoints");
+            return false;
+        }
+        slayer3d_properties *properties = NULL;
+        if (!copy_properties_from_json(obj_get(json, "properties"), &properties))
+        {
+            set_error(error_buffer, error_buffer_size, "editor connection properties must be an object");
+            return false;
+        }
+        slayer3d_game_data_place_editor_connection_desc desc;
+        SDL_zero(desc);
+        desc.id = json_string(json, "id", NULL);
+        desc.id_prefix = json_string(json, "id_prefix", "connection.editor");
+        desc.from = editor_connection_endpoint_from_json(from, "activate", NULL);
+        desc.to = editor_connection_endpoint_from_json(to, NULL, "trigger");
+        desc.properties = properties;
+        char id[160];
+        const bool ok =
+            slayer3d_game_data_place_editor_connection(runtime, &desc, id, sizeof(id), error_buffer, error_buffer_size);
+        slayer3d_properties_destroy(properties);
+        if (!ok)
+            return false;
+    }
+    runtime->editor_connection_dirty = false;
+    runtime->editor_connection_revision = 0;
+    return true;
+}
+
+static const char *editor_connection_selected_actor(slayer3d_game_data_runtime *runtime, char *error, size_t error_size)
+{
+    slayer3d_game_data_editor_selection selection;
+    SDL_zero(selection);
+    if (!slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.hit ||
+        selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR || selection.element_name == NULL ||
+        selection.element_name[0] == '\0')
+    {
+        SDL_snprintf(error, error_size, "select an editor actor before connecting");
+        return NULL;
+    }
+    return selection.element_name;
+}
+
+static const char *editor_connection_string_from_state(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                       const char *literal_key, const char *state_key,
+                                                       const char *fallback)
+{
+    const char *state_name = json_string(action, state_key, NULL);
+    if (state_name != NULL && runtime != NULL && runtime->scene_state != NULL)
+        return slayer3d_properties_get_string(runtime->scene_state, state_name, fallback);
+    return json_string(action, literal_key, fallback);
+}
+
+static void publish_editor_connection_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
+                                              const char *message, const char *id, const char *source,
+                                              const char *target)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
+    editor_set_string_output(scene_state, outputs, "connection_key", ok && id != NULL ? id : "");
+    editor_set_string_output(scene_state, outputs, "source_key", ok && source != NULL ? source : "");
+    editor_set_string_output(scene_state, outputs, "target_key", ok && target != NULL ? target : "");
+    editor_set_bool_output(scene_state, outputs, "dirty_key",
+                           runtime != NULL ? runtime->editor_connection_dirty : false);
+    editor_set_int_output(scene_state, outputs, "revision_key",
+                          runtime != NULL ? (int)runtime->editor_connection_revision : 0);
+    editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_connection_count : 0);
+    if (scene_state != NULL)
+    {
+        slayer3d_properties_set_bool(scene_state, "editor.connection.valid", ok);
+        slayer3d_properties_set_string(scene_state, "editor.connection.message", message != NULL ? message : "");
+        slayer3d_properties_set_int(scene_state, "editor.connection.count",
+                                    runtime != NULL ? runtime->editor_connection_count : 0);
+        if (ok)
+        {
+            slayer3d_properties_set_string(scene_state, "editor.connection.last", id != NULL ? id : "");
+            slayer3d_properties_set_string(scene_state, "editor.connection.last.source", source != NULL ? source : "");
+            slayer3d_properties_set_string(scene_state, "editor.connection.last.target", target != NULL ? target : "");
+        }
+    }
+}
+
+bool slayer3d_game_data_mark_editor_connection_source_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    char error[192];
+    error[0] = '\0';
+    const char *target = editor_connection_string_from_state(runtime, action, "target", "target_from_state", NULL);
+    if (target == NULL || target[0] == '\0')
+        target = editor_connection_selected_actor(runtime, error, sizeof(error));
+    const char *event = editor_connection_string_from_state(runtime, action, "event", "event_from_state", "activate");
+    if (runtime == NULL || target == NULL || target[0] == '\0' || event == NULL || event[0] == '\0')
+    {
+        publish_editor_connection_outputs(runtime, outputs, false,
+                                          error[0] != '\0' ? error : "connection source requires actor and event", "",
+                                          target, "");
+        return true;
+    }
+    if (find_editor_actor(runtime, target) == NULL)
+    {
+        SDL_snprintf(error, sizeof(error), "editor actor '%s' not found", target);
+        publish_editor_connection_outputs(runtime, outputs, false, error, "", target, "");
+        return true;
+    }
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    if (scene_state != NULL)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.connection.source.entity", target);
+        slayer3d_properties_set_string(scene_state, "editor.connection.source.event", event);
+        slayer3d_properties_set_bool(scene_state, "editor.connection.source.valid", true);
+    }
+    publish_editor_connection_outputs(runtime, outputs, true,
+                                      json_string(action, "message", "connection source marked"), "", target, "");
+    return true;
+}
+
+bool slayer3d_game_data_place_editor_connection_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    char error[192];
+    error[0] = '\0';
+    const bool to_from_selection = json_bool(action, "to_from_selection", true);
+    const char *to_entity =
+        editor_connection_string_from_state(runtime, action, "to_entity", "to_entity_from_state", NULL);
+    if ((to_entity == NULL || to_entity[0] == '\0') && to_from_selection)
+        to_entity = editor_connection_selected_actor(runtime, error, sizeof(error));
+    const char *from_entity =
+        editor_connection_string_from_state(runtime, action, "from_entity", "from_entity_from_state", NULL);
+    const char *from_event =
+        editor_connection_string_from_state(runtime, action, "from_event", "from_event_from_state", "activate");
+    const char *to_action =
+        editor_connection_string_from_state(runtime, action, "to_action", "to_action_from_state", "trigger");
+    if (runtime == NULL || from_entity == NULL || from_entity[0] == '\0' || to_entity == NULL || to_entity[0] == '\0' ||
+        from_event == NULL || from_event[0] == '\0' || to_action == NULL || to_action[0] == '\0')
+    {
+        publish_editor_connection_outputs(
+            runtime, outputs, false,
+            error[0] != '\0' ? error : "connection requires source entity, source event, target entity, and action", "",
+            from_entity, to_entity);
+        return true;
+    }
+
+    slayer3d_properties *properties = properties_from_json_payload(obj_get(action, "properties"), NULL);
+    if (properties == NULL)
+    {
+        publish_editor_connection_outputs(runtime, outputs, false, "connection properties must be an object", "",
+                                          from_entity, to_entity);
+        return true;
+    }
+
+    slayer3d_game_data_place_editor_connection_desc desc;
+    SDL_zero(desc);
+    desc.id = json_string(action, "id", NULL);
+    desc.id_prefix = json_string(action, "id_prefix", "connection.editor");
+    desc.from.entity = from_entity;
+    desc.from.event = from_event;
+    desc.from.external = json_bool(action, "from_external", false);
+    desc.to.entity = to_entity;
+    desc.to.action = to_action;
+    desc.to.external = json_bool(action, "to_external", false);
+    desc.properties = properties;
+    char connection_id[160];
+    const bool ok = slayer3d_game_data_place_editor_connection(runtime, &desc, connection_id, sizeof(connection_id),
+                                                               error, sizeof(error));
+    slayer3d_properties_destroy(properties);
+    publish_editor_connection_outputs(runtime, outputs, ok,
+                                      ok ? json_string(action, "message", "connection added") : error,
+                                      ok ? connection_id : "", from_entity, to_entity);
+    return true;
+}
+
 static void publish_editor_actor_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
                                          const char *message, const char *name)
 {
