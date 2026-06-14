@@ -67,7 +67,8 @@ lossless path used by the editor's open/save workflow today.
 - `metadata`: Optional object with `id`, `name`, `author`, and `description`.
 - `units`: Optional string, either `meters` or `source_units`.
 - `coordinate_system`: Optional string. The initial format uses `y_up`.
-- `assets`: Optional asset catalogs for textures, models, sprites, and skyboxes.
+- `assets`: Optional asset catalogs for textures, models, sprites, skyboxes, and
+  effect definitions.
 - `materials`: Optional material definitions used by brushes and faces.
 - `brushes`: Optional array of authored brush geometry.
 - `actors`: Optional array of placed gameplay/editor actors.
@@ -75,10 +76,10 @@ lossless path used by the editor's open/save workflow today.
 - `properties`: Optional arbitrary map-level key-value properties.
 - `prefabs`: Optional reusable prefab definitions for linked brush, actor, or
   mixed editor instances.
-- `lights`: Reserved for dynamic and baked light authoring in a later slice.
-- `effects`: Reserved for particles, fog, fire/smoke markers, and similar
-  effect primitives in a later slice.
-- `skybox`: Reserved for map-level skybox selection in a later slice.
+- `lights`: Optional dynamic/runtime and baked/build-time light markers.
+- `effects`: Optional particles, fog volumes, fire/smoke markers, and similar
+  effect primitives.
+- `skybox`: Optional map-level skybox selection.
 - `editor`: Optional editor-only metadata.
 
 ## Asset References
@@ -95,7 +96,8 @@ Asset entries use stable ids and project-relative paths:
       { "id": "model.enemy.capsule", "path": "models/enemy_capsule.glb" }
     ],
     "sprites": [],
-    "skyboxes": []
+    "skyboxes": [],
+    "effects": []
   }
 }
 ```

@@ -62,8 +62,9 @@
       "items": { "$ref": "#/$defs/light" }
     },
     "effects": {
-      "description": "Reserved for authored particles, fog, and other effect primitives.",
-      "type": "array"
+      "description": "Authored particles, fog volumes, fire/smoke markers, and other effect primitives.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/effect" }
     },
     "skybox": {
       "description": "Map-level skybox selection.",
@@ -145,6 +146,10 @@
           "items": { "$ref": "#/$defs/assetEntry" }
         },
         "skyboxes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        },
+        "effects": {
           "type": "array",
           "items": { "$ref": "#/$defs/assetEntry" }
         }
@@ -257,7 +262,7 @@
         "prefab": { "type": "string", "minLength": 1 },
         "prefab_linked": { "type": "boolean" },
         "primitive": {
-          "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger", "light"]
+          "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger", "light", "effect"]
         },
         "transform": { "$ref": "#/$defs/transform" },
         "color": { "$ref": "#/$defs/rgba" },
@@ -310,6 +315,30 @@
         "outer_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
         "casts_shadow": { "type": "boolean" },
         "bake_group": { "type": "string", "minLength": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source_actor": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "transform": { "$ref": "#/$defs/transform" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "asset": { "type": "string", "minLength": 1 },
+        "texture": { "type": "string", "minLength": 1 },
+        "sprite": { "type": "string", "minLength": 1 },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "duration": { "type": "number", "minimum": 0 },
+        "density": { "type": "number", "minimum": 0 },
+        "max_particles": { "type": "integer", "minimum": 0 },
+        "loop": { "type": "boolean" },
+        "emissive": { "type": "boolean" },
+        "preview": { "type": "boolean" },
         "properties": { "$ref": "#/$defs/properties" }
       }
     },

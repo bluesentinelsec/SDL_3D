@@ -1048,6 +1048,23 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    &list, "simple_robot", "Robot", "box", "model.editor_shell.simple_robot", "actor.editor_shell.robot",
                    "actor.editor_shell.simple_robot", "Meshes", "actor_robot", "simple_robot", "actor", "robot",
                    (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 4);
+    ok = ok &&
+         editor_actor_scan_list_append_builtin(
+             &list, "particle_emitter", "Particle Emitter", "sphere", "", "actor.editor_shell.effect.particles",
+             "actor.editor_shell.particle_emitter", "Effects", "actor_effect", "particle_emitter", "effect",
+             "particle_emitter", (slayer3d_color){255, 214, 92, 180}, slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 2000);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "fog_volume", "Fog Volume", "box", "", "actor.editor_shell.effect.fog",
+                   "actor.editor_shell.fog_volume", "Effects", "actor_effect", "fog_volume", "effect", "fog_volume",
+                   (slayer3d_color){138, 190, 255, 96}, slayer3d_vec3_make(3.0f, 1.5f, 3.0f), 2001);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "fire_marker", "Fire", "sphere", "", "actor.editor_shell.effect.fire",
+                   "actor.editor_shell.fire_marker", "Effects", "actor_effect", "fire_marker", "effect", "fire",
+                   (slayer3d_color){255, 112, 48, 210}, slayer3d_vec3_make(0.6f, 0.9f, 0.6f), 2002);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "smoke_marker", "Smoke", "sphere", "", "actor.editor_shell.effect.smoke",
+                   "actor.editor_shell.smoke_marker", "Effects", "actor_effect", "smoke_marker", "effect", "smoke",
+                   (slayer3d_color){148, 154, 166, 165}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 2003);
     const bool scanned = editor_scan_actor_model_directory(runtime, directory, relative_directory, model_prefix, &list);
     if (ok && list.count > 1)
         SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);

@@ -1961,7 +1961,7 @@ destinations.
 Use `editor.map.export` when the editor should publish the standalone
 `.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
 including top-level materials, brushes, player-start actors, editor actors,
-generic prefabs, lights, skyboxes, and connections for inspection or game
+generic prefabs, lights, effects, skyboxes, and connections for inspection or game
 loading. It also embeds the lossless editable fragment under
 `editor.editable_level_fragment`, so reopening the map restores source-backed
 brush editing state exactly. Native editor hosts can call
@@ -1984,6 +1984,15 @@ can correlate it with the original marker when needed. Light export supports
 `light_type` (`point`, `spot`, or `directional`), `light_color`,
 `light_intensity`, `light_range`, `light_direction`, `casts_shadow`,
 `inner_angle_degrees`, `outer_angle_degrees`, and `bake_group`.
+
+Placed editor actors whose properties identify them as effects are emitted as
+normalized top-level `effects` entries. Set `role` to `effect`, provide
+`effect_kind` or `effect_type`, or use one of the default effect actor browser
+entries such as `particle_emitter`, `fog_volume`, `fire`, or `smoke`. The export
+preserves transform, color, optional `effect_asset`, `effect_texture`,
+`effect_sprite`, `radius`, `duration`, `density`, `max_particles`, `loop`,
+`emissive`, `preview`, and the full generic property bag. Games may use custom
+`kind`, `type`, and property fields for behavior the editor does not understand.
 
 Map-level `skybox` data may reference a configured skybox asset or explicit
 cube-face image references:
@@ -2013,6 +2022,25 @@ cube-face image references:
       "range": 12.0,
       "casts_shadow": true,
       "properties": { "switch_group": "room_a" }
+    }
+  ]
+}
+```
+
+```json
+{
+  "effects": [
+    {
+      "id": "effect.room_smoke",
+      "kind": "particle_emitter",
+      "type": "particles.emitter",
+      "transform": { "position": [0.0, 1.0, 0.0], "scale": [1.0, 1.0, 1.0] },
+      "color": [180, 190, 205, 180],
+      "texture": "textures/smoke.png",
+      "radius": 1.5,
+      "max_particles": 128,
+      "loop": true,
+      "properties": { "trigger_group": "room_a" }
     }
   ]
 }

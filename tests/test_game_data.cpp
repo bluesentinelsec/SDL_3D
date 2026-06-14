@@ -18559,8 +18559,8 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
 
     emit_signal("signal.editor.palette.game_object");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 6);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 6 actors");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 10);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 10 actors");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
@@ -18584,6 +18584,135 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(model_root);
+}
+
+TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *effect_properties = slayer3d_properties_create();
+    ASSERT_NE(effect_properties, nullptr);
+    slayer3d_properties_set_string(effect_properties, "role", "effect");
+    slayer3d_properties_set_string(effect_properties, "effect_kind", "particle_emitter");
+    slayer3d_properties_set_string(effect_properties, "effect_type", "particles.emitter");
+    slayer3d_properties_set_string(effect_properties, "effect_texture", "textures/smoke.png");
+    slayer3d_properties_set_float(effect_properties, "radius", 1.5f);
+    slayer3d_properties_set_float(effect_properties, "duration", 3.0f);
+    slayer3d_properties_set_float(effect_properties, "density", 0.75f);
+    slayer3d_properties_set_int(effect_properties, "max_particles", 128);
+    slayer3d_properties_set_bool(effect_properties, "loop", true);
+    slayer3d_properties_set_bool(effect_properties, "preview", true);
+    slayer3d_properties_set_color(effect_properties, "effect_color", slayer3d_color{180, 190, 205, 180});
+
+    slayer3d_game_data_place_editor_actor_desc desc{};
+    desc.name = "effect.editor_shell.smoke.test";
+    desc.display_name = "Smoke";
+    desc.mesh = "sphere";
+    desc.group = "Effects";
+    desc.position = slayer3d_vec3_make(2.0f, 1.0f, -3.0f);
+    desc.has_position = true;
+    desc.scale = slayer3d_vec3_make(0.75f, 0.75f, 0.75f);
+    desc.has_scale = true;
+    desc.color = slayer3d_color{148, 154, 166, 165};
+    desc.has_color = true;
+    desc.properties = effect_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &desc, nullptr, 0u, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(effect_properties);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+
+    yyjson_doc *doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *effects = yyjson_obj_get(root, "effects");
+    ASSERT_TRUE(yyjson_is_arr(effects));
+    ASSERT_EQ(yyjson_arr_size(effects), 1u);
+    yyjson_val *effect = yyjson_arr_get(effects, 0);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(effect, "id")), "effect.editor_shell.smoke.test.effect");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(effect, "source_actor")), "effect.editor_shell.smoke.test");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(effect, "kind")), "particle_emitter");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(effect, "type")), "particles.emitter");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(effect, "texture")), "textures/smoke.png");
+    EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(effect, "radius")), 1.5, 0.001);
+    EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(effect, "duration")), 3.0, 0.001);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(effect, "max_particles")), 128);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(effect, "loop")));
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(effect, "preview")));
+    yyjson_val *effect_color = yyjson_obj_get(effect, "color");
+    ASSERT_TRUE(yyjson_is_arr(effect_color));
+    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(effect_color, 0)), 180u);
+    yyjson_val *transform = yyjson_obj_get(effect, "transform");
+    ASSERT_TRUE(yyjson_is_obj(transform));
+    yyjson_val *position = yyjson_obj_get(transform, "position");
+    ASSERT_TRUE(yyjson_is_arr(position));
+    EXPECT_NEAR(yyjson_get_real(yyjson_arr_get(position, 0)), 2.0, 0.001);
+    yyjson_doc_free(doc);
+    SDL_free(map_json);
+
+    const char *valid_effect_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "assets": {
+        "effects": [{ "id": "effect.fog.room", "path": "effects/fog_room.json" }]
+      },
+      "effects": [
+        {
+          "id": "effect.room_fog",
+          "kind": "fog_volume",
+          "type": "fog.volume",
+          "asset": "effect.fog.room",
+          "transform": { "position": [0, 1, 0], "scale": [4, 2, 4] },
+          "color": [128, 160, 220, 120],
+          "radius": 3.5,
+          "density": 0.35,
+          "properties": { "trigger_group": "room_a" }
+        }
+      ],
+      "connections": [
+        {
+          "from": { "entity": "effect.room_fog", "event": "finished" },
+          "to": { "entity": "external.audio_bus", "action": "play", "external": true }
+        }
+      ]
+    })json";
+    ASSERT_TRUE(
+        slayer3d_map_validate_json(valid_effect_map, SDL_strlen(valid_effect_map), nullptr, error, sizeof(error)))
+        << error;
+
+    const char *invalid_effect_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "effects": [{ "id": "effect.bad", "kind": "", "radius": -1 }]
+    })json";
+    EXPECT_FALSE(
+        slayer3d_map_validate_json(invalid_effect_map, SDL_strlen(invalid_effect_map), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("effect kind"), std::string::npos) << error;
+
+    const char *invalid_source_actor_map = R"json({
+      "format": "slayer3d.map",
+      "version": 1,
+      "effects": [{ "id": "effect.bad_source", "source_actor": "actor.missing", "kind": "smoke" }]
+    })json";
+    EXPECT_FALSE(slayer3d_map_validate_json(invalid_source_actor_map, SDL_strlen(invalid_source_actor_map), nullptr,
+                                            error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("source_actor"), std::string::npos) << error;
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)

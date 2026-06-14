@@ -61,9 +61,9 @@ extern "C"
      *
      * Validation covers the initial `.slayermap.json` contract: format/version,
      * metadata, asset references, materials, brushes, actor instances, authored
-     * light markers, skyboxes, transforms, arbitrary property bags, and object
-     * connections. Unknown top-level fields are allowed for forward-compatible
-     * project extensions.
+     * light/effect markers, skyboxes, transforms, arbitrary property bags, and
+     * object connections. Unknown top-level fields are allowed for
+     * forward-compatible project extensions.
      *
      * @param json UTF-8 JSON document.
      * @param json_size Size of @p json in bytes.

@@ -362,7 +362,8 @@ static bool map_validate_assets(map_validation_context *ctx, yyjson_val *root)
     return map_validate_asset_array(ctx, map_obj_get(assets, "textures"), "textures", "$.assets.textures") &&
            map_validate_asset_array(ctx, map_obj_get(assets, "models"), "models", "$.assets.models") &&
            map_validate_asset_array(ctx, map_obj_get(assets, "sprites"), "sprites", "$.assets.sprites") &&
-           map_validate_asset_array(ctx, map_obj_get(assets, "skyboxes"), "skyboxes", "$.assets.skyboxes");
+           map_validate_asset_array(ctx, map_obj_get(assets, "skyboxes"), "skyboxes", "$.assets.skyboxes") &&
+           map_validate_asset_array(ctx, map_obj_get(assets, "effects"), "effects", "$.assets.effects");
 }
 
 static bool map_validate_material_reference(map_validation_context *ctx, yyjson_val *object, const char *key,
@@ -596,11 +597,12 @@ static bool map_validate_primitive(map_validation_context *ctx, yyjson_val *acto
     const char *value = yyjson_get_str(primitive);
     if (SDL_strcmp(value, "box") == 0 || SDL_strcmp(value, "cube") == 0 || SDL_strcmp(value, "capsule") == 0 ||
         SDL_strcmp(value, "sphere") == 0 || SDL_strcmp(value, "cylinder") == 0 || SDL_strcmp(value, "rectangle") == 0 ||
-        SDL_strcmp(value, "billboard") == 0 || SDL_strcmp(value, "trigger") == 0 || SDL_strcmp(value, "light") == 0)
+        SDL_strcmp(value, "billboard") == 0 || SDL_strcmp(value, "trigger") == 0 || SDL_strcmp(value, "light") == 0 ||
+        SDL_strcmp(value, "effect") == 0)
         return true;
     return map_error(ctx, path,
                      "actor primitive must be box, cube, capsule, sphere, cylinder, rectangle, billboard, trigger, or "
-                     "light");
+                     "light, or effect");
 }
 
 static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
@@ -745,6 +747,28 @@ static bool map_validate_optional_positive_number(map_validation_context *ctx, y
     return true;
 }
 
+static bool map_validate_optional_non_negative_int(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                   const char *json_path, const char *description)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_int(value) || yyjson_get_int(value) < 0)
+        return map_error(ctx, json_path, "%s must be a non-negative integer", description);
+    return true;
+}
+
+static bool map_validate_optional_bool(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                       const char *json_path, const char *description)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_bool(value))
+        return map_error(ctx, json_path, "%s must be a boolean", description);
+    return true;
+}
+
 static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *lights = map_obj_get(root, "lights");
@@ -802,6 +826,81 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
              !map_error(ctx, path, "light casts_shadow must be a boolean")) ||
             !map_optional_non_empty_string(ctx, light, "bake_group", path, "light bake group") ||
             !map_validate_properties(ctx, map_obj_get(light, "properties"), path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool map_validate_effects(map_validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *effects = map_obj_get(root, "effects");
+    if (effects == NULL)
+        return true;
+    if (!yyjson_is_arr(effects))
+        return map_error(ctx, "$.effects", "effects must be an array");
+    for (size_t i = 0, count = yyjson_arr_size(effects); i < count; ++i)
+    {
+        char path[MAP_PATH_MAX];
+        char id_path[MAP_PATH_MAX];
+        char source_actor_path[MAP_PATH_MAX];
+        char kind_path[MAP_PATH_MAX];
+        char type_path[MAP_PATH_MAX];
+        char transform_path[MAP_PATH_MAX];
+        char color_path[MAP_PATH_MAX];
+        char asset_path[MAP_PATH_MAX];
+        char texture_path[MAP_PATH_MAX];
+        char sprite_path[MAP_PATH_MAX];
+        char radius_path[MAP_PATH_MAX];
+        char duration_path[MAP_PATH_MAX];
+        char density_path[MAP_PATH_MAX];
+        char max_particles_path[MAP_PATH_MAX];
+        char loop_path[MAP_PATH_MAX];
+        char emissive_path[MAP_PATH_MAX];
+        char preview_path[MAP_PATH_MAX];
+        map_format_path(path, sizeof(path), "$.effects[%zu]", i);
+        map_format_path(id_path, sizeof(id_path), "%s.id", path);
+        map_format_path(source_actor_path, sizeof(source_actor_path), "%s.source_actor", path);
+        map_format_path(kind_path, sizeof(kind_path), "%s.kind", path);
+        map_format_path(type_path, sizeof(type_path), "%s.type", path);
+        map_format_path(transform_path, sizeof(transform_path), "%s.transform", path);
+        map_format_path(color_path, sizeof(color_path), "%s.color", path);
+        map_format_path(asset_path, sizeof(asset_path), "%s.asset", path);
+        map_format_path(texture_path, sizeof(texture_path), "%s.texture", path);
+        map_format_path(sprite_path, sizeof(sprite_path), "%s.sprite", path);
+        map_format_path(radius_path, sizeof(radius_path), "%s.radius", path);
+        map_format_path(duration_path, sizeof(duration_path), "%s.duration", path);
+        map_format_path(density_path, sizeof(density_path), "%s.density", path);
+        map_format_path(max_particles_path, sizeof(max_particles_path), "%s.max_particles", path);
+        map_format_path(loop_path, sizeof(loop_path), "%s.loop", path);
+        map_format_path(emissive_path, sizeof(emissive_path), "%s.emissive", path);
+        map_format_path(preview_path, sizeof(preview_path), "%s.preview", path);
+        yyjson_val *effect = yyjson_arr_get(effects, i);
+        if (!yyjson_is_obj(effect))
+            return map_error(ctx, path, "effect entry must be an object");
+        const char *source_actor = map_json_string(effect, "source_actor");
+        if (!map_require_non_empty_string(ctx, effect, "id", id_path, "effect id") ||
+            !map_add_unique(ctx, &ctx->object_ids, "object", map_json_string(effect, "id"), path) ||
+            !map_optional_non_empty_string(ctx, effect, "source_actor", source_actor_path, "effect source actor") ||
+            (source_actor != NULL && !map_name_table_contains(&ctx->object_ids, source_actor) &&
+             !map_error(ctx, source_actor_path, "unknown effect source_actor '%s'", source_actor)) ||
+            !map_require_non_empty_string(ctx, effect, "kind", kind_path, "effect kind") ||
+            !map_optional_non_empty_string(ctx, effect, "type", type_path, "effect type") ||
+            !map_validate_transform(ctx, map_obj_get(effect, "transform"), transform_path) ||
+            !map_validate_optional_color(ctx, effect, "color", color_path, "effect color") ||
+            !map_validate_asset_reference(ctx, effect, "asset", asset_path, "effect asset") ||
+            !map_validate_asset_reference(ctx, effect, "texture", texture_path, "effect texture") ||
+            !map_validate_asset_reference(ctx, effect, "sprite", sprite_path, "effect sprite") ||
+            !map_validate_optional_positive_number(ctx, effect, "radius", radius_path, "effect radius") ||
+            !map_validate_optional_non_negative_number(ctx, effect, "duration", duration_path, "effect duration") ||
+            !map_validate_optional_non_negative_number(ctx, effect, "density", density_path, "effect density") ||
+            !map_validate_optional_non_negative_int(ctx, effect, "max_particles", max_particles_path,
+                                                    "effect max_particles") ||
+            !map_validate_optional_bool(ctx, effect, "loop", loop_path, "effect loop") ||
+            !map_validate_optional_bool(ctx, effect, "emissive", emissive_path, "effect emissive") ||
+            !map_validate_optional_bool(ctx, effect, "preview", preview_path, "effect preview") ||
+            !map_validate_properties(ctx, map_obj_get(effect, "properties"), path))
         {
             return false;
         }
@@ -937,7 +1036,8 @@ static bool map_validate_root(map_validation_context *ctx, yyjson_val *root)
 
     return map_validate_metadata(ctx, root) && map_validate_assets(ctx, root) && map_validate_materials(ctx, root) &&
            map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) && map_validate_prefabs(ctx, root) &&
-           map_validate_lights(ctx, root) && map_validate_skybox(ctx, root) && map_validate_connections(ctx, root) &&
+           map_validate_lights(ctx, root) && map_validate_effects(ctx, root) && map_validate_skybox(ctx, root) &&
+           map_validate_connections(ctx, root) &&
            map_validate_properties(ctx, map_obj_get(root, "properties"), "$.properties");
 }
 
