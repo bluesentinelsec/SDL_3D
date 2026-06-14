@@ -29,6 +29,18 @@ The initial handle is intentionally JSON-preserving rather than a full C object
 model. Later slices can layer editor/game-specific materialization on top of
 the same load/save primitive without losing unknown fields.
 
+## Example Game Data
+
+[`demos/slayermap_example`](../demos/slayermap_example) contains a small
+training-room map and native loader example. The map demonstrates the intended
+game-facing data surface: textured graybox brushes, placed actors, reusable
+prefabs, authored lights/effects, a skybox reference, and generic event/action
+connections that a game runtime can interpret.
+
+Build it with `SLAYER3D_BUILD_DEMOS=ON`, then run
+`slayer3d_slayermap_example` to load the bundled map through the public
+`slayer3d_map_*` API and print the authored object counts.
+
 ## Versioning
 
 Every map has a stable format id and integer version:

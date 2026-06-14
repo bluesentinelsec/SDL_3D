@@ -1,0 +1,323 @@
+{
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "map.example.training_room",
+    "name": "SlayerMap Training Room",
+    "description": "A data-authored graybox example showing brushes, materials, actors, prefabs, lights, effects, skybox data, and generic gameplay connections."
+  },
+  "units": "meters",
+  "coordinate_system": "y_up",
+  "assets": {
+    "textures": [
+      { "id": "tex.floor.rock", "path": "textures/rock_floor.jpg" },
+      { "id": "tex.wall.metal", "path": "textures/wall_metal.jpg" },
+      { "id": "tex.door.hatch", "path": "textures/door-hatch.png" },
+      { "id": "tex.effect.smoke", "path": "textures/smoke.png" }
+    ],
+    "models": [
+      { "id": "model.player.capsule", "path": "models/player_capsule.glb" },
+      { "id": "model.enemy.rectangle", "path": "models/enemy_rectangle.glb" }
+    ],
+    "sprites": [
+      { "id": "sprite.pickup.health", "path": "sprites/health_pickup.png" }
+    ],
+    "skyboxes": [
+      { "id": "skybox.training.dusk", "path": "skyboxes/training_dusk" }
+    ],
+    "effects": [
+      { "id": "effect.smoke.small", "path": "effects/smoke_small.json" }
+    ]
+  },
+  "materials": [
+    {
+      "id": "mat.floor.rock",
+      "texture": "tex.floor.rock",
+      "color": [96, 100, 104, 255],
+      "properties": {
+        "footstep": "stone"
+      }
+    },
+    {
+      "id": "mat.wall.metal",
+      "texture": "tex.wall.metal",
+      "color": [80, 92, 104, 255],
+      "properties": {
+        "cover": true
+      }
+    },
+    {
+      "id": "mat.door.hatch",
+      "texture": "tex.door.hatch",
+      "color": [150, 135, 84, 255],
+      "properties": {
+        "interaction": "door"
+      }
+    },
+    {
+      "id": "mat.trigger.preview",
+      "color": [74, 202, 118, 96],
+      "properties": {
+        "editor_only": true
+      }
+    }
+  ],
+  "brushes": [
+    {
+      "id": "brush.floor",
+      "geometry": { "kind": "box", "min": [-6, 0, -6], "max": [6, 0.25, 6] },
+      "material": "mat.floor.rock",
+      "properties": {
+        "graybox_role": "floor",
+        "walkable": true
+      }
+    },
+    {
+      "id": "brush.wall.north",
+      "geometry": { "kind": "box", "min": [-6, 0, 5.75], "max": [6, 3, 6] },
+      "material": "mat.wall.metal",
+      "properties": {
+        "graybox_role": "wall"
+      }
+    },
+    {
+      "id": "brush.wall.west",
+      "geometry": { "kind": "box", "min": [-6, 0, -6], "max": [-5.75, 3, 6] },
+      "material": "mat.wall.metal",
+      "properties": {
+        "graybox_role": "wall"
+      }
+    },
+    {
+      "id": "brush.door.security",
+      "geometry": { "kind": "box", "min": [2.75, 0, 5.5], "max": [4.25, 2.5, 5.75] },
+      "material": "mat.door.hatch",
+      "faces": [
+        {
+          "id": "brush.door.security.front",
+          "side": "south",
+          "material": "mat.door.hatch",
+          "properties": {
+            "paint_target": "front_panel"
+          }
+        }
+      ],
+      "properties": {
+        "role": "door",
+        "locked": true,
+        "requires_key": "training_keycard"
+      }
+    },
+    {
+      "id": "brush.trigger.entry",
+      "geometry": { "kind": "box", "min": [-1.5, 0.25, -5.5], "max": [1.5, 1, -4.5] },
+      "material": "mat.trigger.preview",
+      "color": [74, 202, 118, 80],
+      "properties": {
+        "role": "trigger",
+        "trigger_kind": "proximity",
+        "once": true
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.player_start",
+      "archetype": "player_start",
+      "model": "model.player.capsule",
+      "primitive": "capsule",
+      "transform": {
+        "position": [0, 0.25, -4],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "facing": [0, 0, 1]
+      },
+      "color": [80, 150, 255, 190],
+      "properties": {
+        "team": "player",
+        "spawn_group": "default"
+      }
+    },
+    {
+      "id": "actor.enemy.guard.1",
+      "archetype": "enemy.guard",
+      "model": "model.enemy.rectangle",
+      "primitive": "rectangle",
+      "transform": {
+        "position": [-3, 0.25, 2],
+        "rotation": [0, 45, 0],
+        "scale": [0.75, 1.5, 0.75],
+        "facing": [1, 0, -1]
+      },
+      "color": [230, 88, 88, 220],
+      "properties": {
+        "team": "enemy",
+        "health": 100,
+        "patrol_route": "route.training.guard"
+      }
+    },
+    {
+      "id": "actor.pickup.health.1",
+      "prefab": "prefab.pickup.health.small",
+      "prefab_linked": true,
+      "archetype": "pickup.health",
+      "primitive": "sphere",
+      "transform": {
+        "position": [3, 0.55, -2],
+        "scale": [0.4, 0.4, 0.4]
+      },
+      "color": [84, 220, 120, 210],
+      "properties": {
+        "instance_id": "pickup.training.health.1",
+        "amount": 25
+      }
+    },
+    {
+      "id": "actor.light_switch",
+      "archetype": "switch.light",
+      "primitive": "box",
+      "transform": {
+        "position": [-5.55, 1.2, 0],
+        "scale": [0.25, 0.4, 0.25]
+      },
+      "color": [245, 205, 82, 255],
+      "properties": {
+        "interaction": "press",
+        "target_light": "light.key"
+      }
+    }
+  ],
+  "prefabs": [
+    {
+      "id": "prefab.pickup.health.small",
+      "name": "Small Health Pickup",
+      "actors": [
+        {
+          "id": "actor.pickup.health.template",
+          "archetype": "pickup.health",
+          "primitive": "sphere",
+          "color": [84, 220, 120, 210],
+          "properties": {
+            "amount": 25,
+            "respawn_seconds": 30
+          }
+        }
+      ],
+      "properties": {
+        "category": "pickups"
+      }
+    }
+  ],
+  "lights": [
+    {
+      "id": "light.key",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": {
+        "position": [0, 2.6, 0]
+      },
+      "color": [255, 232, 190, 255],
+      "intensity": 1.8,
+      "range": 9,
+      "casts_shadow": true,
+      "properties": {
+        "starts_enabled": true,
+        "bake_group": "training_room"
+      }
+    },
+    {
+      "id": "light.sun",
+      "kind": "baked",
+      "type": "directional",
+      "direction": [-0.2, -1, 0.1],
+      "color": [210, 225, 255, 255],
+      "intensity": 0.4,
+      "properties": {
+        "bake_group": "ambient"
+      }
+    }
+  ],
+  "effects": [
+    {
+      "id": "effect.entry.smoke",
+      "kind": "particle_emitter",
+      "type": "particles.emitter",
+      "asset": "effect.smoke.small",
+      "texture": "tex.effect.smoke",
+      "transform": {
+        "position": [0, 0.3, -4.75],
+        "scale": [1, 1, 1]
+      },
+      "color": [180, 190, 205, 150],
+      "radius": 1.5,
+      "duration": 2,
+      "density": 0.5,
+      "max_particles": 96,
+      "loop": true,
+      "preview": true,
+      "properties": {
+        "trigger_group": "entry"
+      }
+    }
+  ],
+  "skybox": {
+    "id": "skybox.main",
+    "asset": "skybox.training.dusk",
+    "size": 400,
+    "properties": {
+      "mood": "dusk"
+    }
+  },
+  "connections": [
+    {
+      "id": "connection.entry.opens_door",
+      "from": { "entity": "brush.trigger.entry", "event": "entered" },
+      "to": { "entity": "brush.door.security", "action": "unlock" },
+      "properties": {
+        "condition": "player_has_keycard",
+        "delay": 0.1
+      }
+    },
+    {
+      "id": "connection.switch.toggles_key_light",
+      "from": { "entity": "actor.light_switch", "event": "pressed" },
+      "to": { "entity": "light.key", "action": "toggle" },
+      "properties": {
+        "toggle_group": "room_key_light"
+      }
+    },
+    {
+      "id": "connection.enemy_killed.notifies_game",
+      "from": { "entity": "actor.enemy.guard.1", "event": "killed" },
+      "to": { "entity": "game.objectives.training", "action": "mark_complete", "external": true },
+      "properties": {
+        "objective": "clear_training_room"
+      }
+    },
+    {
+      "id": "connection.pickup.heals_player",
+      "from": { "entity": "actor.pickup.health.1", "event": "collected" },
+      "to": { "entity": "game.player", "action": "heal", "external": true },
+      "properties": {
+        "amount_from_property": "amount"
+      }
+    }
+  ],
+  "properties": {
+    "gameplay_profile": "slayermap_example",
+    "music": "audio/training_room.ogg",
+    "designer_notes": [
+      "Connections intentionally use generic event/action pairs.",
+      "A game runtime decides what unlock, toggle, heal, and objective completion mean."
+    ]
+  },
+  "editor": {
+    "camera": {
+      "position": [9, 6, -9],
+      "target": [0, 1, 0]
+    },
+    "inspector": {
+      "collapsed": false
+    }
+  }
+}

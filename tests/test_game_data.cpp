@@ -41558,6 +41558,44 @@ TEST(GameDataRuntime, SlayerMapLoadWriteAndReloadFile)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
+{
+    const std::filesystem::path map_path =
+        std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "slayermap_example" / "maps" / "training_room.slayermap.json";
+    ASSERT_TRUE(std::filesystem::exists(map_path)) << map_path;
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &document, error, sizeof(error))) << error;
+    ASSERT_NE(document, nullptr);
+    EXPECT_EQ(slayer3d_map_get_version(document), SLAYER3D_MAP_FORMAT_VERSION);
+    EXPECT_STREQ(slayer3d_map_get_source_path(document), map_path.string().c_str());
+    EXPECT_STREQ(slayer3d_map_get_metadata_id(document), "map.example.training_room");
+    EXPECT_STREQ(slayer3d_map_get_metadata_name(document), "SlayerMap Training Room");
+    EXPECT_EQ(slayer3d_map_get_material_count(document), 4u);
+    EXPECT_EQ(slayer3d_map_get_brush_count(document), 5u);
+    EXPECT_EQ(slayer3d_map_get_actor_count(document), 4u);
+    EXPECT_EQ(slayer3d_map_get_prefab_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_light_count(document), 2u);
+    EXPECT_EQ(slayer3d_map_get_effect_count(document), 1u);
+    EXPECT_TRUE(slayer3d_map_has_skybox(document));
+    EXPECT_EQ(slayer3d_map_get_connection_count(document), 4u);
+
+    char *serialized = nullptr;
+    size_t serialized_size = 0;
+    ASSERT_TRUE(slayer3d_map_to_json(document, &serialized, &serialized_size, error, sizeof(error))) << error;
+    ASSERT_NE(serialized, nullptr);
+    EXPECT_GT(serialized_size, 0u);
+    const std::string serialized_text(serialized, serialized_size);
+    EXPECT_NE(serialized_text.find("\"actor.enemy.guard.1\""), std::string::npos);
+    EXPECT_NE(serialized_text.find("\"connection.switch.toggles_key_light\""), std::string::npos);
+    EXPECT_NE(serialized_text.find("\"game.objectives.training\""), std::string::npos);
+    EXPECT_TRUE(slayer3d_map_validate_json(serialized, serialized_size, nullptr, error, sizeof(error))) << error;
+
+    slayer3d_map_free_string(serialized);
+    slayer3d_map_destroy(document);
+}
+
 TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
 {
     const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");

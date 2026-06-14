@@ -51,6 +51,7 @@ Native installs include:
 - `bin/slayer3d_pack`
 - `bin/slayer3d_bundle`
 - `share/slayer3d/demos/editor_shell_dojo`
+- `share/slayer3d/demos/slayermap_example`
 - `share/slayer3d/media`
 
 The installed no-argument editor discovers the packaged Editor Shell Dojo at

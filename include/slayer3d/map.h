@@ -174,6 +174,18 @@ extern "C"
     /** @brief Return the number of actor entries in a loaded map. */
     size_t slayer3d_map_get_actor_count(const slayer3d_map_document *document);
 
+    /** @brief Return the number of prefab entries in a loaded map. */
+    size_t slayer3d_map_get_prefab_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of light entries in a loaded map. */
+    size_t slayer3d_map_get_light_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of effect entries in a loaded map. */
+    size_t slayer3d_map_get_effect_count(const slayer3d_map_document *document);
+
+    /** @brief Return true when the loaded map authors a skybox selection. */
+    bool slayer3d_map_has_skybox(const slayer3d_map_document *document);
+
     /** @brief Return the number of connection entries in a loaded map. */
     size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document);
 

@@ -1339,6 +1339,29 @@ size_t slayer3d_map_get_actor_count(const slayer3d_map_document *document)
     return map_array_count(document, "actors");
 }
 
+size_t slayer3d_map_get_prefab_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "prefabs");
+}
+
+size_t slayer3d_map_get_light_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "lights");
+}
+
+size_t slayer3d_map_get_effect_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "effects");
+}
+
+bool slayer3d_map_has_skybox(const slayer3d_map_document *document)
+{
+    if (document == NULL || document->doc == NULL)
+        return false;
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    return map_obj_get(root, "skybox") != NULL;
+}
+
 size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document)
 {
     return map_array_count(document, "connections");

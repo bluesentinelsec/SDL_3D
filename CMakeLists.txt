@@ -569,9 +569,22 @@ else()
             BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
         )
 
+        if(TARGET slayer3d_slayermap_example)
+            install(
+                TARGETS slayer3d_slayermap_example
+                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+                BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
+            )
+        endif()
+
         install(
             DIRECTORY demos/editor_shell_dojo/
             DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/demos/editor_shell_dojo"
+        )
+
+        install(
+            DIRECTORY demos/slayermap_example/
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/demos/slayermap_example"
         )
 
         install(
