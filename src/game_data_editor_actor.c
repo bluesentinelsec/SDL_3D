@@ -26,7 +26,8 @@ const editor_actor_runtime *find_editor_actor(const slayer3d_game_data_runtime *
 
 static bool runtime_scene_exists(const slayer3d_game_data_runtime *runtime, const char *scene)
 {
-    return scene == NULL || scene[0] == '\0' || find_scene_const(runtime, scene) != NULL;
+    return scene == NULL || scene[0] == '\0' || runtime == NULL || runtime->scene_count <= 0 ||
+           find_scene_const(runtime, scene) != NULL;
 }
 
 static bool duplicate_optional_string(const char *value, char **out_copy)
@@ -56,6 +57,41 @@ static bool ensure_editor_actor_capacity(slayer3d_game_data_runtime *runtime, in
                (size_t)(capacity - runtime->editor_actor_capacity) * sizeof(*actors));
     runtime->editor_actors = actors;
     runtime->editor_actor_capacity = capacity;
+    return true;
+}
+
+static editor_prefab_runtime *find_editor_prefab_mutable(slayer3d_game_data_runtime *runtime, const char *id)
+{
+    if (runtime == NULL || id == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->editor_prefab_count; ++i)
+    {
+        if (runtime->editor_prefabs[i].id != NULL && SDL_strcmp(runtime->editor_prefabs[i].id, id) == 0)
+            return &runtime->editor_prefabs[i];
+    }
+    return NULL;
+}
+
+static const editor_prefab_runtime *find_editor_prefab(const slayer3d_game_data_runtime *runtime, const char *id)
+{
+    return find_editor_prefab_mutable((slayer3d_game_data_runtime *)runtime, id);
+}
+
+static bool ensure_editor_prefab_capacity(slayer3d_game_data_runtime *runtime, int required_capacity)
+{
+    if (runtime == NULL || required_capacity <= runtime->editor_prefab_capacity)
+        return runtime != NULL;
+    int capacity = runtime->editor_prefab_capacity > 0 ? runtime->editor_prefab_capacity : 8;
+    while (capacity < required_capacity)
+        capacity *= 2;
+    editor_prefab_runtime *prefabs =
+        (editor_prefab_runtime *)SDL_realloc(runtime->editor_prefabs, (size_t)capacity * sizeof(*prefabs));
+    if (prefabs == NULL)
+        return false;
+    SDL_memset(prefabs + runtime->editor_prefab_capacity, 0,
+               (size_t)(capacity - runtime->editor_prefab_capacity) * sizeof(*prefabs));
+    runtime->editor_prefabs = prefabs;
+    runtime->editor_prefab_capacity = capacity;
     return true;
 }
 
@@ -148,6 +184,8 @@ static void free_editor_actor_entry(editor_actor_runtime *actor)
     SDL_free(actor->mesh);
     SDL_free(actor->model);
     SDL_free(actor->group);
+    SDL_free(actor->prefab);
+    slayer3d_properties_destroy(actor->prefab_overrides);
     slayer3d_properties_destroy(actor->properties);
     SDL_zero(*actor);
 }
@@ -166,10 +204,46 @@ void free_editor_actors_runtime(slayer3d_game_data_runtime *runtime)
     runtime->editor_actor_dirty = false;
 }
 
+static void free_editor_prefab_entry(editor_prefab_runtime *prefab)
+{
+    if (prefab == NULL)
+        return;
+    SDL_free(prefab->id);
+    SDL_free(prefab->label);
+    SDL_free(prefab->category);
+    SDL_free(prefab->kind);
+    SDL_free(prefab->archetype);
+    SDL_free(prefab->mesh);
+    SDL_free(prefab->model);
+    SDL_free(prefab->group);
+    slayer3d_properties_destroy(prefab->properties);
+    SDL_zero(*prefab);
+}
+
+void free_editor_prefabs_runtime(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < runtime->editor_prefab_count; ++i)
+        free_editor_prefab_entry(&runtime->editor_prefabs[i]);
+    SDL_free(runtime->editor_prefabs);
+    runtime->editor_prefabs = NULL;
+    runtime->editor_prefab_count = 0;
+    runtime->editor_prefab_capacity = 0;
+    runtime->editor_prefab_revision = 0;
+    runtime->editor_prefab_dirty = false;
+}
+
 static void mark_editor_actors_dirty(slayer3d_game_data_runtime *runtime)
 {
     runtime->editor_actor_revision++;
     runtime->editor_actor_dirty = true;
+}
+
+static void mark_editor_prefabs_dirty(slayer3d_game_data_runtime *runtime)
+{
+    runtime->editor_prefab_revision++;
+    runtime->editor_prefab_dirty = true;
 }
 
 static const char *editor_property_type_name(slayer3d_value_type type)
@@ -388,6 +462,9 @@ bool slayer3d_game_data_get_editor_actor(const slayer3d_game_data_runtime *runti
     out_actor->rotation = actor->rotation;
     out_actor->scale = actor->scale;
     out_actor->color = actor->color;
+    out_actor->prefab = actor->prefab;
+    out_actor->prefab_linked = actor->prefab_linked;
+    out_actor->prefab_overrides = actor->prefab_overrides;
     out_actor->properties = actor->properties;
     return true;
 }
@@ -416,11 +493,12 @@ static bool assign_editor_actor_strings(editor_actor_runtime *entry,
     char *mesh_copy = NULL;
     char *model_copy = NULL;
     char *group_copy = NULL;
+    char *prefab_copy = NULL;
     if (!duplicate_optional_string(name, &name_copy) || !duplicate_optional_string(scene, &scene_copy) ||
         !duplicate_optional_string(desc->display_name, &display_name_copy) ||
         !duplicate_optional_string(desc->archetype, &archetype_copy) ||
         !duplicate_optional_string(desc->mesh, &mesh_copy) || !duplicate_optional_string(desc->model, &model_copy) ||
-        !duplicate_optional_string(desc->group, &group_copy))
+        !duplicate_optional_string(desc->group, &group_copy) || !duplicate_optional_string(desc->prefab, &prefab_copy))
     {
         SDL_free(name_copy);
         SDL_free(scene_copy);
@@ -429,6 +507,7 @@ static bool assign_editor_actor_strings(editor_actor_runtime *entry,
         SDL_free(mesh_copy);
         SDL_free(model_copy);
         SDL_free(group_copy);
+        SDL_free(prefab_copy);
         set_error(error_buffer, error_buffer_size, "failed to allocate editor actor fields");
         return false;
     }
@@ -440,6 +519,7 @@ static bool assign_editor_actor_strings(editor_actor_runtime *entry,
     SDL_free(entry->mesh);
     SDL_free(entry->model);
     SDL_free(entry->group);
+    SDL_free(entry->prefab);
     entry->name = name_copy;
     entry->scene = scene_copy;
     entry->display_name = display_name_copy;
@@ -447,6 +527,7 @@ static bool assign_editor_actor_strings(editor_actor_runtime *entry,
     entry->mesh = mesh_copy;
     entry->model = model_copy;
     entry->group = group_copy;
+    entry->prefab = prefab_copy;
     return true;
 }
 
@@ -506,6 +587,13 @@ bool slayer3d_game_data_place_editor_actor(slayer3d_game_data_runtime *runtime,
         set_error(error_buffer, error_buffer_size, "failed to allocate actor properties");
         return false;
     }
+    slayer3d_properties *prefab_overrides = NULL;
+    if (!copy_properties(desc->prefab_overrides, &prefab_overrides))
+    {
+        slayer3d_properties_destroy(properties);
+        set_error(error_buffer, error_buffer_size, "failed to allocate actor prefab overrides");
+        return false;
+    }
 
     editor_actor_runtime *entry = find_editor_actor_mutable(runtime, name);
     if (entry == NULL)
@@ -513,6 +601,7 @@ bool slayer3d_game_data_place_editor_actor(slayer3d_game_data_runtime *runtime,
         if (!ensure_editor_actor_capacity(runtime, runtime->editor_actor_count + 1))
         {
             slayer3d_properties_destroy(properties);
+            slayer3d_properties_destroy(prefab_overrides);
             set_error(error_buffer, error_buffer_size, "failed to allocate editor actor");
             return false;
         }
@@ -522,10 +611,14 @@ bool slayer3d_game_data_place_editor_actor(slayer3d_game_data_runtime *runtime,
     if (!assign_editor_actor_strings(entry, desc, scene, name, error_buffer, error_buffer_size))
     {
         slayer3d_properties_destroy(properties);
+        slayer3d_properties_destroy(prefab_overrides);
         return false;
     }
     slayer3d_properties_destroy(entry->properties);
+    slayer3d_properties_destroy(entry->prefab_overrides);
     entry->properties = properties;
+    entry->prefab_overrides = prefab_overrides;
+    entry->prefab_linked = desc->prefab_linked && desc->prefab != NULL && desc->prefab[0] != '\0';
     entry->position = position;
     entry->rotation = desc->has_rotation ? desc->rotation : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     entry->scale = desc->has_scale ? desc->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
@@ -562,6 +655,13 @@ bool load_editor_actors(slayer3d_game_data_runtime *runtime, yyjson_val *root, c
             set_error(error_buffer, error_buffer_size, "editor actor properties must be an object");
             return false;
         }
+        slayer3d_properties *prefab_overrides = NULL;
+        if (!copy_properties_from_json(obj_get(json, "prefab_overrides"), &prefab_overrides))
+        {
+            slayer3d_properties_destroy(properties);
+            set_error(error_buffer, error_buffer_size, "editor actor prefab_overrides must be an object");
+            return false;
+        }
         slayer3d_game_data_place_editor_actor_desc desc;
         SDL_zero(desc);
         desc.name = json_string(json, "name", NULL);
@@ -579,16 +679,393 @@ bool load_editor_actors(slayer3d_game_data_runtime *runtime, yyjson_val *root, c
         desc.has_scale = obj_get(json, "scale") != NULL;
         desc.color = json_color(json, "color", (slayer3d_color){120, 200, 255, 210});
         desc.has_color = obj_get(json, "color") != NULL;
+        desc.prefab = json_string(json, "prefab", NULL);
+        desc.prefab_linked = json_bool(json, "prefab_linked", desc.prefab != NULL && desc.prefab[0] != '\0');
+        desc.prefab_overrides = prefab_overrides;
         desc.properties = properties;
         char name[128];
         const bool ok =
             slayer3d_game_data_place_editor_actor(runtime, &desc, name, sizeof(name), error_buffer, error_buffer_size);
+        slayer3d_properties_destroy(prefab_overrides);
         slayer3d_properties_destroy(properties);
         if (!ok)
             return false;
     }
     runtime->editor_actor_dirty = false;
     runtime->editor_actor_revision = 0;
+    return true;
+}
+
+bool slayer3d_game_data_get_editor_prefab(const slayer3d_game_data_runtime *runtime, const char *id,
+                                          slayer3d_game_data_editor_prefab *out_prefab)
+{
+    if (out_prefab != NULL)
+        SDL_zero(*out_prefab);
+    const editor_prefab_runtime *prefab = find_editor_prefab(runtime, id);
+    if (prefab == NULL || out_prefab == NULL)
+        return false;
+    out_prefab->id = prefab->id;
+    out_prefab->label = prefab->label;
+    out_prefab->category = prefab->category;
+    out_prefab->kind = prefab->kind;
+    out_prefab->archetype = prefab->archetype;
+    out_prefab->mesh = prefab->mesh;
+    out_prefab->model = prefab->model;
+    out_prefab->group = prefab->group;
+    out_prefab->position = prefab->position;
+    out_prefab->rotation = prefab->rotation;
+    out_prefab->scale = prefab->scale;
+    out_prefab->color = prefab->color;
+    out_prefab->properties = prefab->properties;
+    return true;
+}
+
+bool slayer3d_game_data_get_editor_prefab_state(const slayer3d_game_data_runtime *runtime,
+                                                slayer3d_game_data_editor_prefab_state *out_state)
+{
+    if (out_state != NULL)
+        SDL_zero(*out_state);
+    if (runtime == NULL || out_state == NULL)
+        return false;
+    out_state->dirty = runtime->editor_prefab_dirty;
+    out_state->revision = runtime->editor_prefab_revision;
+    out_state->count = runtime->editor_prefab_count;
+    return true;
+}
+
+static bool assign_editor_prefab_strings(editor_prefab_runtime *entry,
+                                         const slayer3d_game_data_place_editor_prefab_desc *desc, char *error_buffer,
+                                         int error_buffer_size)
+{
+    char *id_copy = NULL;
+    char *label_copy = NULL;
+    char *category_copy = NULL;
+    char *kind_copy = NULL;
+    char *archetype_copy = NULL;
+    char *mesh_copy = NULL;
+    char *model_copy = NULL;
+    char *group_copy = NULL;
+    const char *kind = desc->kind != NULL && desc->kind[0] != '\0' ? desc->kind : "actor";
+    if (!duplicate_optional_string(desc->id, &id_copy) || !duplicate_optional_string(desc->label, &label_copy) ||
+        !duplicate_optional_string(desc->category, &category_copy) || !duplicate_optional_string(kind, &kind_copy) ||
+        !duplicate_optional_string(desc->archetype, &archetype_copy) ||
+        !duplicate_optional_string(desc->mesh, &mesh_copy) || !duplicate_optional_string(desc->model, &model_copy) ||
+        !duplicate_optional_string(desc->group, &group_copy))
+    {
+        SDL_free(id_copy);
+        SDL_free(label_copy);
+        SDL_free(category_copy);
+        SDL_free(kind_copy);
+        SDL_free(archetype_copy);
+        SDL_free(mesh_copy);
+        SDL_free(model_copy);
+        SDL_free(group_copy);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editor prefab fields");
+        return false;
+    }
+
+    SDL_free(entry->id);
+    SDL_free(entry->label);
+    SDL_free(entry->category);
+    SDL_free(entry->kind);
+    SDL_free(entry->archetype);
+    SDL_free(entry->mesh);
+    SDL_free(entry->model);
+    SDL_free(entry->group);
+    entry->id = id_copy;
+    entry->label = label_copy;
+    entry->category = category_copy;
+    entry->kind = kind_copy;
+    entry->archetype = archetype_copy;
+    entry->mesh = mesh_copy;
+    entry->model = model_copy;
+    entry->group = group_copy;
+    return true;
+}
+
+static bool actor_prefab_property_overridden(const editor_actor_runtime *actor, const char *key)
+{
+    if (actor == NULL || actor->prefab_overrides == NULL || key == NULL)
+        return false;
+    const slayer3d_value *value = slayer3d_properties_get_value(actor->prefab_overrides, key);
+    return value != NULL && (value->type != SLAYER3D_VALUE_BOOL || value->as_bool);
+}
+
+static bool apply_prefab_to_linked_actor(editor_actor_runtime *actor, const editor_prefab_runtime *prefab)
+{
+    if (actor == NULL || prefab == NULL)
+        return false;
+    slayer3d_game_data_place_editor_actor_desc desc;
+    SDL_zero(desc);
+    desc.name = actor->name;
+    desc.scene = actor->scene;
+    desc.display_name = prefab->label;
+    desc.archetype = prefab->archetype;
+    desc.mesh = prefab->mesh;
+    desc.model = prefab->model;
+    desc.group = prefab->group;
+    desc.position = actor->position;
+    desc.has_position = true;
+    desc.rotation = actor->rotation;
+    desc.has_rotation = true;
+    desc.scale = actor->scale;
+    desc.has_scale = true;
+    desc.color = prefab->color;
+    desc.has_color = true;
+    desc.prefab = prefab->id;
+    desc.prefab_linked = true;
+    desc.prefab_overrides = actor->prefab_overrides;
+
+    slayer3d_properties *properties = NULL;
+    if (!copy_properties(prefab->properties, &properties))
+        return false;
+    if (actor->properties != NULL)
+    {
+        const int count = slayer3d_properties_count(actor->properties);
+        for (int i = 0; i < count; ++i)
+        {
+            const char *key = NULL;
+            slayer3d_value_type type = SLAYER3D_VALUE_STRING;
+            if (!slayer3d_properties_get_key_at(actor->properties, i, &key, &type) || key == NULL)
+                continue;
+            const slayer3d_value *value = slayer3d_properties_get_value(actor->properties, key);
+            if (actor_prefab_property_overridden(actor, key) && value != NULL &&
+                !set_property_from_value(properties, key, value))
+            {
+                slayer3d_properties_destroy(properties);
+                return false;
+            }
+        }
+    }
+    desc.properties = properties;
+
+    char error[128];
+    const bool ok = assign_editor_actor_strings(actor, &desc, actor->scene, actor->name, error, sizeof(error));
+    if (ok)
+    {
+        slayer3d_properties *override_copy = NULL;
+        if (!copy_properties(desc.prefab_overrides, &override_copy))
+        {
+            slayer3d_properties_destroy(properties);
+            return false;
+        }
+        slayer3d_properties_destroy(actor->properties);
+        slayer3d_properties_destroy(actor->prefab_overrides);
+        actor->properties = properties;
+        actor->prefab_overrides = override_copy;
+        actor->prefab_linked = true;
+        actor->color = desc.color;
+    }
+    else
+    {
+        slayer3d_properties_destroy(properties);
+    }
+    return ok;
+}
+
+static void propagate_editor_prefab_to_linked_instances(slayer3d_game_data_runtime *runtime,
+                                                        const editor_prefab_runtime *prefab)
+{
+    if (runtime == NULL || prefab == NULL || prefab->id == NULL)
+        return;
+    bool changed = false;
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        editor_actor_runtime *actor = &runtime->editor_actors[i];
+        if (actor->prefab_linked && actor->prefab != NULL && SDL_strcmp(actor->prefab, prefab->id) == 0 &&
+            apply_prefab_to_linked_actor(actor, prefab))
+        {
+            changed = true;
+        }
+    }
+    if (changed)
+        mark_editor_actors_dirty(runtime);
+}
+
+bool slayer3d_game_data_place_editor_prefab(slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_place_editor_prefab_desc *desc, char *error_buffer,
+                                            int error_buffer_size)
+{
+    if (runtime == NULL || desc == NULL || desc->id == NULL || desc->id[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "prefab placement requires a runtime and id");
+        return false;
+    }
+
+    slayer3d_properties *properties = NULL;
+    if (!copy_properties(desc->properties, &properties))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate prefab properties");
+        return false;
+    }
+
+    editor_prefab_runtime *entry = find_editor_prefab_mutable(runtime, desc->id);
+    if (entry == NULL)
+    {
+        if (!ensure_editor_prefab_capacity(runtime, runtime->editor_prefab_count + 1))
+        {
+            slayer3d_properties_destroy(properties);
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor prefab");
+            return false;
+        }
+        entry = &runtime->editor_prefabs[runtime->editor_prefab_count++];
+    }
+
+    if (!assign_editor_prefab_strings(entry, desc, error_buffer, error_buffer_size))
+    {
+        slayer3d_properties_destroy(properties);
+        return false;
+    }
+    slayer3d_properties_destroy(entry->properties);
+    entry->properties = properties;
+    entry->position = desc->has_position ? desc->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    entry->rotation = desc->has_rotation ? desc->rotation : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    entry->scale = desc->has_scale ? desc->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    entry->color = desc->has_color ? desc->color : (slayer3d_color){120, 200, 255, 210};
+    mark_editor_prefabs_dirty(runtime);
+    propagate_editor_prefab_to_linked_instances(runtime, entry);
+    return true;
+}
+
+bool slayer3d_game_data_instantiate_editor_prefab(slayer3d_game_data_runtime *runtime,
+                                                  const slayer3d_game_data_instantiate_editor_prefab_desc *desc,
+                                                  char *out_name, size_t out_name_size, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    const editor_prefab_runtime *prefab = desc != NULL ? find_editor_prefab(runtime, desc->prefab) : NULL;
+    if (runtime == NULL || desc == NULL || prefab == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "prefab instance requires an existing prefab id");
+        return false;
+    }
+    if (prefab->kind != NULL && prefab->kind[0] != '\0' && SDL_strcmp(prefab->kind, "actor") != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "only actor prefabs can be instantiated as editor actors");
+        return false;
+    }
+
+    slayer3d_properties *properties = NULL;
+    if (!copy_properties(prefab->properties, &properties))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate prefab instance properties");
+        return false;
+    }
+    if (desc->properties != NULL)
+    {
+        const int count = slayer3d_properties_count(desc->properties);
+        for (int i = 0; i < count; ++i)
+        {
+            const char *key = NULL;
+            slayer3d_value_type type = SLAYER3D_VALUE_STRING;
+            if (!slayer3d_properties_get_key_at(desc->properties, i, &key, &type) || key == NULL)
+                continue;
+            const slayer3d_value *value = slayer3d_properties_get_value(desc->properties, key);
+            if (value != NULL && !set_property_from_value(properties, key, value))
+            {
+                slayer3d_properties_destroy(properties);
+                set_error(error_buffer, error_buffer_size, "failed to apply prefab instance overrides");
+                return false;
+            }
+        }
+    }
+
+    slayer3d_game_data_place_editor_actor_desc actor_desc;
+    SDL_zero(actor_desc);
+    actor_desc.name = desc->name;
+    actor_desc.name_prefix = desc->name_prefix != NULL ? desc->name_prefix : prefab->id;
+    actor_desc.scene = desc->scene;
+    actor_desc.display_name = prefab->label;
+    actor_desc.archetype = prefab->archetype;
+    actor_desc.mesh = prefab->mesh;
+    actor_desc.model = prefab->model;
+    actor_desc.group = prefab->group;
+    actor_desc.position = desc->has_position ? desc->position : prefab->position;
+    actor_desc.has_position = true;
+    actor_desc.rotation = desc->has_rotation ? desc->rotation : prefab->rotation;
+    actor_desc.has_rotation = true;
+    actor_desc.scale = desc->has_scale ? desc->scale : prefab->scale;
+    actor_desc.has_scale = true;
+    actor_desc.color = prefab->color;
+    actor_desc.has_color = true;
+    actor_desc.prefab = prefab->id;
+    actor_desc.prefab_linked = true;
+    actor_desc.prefab_overrides = desc->prefab_overrides;
+    actor_desc.properties = properties;
+    const bool ok = slayer3d_game_data_place_editor_actor(runtime, &actor_desc, out_name, out_name_size, error_buffer,
+                                                          error_buffer_size);
+    slayer3d_properties_destroy(properties);
+    return ok;
+}
+
+bool slayer3d_game_data_unlink_editor_actor_prefab(slayer3d_game_data_runtime *runtime, const char *actor_name,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    editor_actor_runtime *actor = find_editor_actor_mutable(runtime, actor_name);
+    if (actor == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "editor actor '%s' not found", actor_name);
+        return false;
+    }
+    actor->prefab_linked = false;
+    mark_editor_actors_dirty(runtime);
+    return true;
+}
+
+bool load_editor_prefabs(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                         int error_buffer_size)
+{
+    yyjson_val *prefabs = obj_get(root, "editor_prefabs");
+    if (prefabs == NULL)
+        prefabs = obj_get(root, "prefabs");
+    if (prefabs == NULL)
+        return true;
+    if (runtime == NULL || !yyjson_is_arr(prefabs))
+    {
+        set_error(error_buffer, error_buffer_size, "editor_prefabs must be an array");
+        return false;
+    }
+
+    for (size_t i = 0; i < yyjson_arr_size(prefabs); ++i)
+    {
+        yyjson_val *json = yyjson_arr_get(prefabs, i);
+        if (!yyjson_is_obj(json))
+        {
+            set_error(error_buffer, error_buffer_size, "editor prefab entry must be an object");
+            return false;
+        }
+        slayer3d_properties *properties = NULL;
+        if (!copy_properties_from_json(obj_get(json, "properties"), &properties))
+        {
+            set_error(error_buffer, error_buffer_size, "editor prefab properties must be an object");
+            return false;
+        }
+        slayer3d_game_data_place_editor_prefab_desc desc;
+        SDL_zero(desc);
+        desc.id = json_string(json, "id", NULL);
+        desc.label = json_string(json, "label", NULL);
+        desc.category =
+            first_non_empty_string(json_string(json, "category", NULL), json_string(json, "group", NULL), NULL);
+        desc.kind = json_string(json, "kind", "actor");
+        desc.archetype = json_string(json, "archetype", NULL);
+        desc.mesh = json_string(json, "mesh", "box");
+        desc.model = json_string(json, "model", NULL);
+        desc.group = json_string(json, "group", NULL);
+        desc.position = json_vec3(json, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        desc.has_position = obj_get(json, "position") != NULL;
+        desc.rotation = json_vec3(json, "rotation", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        desc.has_rotation = obj_get(json, "rotation") != NULL;
+        desc.scale = json_vec3(json, "scale", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+        desc.has_scale = obj_get(json, "scale") != NULL;
+        desc.color = json_color(json, "color", (slayer3d_color){120, 200, 255, 210});
+        desc.has_color = obj_get(json, "color") != NULL;
+        desc.properties = properties;
+        const bool ok = slayer3d_game_data_place_editor_prefab(runtime, &desc, error_buffer, error_buffer_size);
+        slayer3d_properties_destroy(properties);
+        if (!ok)
+            return false;
+    }
+    runtime->editor_prefab_dirty = false;
+    runtime->editor_prefab_revision = 0;
     return true;
 }
 
@@ -1129,6 +1606,129 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
     slayer3d_properties_destroy(properties);
     publish_editor_actor_outputs(runtime, outputs, ok, ok ? json_string(action, "message", "actor placed") : error,
                                  ok ? actor_name : "");
+    return true;
+}
+
+static void publish_editor_prefab_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
+                                          const char *message, const char *prefab, const char *actor)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
+    editor_set_string_output(scene_state, outputs, "prefab_key", ok && prefab != NULL ? prefab : "");
+    editor_set_string_output(scene_state, outputs, "actor_key", ok && actor != NULL ? actor : "");
+    editor_set_bool_output(scene_state, outputs, "dirty_key", runtime != NULL ? runtime->editor_prefab_dirty : false);
+    editor_set_int_output(scene_state, outputs, "revision_key",
+                          runtime != NULL ? (int)runtime->editor_prefab_revision : 0);
+    editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_prefab_count : 0);
+}
+
+bool slayer3d_game_data_place_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_properties *properties = properties_from_json_payload(obj_get(action, "properties"), NULL);
+    if (properties == NULL)
+    {
+        publish_editor_prefab_outputs(runtime, outputs, false, "prefab properties must be an object", "", "");
+        return true;
+    }
+
+    slayer3d_game_data_place_editor_prefab_desc desc;
+    SDL_zero(desc);
+    desc.id = json_string(action, "id", NULL);
+    desc.label = json_string(action, "label", NULL);
+    desc.category = json_string(action, "category", NULL);
+    desc.kind = json_string(action, "kind", "actor");
+    desc.archetype = json_string(action, "archetype", NULL);
+    desc.mesh = json_string(action, "mesh", "box");
+    desc.model = json_string(action, "model", NULL);
+    desc.group = json_string(action, "group", NULL);
+    desc.position = json_vec3(action, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.has_position = obj_get(action, "position") != NULL;
+    desc.rotation = json_vec3(action, "rotation", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.has_rotation = obj_get(action, "rotation") != NULL;
+    desc.scale = json_vec3(action, "scale", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+    desc.has_scale = obj_get(action, "scale") != NULL;
+    desc.color = json_color(action, "color", (slayer3d_color){120, 200, 255, 210});
+    desc.has_color = obj_get(action, "color") != NULL;
+    desc.properties = properties;
+
+    char error[192];
+    const bool ok = slayer3d_game_data_place_editor_prefab(runtime, &desc, error, sizeof(error));
+    slayer3d_properties_destroy(properties);
+    publish_editor_prefab_outputs(runtime, outputs, ok, ok ? json_string(action, "message", "prefab saved") : error,
+                                  ok ? desc.id : "", "");
+    return true;
+}
+
+bool slayer3d_game_data_instantiate_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_properties *properties = properties_from_json_payload(obj_get(action, "properties"), NULL);
+    if (properties == NULL)
+    {
+        publish_editor_prefab_outputs(runtime, outputs, false, "prefab instance properties must be an object", "", "");
+        return true;
+    }
+    slayer3d_properties *overrides = properties_from_json_payload(obj_get(action, "prefab_overrides"), NULL);
+    if (overrides == NULL)
+    {
+        slayer3d_properties_destroy(properties);
+        publish_editor_prefab_outputs(runtime, outputs, false, "prefab_overrides must be an object", "", "");
+        return true;
+    }
+
+    slayer3d_game_data_instantiate_editor_prefab_desc desc;
+    SDL_zero(desc);
+    desc.prefab = json_string(action, "prefab", json_string(action, "id", NULL));
+    desc.name = json_string(action, "name", NULL);
+    desc.name_prefix = json_string(action, "name_prefix", NULL);
+    desc.scene = json_string(action, "scene", NULL);
+    desc.position = json_vec3(action, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.has_position = obj_get(action, "position") != NULL;
+    desc.rotation = json_vec3(action, "rotation", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.has_rotation = obj_get(action, "rotation") != NULL;
+    desc.scale = json_vec3(action, "scale", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+    desc.has_scale = obj_get(action, "scale") != NULL;
+    desc.properties = properties;
+    desc.prefab_overrides = overrides;
+
+    char actor_name[128];
+    char error[192];
+    const bool ok = slayer3d_game_data_instantiate_editor_prefab(runtime, &desc, actor_name, sizeof(actor_name), error,
+                                                                 sizeof(error));
+    slayer3d_properties_destroy(overrides);
+    slayer3d_properties_destroy(properties);
+    publish_editor_prefab_outputs(runtime, outputs, ok,
+                                  ok ? json_string(action, "message", "prefab instantiated") : error,
+                                  ok ? desc.prefab : "", ok ? actor_name : "");
+    return true;
+}
+
+bool slayer3d_game_data_unlink_editor_actor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *target = json_string(action, "actor", json_string(action, "target", NULL));
+    char error[192];
+    error[0] = '\0';
+    if ((target == NULL || target[0] == '\0') && json_bool(action, "actor_from_selection", false))
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit &&
+            selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+        {
+            target = selection.element_name;
+        }
+    }
+    if (target == NULL || target[0] == '\0')
+    {
+        publish_editor_prefab_outputs(runtime, outputs, false, "prefab unlink requires an actor", "", "");
+        return true;
+    }
+    const bool ok = slayer3d_game_data_unlink_editor_actor_prefab(runtime, target, error, sizeof(error));
+    publish_editor_prefab_outputs(runtime, outputs, ok, ok ? json_string(action, "message", "prefab unlinked") : error,
+                                  "", ok ? target : "");
     return true;
 }
 

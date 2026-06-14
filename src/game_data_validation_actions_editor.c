@@ -1378,3 +1378,83 @@ bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *act
     const char *output_keys[] = {"valid_key", "message_key", "actor_key", "dirty_key", "revision_key", "count_key"};
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
+
+static bool validate_editor_prefab_common_fields(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 const char *type, bool require_id)
+{
+    const char *id = json_string(action, "id");
+    const char *prefab = json_string(action, "prefab");
+    if (require_id && (id == NULL || id[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires a non-empty id", type);
+    if (!require_id && (prefab == NULL || prefab[0] == '\0') && (id == NULL || id[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires prefab or id", type);
+    static const char *const optional_string_fields[] = {"id",        "prefab",   "name",  "name_prefix",
+                                                         "label",     "category", "kind",  "group",
+                                                         "archetype", "mesh",     "model", "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_string_fields); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_string_fields[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_string_fields[i]), field_path,
+                                                      "editor prefab field"))
+            return false;
+    }
+    yyjson_val *position = obj_get(action, "position");
+    yyjson_val *rotation = obj_get(action, "rotation");
+    yyjson_val *scale = obj_get(action, "scale");
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *properties = obj_get(action, "properties");
+    yyjson_val *overrides = obj_get(action, "prefab_overrides");
+    if (position != NULL && !is_exact_vec_array(position, 3))
+        return validation_error(ctx, json_path, "%s position must be a vec3", type);
+    if (rotation != NULL && !is_exact_vec_array(rotation, 3))
+        return validation_error(ctx, json_path, "%s rotation must be a vec3", type);
+    if (scale != NULL &&
+        (!is_exact_vec_array(scale, 3) || yyjson_get_num(yyjson_arr_get(scale, 0)) <= 0.0 ||
+         yyjson_get_num(yyjson_arr_get(scale, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(scale, 2)) <= 0.0))
+        return validation_error(ctx, json_path, "%s scale must be a positive vec3", type);
+    if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+        return validation_error(ctx, json_path, "%s color must be a color array", type);
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    if (overrides != NULL && !yyjson_is_obj(overrides))
+        return validation_error(ctx, json_path, "%s prefab_overrides must be an object", type);
+    const char *output_keys[] = {"valid_key", "message_key",  "prefab_key", "actor_key",
+                                 "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_prefab_define_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    (void)names;
+    return validate_editor_prefab_common_fields(ctx, action, json_path, type, true);
+}
+
+bool validate_editor_prefab_instantiate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    const char *scene = json_string(action, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    return validate_editor_prefab_common_fields(ctx, action, json_path, type, false);
+}
+
+bool validate_editor_prefab_unlink_actor_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    (void)names;
+    const char *actor = json_string(action, "actor");
+    const char *target = json_string(action, "target");
+    yyjson_val *actor_from_selection = obj_get(action, "actor_from_selection");
+    if ((actor == NULL || actor[0] == '\0') && (target == NULL || target[0] == '\0') &&
+        (actor_from_selection == NULL || !yyjson_get_bool(actor_from_selection)))
+    {
+        return validation_error(ctx, json_path, "%s requires actor, target, or actor_from_selection", type);
+    }
+    if (actor_from_selection != NULL && !yyjson_is_bool(actor_from_selection))
+        return validation_error(ctx, json_path, "%s actor_from_selection must be a boolean", type);
+    const char *output_keys[] = {"valid_key", "message_key",  "prefab_key", "actor_key",
+                                 "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}

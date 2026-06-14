@@ -73,8 +73,8 @@ lossless path used by the editor's open/save workflow today.
 - `actors`: Optional array of placed gameplay/editor actors.
 - `connections`: Optional generic links between authored objects.
 - `properties`: Optional arbitrary map-level key-value properties.
-- `prefabs`: Reserved for prefab definitions and linked instances in a later
-  slice.
+- `prefabs`: Optional reusable prefab definitions for linked brush, actor, or
+  mixed editor instances.
 - `lights`: Reserved for dynamic and baked light authoring in a later slice.
 - `effects`: Reserved for particles, fog, fire/smoke markers, and similar
   effect primitives in a later slice.
@@ -211,6 +211,18 @@ Connections are optional generic links between authored objects:
 
 Games may ignore, extend, or reinterpret connections. If an endpoint references
 an object outside the map, set `external: true` on that endpoint.
+
+## Prefabs
+
+Prefabs are optional reusable definitions for preconfigured entities. Actor
+prefabs may define `archetype`, `mesh`, `model`, `group`, transform defaults,
+`color`, and arbitrary `properties`. Brush and mixed prefabs may carry `brushes`
+and `actors` arrays using the same public object shapes as top-level map data.
+
+Placed instances keep unique ids for per-instance gameplay logic. Actor
+instances placed from a prefab write `prefab` and `prefab_linked`; linked
+instances can receive shared updates from their source prefab while still
+preserving explicit per-instance property overrides.
 
 ## Minimal Example
 

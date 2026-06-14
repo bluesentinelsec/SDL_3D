@@ -52,8 +52,9 @@
       "$ref": "#/$defs/properties"
     },
     "prefabs": {
-      "description": "Reserved for prefab definitions and linked instances.",
-      "type": ["array", "object"]
+      "description": "Reusable prefab definitions for linked brush, actor, or mixed editor instances.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/prefab" }
     },
     "lights": {
       "description": "Reserved for authored dynamic and baked light data.",
@@ -242,12 +243,42 @@
         "archetype": { "type": "string", "minLength": 1 },
         "model": { "type": "string", "minLength": 1 },
         "sprite": { "type": "string", "minLength": 1 },
+        "prefab": { "type": "string", "minLength": 1 },
+        "prefab_linked": { "type": "boolean" },
         "primitive": {
           "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger"]
         },
         "transform": { "$ref": "#/$defs/transform" },
         "color": { "$ref": "#/$defs/rgba" },
         "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "prefab": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["actor", "brush", "mixed"] },
+        "archetype": { "type": "string", "minLength": 1 },
+        "mesh": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "group": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "scale": { "$ref": "#/$defs/positiveVec3" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "properties": { "$ref": "#/$defs/properties" },
+        "brushes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/brush" }
+        },
+        "actors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/actor" }
+        }
       }
     },
     "connectionEndpoint": {
@@ -274,4 +305,3 @@
     }
   }
 }
-

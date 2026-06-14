@@ -547,7 +547,34 @@ static bool export_add_editor_actor(yyjson_mut_doc *doc, yyjson_mut_val *actors,
         !export_add_vec3(doc, obj, "position", actor->position) ||
         !export_add_vec3(doc, obj, "rotation", actor->rotation) || !export_add_vec3(doc, obj, "scale", actor->scale) ||
         !export_add_color(doc, obj, "color", actor->color) ||
+        !export_add_optional_string(doc, obj, "prefab", actor->prefab) ||
+        !((actor->prefab != NULL && actor->prefab[0] != '\0')
+              ? yyjson_mut_obj_add_bool(doc, obj, "prefab_linked", actor->prefab_linked)
+              : true) ||
+        !export_add_properties(doc, obj, "prefab_overrides", actor->prefab_overrides) ||
         !export_add_properties(doc, obj, "properties", actor->properties))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool export_add_editor_prefab(yyjson_mut_doc *doc, yyjson_mut_val *prefabs, const editor_prefab_runtime *prefab)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(prefabs, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "id", prefab->id != NULL ? prefab->id : "") ||
+        !export_add_optional_string(doc, obj, "label", prefab->label) ||
+        !export_add_optional_string(doc, obj, "category", prefab->category) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "kind", prefab->kind != NULL ? prefab->kind : "actor") ||
+        !export_add_optional_string(doc, obj, "archetype", prefab->archetype) ||
+        !export_add_optional_string(doc, obj, "mesh", prefab->mesh) ||
+        !export_add_optional_string(doc, obj, "model", prefab->model) ||
+        !export_add_optional_string(doc, obj, "group", prefab->group) ||
+        !export_add_vec3(doc, obj, "position", prefab->position) ||
+        !export_add_vec3(doc, obj, "rotation", prefab->rotation) ||
+        !export_add_vec3(doc, obj, "scale", prefab->scale) || !export_add_color(doc, obj, "color", prefab->color) ||
+        !export_add_properties(doc, obj, "properties", prefab->properties))
     {
         return false;
     }
@@ -665,9 +692,10 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
     yyjson_mut_val *sources = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *starts = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *actors = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *prefabs = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *connections = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     if (doc == NULL || root == NULL || worlds == NULL || sources == NULL || starts == NULL || actors == NULL ||
-        connections == NULL)
+        prefabs == NULL || connections == NULL)
     {
         yyjson_mut_doc_free(doc);
         set_error(error_buffer, error_buffer_size, "failed to allocate editable level export document");
@@ -682,11 +710,14 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
               export_add_editor_brush_source_world(doc, sources, world_runtime) &&
               yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts) &&
               yyjson_mut_obj_add_val(doc, root, "editor_actors", actors) &&
+              yyjson_mut_obj_add_val(doc, root, "editor_prefabs", prefabs) &&
               yyjson_mut_obj_add_val(doc, root, "editor_connections", connections);
     for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
         ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);
     for (int i = 0; ok && i < runtime->editor_actor_count; ++i)
         ok = export_add_editor_actor(doc, actors, &runtime->editor_actors[i]);
+    for (int i = 0; ok && i < runtime->editor_prefab_count; ++i)
+        ok = export_add_editor_prefab(doc, prefabs, &runtime->editor_prefabs[i]);
     for (int i = 0; ok && i < runtime->editor_connection_count; ++i)
         ok = export_add_editor_connection(doc, connections, &runtime->editor_connections[i]);
 
@@ -897,6 +928,7 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
     if (runtime != NULL)
     {
         runtime->editor_actor_dirty = false;
+        runtime->editor_prefab_dirty = false;
         runtime->editor_connection_dirty = false;
     }
     if (out_size != NULL)
@@ -1068,6 +1100,10 @@ static bool export_add_map_editor_actor(yyjson_mut_doc *doc, yyjson_mut_val *act
         !export_add_optional_string(doc, obj, "archetype", actor->archetype) ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "primitive", editor_actor_map_primitive(actor)) ||
         !export_add_optional_string(doc, obj, "model", actor->model) ||
+        !export_add_optional_string(doc, obj, "prefab", actor->prefab) ||
+        !((actor->prefab != NULL && actor->prefab[0] != '\0')
+              ? yyjson_mut_obj_add_bool(doc, obj, "prefab_linked", actor->prefab_linked)
+              : true) ||
         !yyjson_mut_obj_add_val(doc, obj, "transform", transform) ||
         !export_add_vec3(doc, transform, "position", actor->position) ||
         !export_add_vec3(doc, transform, "rotation", actor->rotation) ||
@@ -1096,6 +1132,17 @@ static bool export_add_map_connections(yyjson_mut_doc *doc, yyjson_mut_val *conn
     for (int i = 0; i < runtime->editor_connection_count; ++i)
     {
         if (!export_add_editor_connection(doc, connections, &runtime->editor_connections[i]))
+            return false;
+    }
+    return true;
+}
+
+static bool export_add_map_prefabs(yyjson_mut_doc *doc, yyjson_mut_val *prefabs,
+                                   const slayer3d_game_data_runtime *runtime)
+{
+    for (int i = 0; i < runtime->editor_prefab_count; ++i)
+    {
+        if (!export_add_editor_prefab(doc, prefabs, &runtime->editor_prefabs[i]))
             return false;
     }
     return true;
@@ -1139,10 +1186,12 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
     yyjson_mut_val *brushes = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *actors = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *connections = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *prefabs = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *editor = doc != NULL ? yyjson_mut_obj(doc) : NULL;
     yyjson_mut_val *fragment_copy = doc != NULL ? yyjson_val_mut_copy(doc, fragment_root) : NULL;
     if (fragment_doc == NULL || doc == NULL || root == NULL || metadata == NULL || materials == NULL ||
-        brushes == NULL || actors == NULL || connections == NULL || editor == NULL || fragment_copy == NULL)
+        brushes == NULL || actors == NULL || connections == NULL || prefabs == NULL || editor == NULL ||
+        fragment_copy == NULL)
     {
         yyjson_doc_free(fragment_doc);
         yyjson_mut_doc_free(doc);
@@ -1167,6 +1216,7 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
               export_add_map_editor_actors(doc, actors, runtime) &&
               yyjson_mut_obj_add_val(doc, root, "connections", connections) &&
               export_add_map_connections(doc, connections, runtime) &&
+              yyjson_mut_obj_add_val(doc, root, "prefabs", prefabs) && export_add_map_prefabs(doc, prefabs, runtime) &&
               yyjson_mut_obj_add_val(doc, root, "editor", editor) &&
               yyjson_mut_obj_add_strcpy(doc, editor, "source_format", "slayer3d.fragment.v0") &&
               yyjson_mut_obj_add_val(doc, editor, "editable_level_fragment", fragment_copy);
@@ -1229,6 +1279,7 @@ bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime 
     if (runtime != NULL)
     {
         runtime->editor_actor_dirty = false;
+        runtime->editor_prefab_dirty = false;
         runtime->editor_connection_dirty = false;
     }
     if (out_size != NULL)

@@ -612,6 +612,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
         char model_path[MAP_PATH_MAX];
         char sprite_path[MAP_PATH_MAX];
         char primitive_path[MAP_PATH_MAX];
+        char prefab_path[MAP_PATH_MAX];
         map_format_path(path, sizeof(path), "$.actors[%zu]", i);
         map_format_path(id_path, sizeof(id_path), "%s.id", path);
         map_format_path(transform_path, sizeof(transform_path), "%s.transform", path);
@@ -619,6 +620,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
         map_format_path(model_path, sizeof(model_path), "%s.model", path);
         map_format_path(sprite_path, sizeof(sprite_path), "%s.sprite", path);
         map_format_path(primitive_path, sizeof(primitive_path), "%s.primitive", path);
+        map_format_path(prefab_path, sizeof(prefab_path), "%s.prefab", path);
         yyjson_val *actor = yyjson_arr_get(actors, i);
         if (!yyjson_is_obj(actor))
             return map_error(ctx, path, "actor entry must be an object");
@@ -627,6 +629,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
             !map_optional_non_empty_string(ctx, actor, "archetype", path, "actor archetype") ||
             !map_validate_asset_reference(ctx, actor, "model", model_path, "actor model") ||
             !map_validate_asset_reference(ctx, actor, "sprite", sprite_path, "actor sprite") ||
+            !map_optional_non_empty_string(ctx, actor, "prefab", prefab_path, "actor prefab") ||
             !map_validate_primitive(ctx, actor, primitive_path) ||
             !map_validate_transform(ctx, map_obj_get(actor, "transform"), transform_path) ||
             !map_validate_optional_color(ctx, actor, "color", color_path, "actor color") ||
@@ -634,6 +637,59 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
             return false;
     }
     return true;
+}
+
+static bool map_validate_prefabs(map_validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *prefabs = map_obj_get(root, "prefabs");
+    if (prefabs == NULL)
+        return true;
+    if (!yyjson_is_arr(prefabs))
+        return map_error(ctx, "$.prefabs", "prefabs must be an array");
+    map_name_table ids;
+    SDL_zero(ids);
+    bool ok = true;
+    for (size_t i = 0, count = yyjson_arr_size(prefabs); ok && i < count; ++i)
+    {
+        char path[MAP_PATH_MAX];
+        char id_path[MAP_PATH_MAX];
+        char kind_path[MAP_PATH_MAX];
+        char position_path[MAP_PATH_MAX];
+        char rotation_path[MAP_PATH_MAX];
+        char scale_path[MAP_PATH_MAX];
+        char color_path[MAP_PATH_MAX];
+        map_format_path(path, sizeof(path), "$.prefabs[%zu]", i);
+        map_format_path(id_path, sizeof(id_path), "%s.id", path);
+        map_format_path(kind_path, sizeof(kind_path), "%s.kind", path);
+        map_format_path(position_path, sizeof(position_path), "%s.position", path);
+        map_format_path(rotation_path, sizeof(rotation_path), "%s.rotation", path);
+        map_format_path(scale_path, sizeof(scale_path), "%s.scale", path);
+        map_format_path(color_path, sizeof(color_path), "%s.color", path);
+        yyjson_val *prefab = yyjson_arr_get(prefabs, i);
+        yyjson_val *scale = map_obj_get(prefab, "scale");
+        if (!yyjson_is_obj(prefab))
+        {
+            ok = map_error(ctx, path, "prefab entry must be an object");
+            break;
+        }
+        const char *kind = map_json_string(prefab, "kind");
+        if (!map_require_non_empty_string(ctx, prefab, "id", id_path, "prefab id") ||
+            !map_add_unique(ctx, &ids, "prefab", map_json_string(prefab, "id"), path) ||
+            !map_optional_non_empty_string(ctx, prefab, "kind", kind_path, "prefab kind") ||
+            (kind != NULL && SDL_strcmp(kind, "actor") != 0 && SDL_strcmp(kind, "brush") != 0 &&
+             SDL_strcmp(kind, "mixed") != 0 &&
+             !map_error(ctx, kind_path, "prefab kind must be actor, brush, or mixed")) ||
+            !map_validate_optional_vec3(ctx, prefab, "position", position_path, "prefab position") ||
+            !map_validate_optional_vec3(ctx, prefab, "rotation", rotation_path, "prefab rotation") ||
+            (scale != NULL && !map_validate_positive_vec3(ctx, scale, scale_path, "prefab scale")) ||
+            !map_validate_optional_color(ctx, prefab, "color", color_path, "prefab color") ||
+            !map_validate_properties(ctx, map_obj_get(prefab, "properties"), path))
+        {
+            ok = false;
+        }
+    }
+    map_name_table_destroy(&ids);
+    return ok;
 }
 
 static bool map_validate_connection_endpoint(map_validation_context *ctx, yyjson_val *endpoint, const char *path,
@@ -721,7 +777,8 @@ static bool map_validate_root(map_validation_context *ctx, yyjson_val *root)
         return map_error(ctx, "$.coordinate_system", "coordinate_system must be 'y_up'");
 
     return map_validate_metadata(ctx, root) && map_validate_assets(ctx, root) && map_validate_materials(ctx, root) &&
-           map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) && map_validate_connections(ctx, root) &&
+           map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) && map_validate_prefabs(ctx, root) &&
+           map_validate_connections(ctx, root) &&
            map_validate_properties(ctx, map_obj_get(root, "properties"), "$.properties");
 }
 

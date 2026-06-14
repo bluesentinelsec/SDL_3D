@@ -107,6 +107,7 @@ static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
     runtime->brush_world_count = 0;
     free_editor_player_starts_runtime(runtime);
     free_editor_actors_runtime(runtime);
+    free_editor_prefabs_runtime(runtime);
     free_editor_connections_runtime(runtime);
     SDL_free(runtime->editor_player_start_source_path);
     runtime->editor_player_start_source_path = NULL;
@@ -150,6 +151,7 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
     }
     if (!load_brush_worlds(staged, root, error_buffer, error_buffer_size) ||
         !load_editor_player_starts(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_prefabs(staged, root, error_buffer, error_buffer_size) ||
         !load_editor_actors(staged, root, error_buffer, error_buffer_size) ||
         !load_editor_connections(staged, root, error_buffer, error_buffer_size))
     {
@@ -229,6 +231,16 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
     staged->editor_actors = NULL;
     staged->editor_actor_count = 0;
     staged->editor_actor_capacity = 0;
+
+    free_editor_prefabs_runtime(runtime);
+    runtime->editor_prefabs = staged->editor_prefabs;
+    runtime->editor_prefab_count = staged->editor_prefab_count;
+    runtime->editor_prefab_capacity = staged->editor_prefab_capacity;
+    runtime->editor_prefab_revision = staged->editor_prefab_revision;
+    runtime->editor_prefab_dirty = staged->editor_prefab_dirty;
+    staged->editor_prefabs = NULL;
+    staged->editor_prefab_count = 0;
+    staged->editor_prefab_capacity = 0;
 
     free_editor_connections_runtime(runtime);
     runtime->editor_connections = staged->editor_connections;

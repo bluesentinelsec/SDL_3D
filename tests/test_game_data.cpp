@@ -18614,9 +18614,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
 
     char *map_json = nullptr;
     size_t map_size = 0u;
-    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
-                                                                  &map_size, error, sizeof(error)))
-        << error;
+    error[0] = '\0';
+    const bool map_export_ok = slayer3d_game_data_export_editable_level_map_json(
+        runtime, "brush.editor_shell.target", &map_json, &map_size, error, sizeof(error));
+    ASSERT_TRUE(map_export_ok) << "map export failed: " << error;
     ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
     yyjson_doc *map_doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
     ASSERT_NE(map_doc, nullptr);
@@ -18636,6 +18637,209 @@ TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
     yyjson_doc_free(map_doc);
     SDL_free(map_json);
 
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoDefinesInstantiatesPropagatesAndUnlinksActorPrefabs)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.prefab.define",
+      "id": "prefab.guard",
+      "label": "Guard",
+      "category": "Enemies",
+      "kind": "actor",
+      "archetype": "actor.enemy.guard",
+      "mesh": "rectangle",
+      "group": "Opponents",
+      "scale": [1.0, 2.0, 1.0],
+      "color": [160, 80, 40, 220],
+      "properties": { "health": 100, "faction": "enemy" },
+      "outputs": {
+        "valid_key": "test.prefab.valid",
+        "prefab_key": "test.prefab.id",
+        "count_key": "test.prefab.count"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.prefab.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.prefab.id", ""), "prefab.guard");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.prefab.count", 0), 1);
+
+    slayer3d_game_data_editor_prefab prefab{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_prefab(runtime, "prefab.guard", &prefab));
+    EXPECT_STREQ(prefab.label, "Guard");
+    EXPECT_STREQ(prefab.kind, "actor");
+    ASSERT_NE(prefab.properties, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(prefab.properties, "health", 0), 100);
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.prefab.instantiate",
+      "prefab": "prefab.guard",
+      "name": "actor.guard.1",
+      "position": [3.0, 0.5, 2.0],
+      "properties": { "health": 150 },
+      "prefab_overrides": { "health": true },
+      "outputs": {
+        "valid_key": "test.prefab.instance.valid",
+        "actor_key": "test.prefab.instance.actor"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.prefab.instance.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.prefab.instance.actor", ""), "actor.guard.1");
+
+    slayer3d_game_data_editor_actor actor{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.guard.1", &actor));
+    EXPECT_STREQ(actor.prefab, "prefab.guard");
+    EXPECT_TRUE(actor.prefab_linked);
+    EXPECT_STREQ(actor.mesh, "rectangle");
+    ASSERT_NE(actor.properties, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(actor.properties, "health", 0), 150);
+    EXPECT_STREQ(slayer3d_properties_get_string(actor.properties, "faction", ""), "enemy");
+    ASSERT_NE(actor.prefab_overrides, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(actor.prefab_overrides, "health", false));
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.prefab.define",
+      "id": "prefab.guard",
+      "label": "Guard Captain",
+      "category": "Enemies",
+      "kind": "actor",
+      "archetype": "actor.enemy.guard_captain",
+      "mesh": "capsule",
+      "group": "Opponents",
+      "scale": [1.0, 2.0, 1.0],
+      "color": [32, 96, 220, 200],
+      "properties": { "health": 80, "faction": "boss" }
+    })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.guard.1", &actor));
+    EXPECT_TRUE(actor.prefab_linked);
+    EXPECT_STREQ(actor.archetype, "actor.enemy.guard_captain");
+    EXPECT_STREQ(actor.mesh, "capsule");
+    EXPECT_EQ(actor.color.b, 220);
+    EXPECT_EQ(slayer3d_properties_get_int(actor.properties, "health", 0), 150);
+    EXPECT_STREQ(slayer3d_properties_get_string(actor.properties, "faction", ""), "boss");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.prefab.unlink_actor",
+      "actor": "actor.guard.1",
+      "outputs": {
+        "valid_key": "test.prefab.unlink.valid",
+        "actor_key": "test.prefab.unlink.actor"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.prefab.unlink.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.prefab.unlink.actor", ""), "actor.guard.1");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.prefab.define",
+      "id": "prefab.guard",
+      "label": "Guard Final",
+      "category": "Enemies",
+      "kind": "actor",
+      "archetype": "actor.enemy.guard_final",
+      "mesh": "sphere",
+      "group": "Opponents",
+      "color": [250, 250, 250, 180],
+      "properties": { "health": 60, "faction": "final" }
+    })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.guard.1", &actor));
+    EXPECT_FALSE(actor.prefab_linked);
+    EXPECT_STREQ(actor.archetype, "actor.enemy.guard_captain");
+    EXPECT_STREQ(actor.mesh, "capsule");
+    EXPECT_STREQ(slayer3d_properties_get_string(actor.properties, "faction", ""), "boss");
+
+    char *fragment_json = nullptr;
+    size_t fragment_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &fragment_json, &fragment_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *fragment_doc = yyjson_read(fragment_json, fragment_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(fragment_doc, nullptr);
+    yyjson_val *fragment_root = yyjson_doc_get_root(fragment_doc);
+    yyjson_val *editor_prefabs = yyjson_obj_get(fragment_root, "editor_prefabs");
+    yyjson_val *editor_actors = yyjson_obj_get(fragment_root, "editor_actors");
+    ASSERT_TRUE(yyjson_is_arr(editor_prefabs));
+    ASSERT_TRUE(yyjson_is_arr(editor_actors));
+    ASSERT_EQ(yyjson_arr_size(editor_prefabs), 1u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(editor_prefabs, 0), "id")), "prefab.guard");
+    yyjson_val *exported_actor = nullptr;
+    for (size_t i = 0; i < yyjson_arr_size(editor_actors); ++i)
+    {
+        yyjson_val *candidate = yyjson_arr_get(editor_actors, i);
+        if (SDL_strcmp(yyjson_get_str(yyjson_obj_get(candidate, "name")), "actor.guard.1") == 0)
+        {
+            exported_actor = candidate;
+            break;
+        }
+    }
+    ASSERT_NE(exported_actor, nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_actor, "prefab")), "prefab.guard");
+    EXPECT_FALSE(yyjson_get_bool(yyjson_obj_get(exported_actor, "prefab_linked")));
+    yyjson_doc_free(fragment_doc);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    error[0] = '\0';
+    const bool map_export_ok = slayer3d_game_data_export_editable_level_map_json(
+        runtime, "brush.editor_shell.target", &map_json, &map_size, error, sizeof(error));
+    if (!map_export_ok)
+        std::fprintf(stderr, "map export failed: %s\n", error);
+    ASSERT_TRUE(map_export_ok) << "map export failed: " << error;
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+    yyjson_doc *map_doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(map_doc, nullptr);
+    yyjson_val *map_root = yyjson_doc_get_root(map_doc);
+    yyjson_val *map_prefabs = yyjson_obj_get(map_root, "prefabs");
+    ASSERT_TRUE(yyjson_is_arr(map_prefabs));
+    ASSERT_EQ(yyjson_arr_size(map_prefabs), 1u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(map_prefabs, 0), "id")), "prefab.guard");
+    yyjson_doc_free(map_doc);
+    SDL_free(map_json);
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), roundtrip_session, &roundtrip_runtime, error,
+                                             sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        roundtrip_runtime, "brush.editor_shell.target", fragment_json, fragment_size, nullptr, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_editor_prefab roundtrip_prefab{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_prefab(roundtrip_runtime, "prefab.guard", &roundtrip_prefab));
+    EXPECT_STREQ(roundtrip_prefab.label, "Guard Final");
+    slayer3d_game_data_editor_actor roundtrip_actor{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(roundtrip_runtime, "actor.guard.1", &roundtrip_actor));
+    EXPECT_STREQ(roundtrip_actor.prefab, "prefab.guard");
+    EXPECT_FALSE(roundtrip_actor.prefab_linked);
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_actor.properties, "faction", ""), "boss");
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    SDL_free(fragment_json);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }

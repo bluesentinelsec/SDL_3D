@@ -2186,6 +2186,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.connection.add") == 0)
         return slayer3d_game_data_place_editor_connection_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.prefab.define") == 0)
+        return slayer3d_game_data_place_editor_prefab_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.prefab.instantiate") == 0)
+        return slayer3d_game_data_instantiate_editor_prefab_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.prefab.unlink_actor") == 0)
+        return slayer3d_game_data_unlink_editor_actor_prefab_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.property.set") == 0)
         return slayer3d_game_data_set_editor_property_action(runtime, action, payload);
 
@@ -2279,6 +2288,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.actor.place") == 0)
         return slayer3d_game_data_place_editor_actor_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.prefab.define") == 0)
+        return slayer3d_game_data_place_editor_prefab_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.prefab.instantiate") == 0)
+        return slayer3d_game_data_instantiate_editor_prefab_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.prefab.unlink_actor") == 0)
+        return slayer3d_game_data_unlink_editor_actor_prefab_action(runtime, action);
 
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {

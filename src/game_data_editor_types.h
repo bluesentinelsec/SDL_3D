@@ -56,8 +56,28 @@ typedef struct editor_actor_runtime
     slayer3d_vec3 rotation;
     slayer3d_vec3 scale;
     slayer3d_color color;
+    char *prefab;
+    bool prefab_linked;
+    slayer3d_properties *prefab_overrides;
     slayer3d_properties *properties;
 } editor_actor_runtime;
+
+typedef struct editor_prefab_runtime
+{
+    char *id;
+    char *label;
+    char *category;
+    char *kind;
+    char *archetype;
+    char *mesh;
+    char *model;
+    char *group;
+    slayer3d_vec3 position;
+    slayer3d_vec3 rotation;
+    slayer3d_vec3 scale;
+    slayer3d_color color;
+    slayer3d_properties *properties;
+} editor_prefab_runtime;
 
 typedef struct editor_connection_endpoint_runtime
 {

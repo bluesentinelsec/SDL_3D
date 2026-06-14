@@ -1866,6 +1866,40 @@ workflow in the inspector.
 }
 ```
 
+Use `editor.prefab.define` to create or update reusable editor prefabs, and
+`editor.prefab.instantiate` to place linked actor instances from actor prefabs.
+An actor prefab can provide `archetype`, `mesh`, `model`, `group`, transform
+defaults, `color`, and arbitrary shared `properties`. Instances keep unique
+actor ids and a stable `prefab` back-reference. `prefab_overrides` names
+properties that should stay per-instance when the source prefab changes.
+
+```json
+{
+  "type": "editor.prefab.define",
+  "id": "prefab.guard",
+  "label": "Guard",
+  "category": "Enemies",
+  "kind": "actor",
+  "archetype": "actor.enemy.guard",
+  "mesh": "capsule",
+  "properties": { "health": 100, "faction": "enemy" }
+}
+```
+
+```json
+{
+  "type": "editor.prefab.instantiate",
+  "prefab": "prefab.guard",
+  "name_prefix": "actor.guard",
+  "position": [3.0, 0.5, 2.0],
+  "properties": { "health": 150 },
+  "prefab_overrides": { "health": true }
+}
+```
+
+Use `editor.prefab.unlink_actor` when an instance should keep its current data
+but stop receiving future source-prefab updates.
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted
@@ -1882,15 +1916,16 @@ destinations.
 
 Use `editor.map.export` when the editor should publish the standalone
 `.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
-including top-level materials, brushes, player-start actors, editor actors, and
-generic connections for inspection or game loading. It also embeds the lossless editable fragment under
+including top-level materials, brushes, player-start actors, editor actors,
+generic prefabs, and connections for inspection or game loading. It also embeds
+the lossless editable fragment under
 `editor.editable_level_fragment`, so reopening the map restores source-backed
 brush editing state exactly. Native editor hosts can call
 `slayer3d_game_data_export_editable_level_map_json()` or
 `slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
 successful native save marks both the selected brush world and player-start
-collection clean at their current revisions, and marks placed editor actors and
-connections clean after their editable data is written. Map export requires a
+collection clean at their current revisions, and marks placed editor actors,
+prefabs, and connections clean after their editable data is written. Map export requires a
 source-backed brush world and runs source/compiled identity checks before
 writing JSON, so stale runtime-only brush data cannot become the saved level.
 

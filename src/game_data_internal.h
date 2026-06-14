@@ -121,6 +121,11 @@ typedef struct slayer3d_game_data_runtime
     int editor_actor_capacity;
     Uint64 editor_actor_revision;
     bool editor_actor_dirty;
+    editor_prefab_runtime *editor_prefabs;
+    int editor_prefab_count;
+    int editor_prefab_capacity;
+    Uint64 editor_prefab_revision;
+    bool editor_prefab_dirty;
     editor_connection_runtime *editor_connections;
     int editor_connection_count;
     int editor_connection_capacity;
@@ -409,6 +414,8 @@ bool load_editor_player_starts(slayer3d_game_data_runtime *runtime, yyjson_val *
                                int error_buffer_size);
 bool load_editor_actors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                         int error_buffer_size);
+bool load_editor_prefabs(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                         int error_buffer_size);
 bool load_editor_connections(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);
 bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
