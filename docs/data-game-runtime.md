@@ -239,6 +239,13 @@ build/MyGame
 launches a data-authored editor project, injects editor input/output paths as
 scene state, and leaves the actual tool behavior in JSON/Lua.
 
+Running it with no arguments opens the bundled editor shell project with a new
+untitled `.slayermap.json` save target in SDL's per-user preferences directory:
+
+```sh
+build/debug/slayer3d_editor
+```
+
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```

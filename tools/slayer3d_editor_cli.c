@@ -31,15 +31,17 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
+        "  %s\n"
         "  %s new --project <project-dir-or-json> --output <level.json> [--overwrite]\n"
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--overwrite]\n"
         "\n"
         "Commands:\n"
+        "  no args  Launch the bundled editor shell project with a new untitled map.\n"
         "  new    Start from the project's empty editor level and save to --output.\n"
         "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
-        program, program);
+        program, program, program);
 }
 
 static bool path_is_absolute_tool(const char *path)
@@ -154,6 +156,85 @@ static bool file_exists_tool(const char *path, bool *out_is_file)
     if (out_is_file != NULL)
         *out_is_file = info.type == SDL_PATHTYPE_FILE;
     return true;
+}
+
+static bool directory_exists_tool(const char *path)
+{
+    SDL_PathInfo info;
+    SDL_zero(info);
+    return path != NULL && path[0] != '\0' && SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
+
+static char *editor_default_project_path(void)
+{
+    const char *env_project = SDL_getenv("SLAYER3D_EDITOR_PROJECT");
+    if (directory_exists_tool(env_project))
+        return SDL_strdup(env_project);
+
+#if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
+    if (directory_exists_tool(SLAYER3D_EDITOR_DEFAULT_PROJECT))
+        return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
+#endif
+
+    if (directory_exists_tool("demos/editor_shell_dojo"))
+        return SDL_strdup("demos/editor_shell_dojo");
+
+    const char *base_path = SDL_GetBasePath();
+    char *candidate = NULL;
+    if (base_path != NULL)
+    {
+        candidate = path_join_tool(base_path, "demos/editor_shell_dojo");
+        if (!directory_exists_tool(candidate))
+        {
+            SDL_free(candidate);
+            candidate = path_join_tool(base_path, "editor_shell_dojo");
+        }
+        if (!directory_exists_tool(candidate))
+        {
+            SDL_free(candidate);
+            candidate = path_join_tool(base_path, "../share/slayer3d/demos/editor_shell_dojo");
+        }
+        if (!directory_exists_tool(candidate))
+        {
+            SDL_free(candidate);
+            candidate = path_join_tool(base_path, "../Resources/editor_shell_dojo");
+        }
+    }
+    if (directory_exists_tool(candidate))
+        return candidate;
+    SDL_free(candidate);
+
+#if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
+    return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
+#else
+    return SDL_strdup("demos/editor_shell_dojo");
+#endif
+}
+
+static char *editor_default_output_path(void)
+{
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "Slayer3DEditor");
+    if (pref_path == NULL)
+        return SDL_strdup("untitled.slayermap.json");
+
+    char leaf[64];
+    char *candidate = NULL;
+    bool is_file = false;
+    for (int i = 0; i < 10000; ++i)
+    {
+        if (i == 0)
+            SDL_strlcpy(leaf, "untitled.slayermap.json", sizeof(leaf));
+        else
+            SDL_snprintf(leaf, sizeof(leaf), "untitled-%d.slayermap.json", i);
+        candidate = path_join_tool(pref_path, leaf);
+        if (candidate == NULL || !file_exists_tool(candidate, &is_file))
+            break;
+        SDL_free(candidate);
+        candidate = NULL;
+    }
+
+    SDL_free(pref_path);
+    return candidate != NULL ? candidate : SDL_strdup("untitled.slayermap.json");
 }
 
 static void editor_asset_source_destroy(slayer3d_editor_asset_source *source)
@@ -342,9 +423,21 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     SDL_zero(*args);
     if (argc <= 1 || argv == NULL || argv[1] == NULL)
     {
-        slayer3d_editor_args_print_usage(program, out);
+        args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+        args->owned_project = editor_default_project_path();
+        args->owned_output_path = editor_default_output_path();
+        args->project = args->owned_project;
+        args->output_path = args->owned_output_path;
         arg_freetable(argtable, SDL_arraysize(argtable));
-        return SLAYER3D_TOOL_CLI_ERROR;
+        if (args->project == NULL || args->project[0] == '\0' || args->output_path == NULL ||
+            args->output_path[0] == '\0')
+        {
+            slayer3d_editor_args_destroy(args);
+            if (out != NULL)
+                fprintf(out, "%s: failed to resolve default editor project or output path.\n", program);
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        return SLAYER3D_TOOL_CLI_OK;
     }
     if (SDL_strcmp(argv[1], "--help") == 0 || SDL_strcmp(argv[1], "-h") == 0)
     {
@@ -439,8 +532,11 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
 
 void slayer3d_editor_args_destroy(slayer3d_editor_args *args)
 {
-    if (args != NULL)
-        SDL_zero(*args);
+    if (args == NULL)
+        return;
+    SDL_free(args->owned_project);
+    SDL_free(args->owned_output_path);
+    SDL_zero(*args);
 }
 
 bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_project *out_project, char *error_buffer,

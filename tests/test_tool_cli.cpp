@@ -304,9 +304,48 @@ TEST(ToolCli, EditorOpenDefaultsOutputToInput)
     std::filesystem::remove_all(project_dir);
 }
 
-TEST(ToolCli, EditorRejectsMissingSubcommand)
+TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
 {
     std::vector<char *> argv = argv_from({"slayer3d_editor"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
+    ASSERT_NE(args.project, nullptr);
+    ASSERT_NE(args.output_path, nullptr);
+    EXPECT_EQ(std::filesystem::path(args.project), std::filesystem::path(SLAYER3D_EDITOR_DEFAULT_PROJECT));
+    EXPECT_NE(std::string(args.output_path).find(".slayermap.json"), std::string::npos);
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    EXPECT_STREQ(launch.input_path, "");
+    EXPECT_STREQ(launch.save_path, args.output_path);
+
+    slayer3d_editor_runner_invocation invocation;
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+    std::string joined;
+    for (int i = 0; i < invocation.argc; ++i)
+    {
+        if (!joined.empty())
+            joined += "\n";
+        joined += invocation.argv[i];
+    }
+    EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
+    EXPECT_NE(joined.find("editor.project.dir=" + std::string(SLAYER3D_EDITOR_DEFAULT_PROJECT)), std::string::npos);
+
+    slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorRejectsUnknownSubcommand)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "bogus"});
     slayer3d_editor_args args;
     EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
 }

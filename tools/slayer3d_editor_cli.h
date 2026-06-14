@@ -30,6 +30,8 @@ extern "C"
         const char *project;
         const char *input_path;
         const char *output_path;
+        char *owned_project;
+        char *owned_output_path;
         bool overwrite;
     } slayer3d_editor_args;
 

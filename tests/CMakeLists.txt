@@ -299,6 +299,11 @@ else()
         PRIVATE
             ${CMAKE_SOURCE_DIR}/tools
     )
+    target_compile_definitions(
+        slayer3d_tool_cli_test
+        PRIVATE
+            SLAYER3D_EDITOR_DEFAULT_PROJECT="${CMAKE_SOURCE_DIR}/demos/editor_shell_dojo"
+    )
 
     if(NOT EMSCRIPTEN)
         slayer3d_add_test(slayer3d_asset_test test_asset.cpp unit)
