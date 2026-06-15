@@ -303,10 +303,14 @@
     "signal.editor.property.select_slot.1",
     "signal.editor.property.select_slot.2",
     "signal.editor.property.select_slot.3",
+    "signal.editor.property.select_slot.4",
+    "signal.editor.property.select_slot.5",
     "signal.editor.property.delete.0",
     "signal.editor.property.delete.1",
     "signal.editor.property.delete.2",
     "signal.editor.property.delete.3",
+    "signal.editor.property.delete.4",
+    "signal.editor.property.delete.5",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.clip.cycle_keep_mode",
@@ -384,171 +388,205 @@
     "sensors": [
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.tool.cycle",
         "on_pressed": "signal.editor.tool.cycle"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.selection.clear",
         "on_pressed": "signal.editor.selection.clear"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.escape",
         "on_pressed": "signal.editor.escape"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.inspector.toggle",
         "on_pressed": "signal.editor.inspector.toggle"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.command.commit",
         "on_pressed": "signal.editor.command.commit"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.clip.cycle_keep_mode",
         "on_pressed": "signal.editor.clip.cycle_keep_mode"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.accept",
         "on_pressed": "signal.editor.palette.accept"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.command.undo",
         "on_pressed": "signal.editor.command.undo"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.delete_selected",
         "on_pressed": "signal.editor.delete_selected"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.brush.lower_y",
         "on_pressed": "signal.editor.brush.lower_y"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.brush.raise_y",
         "on_pressed": "signal.editor.brush.raise_y"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.brush.duplicate",
         "on_pressed": "signal.editor.brush.duplicate"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.brush.flip_horizontal",
         "on_pressed": "signal.editor.brush.flip_horizontal"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.brush.flip_vertical",
         "on_pressed": "signal.editor.brush.flip_vertical"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.open",
         "on_pressed": "signal.editor.open"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.export",
         "on_pressed": "signal.editor.export"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.save_as",
         "on_pressed": "signal.editor.save_as"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.test_run.prepare",
         "on_pressed": "signal.editor.test_run.prepare"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.test_run.enter",
         "on_pressed": "signal.editor.test_run.enter"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.grid.decrease",
         "on_pressed": "signal.editor.grid.decrease"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.grid.increase",
         "on_pressed": "signal.editor.grid.increase"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.wall_axis.toggle",
         "on_pressed": "signal.editor.wall_axis.toggle"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.select",
         "on_pressed": "signal.editor.mode.select"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.brush",
         "on_pressed": "signal.editor.mode.brush"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.face",
         "on_pressed": "signal.editor.mode.face"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.clip",
         "on_pressed": "signal.editor.mode.clip"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.vertex",
         "on_pressed": "signal.editor.mode.vertex"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.mode.rotate",
         "on_pressed": "signal.editor.mode.rotate"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.material",
         "on_pressed": "signal.editor.palette.material"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.game_object",
         "on_pressed": "signal.editor.palette.game_object"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.close",
         "on_pressed": "signal.editor.palette.close"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.previous",
         "on_pressed": "signal.editor.palette.previous"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
         "action": "action.editor.palette.next",
         "on_pressed": "signal.editor.palette.next"
       }
@@ -1359,20 +1397,10 @@
         "signal": "signal.editor.property.apply",
         "actions": [
           {
-            "type": "editor.property.remove",
-            "target_type": "selection",
-            "key_from_state": "editor.property.edit.original_key",
-            "outputs": {
-              "valid_key": "editor.property.edit.remove.valid",
-              "message_key": "editor.property.edit.message",
-              "target_key": "editor.property.edit.target",
-              "key_key": "editor.property.edit.applied_key"
-            }
-          },
-          {
             "type": "editor.property.set",
             "target_type": "selection",
             "key_from_state": "editor.property.edit.key",
+            "original_key_from_state": "editor.property.edit.original_key",
             "value_from_state": "editor.property.edit.value",
             "outputs": {
               "valid_key": "editor.property.edit.valid",
@@ -1402,6 +1430,14 @@
         "actions": [{ "type": "editor.property.select_slot", "slot": 3 }]
       },
       {
+        "signal": "signal.editor.property.select_slot.4",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 4 }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot.5",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 5 }]
+      },
+      {
         "signal": "signal.editor.property.delete.0",
         "actions": [
           { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.0.key" },
@@ -1426,6 +1462,20 @@
         "signal": "signal.editor.property.delete.3",
         "actions": [
           { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.3.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.delete.4",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.4.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.delete.5",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.5.key" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
         ]
       },
@@ -3082,6 +3132,7 @@
           "front_camera": "camera.editor_shell.ortho_front",
           "side_camera": "camera.editor_shell.ortho_side",
           "orthographic_size_key": "editor.ortho.size",
+          "controls_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 14.0,
           "fast_speed": 40.0,

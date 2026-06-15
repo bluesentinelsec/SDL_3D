@@ -482,6 +482,9 @@ static bool validate_editor_camera_component_handler(validation_context *ctx, yy
     if (!validate_editor_camera_component(ctx, component, path, names))
         return false;
     char condition_path[PATH_BUFFER_SIZE];
+    format_path(condition_path, sizeof(condition_path), "%s.controls_if", path);
+    if (!validate_data_condition(ctx, obj_get(component, "controls_if"), condition_path, names))
+        return false;
     format_path(condition_path, sizeof(condition_path), "%s.orthographic_controls_if", path);
     return validate_data_condition(ctx, obj_get(component, "orthographic_controls_if"), condition_path, names);
 }

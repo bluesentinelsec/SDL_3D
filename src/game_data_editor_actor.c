@@ -439,6 +439,19 @@ static const char *editor_property_action_string_from_state(slayer3d_game_data_r
     return json_string(action, literal_key, fallback);
 }
 
+static bool editor_property_string_is_blank(const char *value)
+{
+    if (value == NULL)
+        return true;
+    while (*value != '\0')
+    {
+        if (*value != ' ' && *value != '\t' && *value != '\r' && *value != '\n')
+            return false;
+        ++value;
+    }
+    return true;
+}
+
 static const char *editor_property_action_target_name(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                       char *error, size_t error_size)
 {
@@ -480,6 +493,8 @@ static bool editor_property_action_value(slayer3d_game_data_runtime *runtime, sl
         const slayer3d_value *value = runtime != NULL && runtime->scene_state != NULL
                                           ? slayer3d_properties_get_value(runtime->scene_state, value_from_state)
                                           : NULL;
+        if (value != NULL && value->type == SLAYER3D_VALUE_STRING && editor_property_string_is_blank(value->as_string))
+            return false;
         return value != NULL && set_property_from_value(properties, key, value);
     }
     const char *value_from_payload = json_string(action, "value_from_payload", NULL);
@@ -489,7 +504,10 @@ static bool editor_property_action_value(slayer3d_game_data_runtime *runtime, sl
             payload != NULL ? slayer3d_properties_get_value(payload, value_from_payload) : NULL;
         return value != NULL && set_property_from_value(properties, key, value);
     }
-    return set_property_from_json_with_payload(properties, key, obj_get(action, "value"), payload);
+    yyjson_val *json_value = obj_get(action, "value");
+    if (yyjson_is_str(json_value) && editor_property_string_is_blank(yyjson_get_str(json_value)))
+        return false;
+    return set_property_from_json_with_payload(properties, key, json_value, payload);
 }
 
 static void publish_editor_property_action_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
@@ -529,8 +547,9 @@ static bool editor_property_ensure_properties(slayer3d_properties **properties)
 }
 
 static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *runtime, const char *key,
-                                                   yyjson_val *action, const slayer3d_properties *payload, bool remove,
-                                                   char *error, size_t error_size)
+                                                   const char *original_key, yyjson_val *action,
+                                                   const slayer3d_properties *payload, bool remove, char *error,
+                                                   size_t error_size)
 {
     if (runtime == NULL || key == NULL || key[0] == '\0' || !editor_selected_brushes_active_for_scene(runtime) ||
         runtime->editor_selected_brush_count <= 0)
@@ -566,6 +585,8 @@ static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *r
                 SDL_snprintf(error, error_size, "editor property value is invalid");
                 return false;
             }
+            if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
+                slayer3d_properties_remove(box->properties, original_key);
         }
         editor_brush_world_mark_dirty(world);
         changed = true;
@@ -1899,8 +1920,10 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
     char error[192];
     error[0] = '\0';
     const char *key = editor_property_action_string_from_state(runtime, action, "key", "key_from_state", NULL);
+    const char *original_key =
+        editor_property_action_string_from_state(runtime, action, "original_key", "original_key_from_state", NULL);
     const char *target_type = json_string(action, "target_type", "selection");
-    if (runtime == NULL || key == NULL || key[0] == '\0')
+    if (runtime == NULL || editor_property_string_is_blank(key))
     {
         publish_editor_property_action_outputs(
             runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", "", key);
@@ -1934,13 +1957,16 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
                                                        target, key);
                 return true;
             }
+            if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
+                slayer3d_properties_remove(actor->properties, original_key);
             mark_editor_actors_dirty(runtime);
             refresh_editor_property_selection_if_needed(runtime, target);
             publish_editor_property_action_outputs(runtime, outputs, true,
                                                    json_string(action, "message", "property set"), target, key);
             return true;
         }
-        if (editor_property_selected_brushes_apply(runtime, key, action, payload, false, error, sizeof(error)))
+        if (editor_property_selected_brushes_apply(runtime, key, original_key, action, payload, false, error,
+                                                   sizeof(error)))
         {
             publish_editor_property_action_outputs(
                 runtime, outputs, true, json_string(action, "message", "property set"),
@@ -1978,6 +2004,8 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
                                                key);
         return true;
     }
+    if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
+        slayer3d_properties_remove(actor->properties, original_key);
     mark_editor_actors_dirty(runtime);
     refresh_editor_property_selection_if_needed(runtime, target);
     publish_editor_property_action_outputs(runtime, outputs, true, json_string(action, "message", "property set"),
@@ -1992,7 +2020,7 @@ bool slayer3d_game_data_remove_editor_property_action(slayer3d_game_data_runtime
     error[0] = '\0';
     const char *key = editor_property_action_string_from_state(runtime, action, "key", "key_from_state", NULL);
     const char *target_type = json_string(action, "target_type", "selection");
-    if (runtime == NULL || key == NULL || key[0] == '\0')
+    if (runtime == NULL || editor_property_string_is_blank(key))
     {
         publish_editor_property_action_outputs(
             runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", "", key);
@@ -2016,7 +2044,7 @@ bool slayer3d_game_data_remove_editor_property_action(slayer3d_game_data_runtime
                                                    json_string(action, "message", "property removed"), target, key);
             return true;
         }
-        if (editor_property_selected_brushes_apply(runtime, key, action, NULL, true, error, sizeof(error)))
+        if (editor_property_selected_brushes_apply(runtime, key, NULL, action, NULL, true, error, sizeof(error)))
         {
             publish_editor_property_action_outputs(
                 runtime, outputs, true, json_string(action, "message", "property removed"),

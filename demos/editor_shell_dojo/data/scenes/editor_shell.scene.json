@@ -1220,6 +1220,108 @@
             ]
           },
           {
+            "id": "ui.editor_shell.left_inspector.row.property4",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 284,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.4.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property4.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.4.key", "default": "" }],
+                "action": "editor.property.select_slot.4",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property4.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.4.value", "default": "" }],
+                "action": "editor.property.select_slot.4",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property4.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.4"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property5",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 314,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.5.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property5.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.5.key", "default": "" }],
+                "action": "editor.property.select_slot.5",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property5.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.5.value", "default": "" }],
+                "action": "editor.property.select_slot.5",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property5.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.5"
+              }
+            ]
+          },
+          {
             "id": "ui.editor_shell.left_inspector.row.vertex",
             "type": "panel",
             "layout": "row",
