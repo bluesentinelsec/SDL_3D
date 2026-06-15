@@ -19978,17 +19978,18 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0").found);
     RectSummary map_tab_initial = visible_frame("ui.editor_shell.left_inspector.map.tab");
     RectSummary entity_tab_initial = visible_frame("ui.editor_shell.left_inspector.entity.tab");
-    RectSummary face_tab_initial = visible_frame("ui.editor_shell.left_inspector.face.tab");
     ASSERT_TRUE(map_tab_initial.found);
     ASSERT_TRUE(entity_tab_initial.found);
-    ASSERT_TRUE(face_tab_initial.found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.face.tab").found);
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
                  "Object");
     click_editor(entity_tab_initial.x + entity_tab_initial.w * 0.5f,
                  entity_tab_initial.y + entity_tab_initial.h * 0.5f);
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
                  "Data");
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.connection.source.button").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.connection.connect.button").found);
     RectSummary property_add = visible_frame("ui.editor_shell.left_inspector.property.new.button");
     RectSummary property_apply = visible_frame("ui.editor_shell.left_inspector.property.apply.button");
     RectSummary property_key = visible_frame("ui.editor_shell.left_inspector.property.edit.key");
@@ -20016,22 +20017,50 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_STREQ(
         slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),
         "value");
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    slayer3d_properties_set_bool(mutable_scene_state, "editor.property.slot.0.available", true);
+    slayer3d_properties_set_string(mutable_scene_state, "editor.property.slot.0.key", "door_id");
+    slayer3d_properties_set_string(mutable_scene_state, "editor.property.slot.0.value", "blue");
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property1").found);
+    click_editor(property_key.x + property_key.w * 0.5f, property_key.y + property_key.h * 0.5f);
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),
+        "key");
+    SDL_Event key_event{};
+    key_event.type = SDL_EVENT_KEY_DOWN;
+    key_event.key.scancode = SDL_SCANCODE_B;
+    slayer3d_input_process_event(input, &key_event);
+    SDL_Event text_event{};
+    text_event.type = SDL_EVENT_TEXT_INPUT;
+    text_event.text.text = "b";
+    slayer3d_input_process_event(input, &text_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.key", ""), "b");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.tool.mode", ""),
+                 "select");
+    key_event.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click_editor(inspector.x + inspector.w - 8.0f, inspector.y + 8.0f);
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", "set"),
+        "");
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
-    RectSummary face_tab_after_data = visible_frame("ui.editor_shell.left_inspector.face.tab");
-    ASSERT_TRUE(face_tab_after_data.found);
-    click_editor(face_tab_after_data.x + face_tab_after_data.w * 0.5f,
-                 face_tab_after_data.y + face_tab_after_data.h * 0.5f);
-    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
-                 "Face");
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview").found);
-    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
-    RectSummary object_tab_after_face = visible_frame("ui.editor_shell.left_inspector.map.tab");
-    ASSERT_TRUE(object_tab_after_face.found);
-    click_editor(object_tab_after_face.x + object_tab_after_face.w * 0.5f,
-                 object_tab_after_face.y + object_tab_after_face.h * 0.5f);
+    RectSummary object_tab_after_data = visible_frame("ui.editor_shell.left_inspector.map.tab");
+    ASSERT_TRUE(object_tab_after_data.found);
+    click_editor(object_tab_after_data.x + object_tab_after_data.w * 0.5f,
+                 object_tab_after_data.y + object_tab_after_data.h * 0.5f);
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
                  "Object");
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview_dims").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview_grid_axis").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");
     HitSummary track_hit = retained_ui_hit(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
@@ -20047,13 +20076,10 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.1").found);
     RectSummary map_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.map.tab");
     RectSummary entity_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.entity.tab");
-    RectSummary face_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.face.tab");
     ASSERT_TRUE(map_tab_scrolled.found);
     ASSERT_TRUE(entity_tab_scrolled.found);
-    ASSERT_TRUE(face_tab_scrolled.found);
     EXPECT_LT(map_tab_scrolled.y, map_tab_initial.y);
     EXPECT_LT(entity_tab_scrolled.y, entity_tab_initial.y);
-    EXPECT_LT(face_tab_scrolled.y, face_tab_initial.y);
 
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
@@ -33264,11 +33290,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         slayer3d_game_data_ui_rect inspector_panel_rect{};
         slayer3d_game_data_ui_rect inspector_header_rect{};
         slayer3d_game_data_ui_rect inspector_row_rect{};
-        bool inspector_tabs[3]{};
+        bool inspector_tabs[2]{};
         bool inspector_rows[4]{};
         bool inspector_collapsed = false;
         bool inspector_title = false;
-        bool inspector_tab_labels[3]{};
+        bool inspector_tab_labels[2]{};
         bool inspector_collapsed_label = false;
         bool console_panel = false;
         bool console_tabs[2]{};
@@ -33326,8 +33352,6 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 capture->inspector_tabs[0] = true;
             else if (name == "ui.editor_shell.left_inspector.entity.tab")
                 capture->inspector_tabs[1] = true;
-            else if (name == "ui.editor_shell.left_inspector.face.tab")
-                capture->inspector_tabs[2] = true;
             else if (name == "ui.editor_shell.left_inspector.row.name")
             {
                 capture->inspector_rows[0] = true;
@@ -33425,8 +33449,6 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->inspector_tab_labels[0] = true;
         else if (name == "ui.editor_shell.left_inspector.tab.entity.label")
             capture->inspector_tab_labels[1] = true;
-        else if (name == "ui.editor_shell.left_inspector.tab.face.label")
-            capture->inspector_tab_labels[2] = true;
         std::string prefix = "ui.editor_shell.toolbar.";
         const std::string suffix = ".label";
         if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
@@ -33508,7 +33530,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_GE(toolbar_capture.inspector_header_rect.y, toolbar_capture.inspector_panel_rect.y);
     EXPECT_LE(toolbar_capture.inspector_header_rect.x + toolbar_capture.inspector_header_rect.w,
               toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 2; ++i)
     {
         EXPECT_TRUE(toolbar_capture.inspector_tabs[i]) << i;
         EXPECT_TRUE(toolbar_capture.inspector_tab_labels[i]) << i;

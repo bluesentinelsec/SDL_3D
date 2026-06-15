@@ -82,6 +82,20 @@ static bool editor_hit_is_inspector_scrollbar(const slayer3d_ui_layout_hit_regio
            editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.scroll.thumb.");
 }
 
+static bool editor_hit_is_property_control(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.property.") ||
+           editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.row.property");
+}
+
+static bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime)
+{
+    const char *focus = runtime != NULL && runtime->scene_state != NULL
+                            ? slayer3d_properties_get_string(runtime->scene_state, "editor.property.edit.focus", "")
+                            : "";
+    return SDL_strcmp(focus, "key") == 0 || SDL_strcmp(focus, "value") == 0;
+}
+
 static const slayer3d_ui_layout_hit_region *editor_find_layout_hit_by_id(const slayer3d_ui_layout_model *layout,
                                                                          const char *id)
 {
@@ -184,7 +198,7 @@ static bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime
               changed;
     if (changed)
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "editing property");
-    return changed;
+    return true;
 }
 
 static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runtime,
@@ -461,15 +475,26 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool clicked = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
     const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
     const bool released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
-    if (editor_update_property_text_edit(runtime))
-    {
-        if (out_consumed != NULL)
-            *out_consumed = true;
-        return true;
-    }
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
+    const bool property_focus_active = editor_property_edit_has_focus(runtime);
+    if (property_focus_active && clicked && !editor_hit_is_property_control(hit))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    if (property_focus_active && !clicked)
+    {
+        (void)editor_update_property_text_edit(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
     if (slayer3d_properties_get_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false))
     {
         if (released || !left_down)

@@ -293,7 +293,6 @@
     "signal.editor.inspector.toggle",
     "signal.editor.inspector.tab.object",
     "signal.editor.inspector.tab.data",
-    "signal.editor.inspector.tab.face",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
     "signal.editor.property.new",
@@ -1316,14 +1315,6 @@
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Data" },
           { "type": "scene_state.set", "key": "editor.inspector.scroll", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector data tab" }
-        ]
-      },
-      {
-        "signal": "signal.editor.inspector.tab.face",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Face" },
-          { "type": "scene_state.set", "key": "editor.inspector.scroll", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector face tab" }
         ]
       },
       {
