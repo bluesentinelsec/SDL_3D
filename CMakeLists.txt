@@ -321,6 +321,7 @@ target_sources(
         src/input.c
         src/lighting.c
         src/logic.c
+        src/map.c
         src/math.c
         src/font.c
         src/fps_mover.c
@@ -515,6 +516,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
         slayer3d_editor
         PRIVATE
             SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media"
+            SLAYER3D_EDITOR_DEFAULT_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo"
             SLAYER3D_RUNNER_NO_MAIN
     )
     slayer3d_enable_warnings(slayer3d_editor)
@@ -559,6 +561,37 @@ else()
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
+
+    if(TARGET slayer3d_pack AND TARGET slayer3d_bundle AND TARGET slayer3d_runner AND TARGET slayer3d_editor)
+        install(
+            TARGETS slayer3d_pack slayer3d_bundle slayer3d_runner slayer3d_editor
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+
+        if(TARGET slayer3d_slayermap_example)
+            install(
+                TARGETS slayer3d_slayermap_example
+                RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+                BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
+            )
+        endif()
+
+        install(
+            DIRECTORY demos/editor_shell_dojo/
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/demos/editor_shell_dojo"
+        )
+
+        install(
+            DIRECTORY demos/slayermap_example/
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/demos/slayermap_example"
+        )
+
+        install(
+            DIRECTORY media/
+            DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/media"
+        )
+    endif()
 
     install(
         DIRECTORY include/

@@ -87,6 +87,8 @@ extern "C"
         slayer3d_ui_layout_rect rect;
         float padding;
         float gap;
+        /** @brief Clip descendant rendering and hit testing to this node's padded content rect. */
+        bool clip_children;
         int layer;
         bool interactive;
         const char *text;
@@ -118,6 +120,8 @@ extern "C"
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_axis axis;
         slayer3d_ui_layout_rect rect;
+        bool has_clip_rect;
+        slayer3d_ui_layout_rect clip_rect;
         int layer;
         bool interactive;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
@@ -143,6 +147,8 @@ extern "C"
         char id[SLAYER3D_UI_LAYOUT_ID_MAX];
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_rect rect;
+        bool has_clip_rect;
+        slayer3d_ui_layout_rect clip_rect;
         int layer;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
@@ -169,6 +175,8 @@ extern "C"
         char id[SLAYER3D_UI_LAYOUT_ID_MAX];
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_rect rect;
+        bool has_clip_rect;
+        slayer3d_ui_layout_rect clip_rect;
         int layer;
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         bool hovered;

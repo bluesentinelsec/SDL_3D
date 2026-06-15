@@ -496,6 +496,15 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
         return;
 
     const char *mode = scene_state_string(runtime, json_string(component, "mode_key", "editor.view.mode"), NULL);
+    yyjson_val *controls_if = obj_get(component, "controls_if");
+    if (controls_if != NULL && !eval_data_condition(runtime, controls_if, NULL))
+    {
+        runtime->editor_camera_orbit.active = false;
+        runtime->editor_camera_move.active = false;
+        runtime->editor_camera_move.hold_seconds = 0.0f;
+        runtime->editor_camera_move.direction = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        return;
+    }
     if (editor_camera_mode_is_orthographic(mode, component))
     {
         yyjson_val *orthographic_controls_if = obj_get(component, "orthographic_controls_if");

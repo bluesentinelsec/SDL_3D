@@ -8,6 +8,8 @@
  * types have been declared, so it intentionally does not include that header.
  */
 
+#define SLAYER3D_EDITOR_PROPERTY_SLOT_CAP 64
+
 yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
 
 typedef struct editor_trace_viewport_config
@@ -147,6 +149,8 @@ bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec
                          slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
+void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_editor_selection *selection, int slot_count);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,
@@ -167,6 +171,8 @@ bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runt
 bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset,
                                                           bool use_last_offset);
 bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                      const slayer3d_properties *payload);
+bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                       const slayer3d_properties *payload);
 int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);

@@ -330,6 +330,12 @@ extern "C"
         slayer3d_vec3 scale;
         /** @brief Editor display color, including alpha/transparency. */
         slayer3d_color color;
+        /** @brief Source prefab id when this actor was placed from a prefab. */
+        const char *prefab;
+        /** @brief True while this actor receives shared updates from its source prefab. */
+        bool prefab_linked;
+        /** @brief Property keys that this actor overrides from its prefab. Pointer is runtime-owned. */
+        const slayer3d_properties *prefab_overrides;
         /** @brief Arbitrary designer-authored properties. Pointer is runtime-owned. */
         const slayer3d_properties *properties;
     } slayer3d_game_data_editor_actor;
@@ -380,6 +386,12 @@ extern "C"
         slayer3d_color color;
         /** @brief Whether @p color is explicit. */
         bool has_color;
+        /** @brief Optional source prefab id for linked instances. */
+        const char *prefab;
+        /** @brief Whether this actor should receive shared updates from its source prefab. */
+        bool prefab_linked;
+        /** @brief Property keys explicitly overridden by this instance. */
+        const slayer3d_properties *prefab_overrides;
         /** @brief Optional arbitrary designer-authored properties to copy into the actor. */
         const slayer3d_properties *properties;
     } slayer3d_game_data_place_editor_actor_desc;
@@ -401,6 +413,210 @@ extern "C"
     bool slayer3d_game_data_place_editor_actor(slayer3d_game_data_runtime *runtime,
                                                const slayer3d_game_data_place_editor_actor_desc *desc, char *out_name,
                                                size_t out_name_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief First-class prefab definition for reusable editor placements. */
+    typedef struct slayer3d_game_data_editor_prefab
+    {
+        /** @brief Stable prefab id. Pointer is runtime-owned. */
+        const char *id;
+        /** @brief Human-facing browser label. Pointer is runtime-owned. */
+        const char *label;
+        /** @brief Browser category/group. Pointer is runtime-owned. */
+        const char *category;
+        /** @brief Prefab kind, such as actor, brush, or mixed. Pointer is runtime-owned. */
+        const char *kind;
+        /** @brief Actor archetype default for actor prefabs. */
+        const char *archetype;
+        /** @brief Editor mesh primitive default for actor prefabs. */
+        const char *mesh;
+        /** @brief Optional model asset id default for actor prefabs. */
+        const char *model;
+        /** @brief Actor group default for actor prefabs. */
+        const char *group;
+        /** @brief Default placement position offset. */
+        slayer3d_vec3 position;
+        /** @brief Default placement rotation. */
+        slayer3d_vec3 rotation;
+        /** @brief Default placement scale. */
+        slayer3d_vec3 scale;
+        /** @brief Default editor display color. */
+        slayer3d_color color;
+        /** @brief Shared prefab properties copied to linked instances. Pointer is runtime-owned. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_editor_prefab;
+
+    /** @brief Editor save state for prefab definitions. */
+    typedef struct slayer3d_game_data_editor_prefab_state
+    {
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Number of prefab definitions currently loaded in the runtime. */
+        int count;
+    } slayer3d_game_data_editor_prefab_state;
+
+    /** @brief Descriptor for creating or updating one editor prefab definition. */
+    typedef struct slayer3d_game_data_place_editor_prefab_desc
+    {
+        /** @brief Stable prefab id. Required. */
+        const char *id;
+        /** @brief Human-facing browser label. */
+        const char *label;
+        /** @brief Browser category/group. */
+        const char *category;
+        /** @brief Prefab kind, defaults to actor. */
+        const char *kind;
+        /** @brief Actor archetype default for actor prefabs. */
+        const char *archetype;
+        /** @brief Editor mesh primitive default for actor prefabs. */
+        const char *mesh;
+        /** @brief Optional model asset id default for actor prefabs. */
+        const char *model;
+        /** @brief Actor group default for actor prefabs. */
+        const char *group;
+        /** @brief Default placement position offset. */
+        slayer3d_vec3 position;
+        /** @brief Whether @p position is explicit. */
+        bool has_position;
+        /** @brief Default placement rotation. */
+        slayer3d_vec3 rotation;
+        /** @brief Whether @p rotation is explicit. */
+        bool has_rotation;
+        /** @brief Default placement scale. */
+        slayer3d_vec3 scale;
+        /** @brief Whether @p scale is explicit. */
+        bool has_scale;
+        /** @brief Default editor display color. */
+        slayer3d_color color;
+        /** @brief Whether @p color is explicit. */
+        bool has_color;
+        /** @brief Shared prefab properties copied to linked instances. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_place_editor_prefab_desc;
+
+    /** @brief Descriptor for placing a linked prefab instance. */
+    typedef struct slayer3d_game_data_instantiate_editor_prefab_desc
+    {
+        /** @brief Source prefab id. Required. */
+        const char *prefab;
+        /** @brief Optional actor instance name. */
+        const char *name;
+        /** @brief Prefix used to generate an instance name when @p name is omitted. */
+        const char *name_prefix;
+        /** @brief Optional scene reference. Defaults to the active scene. */
+        const char *scene;
+        /** @brief Optional placement position override. */
+        slayer3d_vec3 position;
+        /** @brief Whether @p position is explicit. */
+        bool has_position;
+        /** @brief Optional placement rotation override. */
+        slayer3d_vec3 rotation;
+        /** @brief Whether @p rotation is explicit. */
+        bool has_rotation;
+        /** @brief Optional placement scale override. */
+        slayer3d_vec3 scale;
+        /** @brief Whether @p scale is explicit. */
+        bool has_scale;
+        /** @brief Optional property values to apply as instance overrides. */
+        const slayer3d_properties *properties;
+        /** @brief Property keys explicitly overridden by this instance. */
+        const slayer3d_properties *prefab_overrides;
+    } slayer3d_game_data_instantiate_editor_prefab_desc;
+
+    /** @brief Query one prefab definition by id. */
+    bool slayer3d_game_data_get_editor_prefab(const slayer3d_game_data_runtime *runtime, const char *id,
+                                              slayer3d_game_data_editor_prefab *out_prefab);
+
+    /** @brief Query editor save state for runtime prefab definitions. */
+    bool slayer3d_game_data_get_editor_prefab_state(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_editor_prefab_state *out_state);
+
+    /** @brief Create or update one runtime prefab definition and propagate shared updates to linked instances. */
+    bool slayer3d_game_data_place_editor_prefab(slayer3d_game_data_runtime *runtime,
+                                                const slayer3d_game_data_place_editor_prefab_desc *desc,
+                                                char *error_buffer, int error_buffer_size);
+
+    /** @brief Instantiate one actor prefab as a linked editor actor. */
+    bool slayer3d_game_data_instantiate_editor_prefab(slayer3d_game_data_runtime *runtime,
+                                                      const slayer3d_game_data_instantiate_editor_prefab_desc *desc,
+                                                      char *out_name, size_t out_name_size, char *error_buffer,
+                                                      int error_buffer_size);
+
+    /** @brief Detach an actor instance from future shared prefab updates. */
+    bool slayer3d_game_data_unlink_editor_actor_prefab(slayer3d_game_data_runtime *runtime, const char *actor_name,
+                                                       char *error_buffer, int error_buffer_size);
+
+    /** @brief One endpoint in an editor-authored generic connection. */
+    typedef struct slayer3d_game_data_editor_connection_endpoint
+    {
+        /** @brief Referenced object/entity id, or external id when @p external is true. */
+        const char *entity;
+        /** @brief Source-side event name, used by connection sources. */
+        const char *event;
+        /** @brief Target-side action name, used by connection targets. */
+        const char *action;
+        /** @brief True when the endpoint is intentionally outside this map. */
+        bool external;
+    } slayer3d_game_data_editor_connection_endpoint;
+
+    /** @brief Runtime-authored generic connection between editor objects. */
+    typedef struct slayer3d_game_data_editor_connection
+    {
+        /** @brief Stable connection id. Pointer is runtime-owned. */
+        const char *id;
+        /** @brief Source endpoint. */
+        slayer3d_game_data_editor_connection_endpoint from;
+        /** @brief Target endpoint. */
+        slayer3d_game_data_editor_connection_endpoint to;
+        /** @brief Arbitrary designer-authored connection properties. Pointer is runtime-owned. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_editor_connection;
+
+    /** @brief Editor save state for generic connections. */
+    typedef struct slayer3d_game_data_editor_connection_state
+    {
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Number of editor connections currently loaded in the runtime. */
+        int count;
+    } slayer3d_game_data_editor_connection_state;
+
+    /** @brief Descriptor for creating or updating one generic editor connection. */
+    typedef struct slayer3d_game_data_place_editor_connection_desc
+    {
+        /** @brief Connection id. Optional when @p id_prefix is provided. */
+        const char *id;
+        /** @brief Prefix used to generate a unique connection id when @p id is omitted. */
+        const char *id_prefix;
+        /** @brief Source endpoint. */
+        slayer3d_game_data_editor_connection_endpoint from;
+        /** @brief Target endpoint. */
+        slayer3d_game_data_editor_connection_endpoint to;
+        /** @brief Optional arbitrary designer-authored connection properties to copy. */
+        const slayer3d_properties *properties;
+    } slayer3d_game_data_place_editor_connection_desc;
+
+    /**
+     * @brief Query one editor connection by id.
+     *
+     * Returned pointers are runtime-owned and remain valid until editor
+     * connections are mutated or the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_editor_connection(const slayer3d_game_data_runtime *runtime, const char *id,
+                                                  slayer3d_game_data_editor_connection *out_connection);
+
+    /** @brief Query editor save state for runtime generic connections. */
+    bool slayer3d_game_data_get_editor_connection_state(const slayer3d_game_data_runtime *runtime,
+                                                        slayer3d_game_data_editor_connection_state *out_state);
+
+    /** @brief Create or update one runtime generic editor connection. */
+    bool slayer3d_game_data_place_editor_connection(slayer3d_game_data_runtime *runtime,
+                                                    const slayer3d_game_data_place_editor_connection_desc *desc,
+                                                    char *out_id, size_t out_id_size, char *error_buffer,
+                                                    int error_buffer_size);
 
     /** @brief Runtime-authored player start marker for editor and test-run workflows. */
     typedef struct slayer3d_game_data_editor_player_start
@@ -699,6 +915,32 @@ extern "C"
                                                               int error_buffer_size);
 
     /**
+     * @brief Export one editable level as a standalone Slayer3D map JSON document.
+     *
+     * The exported document uses the public `slayer3d.map` format and embeds
+     * the lossless editable level fragment in `editor.editable_level_fragment`.
+     * Top-level materials, brushes, and player-start actors are also emitted so
+     * generic tools can inspect the authored level without understanding the
+     * editor-only fragment contract. The returned string is allocated with
+     * SDL_malloc and must be released with SDL_free().
+     */
+    bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_runtime *runtime,
+                                                           const char *world_name, char **out_json, size_t *out_size,
+                                                           char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Atomically save one editable level as a standalone Slayer3D map file.
+     *
+     * This saves the same JSON produced by
+     * @ref slayer3d_game_data_export_editable_level_map_json. On success, both
+     * the selected brush world and the player-start collection are marked saved
+     * at their current revisions and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const char *path, size_t *out_size, char *error_buffer,
+                                                         int error_buffer_size);
+
+    /**
      * @brief Load an editable level fragment JSON buffer into an existing editor runtime.
      *
      * This performs the same import as
@@ -729,6 +971,28 @@ extern "C"
     bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
                                                               const char *world_name, const char *path,
                                                               char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a Slayer3D map JSON buffer into an existing editor runtime.
+     *
+     * The map is validated through the public map APIs, then
+     * `editor.editable_level_fragment` is imported into @p world_name. This
+     * preserves the current editor source model while the standalone map format
+     * evolves toward direct runtime construction.
+     */
+    bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const void *json, size_t json_size, const char *source_path,
+                                                         char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load a Slayer3D map file into an existing editor runtime.
+     *
+     * The file must be a valid `slayer3d.map` JSON document containing
+     * `editor.editable_level_fragment`. On success both runtime collections are
+     * marked clean and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_load_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                         const char *path, char *error_buffer, int error_buffer_size);
 
     /** @brief Descriptor for creating an editor test-run handoff manifest. */
     typedef struct slayer3d_game_data_editor_test_run_desc

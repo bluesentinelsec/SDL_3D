@@ -70,6 +70,15 @@ extern "C"
         bool pulse_alpha;
         /** @brief Text color. */
         slayer3d_color color;
+        /** @brief True when this text should be clipped to clip_x/clip_y/clip_w/clip_h. */
+        bool has_clip_rect;
+        /** @brief Optional clipping rectangle in the descriptor coordinate space. */
+        float clip_x;
+        float clip_y;
+        float clip_w;
+        float clip_h;
+        /** @brief Whether the clipping rectangle is normalized to the current render size. */
+        bool clip_normalized;
     } slayer3d_game_data_ui_text;
 
     /** @brief Authored UI image descriptor. */
@@ -105,6 +114,15 @@ extern "C"
         const char *effect;
         /** @brief Effect progression speed in effect-seconds per second. */
         float effect_speed;
+        /** @brief True when this image should be clipped to clip_x/clip_y/clip_w/clip_h. */
+        bool has_clip_rect;
+        /** @brief Optional clipping rectangle in the descriptor coordinate space. */
+        float clip_x;
+        float clip_y;
+        float clip_w;
+        float clip_h;
+        /** @brief Whether the clipping rectangle is normalized to the current render size. */
+        bool clip_normalized;
     } slayer3d_game_data_ui_image;
 
     /** @brief Authored UI rectangle descriptor. */
@@ -150,6 +168,15 @@ extern "C"
         float pulse_min;
         /** @brief Maximum pulse alpha multiplier. */
         float pulse_max;
+        /** @brief True when this rectangle should be clipped to clip_x/clip_y/clip_w/clip_h. */
+        bool has_clip_rect;
+        /** @brief Optional clipping rectangle in the descriptor coordinate space. */
+        float clip_x;
+        float clip_y;
+        float clip_w;
+        float clip_h;
+        /** @brief Whether the clipping rectangle is normalized to the current render size. */
+        bool clip_normalized;
     } slayer3d_game_data_ui_rect;
 
     /** @brief Bit flags indicating which runtime UI state fields override authored descriptor values. */

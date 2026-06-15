@@ -349,6 +349,86 @@ bool slayer3d_game_data_load_editor_level_action(slayer3d_game_data_runtime *run
     return true;
 }
 
+bool slayer3d_game_data_export_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    const bool ok =
+        slayer3d_game_data_export_editable_level_map_json(runtime, world_name, &json, &size, error, (int)sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "map exported")
+                                : (error[0] != '\0' ? error : "map export failed"));
+    editor_set_int_output(scene_state, outputs, "size_key",
+                          ok ? (int)(size > (size_t)SDL_MAX_SINT32 ? (size_t)SDL_MAX_SINT32 : size) : 0);
+    editor_set_string_output(scene_state, outputs, "json_key", ok && json != NULL ? json : "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    SDL_free(json);
+    return true;
+}
+
+bool slayer3d_game_data_save_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *path = editor_action_path(runtime, action, NULL);
+    char error[256];
+    error[0] = '\0';
+    size_t size = 0u;
+    const bool ok =
+        slayer3d_game_data_save_editable_level_map_file(runtime, world_name, path, &size, error, (int)sizeof(error));
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "map saved")
+                                : (error[0] != '\0' ? error : "map save failed"));
+    editor_set_int_output(scene_state, outputs, "size_key",
+                          ok ? (int)(size > (size_t)SDL_MAX_SINT32 ? (size_t)SDL_MAX_SINT32 : size) : 0);
+    editor_set_string_output(scene_state, outputs, "path_key", ok && path != NULL ? path : "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    return true;
+}
+
+bool slayer3d_game_data_load_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *path = editor_action_path(runtime, action, NULL);
+    const bool optional = json_bool(action, "optional", false);
+    char error[256];
+    error[0] = '\0';
+
+    bool ok = true;
+    bool skipped = false;
+    if (path == NULL || path[0] == '\0')
+    {
+        ok = optional;
+        skipped = optional;
+        if (!ok)
+            SDL_snprintf(error, sizeof(error), "map load path is required");
+    }
+    else
+    {
+        ok = slayer3d_game_data_load_editable_level_map_file(runtime, world_name, path, error, (int)sizeof(error));
+    }
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? (skipped ? json_string(action, "skipped_message", "no map input")
+                                           : json_string(action, "message", "map loaded"))
+                                : (error[0] != '\0' ? error : "map load failed"));
+    editor_set_string_output(scene_state, outputs, "path_key", ok && path != NULL ? path : "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    return true;
+}
+
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

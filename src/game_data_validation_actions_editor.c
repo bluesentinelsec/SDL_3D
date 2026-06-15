@@ -30,9 +30,10 @@ static bool validation_float_finite(float value)
 
 static bool editor_command_name_valid(const char *value)
 {
-    return value != NULL && (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "rotate") == 0 ||
-                             SDL_strcmp(value, "paint") == 0 || SDL_strcmp(value, "resize") == 0 ||
-                             SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
+    return value != NULL &&
+           (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "rotate") == 0 ||
+            SDL_strcmp(value, "paint") == 0 || SDL_strcmp(value, "color") == 0 || SDL_strcmp(value, "resize") == 0 ||
+            SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
 }
 
 static bool editor_command_target_name_valid(const char *value)
@@ -519,6 +520,306 @@ bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *act
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    const char *target = json_string(action, "target");
+    if (target == NULL)
+        target = "selection";
+    if (SDL_strcmp(target, "selection") != 0 && SDL_strcmp(target, "face") != 0)
+        return validation_error(ctx, json_path, "%s target must be selection or face", type);
+
+    yyjson_val *role = obj_get(action, "role");
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *color_key = obj_get(action, "color_key");
+    yyjson_val *tint = obj_get(action, "tint");
+    yyjson_val *tint_key = obj_get(action, "tint_key");
+    yyjson_val *tint_enabled = obj_get(action, "tint_enabled");
+    if (role != NULL && (!yyjson_is_str(role) || yyjson_get_str(role)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s role must be a non-empty string", type);
+    if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 255.0)))
+        return validation_error(ctx, json_path, "%s color must be a numeric RGB or RGBA array in 0..255", type);
+    if (color_key != NULL && (!yyjson_is_str(color_key) || yyjson_get_str(color_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s color_key must be a non-empty string", type);
+    if (tint != NULL && (!is_exact_vec3_or_vec4_array(tint) || !numeric_array_values_in_range(tint, 0.0, 255.0)))
+        return validation_error(ctx, json_path, "%s tint must be a numeric RGB or RGBA array in 0..255", type);
+    if (tint_key != NULL && (!yyjson_is_str(tint_key) || yyjson_get_str(tint_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s tint_key must be a non-empty string", type);
+    if (tint_enabled != NULL && !yyjson_is_bool(tint_enabled))
+        return validation_error(ctx, json_path, "%s tint_enabled must be a boolean", type);
+    if (role == NULL && color == NULL && color_key == NULL && tint == NULL && tint_key == NULL && tint_enabled == NULL)
+        return validation_error(ctx, json_path, "%s requires color, color_key, role, tint, tint_key, or tint_enabled",
+                                type);
+
+    const char *output_keys[] = {
+        "valid_key",      "event_key",       "message_key", "transaction_id_key", "undo_count_key",    "redo_count_key",
+        "command_key",    "target_key",      "world_key",   "element_key",        "face_index_key",    "bounds_min_key",
+        "bounds_max_key", "source_path_key", "dirty_key",   "revision_key",       "saved_revision_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)) &&
+           validate_optional_action_branches(ctx, action, json_path, names, false);
+}
+
+bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {
+        "directory_key", "relative_directory_key", "directory", "relative_directory", "collection",
+        "world",         "material_prefix"};
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_strings[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, optional_strings[i]);
+    }
+    yyjson_val *slot_count = obj_get(action, "slot_count");
+    if (slot_count != NULL && (!yyjson_is_int(slot_count) || yyjson_get_int(slot_count) < 0))
+        return validation_error(ctx, json_path, "%s slot_count must be non-negative", type);
+    const char *output_keys[] = {"count_key", "registered_count_key", "status_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *index = obj_get(action, "index");
+    if (index != NULL && (!yyjson_is_int(index) || yyjson_get_int(index) < 0))
+        return validation_error(ctx, json_path, "%s index must be non-negative", type);
+    yyjson_val *index_key = obj_get(action, "index_key");
+    if (index_key != NULL && (!yyjson_is_str(index_key) || yyjson_get_str(index_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s index_key must be a non-empty string", type);
+    yyjson_val *collection = obj_get(action, "collection");
+    if (collection != NULL && (!yyjson_is_str(collection) || yyjson_get_str(collection)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s collection must be a non-empty string", type);
+    return true;
+}
+
+bool validate_editor_actor_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {
+        "directory_key", "relative_directory_key", "directory", "relative_directory", "collection", "model_prefix"};
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_strings[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, optional_strings[i]);
+    }
+    yyjson_val *slot_count = obj_get(action, "slot_count");
+    if (slot_count != NULL && (!yyjson_is_int(slot_count) || yyjson_get_int(slot_count) < 0))
+        return validation_error(ctx, json_path, "%s slot_count must be non-negative", type);
+    const char *output_keys[] = {"count_key", "status_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_actor_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    return validate_editor_texture_select_index_action(ctx, action, json_path, names, type);
+}
+
+bool validate_editor_actor_place_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    yyjson_val *index_key = obj_get(action, "index_key");
+    if (index_key != NULL && (!yyjson_is_str(index_key) || yyjson_get_str(index_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s index_key must be a non-empty string", type);
+    yyjson_val *collection = obj_get(action, "collection");
+    if (collection != NULL && (!yyjson_is_str(collection) || yyjson_get_str(collection)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s collection must be a non-empty string", type);
+    const char *position_from = json_string(action, "position_from");
+    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+        SDL_strcmp(position_from, "placement_preview") != 0)
+    {
+        return validation_error(ctx, json_path, "%s position_from must be selection_point or placement_preview", type);
+    }
+    const char *scene = json_string(action, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    const char *output_keys[] = {"valid_key", "message_key", "actor_key", "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_connection_mark_source_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"target", "target_from_state", "event", "event_from_state",
+                                                   "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_strings[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_strings[i]), field_path, type))
+            return false;
+    }
+    if (obj_get(action, "target") != NULL && obj_get(action, "target_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires target or target_from_state, not both", type);
+    if (obj_get(action, "event") != NULL && obj_get(action, "event_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires event or event_from_state, not both", type);
+    const char *output_keys[] = {"valid_key",  "message_key", "connection_key", "source_key",
+                                 "target_key", "dirty_key",   "revision_key",   "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_connection_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"id",          "id_prefix",
+                                                   "from_entity", "from_entity_from_state",
+                                                   "from_event",  "from_event_from_state",
+                                                   "to_entity",   "to_entity_from_state",
+                                                   "to_action",   "to_action_from_state",
+                                                   "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_strings[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_strings[i]), field_path, type))
+            return false;
+    }
+    if (obj_get(action, "from_entity") != NULL && obj_get(action, "from_entity_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires from_entity or from_entity_from_state, not both", type);
+    if (obj_get(action, "from_event") != NULL && obj_get(action, "from_event_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires from_event or from_event_from_state, not both", type);
+    if (obj_get(action, "to_entity") != NULL && obj_get(action, "to_entity_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires to_entity or to_entity_from_state, not both", type);
+    if (obj_get(action, "to_action") != NULL && obj_get(action, "to_action_from_state") != NULL)
+        return validation_error(ctx, json_path, "%s requires to_action or to_action_from_state, not both", type);
+    yyjson_val *to_from_selection = obj_get(action, "to_from_selection");
+    if (to_from_selection != NULL && !yyjson_is_bool(to_from_selection))
+        return validation_error(ctx, json_path, "%s to_from_selection must be bool", type);
+    yyjson_val *from_external = obj_get(action, "from_external");
+    yyjson_val *to_external = obj_get(action, "to_external");
+    if (from_external != NULL && !yyjson_is_bool(from_external))
+        return validation_error(ctx, json_path, "%s from_external must be bool", type);
+    if (to_external != NULL && !yyjson_is_bool(to_external))
+        return validation_error(ctx, json_path, "%s to_external must be bool", type);
+    yyjson_val *properties = obj_get(action, "properties");
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    const char *output_keys[] = {"valid_key",  "message_key", "connection_key", "source_key",
+                                 "target_key", "dirty_key",   "revision_key",   "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_property_target(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            const char *type)
+{
+    const char *target_type = json_string(action, "target_type");
+    if (target_type == NULL)
+        target_type = "selection";
+    if (SDL_strcmp(target_type, "selection") != 0 && SDL_strcmp(target_type, "editor_actor") != 0)
+        return validation_error(ctx, json_path, "%s target_type must be selection or editor_actor", type);
+
+    yyjson_val *target = obj_get(action, "target");
+    yyjson_val *target_from_state = obj_get(action, "target_from_state");
+    if (target != NULL && (!yyjson_is_str(target) || yyjson_get_str(target)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s target must be a non-empty string", type);
+    if (target_from_state != NULL &&
+        (!yyjson_is_str(target_from_state) || yyjson_get_str(target_from_state)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "%s target_from_state must be a non-empty string", type);
+    }
+    if (target != NULL && target_from_state != NULL)
+        return validation_error(ctx, json_path, "%s requires target or target_from_state, not both", type);
+    if (SDL_strcmp(target_type, "editor_actor") == 0 && target == NULL && target_from_state == NULL)
+        return validation_error(ctx, json_path, "%s editor_actor target requires target or target_from_state", type);
+    return true;
+}
+
+static bool validate_editor_property_key(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         const char *type)
+{
+    yyjson_val *key = obj_get(action, "key");
+    yyjson_val *key_from_state = obj_get(action, "key_from_state");
+    if (key != NULL && (!yyjson_is_str(key) || yyjson_get_str(key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s key must be a non-empty string", type);
+    if (key_from_state != NULL && (!yyjson_is_str(key_from_state) || yyjson_get_str(key_from_state)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s key_from_state must be a non-empty string", type);
+    if (key != NULL && key_from_state != NULL)
+        return validation_error(ctx, json_path, "%s requires key or key_from_state, not both", type);
+    if (key == NULL && key_from_state == NULL)
+        return validation_error(ctx, json_path, "%s requires key or key_from_state", type);
+    return true;
+}
+
+static bool validate_editor_property_value(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           const char *type)
+{
+    yyjson_val *value = obj_get(action, "value");
+    yyjson_val *value_from_state = obj_get(action, "value_from_state");
+    yyjson_val *value_from_payload = obj_get(action, "value_from_payload");
+    const int value_sources =
+        (value != NULL ? 1 : 0) + (value_from_state != NULL ? 1 : 0) + (value_from_payload != NULL ? 1 : 0);
+    if (value_sources != 1)
+        return validation_error(ctx, json_path, "%s requires exactly one value source", type);
+    if (value_from_state != NULL && (!yyjson_is_str(value_from_state) || yyjson_get_str(value_from_state)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s value_from_state must be a non-empty string", type);
+    if (value_from_payload != NULL &&
+        (!yyjson_is_str(value_from_payload) || yyjson_get_str(value_from_payload)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "%s value_from_payload must be a non-empty string", type);
+    }
+    if (value == NULL)
+        return true;
+    if (yyjson_is_bool(value) || yyjson_is_int(value) || yyjson_is_num(value) || yyjson_is_str(value))
+        return true;
+    if (is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4))
+        return true;
+    return validation_error(ctx, json_path, "%s value must be a scalar, vec3, color, or value source", type);
+}
+
+bool validate_editor_property_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type)
+{
+    (void)names;
+    if (!validate_editor_property_target(ctx, action, json_path, type) ||
+        !validate_editor_property_key(ctx, action, json_path, type) ||
+        !validate_editor_property_value(ctx, action, json_path, type))
+    {
+        return false;
+    }
+    const char *output_keys[] = {"valid_key", "message_key",  "target_key", "key_key",
+                                 "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_property_remove_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)names;
+    if (!validate_editor_property_target(ctx, action, json_path, type) ||
+        !validate_editor_property_key(ctx, action, json_path, type))
+    {
+        return false;
+    }
+    if (obj_get(action, "value") != NULL || obj_get(action, "value_from_state") != NULL ||
+        obj_get(action, "value_from_payload") != NULL)
+    {
+        return validation_error(ctx, json_path, "%s cannot include a value source", type);
+    }
+    const char *output_keys[] = {"valid_key", "message_key",  "target_key", "key_key",
+                                 "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_property_select_slot_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *slot = obj_get(action, "slot");
+    if (!yyjson_is_int(slot) || yyjson_get_int(slot) < 0)
+        return validation_error(ctx, json_path, "%s requires non-negative integer slot", type);
+    const char *focus = json_string(action, "focus");
+    if (focus != NULL && SDL_strcmp(focus, "key") != 0 && SDL_strcmp(focus, "value") != 0)
+        return validation_error(ctx, json_path, "%s focus must be key or value", type);
+    return true;
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {
@@ -723,6 +1024,45 @@ bool validate_editor_level_load_action(validation_context *ctx, yyjson_val *acti
     yyjson_val *optional = obj_get(action, "optional");
     if (optional != NULL && !yyjson_is_bool(optional))
         return validation_error(ctx, json_path, "editor.level.load optional must be a boolean");
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "path_key",
+                                 "brush_world_key",
+                                 "brush_source_path_key",
+                                 "brush_dirty_key",
+                                 "brush_revision_key",
+                                 "brush_saved_revision_key",
+                                 "player_start_source_path_key",
+                                 "player_start_count_key",
+                                 "player_start_dirty_key",
+                                 "player_start_revision_key",
+                                 "player_start_saved_revision_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_map_export_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    return validate_editor_level_export_action(ctx, action, json_path, names, type);
+}
+
+bool validate_editor_map_save_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type)
+{
+    return validate_editor_level_save_action(ctx, action, json_path, names, type);
+}
+
+bool validate_editor_map_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path) ||
+        !validate_editor_level_path_pair(ctx, action, json_path, type))
+    {
+        return false;
+    }
+    yyjson_val *optional = obj_get(action, "optional");
+    if (optional != NULL && !yyjson_is_bool(optional))
+        return validation_error(ctx, json_path, "%s optional must be a boolean", type);
     const char *output_keys[] = {"valid_key",
                                  "message_key",
                                  "path_key",
@@ -1089,5 +1429,85 @@ bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *act
     if (properties != NULL && !yyjson_is_obj(properties))
         return validation_error(ctx, json_path, "%s properties must be an object", type);
     const char *output_keys[] = {"valid_key", "message_key", "actor_key", "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_prefab_common_fields(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 const char *type, bool require_id)
+{
+    const char *id = json_string(action, "id");
+    const char *prefab = json_string(action, "prefab");
+    if (require_id && (id == NULL || id[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires a non-empty id", type);
+    if (!require_id && (prefab == NULL || prefab[0] == '\0') && (id == NULL || id[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires prefab or id", type);
+    static const char *const optional_string_fields[] = {"id",        "prefab",   "name",  "name_prefix",
+                                                         "label",     "category", "kind",  "group",
+                                                         "archetype", "mesh",     "model", "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_string_fields); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_string_fields[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_string_fields[i]), field_path,
+                                                      "editor prefab field"))
+            return false;
+    }
+    yyjson_val *position = obj_get(action, "position");
+    yyjson_val *rotation = obj_get(action, "rotation");
+    yyjson_val *scale = obj_get(action, "scale");
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *properties = obj_get(action, "properties");
+    yyjson_val *overrides = obj_get(action, "prefab_overrides");
+    if (position != NULL && !is_exact_vec_array(position, 3))
+        return validation_error(ctx, json_path, "%s position must be a vec3", type);
+    if (rotation != NULL && !is_exact_vec_array(rotation, 3))
+        return validation_error(ctx, json_path, "%s rotation must be a vec3", type);
+    if (scale != NULL &&
+        (!is_exact_vec_array(scale, 3) || yyjson_get_num(yyjson_arr_get(scale, 0)) <= 0.0 ||
+         yyjson_get_num(yyjson_arr_get(scale, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(scale, 2)) <= 0.0))
+        return validation_error(ctx, json_path, "%s scale must be a positive vec3", type);
+    if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+        return validation_error(ctx, json_path, "%s color must be a color array", type);
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    if (overrides != NULL && !yyjson_is_obj(overrides))
+        return validation_error(ctx, json_path, "%s prefab_overrides must be an object", type);
+    const char *output_keys[] = {"valid_key", "message_key",  "prefab_key", "actor_key",
+                                 "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+bool validate_editor_prefab_define_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    (void)names;
+    return validate_editor_prefab_common_fields(ctx, action, json_path, type, true);
+}
+
+bool validate_editor_prefab_instantiate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    const char *scene = json_string(action, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    return validate_editor_prefab_common_fields(ctx, action, json_path, type, false);
+}
+
+bool validate_editor_prefab_unlink_actor_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    (void)names;
+    const char *actor = json_string(action, "actor");
+    const char *target = json_string(action, "target");
+    yyjson_val *actor_from_selection = obj_get(action, "actor_from_selection");
+    if ((actor == NULL || actor[0] == '\0') && (target == NULL || target[0] == '\0') &&
+        (actor_from_selection == NULL || !yyjson_get_bool(actor_from_selection)))
+    {
+        return validation_error(ctx, json_path, "%s requires actor, target, or actor_from_selection", type);
+    }
+    if (actor_from_selection != NULL && !yyjson_is_bool(actor_from_selection))
+        return validation_error(ctx, json_path, "%s actor_from_selection must be a boolean", type);
+    const char *output_keys[] = {"valid_key", "message_key",  "prefab_key", "actor_key",
+                                 "dirty_key", "revision_key", "count_key"};
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }

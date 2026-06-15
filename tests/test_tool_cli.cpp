@@ -152,6 +152,11 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
 {
     const std::filesystem::path project_dir = unique_cli_test_dir("editor_project");
     std::filesystem::create_directories(project_dir / "data");
+    std::filesystem::create_directories(project_dir / "media" / "textures");
+    std::filesystem::create_directories(project_dir / "media" / "models");
+    std::filesystem::create_directories(project_dir / "media" / "sprites");
+    std::filesystem::create_directories(project_dir / "media" / "skyboxes");
+    std::filesystem::create_directories(project_dir / "media" / "effects");
     write_text(project_dir / "slayer3d.project.json",
                R"json({
   "schema": "slayer3d.project.v0",
@@ -171,6 +176,10 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     char error[512]{};
     slayer3d_editor_project loaded_project;
     ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    EXPECT_STREQ(loaded_project.asset_sources.textures.relative_path, "media/textures");
+    EXPECT_STREQ(loaded_project.asset_sources.models.relative_path, "media/models");
+    EXPECT_TRUE(loaded_project.asset_sources.textures.available);
+    EXPECT_TRUE(loaded_project.asset_sources.effects.available);
     slayer3d_editor_launch launch;
     ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
@@ -195,10 +204,69 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     EXPECT_NE(joined.find("editor.save.path=" + output), std::string::npos);
     EXPECT_NE(joined.find("editor.test_run.path=" + (project_dir / "build" / "test-run.json").string()),
               std::string::npos);
+    EXPECT_NE(joined.find("editor.project.dir=" + project_dir.string()), std::string::npos);
+    EXPECT_NE(joined.find("editor.project.data_root=data"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.available=true"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.any_missing=false"), std::string::npos);
     slayer3d_editor_runner_invocation_destroy(&invocation);
     slayer3d_editor_launch_destroy(&launch);
     slayer3d_editor_project_destroy(&loaded_project);
     slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(project_dir);
+}
+
+TEST(ToolCli, EditorProjectAssetSourcesAllowConfiguredMissingDirectories)
+{
+    const std::filesystem::path project_dir = unique_cli_test_dir("editor_project_assets");
+    std::filesystem::create_directories(project_dir / "data");
+    std::filesystem::create_directories(project_dir / "content" / "textures");
+    write_text(project_dir / "slayer3d.project.json",
+               R"json({
+  "schema": "slayer3d.project.v0",
+  "data_root": "data",
+  "editor_entry": "asset://editor.game.json",
+  "asset_sources": {
+    "textures": "content/textures",
+    "models": "content/models",
+    "sprites": "content/sprites",
+    "skyboxes": "content/skyboxes",
+    "effects": "content/effects"
+  }
+})json");
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(project_dir.string().c_str(), &loaded_project, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(loaded_project.asset_sources.textures.relative_path, "content/textures");
+    EXPECT_STREQ(loaded_project.asset_sources.models.relative_path, "content/models");
+    EXPECT_STREQ(loaded_project.asset_sources.textures.path, (project_dir / "content" / "textures").string().c_str());
+    EXPECT_TRUE(loaded_project.asset_sources.textures.available);
+    EXPECT_FALSE(loaded_project.asset_sources.models.available);
+
+    slayer3d_editor_args args{};
+    args.command = SLAYER3D_EDITOR_COMMAND_NEW;
+    const std::string output = (project_dir / "level.slayermap.json").string();
+    args.output_path = output.c_str();
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    slayer3d_editor_runner_invocation invocation;
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+    std::string joined;
+    for (int i = 0; i < invocation.argc; ++i)
+    {
+        if (!joined.empty())
+            joined += "\n";
+        joined += invocation.argv[i];
+    }
+    EXPECT_NE(joined.find("editor.asset_source.textures.available=true"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.models.available=false"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.any_missing=true"), std::string::npos);
+
+    slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
     std::filesystem::remove_all(project_dir);
 }
 
@@ -236,9 +304,48 @@ TEST(ToolCli, EditorOpenDefaultsOutputToInput)
     std::filesystem::remove_all(project_dir);
 }
 
-TEST(ToolCli, EditorRejectsMissingSubcommand)
+TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
 {
     std::vector<char *> argv = argv_from({"slayer3d_editor"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
+    ASSERT_NE(args.project, nullptr);
+    ASSERT_NE(args.output_path, nullptr);
+    EXPECT_EQ(std::filesystem::path(args.project), std::filesystem::path(SLAYER3D_EDITOR_DEFAULT_PROJECT));
+    EXPECT_NE(std::string(args.output_path).find(".slayermap.json"), std::string::npos);
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    EXPECT_STREQ(launch.input_path, "");
+    EXPECT_STREQ(launch.save_path, args.output_path);
+
+    slayer3d_editor_runner_invocation invocation;
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+    std::string joined;
+    for (int i = 0; i < invocation.argc; ++i)
+    {
+        if (!joined.empty())
+            joined += "\n";
+        joined += invocation.argv[i];
+    }
+    EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
+    EXPECT_NE(joined.find("editor.project.dir=" + std::string(launch.project_dir)), std::string::npos);
+
+    slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorRejectsUnknownSubcommand)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "bogus"});
     slayer3d_editor_args args;
     EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
 }

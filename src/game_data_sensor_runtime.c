@@ -1084,6 +1084,11 @@ void update_sensors(slayer3d_game_data_runtime *runtime)
     for (int i = 0; i < runtime->sensor_count; ++i)
     {
         sensor_entry *sensor = &runtime->sensors[i];
+        if (sensor->active_if != NULL && !eval_data_condition(runtime, sensor->active_if, NULL))
+        {
+            sensor->was_active = false;
+            continue;
+        }
         if (sensor->type == GAME_DATA_SENSOR_CONTACT_2D)
         {
             update_contact_sensor(runtime, sensor);

@@ -314,6 +314,7 @@ bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
         else if (SDL_strcmp(entry->edge, "exit") == 0)
             signal_name = json_string(sensor, "on_exit", signal_name);
         entry->signal_id = slayer3d_game_data_find_signal(runtime, signal_name);
+        entry->active_if = obj_get(sensor, "active_if");
     }
     return true;
 }

@@ -413,7 +413,9 @@ bool slayer3d_game_data_load_asset_with_options(slayer3d_asset_resolver *assets,
     bool ok = load_signals(runtime, root, error_buffer, error_buffer_size) &&
               load_entities(runtime, root, error_buffer, error_buffer_size) &&
               load_editor_player_starts(runtime, root, error_buffer, error_buffer_size) &&
+              load_editor_prefabs(runtime, root, error_buffer, error_buffer_size) &&
               load_editor_actors(runtime, root, error_buffer, error_buffer_size) &&
+              load_editor_connections(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&
@@ -477,7 +479,15 @@ bool slayer3d_game_data_load_file(const char *path, slayer3d_game_session *sessi
     const bool ok =
         slayer3d_game_data_load_asset(assets, asset_name, session, out_runtime, error_buffer, error_buffer_size);
     if (ok && out_runtime != NULL && *out_runtime != NULL)
+    {
         (*out_runtime)->owns_assets = true;
+        char *file_base_dir = SDL_strdup(base_dir);
+        if (file_base_dir != NULL)
+        {
+            SDL_free((*out_runtime)->file_base_dir);
+            (*out_runtime)->file_base_dir = file_base_dir;
+        }
+    }
     else
         slayer3d_asset_resolver_destroy(assets);
     SDL_free(base_dir);

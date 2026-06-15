@@ -111,6 +111,7 @@ typedef struct sensor_entry
     slayer3d_vec3 volume_max;
     int signal_id;
     yyjson_val *actions;
+    yyjson_val *active_if;
     const char *edge;
     bool was_active;
     sensor_contact_pair_state *contact_pairs;

@@ -9,6 +9,8 @@
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <stdlib.h>
+
 static void *load_editable_fragment_file(const char *path, size_t *out_size, char *error_buffer, int error_buffer_size)
 {
     if (out_size != NULL)
@@ -104,6 +106,9 @@ static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
     runtime->brush_worlds = NULL;
     runtime->brush_world_count = 0;
     free_editor_player_starts_runtime(runtime);
+    free_editor_actors_runtime(runtime);
+    free_editor_prefabs_runtime(runtime);
+    free_editor_connections_runtime(runtime);
     SDL_free(runtime->editor_player_start_source_path);
     runtime->editor_player_start_source_path = NULL;
 }
@@ -145,7 +150,10 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         return false;
     }
     if (!load_brush_worlds(staged, root, error_buffer, error_buffer_size) ||
-        !load_editor_player_starts(staged, root, error_buffer, error_buffer_size))
+        !load_editor_player_starts(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_prefabs(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_actors(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_connections(staged, root, error_buffer, error_buffer_size))
     {
         free_staged_import_runtime(staged);
         SDL_free(staged);
@@ -214,6 +222,36 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
     staged->editor_player_start_count = 0;
     staged->editor_player_start_capacity = 0;
 
+    free_editor_actors_runtime(runtime);
+    runtime->editor_actors = staged->editor_actors;
+    runtime->editor_actor_count = staged->editor_actor_count;
+    runtime->editor_actor_capacity = staged->editor_actor_capacity;
+    runtime->editor_actor_revision = staged->editor_actor_revision;
+    runtime->editor_actor_dirty = staged->editor_actor_dirty;
+    staged->editor_actors = NULL;
+    staged->editor_actor_count = 0;
+    staged->editor_actor_capacity = 0;
+
+    free_editor_prefabs_runtime(runtime);
+    runtime->editor_prefabs = staged->editor_prefabs;
+    runtime->editor_prefab_count = staged->editor_prefab_count;
+    runtime->editor_prefab_capacity = staged->editor_prefab_capacity;
+    runtime->editor_prefab_revision = staged->editor_prefab_revision;
+    runtime->editor_prefab_dirty = staged->editor_prefab_dirty;
+    staged->editor_prefabs = NULL;
+    staged->editor_prefab_count = 0;
+    staged->editor_prefab_capacity = 0;
+
+    free_editor_connections_runtime(runtime);
+    runtime->editor_connections = staged->editor_connections;
+    runtime->editor_connection_count = staged->editor_connection_count;
+    runtime->editor_connection_capacity = staged->editor_connection_capacity;
+    runtime->editor_connection_revision = staged->editor_connection_revision;
+    runtime->editor_connection_dirty = staged->editor_connection_dirty;
+    staged->editor_connections = NULL;
+    staged->editor_connection_count = 0;
+    staged->editor_connection_capacity = 0;
+
     free_staged_import_runtime(staged);
     SDL_free(staged);
     yyjson_doc_free(doc);
@@ -245,6 +283,73 @@ bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_run
 
     const bool ok = slayer3d_game_data_load_editable_level_fragment_json(runtime, world_name, bytes, size, path,
                                                                          error_buffer, error_buffer_size);
+    SDL_free(bytes);
+    return ok;
+}
+
+bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                     const void *json, size_t json_size, const char *source_path,
+                                                     char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || json == NULL || json_size == 0u)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editable level map load requires runtime, world name, and non-empty JSON buffer");
+        return false;
+    }
+
+    slayer3d_map_document *map = NULL;
+    if (!slayer3d_map_load_json((const char *)json, json_size, NULL, &map, error_buffer, error_buffer_size))
+        return false;
+    slayer3d_map_destroy(map);
+
+    yyjson_read_err read_error;
+    SDL_zero(read_error);
+    yyjson_doc *doc = yyjson_read_opts((char *)json, json_size, 0, NULL, &read_error);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    yyjson_val *editor = yyjson_is_obj(root) ? yyjson_obj_get(root, "editor") : NULL;
+    yyjson_val *fragment = yyjson_is_obj(editor) ? yyjson_obj_get(editor, "editable_level_fragment") : NULL;
+    if (!yyjson_is_obj(fragment))
+    {
+        yyjson_doc_free(doc);
+        set_error(error_buffer, error_buffer_size,
+                  "Slayer3D map must contain editor.editable_level_fragment for editable editor load");
+        return false;
+    }
+
+    size_t fragment_size = 0u;
+    char *fragment_json =
+        yyjson_val_write(fragment, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &fragment_size);
+    yyjson_doc_free(doc);
+    if (fragment_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to extract editable level fragment from Slayer3D map");
+        return false;
+    }
+
+    const bool ok = slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, world_name, fragment_json, fragment_size, source_path, error_buffer, error_buffer_size);
+    free(fragment_json);
+    return ok;
+}
+
+bool slayer3d_game_data_load_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                     const char *path, char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || path == NULL || path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editable level map load requires runtime, world name, and non-empty file path");
+        return false;
+    }
+
+    size_t size = 0u;
+    void *bytes = load_editable_fragment_file(path, &size, error_buffer, error_buffer_size);
+    if (bytes == NULL)
+        return false;
+
+    const bool ok = slayer3d_game_data_load_editable_level_map_json(runtime, world_name, bytes, size, path,
+                                                                    error_buffer, error_buffer_size);
     SDL_free(bytes);
     return ok;
 }

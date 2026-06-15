@@ -19,9 +19,14 @@ Reopen that saved level:
 
 `--project` points at a directory containing `slayer3d.project.json`; the
 manifest defines the data root, editor entry point, optional media root, and
-optional test-run manifest path. `new` requires `--output`. `open` requires
-`--input` and saves back to that same file unless `--output` is supplied. Pass
-`--overwrite` only when replacing an existing output file is intentional.
+optional test-run manifest path. It can also define `asset_sources` for
+textures, models, sprites, skyboxes, and effects. Each source is resolved
+relative to the project manifest unless it is already absolute; the editor
+publishes both the resolved path and the project-relative path to scene state so
+future browsers and saved maps can prefer project-relative references. `new`
+requires `--output`. `open` requires `--input` and saves back to that same file
+unless `--output` is supplied. Pass `--overwrite` only when replacing an
+existing output file is intentional.
 
 Press `Ctrl+S` or `Command+S` in the editor to atomically save an editable
 fragment containing `brush_worlds` and `editor_player_starts`. Press `F5` to

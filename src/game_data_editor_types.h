@@ -56,8 +56,52 @@ typedef struct editor_actor_runtime
     slayer3d_vec3 rotation;
     slayer3d_vec3 scale;
     slayer3d_color color;
+    char *prefab;
+    bool prefab_linked;
+    slayer3d_properties *prefab_overrides;
     slayer3d_properties *properties;
 } editor_actor_runtime;
+
+typedef struct editor_prefab_runtime
+{
+    char *id;
+    char *label;
+    char *category;
+    char *kind;
+    char *archetype;
+    char *mesh;
+    char *model;
+    char *group;
+    slayer3d_vec3 position;
+    slayer3d_vec3 rotation;
+    slayer3d_vec3 scale;
+    slayer3d_color color;
+    slayer3d_properties *properties;
+} editor_prefab_runtime;
+
+typedef struct editor_brush_visual_override_runtime
+{
+    bool has_color;
+    slayer3d_color color;
+    bool tint_enabled;
+    slayer3d_color tint;
+} editor_brush_visual_override_runtime;
+
+typedef struct editor_connection_endpoint_runtime
+{
+    char *entity;
+    char *event;
+    char *action;
+    bool external;
+} editor_connection_endpoint_runtime;
+
+typedef struct editor_connection_runtime
+{
+    char *id;
+    editor_connection_endpoint_runtime from;
+    editor_connection_endpoint_runtime to;
+    slayer3d_properties *properties;
+} editor_connection_runtime;
 
 typedef enum editor_drag_create_phase
 {
@@ -187,11 +231,14 @@ typedef struct editor_brush_source_box_runtime
     char *prefab;
     char *material;
     char *face_materials[6];
+    editor_brush_visual_override_runtime visual;
+    editor_brush_visual_override_runtime face_visuals[6];
     int min[3];
     int max[3];
     int vertex_count;
     int vertices[16][3];
     unsigned int contents;
+    slayer3d_properties *properties;
 } editor_brush_source_box_runtime;
 
 #define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8

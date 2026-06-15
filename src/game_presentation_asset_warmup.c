@@ -915,9 +915,11 @@ static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry
         if (!slayer3d_game_data_get_image_asset(runtime, entry->id, &asset))
             return false;
         asset_warmup_prepared_image *prepared = (asset_warmup_prepared_image *)prepared_payload;
+        const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
         slayer3d_game_data_image_cache_entry *cache_entry = slayer3d_game_data_image_cache_insert_prepared(
             image_cache, asset.id, &prepared->texture, prepared->effect, prepared->effect_delay,
-            prepared->effect_duration, &prepared->shader_vertex_source, &prepared->shader_fragment_source);
+            prepared->effect_duration, &prepared->shader_vertex_source, &prepared->shader_fragment_source,
+            asset_source_path);
         return cache_entry != NULL;
     }
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE: {

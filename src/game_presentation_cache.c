@@ -88,6 +88,36 @@ static bool ensure_sprite_cache_capacity(slayer3d_game_data_sprite_cache *cache,
     return true;
 }
 
+static bool image_cache_source_matches(const slayer3d_game_data_image_cache_entry *entry, const char *source_path)
+{
+    const char *entry_source = entry != NULL && entry->source_path != NULL ? entry->source_path : "";
+    const char *request_source = source_path != NULL ? source_path : "";
+    return SDL_strcmp(entry_source, request_source) == 0;
+}
+
+static void image_cache_entry_release(slayer3d_game_data_image_cache_entry *entry)
+{
+    if (entry == NULL)
+        return;
+    if (entry->loaded)
+        slayer3d_free_texture(&entry->texture);
+    SDL_free(entry->source_path);
+    SDL_free(entry->shader_vertex_source);
+    SDL_free(entry->shader_fragment_source);
+    SDL_zero(*entry);
+}
+
+static void image_cache_remove_entry(slayer3d_game_data_image_cache *cache, int index)
+{
+    if (cache == NULL || index < 0 || index >= cache->count)
+        return;
+    image_cache_entry_release(&cache->entries[index]);
+    if (index != cache->count - 1)
+        cache->entries[index] = cache->entries[cache->count - 1];
+    SDL_zero(cache->entries[cache->count - 1]);
+    --cache->count;
+}
+
 static bool ensure_model_cache_capacity(slayer3d_game_data_model_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
@@ -328,17 +358,28 @@ bool slayer3d_game_data_prepare_sprite_backed_image_texture(const slayer3d_game_
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared(
     slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *effect,
-    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source)
+    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source,
+    const char *source_path)
 {
     if (cache == NULL || image_id == NULL || texture == NULL)
         return NULL;
 
+    char *owned_source_path = NULL;
+    if (source_path != NULL && source_path[0] != '\0')
+    {
+        owned_source_path = SDL_strdup(source_path);
+        if (owned_source_path == NULL)
+            return NULL;
+    }
+
+    slayer3d_game_data_image_cache_entry *slot = NULL;
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
         {
-            if (cache->entries[i].loaded)
+            if (image_cache_source_matches(&cache->entries[i], source_path) && cache->entries[i].loaded)
             {
+                SDL_free(owned_source_path);
                 slayer3d_free_texture(texture);
                 if (shader_vertex_source != NULL)
                 {
@@ -352,16 +393,22 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
                 }
                 return &cache->entries[i];
             }
-            return NULL;
+            image_cache_entry_release(&cache->entries[i]);
+            slot = &cache->entries[i];
+            break;
         }
     }
 
-    if (!ensure_image_cache_capacity(cache, cache->count + 1))
+    if (slot == NULL && !ensure_image_cache_capacity(cache, cache->count + 1))
+    {
+        SDL_free(owned_source_path);
         return NULL;
+    }
 
-    slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+    slayer3d_game_data_image_cache_entry *entry = slot != NULL ? slot : &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->image_id = image_id;
+    entry->source_path = owned_source_path;
     entry->effect = effect;
     entry->effect_delay = effect_delay;
     entry->effect_duration = effect_duration;
@@ -378,14 +425,16 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
     entry->texture = *texture;
     SDL_zero(*texture);
     entry->loaded = true;
-    ++cache->count;
+    if (slot == NULL)
+        ++cache->count;
     return entry;
 }
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
-    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture)
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *source_path)
 {
-    return slayer3d_game_data_image_cache_insert_prepared(cache, image_id, texture, NULL, 0.0f, 1.0f, NULL, NULL);
+    return slayer3d_game_data_image_cache_insert_prepared(cache, image_id, texture, NULL, 0.0f, 1.0f, NULL, NULL,
+                                                          source_path);
 }
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
@@ -394,15 +443,20 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entr
     if (runtime == NULL || cache == NULL || cache->assets == NULL || image_id == NULL)
         return NULL;
 
-    for (int i = 0; i < cache->count; ++i)
-    {
-        if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
-            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
-    }
-
     slayer3d_game_data_image_asset asset;
     if (!slayer3d_game_data_get_image_asset(runtime, image_id, &asset))
         return NULL;
+    const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].image_id == NULL || SDL_strcmp(cache->entries[i].image_id, image_id) != 0)
+            continue;
+        if (image_cache_source_matches(&cache->entries[i], asset_source_path))
+            return cache->entries[i].loaded ? &cache->entries[i] : NULL;
+        image_cache_remove_entry(cache, i);
+        break;
+    }
 
     if (asset.sprite != NULL)
     {
@@ -418,7 +472,7 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entr
             return NULL;
         slayer3d_game_data_image_cache_entry *entry = slayer3d_game_data_image_cache_insert_prepared(
             cache, asset.id, &texture, effect, effect_delay, effect_duration, &shader_vertex_source,
-            &shader_fragment_source);
+            &shader_fragment_source, asset_source_path);
         if (entry == NULL)
         {
             slayer3d_free_texture(&texture);
@@ -436,7 +490,7 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entr
     if (!slayer3d_game_data_prepare_direct_image_texture(cache->assets, &asset, &texture))
         return NULL;
     slayer3d_game_data_image_cache_entry *entry =
-        slayer3d_game_data_image_cache_insert_prepared_texture(cache, asset.id, &texture);
+        slayer3d_game_data_image_cache_insert_prepared_texture(cache, asset.id, &texture, asset_source_path);
     if (entry == NULL)
         slayer3d_free_texture(&texture);
     return entry;

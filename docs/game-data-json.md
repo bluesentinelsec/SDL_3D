@@ -1203,6 +1203,12 @@ Convex sources are used after topology edits add, remove, or merge vertices.
 `material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
+`color` stores an optional RGBA graybox color for the source brush, and
+`face_colors` can override individual generated faces with the same face keys.
+Brush colors are used for untextured rendering and remain authored when a
+texture material is later applied. Textured brushes render normally unless an
+explicit `tint`/`face_tints` override is enabled; tints are RGBA and can be used
+for texture color modulation or transparency previews.
 
 Each source box must have a unique `stable_id` and a unique brush `name` within
 its source world. When `name` is omitted, it defaults to `stable_id`. The
@@ -1291,8 +1297,12 @@ missing.
           "kind": "box",
           "prefab": "floor",
           "material": "mat.editor.floor",
+          "color": [110, 122, 132, 255],
           "face_materials": {
             "px": "mat.editor.trim"
+          },
+          "face_tints": {
+            "px": [255, 220, 120, 192]
           },
           "min": [0, -200, 0],
           "max": [8000, 0, 8000],
@@ -1664,8 +1674,8 @@ then switch to the authored play/test scene with `scene.set`.
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the
-authored world. Supported `command` values are `translate`, `paint`, `resize`,
-`extrude`, and `delete`; supported `target` values are `selection`, `world`,
+authored world. Supported `command` values are `translate`, `paint`, `color`,
+`resize`, `extrude`, and `delete`; supported `target` values are `selection`, `world`,
 `element`, `face`, and `material`. Paint previews require a `material` string
 naming a material in the selected brush world's material palette. Resize and
 extrude previews currently target brush faces and use `distance` along the
@@ -1687,6 +1697,40 @@ shrink it.
     "face_stable_id_key": "editor.command_preview.face_stable_id",
     "bounds_min_key": "editor.command_preview.bounds_min",
     "bounds_max_key": "editor.command_preview.bounds_max"
+  }
+}
+```
+
+Use `editor.brush.color` to author stylized graybox colors and explicit texture
+tints against the active selected brushes. `target: "selection"` updates the
+selected source brushes' default color/tint; `target: "face"` updates the active
+source face override. `color` and `tint` are RGB/RGBA arrays in 0..255. `role`
+can be one of the editor default graybox roles (`floor`, `wall`, `ceiling`,
+`trim`, `hazard`, `trigger`, or `placeholder`) and expands to a conventional
+RGBA color. Brush colors do not alter textured rendering by default; set
+`tint` or `tint_enabled` when a textured face should be modulated or have
+explicit alpha.
+
+```json
+{
+  "type": "editor.brush.color",
+  "target": "selection",
+  "role": "floor",
+  "outputs": {
+    "valid_key": "editor.brush.color.valid",
+    "message_key": "editor.brush.color.message"
+  }
+}
+```
+
+```json
+{
+  "type": "editor.brush.color",
+  "target": "face",
+  "tint": [255, 128, 64, 160],
+  "outputs": {
+    "valid_key": "editor.brush.tint.valid",
+    "message_key": "editor.brush.tint.message"
   }
 }
 ```
@@ -1752,6 +1796,155 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 
+Use `editor.texture.scan` to populate an editor texture browser from a configured
+filesystem directory. By default it reads `editor.asset_source.textures.path`
+and `editor.asset_source.textures.relative`, falling back to `textures` relative
+to the loaded game-data file. The scan publishes rows into a runtime collection
+and mirrors the first visible page into `editor.texture.slot.N.*` scene-state
+keys so authored UI can bind labels, thumbnails, and buttons without hard-coded
+paths. Files matching existing brush material textures reuse those material
+names; new files register `mat.project.texture.<slug>` materials on the target
+brush world.
+
+```json
+{
+  "type": "editor.texture.scan",
+  "world": "brush.level.blockout",
+  "collection": "editor.textures",
+  "slot_count": 6,
+  "outputs": {
+    "count_key": "editor.texture.count",
+    "registered_count_key": "editor.texture.registered_count",
+    "status_key": "editor.texture.scan.status"
+  }
+}
+```
+
+Use `editor.texture.select_index` to choose a scanned texture row by index. The
+action updates `editor.palette.material.cursor`, `editor.texture.material`, and
+`editor.texture.selected_index`. Slot-backed UI image warmup state such as
+`asset_warmup.ui_image.image.editor_shell.texture.slot_0.pending` prevents
+selecting textures that are still loading or failed.
+
+Use `editor.actor.scan` to populate the editor Actor browser from built-in
+primitive actors plus a configured model directory. By default it reads
+`editor.asset_source.models.path` and `editor.asset_source.models.relative`,
+falling back to `models` relative to the loaded game-data file. The scan
+publishes rows into a runtime collection and mirrors the first page into
+`editor.actor.slot.N.*` scene-state keys so authored UI can bind labels,
+selection buttons, and model previews. Supported model files currently include
+`.obj`, `.gltf`, `.glb`, and `.fbx`.
+
+```json
+{
+  "type": "editor.actor.scan",
+  "collection": "editor.actors",
+  "slot_count": 6,
+  "outputs": {
+    "count_key": "editor.actor.browser.count",
+    "status_key": "editor.actor.scan.status"
+  }
+}
+```
+
+Rows contain generic placement metadata such as `id`, `label`, `group`, `mesh`,
+`model`, `name_prefix`, `classname`, `role`, `sensor_profile`, `color_*`,
+`scale_*`, `path`, and `relative_path`. Scanned model rows get stable model ids
+such as `model.project.actor.alpha_guard`; runtime rendering resolves those ids
+from the actor browser collection while placed map data can preserve the
+project-relative `model_path` property.
+
+Use `editor.actor.select_index` to choose a scanned actor row by index. It
+updates `editor.actor.selected_index`, `editor.actor.selected`,
+`editor.palette.game_object.cursor`, `editor.mode`, and `editor.tool.mode`. If a
+model-backed row is still warming up or has failed, selection is held back and
+`editor.tool.last_action` reports `actor model loading` or
+`actor model unavailable`.
+
+Use `editor.actor.place_selected` to place the currently selected actor row into
+an editor scene. The action copies the row's generic defaults into the placed
+actor, including mesh/model, display group, color/alpha, scale, class/role
+properties, `actor_browser_id`, and project-relative `model_path` when present.
+Position can come from `placement_preview` or `selection_point`.
+
+Use `editor.property.set` and `editor.property.remove` to mutate arbitrary
+designer-authored key/value pairs on editor objects. The first implementation
+supports `target_type: "editor_actor"` with `target` or `target_from_state`, and
+`target_type: "selection"` for the selected editor actor. Keys can come from
+`key` or `key_from_state`; values can be scalar JSON, vec3/color arrays,
+`value_from_state`, or `value_from_payload`. Editor objects expose up to 64
+designer-authored properties. Selection publishing mirrors those slots into
+`editor.property.slot.N.key`, `.type`, `.value`, and `.available` for generic
+inspector UI.
+
+```json
+{
+  "type": "editor.property.set",
+  "target_type": "editor_actor",
+  "target_from_state": "editor.selection.element",
+  "key": "opens_when",
+  "value": "all_enemies_dead"
+}
+```
+
+Use `editor.connection.mark_source` and `editor.connection.add` to author
+generic event links between editor actors. Connections are intentionally data
+driven: a source endpoint has an entity and event, a target endpoint has an
+entity and action, and optional `properties` can carry game-specific meaning.
+Games can ignore, extend, or reinterpret this data when loading a Slayer3D map.
+
+`editor.connection.mark_source` records the selected actor, or an explicit
+`target`, into `editor.connection.source.entity` with an `event` such as
+`enter`, `activate`, or any game-specific event name. `editor.connection.add`
+can then connect that stored source to the selected actor or to an explicit
+`to_entity`. The editor shell uses this for a simple `Source` then `Connect`
+workflow in the inspector.
+
+```json
+{
+  "type": "editor.connection.add",
+  "from_entity_from_state": "editor.connection.source.entity",
+  "from_event_from_state": "editor.connection.source.event",
+  "to_entity": "actor.room1.door",
+  "to_action": "open",
+  "properties": { "condition": "player_inside" }
+}
+```
+
+Use `editor.prefab.define` to create or update reusable editor prefabs, and
+`editor.prefab.instantiate` to place linked actor instances from actor prefabs.
+An actor prefab can provide `archetype`, `mesh`, `model`, `group`, transform
+defaults, `color`, and arbitrary shared `properties`. Instances keep unique
+actor ids and a stable `prefab` back-reference. `prefab_overrides` names
+properties that should stay per-instance when the source prefab changes.
+
+```json
+{
+  "type": "editor.prefab.define",
+  "id": "prefab.guard",
+  "label": "Guard",
+  "category": "Enemies",
+  "kind": "actor",
+  "archetype": "actor.enemy.guard",
+  "mesh": "capsule",
+  "properties": { "health": 100, "faction": "enemy" }
+}
+```
+
+```json
+{
+  "type": "editor.prefab.instantiate",
+  "prefab": "prefab.guard",
+  "name_prefix": "actor.guard",
+  "position": [3.0, 0.5, 2.0],
+  "properties": { "health": 150 },
+  "prefab_overrides": { "health": true }
+}
+```
+
+Use `editor.prefab.unlink_actor` when an instance should keep its current data
+but stop receiving future source-prefab updates.
+
 Use `editor.brush_world.export` to serialize the current runtime state of one
 brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted
@@ -1766,23 +1959,97 @@ their write commits. Authored save actions are available for controlled editor
 shells, but they require explicit filesystem paths and never accept `asset://`
 destinations.
 
-Use `editor.level.export` when the editable artifact needs both blockout brush
-geometry and test-run player starts. It serializes a single fragment containing
-the selected `brush_worlds` entry and the runtime `editor_player_starts`
-collection. Native editor hosts can call
-`slayer3d_game_data_export_editable_level_fragment_json()` or
-`slayer3d_game_data_save_editable_level_fragment_file()` for the same canonical
-JSON. A successful native save marks both the selected brush world and
-player-start collection clean at their current revisions. This is the preferred
-first milestone save path for blockout editors because reloading one fragment
-restores floors, walls, ceilings, face materials, and player starts together.
-Editable-level export requires a source-backed brush world and runs
-source/compiled identity checks before writing JSON, so stale runtime-only brush
-data cannot become the saved level.
+Use `editor.map.export` when the editor should publish the standalone
+`.slayermap.json` artifact. The action emits the public `slayer3d.map` format,
+including top-level materials, brushes, player-start actors, editor actors,
+generic prefabs, lights, effects, skyboxes, and connections for inspection or game
+loading. It also embeds the lossless editable fragment under
+`editor.editable_level_fragment`, so reopening the map restores source-backed
+brush editing state exactly. Native editor hosts can call
+`slayer3d_game_data_export_editable_level_map_json()` or
+`slayer3d_game_data_save_editable_level_map_file()` for the same JSON. A
+successful native save marks both the selected brush world and player-start
+collection clean at their current revisions, and marks placed editor actors,
+prefabs, and connections clean after their editable data is written. Map export
+requires a source-backed brush world and runs source/compiled identity checks
+before writing JSON, so stale runtime-only brush data cannot become the saved
+level.
+
+Placed editor actors whose properties identify them as lights are also emitted
+as normalized top-level `lights` entries. Set `role` to `light`,
+`baked_light`, or `static_light`, or provide `light_type`, to opt an actor into
+light export. The exported light preserves the actor transform and generic
+properties, gets its own stable light id, and records `source_actor` so runtimes
+can correlate it with the original marker when needed. Light export supports
+`light_kind` (`dynamic`, `baked`, or `both`),
+`light_type` (`point`, `spot`, or `directional`), `light_color`,
+`light_intensity`, `light_range`, `light_direction`, `casts_shadow`,
+`inner_angle_degrees`, `outer_angle_degrees`, and `bake_group`.
+
+Placed editor actors whose properties identify them as effects are emitted as
+normalized top-level `effects` entries. Set `role` to `effect`, provide
+`effect_kind` or `effect_type`, or use one of the default effect actor browser
+entries such as `particle_emitter`, `fog_volume`, `fire`, or `smoke`. The export
+preserves transform, color, optional `effect_asset`, `effect_texture`,
+`effect_sprite`, `radius`, `duration`, `density`, `max_particles`, `loop`,
+`emissive`, `preview`, and the full generic property bag. Games may use custom
+`kind`, `type`, and property fields for behavior the editor does not understand.
+
+Map-level `skybox` data may reference a configured skybox asset or explicit
+cube-face image references:
 
 ```json
 {
-  "type": "editor.level.export",
+  "skybox": {
+    "id": "skybox.main",
+    "asset": "skybox.sky_17",
+    "size": 400,
+    "properties": { "mood": "dusk" }
+  }
+}
+```
+
+```json
+{
+  "lights": [
+    {
+      "id": "light.room_key",
+      "kind": "dynamic",
+      "type": "spot",
+      "transform": { "position": [4.0, 3.0, -2.0] },
+      "direction": [0.0, -1.0, 0.25],
+      "color": [255, 200, 128, 255],
+      "intensity": 2.5,
+      "range": 12.0,
+      "casts_shadow": true,
+      "properties": { "switch_group": "room_a" }
+    }
+  ]
+}
+```
+
+```json
+{
+  "effects": [
+    {
+      "id": "effect.room_smoke",
+      "kind": "particle_emitter",
+      "type": "particles.emitter",
+      "transform": { "position": [0.0, 1.0, 0.0], "scale": [1.0, 1.0, 1.0] },
+      "color": [180, 190, 205, 180],
+      "texture": "textures/smoke.png",
+      "radius": 1.5,
+      "max_particles": 128,
+      "loop": true,
+      "properties": { "trigger_group": "room_a" }
+    }
+  ]
+}
+```
+
+```json
+{
+  "type": "editor.map.export",
   "world": "brush.level.blockout",
   "outputs": {
     "valid_key": "editor.export.valid",
@@ -1795,16 +2062,16 @@ data cannot become the saved level.
 }
 ```
 
-Use `editor.level.save` for the same unified artifact when an authored editor
+Use `editor.map.save` for the same unified artifact when an authored editor
 shell is allowed to write a filesystem path directly. `path` is a literal host
 path; `path_from_state` reads the path from scene state so a host/editor UI can
 choose the destination. Exactly one must be provided. The action writes
 atomically, creates parent directories, and publishes the same brush/player-start
-revision state as `editor.level.export`.
+revision state as `editor.map.export`.
 
 ```json
 {
-  "type": "editor.level.save",
+  "type": "editor.map.save",
   "world": "brush.level.blockout",
   "path_from_state": "editor.save.path",
   "outputs": {
@@ -1816,20 +2083,19 @@ revision state as `editor.level.export`.
 }
 ```
 
-Use `editor.level.load` to replace an editor runtime's authored starter level
-with an editable fragment from disk. This is intended for editor hosts that pass
-`editor.input.path` at launch time. The fragment must use
-`schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
-matches `world`; `editor_brush_sources` records the canonical editor source
-model for the same world and is compiled into runtime brushes on import.
-Runtime-only editable fragments are rejected. Import validates source/compiled
-identity before replacing the live runtime world, and `editor_player_starts`
-replaces the runtime player-start collection. Set `optional: true` when the same
-editor scene should also support new/blank sessions with no input file.
+Use `editor.map.load` to replace an editor runtime's authored starter level with
+a `.slayermap.json` file from disk. This is intended for editor hosts that pass
+`editor.input.path` at launch time. The map is validated through the public map
+APIs, then `editor.editable_level_fragment` is imported into the selected world.
+Runtime-only fragments remain rejected by the fragment importer. Import
+validates source/compiled identity before replacing the live runtime world, and
+`editor_player_starts` replaces the runtime player-start collection. Set
+`optional: true` when the same editor scene should also support new/blank
+sessions with no input file.
 
 ```json
 {
-  "type": "editor.level.load",
+  "type": "editor.map.load",
   "world": "brush.level.blockout",
   "path_from_state": "editor.input.path",
   "optional": true,
@@ -1840,6 +2106,11 @@ editor scene should also support new/blank sessions with no input file.
   }
 }
 ```
+
+The lower-level `editor.level.export`, `editor.level.save`, and
+`editor.level.load` actions still exist for tooling that deliberately wants the
+embedded `slayer3d.fragment.v0` document instead of the standalone map
+container.
 
 Use `editor.test_run.prepare` to publish a game-agnostic handoff manifest for
 launching the generic runner from an editor-selected scene or player start. The
@@ -1853,9 +2124,9 @@ For UI copy/paste affordances, `editor.test_run.prepare` and
 `editor.test_run.save_manifest` can also author `runner`, one mount option
 (`root`, `pack`, or `embedded`), and optional `media`. When `command_key` is
 present in `outputs`, the action publishes a quoted runner command string.
-Authored editor shells should usually run `editor.level.save` immediately before
-test-run preparation so the runner sees the latest blockout fragment rather than
-the last manually saved revision. If the runtime contains source-backed brush
+Authored editor shells should usually run `editor.map.save` immediately before
+test-run preparation so the runner sees the latest blockout map rather than the
+last manually saved revision. If the runtime contains source-backed brush
 worlds, source/compiled identity must validate before the handoff manifest is
 exported.
 

@@ -23,6 +23,7 @@
 #include "slayer3d/input.h"
 #include "slayer3d/lighting.h"
 #include "slayer3d/logic.h"
+#include "slayer3d/map.h"
 #include "slayer3d/math.h"
 #include "slayer3d/model.h"
 #include "slayer3d/network.h"

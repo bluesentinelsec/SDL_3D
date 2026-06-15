@@ -49,10 +49,11 @@ bool slayer3d_game_data_prepare_sprite_backed_image_texture(const slayer3d_game_
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared(
     slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *effect,
-    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source);
+    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source,
+    const char *source_path);
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
-    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture);
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *source_path);
 
 slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_sprite_cache *cache, const char *sprite_id);

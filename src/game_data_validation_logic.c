@@ -266,6 +266,14 @@ bool validate_logic(validation_context *ctx, yyjson_val *root, validation_names 
         const char *type = json_string(sensor, "type");
         if (type == NULL || type[0] == '\0')
             return validation_error(ctx, path, "sensor requires a non-empty type");
+        yyjson_val *active_if = obj_get(sensor, "active_if");
+        if (active_if != NULL)
+        {
+            char condition_path[PATH_BUFFER_SIZE];
+            format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+            if (!validate_data_condition(ctx, active_if, condition_path, names))
+                return false;
+        }
         if (SDL_strcmp(type, "sensor.bounds_exit") == 0)
         {
             if (!require_actor_ref(ctx, names, json_string(sensor, "entity"), path) ||

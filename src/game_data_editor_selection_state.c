@@ -10,6 +10,302 @@
 #include "game_data_brush_internal.h"
 #include "slayer3d/math.h"
 
+static void inspector_format_vec3(slayer3d_vec3 value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value.x, value.y, value.z);
+}
+
+static void inspector_format_bounds(slayer3d_bounding_box bounds, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f -> %.3f, %.3f, %.3f", bounds.min.x, bounds.min.y, bounds.min.z,
+                 bounds.max.x, bounds.max.y, bounds.max.z);
+}
+
+static void inspector_format_color(slayer3d_color color, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", color.r, color.g, color.b, color.a);
+}
+
+static void inspector_format_brush_contents(unsigned int contents, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    buffer[0] = '\0';
+    if (contents == 0U)
+    {
+        SDL_strlcpy(buffer, "solid", buffer_size);
+        return;
+    }
+    struct content_label
+    {
+        unsigned int bit;
+        const char *label;
+    };
+    static const struct content_label labels[] = {
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, "solid"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP, "player_clip"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP, "projectile_clip"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER, "trigger"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER, "water"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA, "lava"},
+        {SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY, "sky"},
+    };
+    for (size_t i = 0; i < SDL_arraysize(labels); ++i)
+    {
+        if ((contents & labels[i].bit) == 0U)
+            continue;
+        if (buffer[0] != '\0')
+            SDL_strlcat(buffer, "|", buffer_size);
+        SDL_strlcat(buffer, labels[i].label, buffer_size);
+    }
+    if (buffer[0] == '\0')
+        SDL_snprintf(buffer, buffer_size, "0x%08x", contents);
+}
+
+static void inspector_set_empty_selection(slayer3d_properties *scene_state)
+{
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "none");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title", "No selection");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.count", "0 selected");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.id", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.material", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.face", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.contents", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", "");
+}
+
+static const slayer3d_game_data_brush *inspector_brush_for_selection(
+    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->world_name == NULL ||
+        selection->element_index < 0)
+    {
+        return NULL;
+    }
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    if (world_runtime == NULL || selection->element_index >= world_runtime->desc.brush_count)
+        return NULL;
+    return &world_runtime->desc.brushes[selection->element_index];
+}
+
+static void inspector_join_brush_tags(const slayer3d_game_data_brush *brush, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    buffer[0] = '\0';
+    if (brush == NULL || brush->tags == NULL || brush->tag_count <= 0)
+        return;
+    for (int i = 0; i < brush->tag_count; ++i)
+    {
+        if (brush->tags[i] == NULL || brush->tags[i][0] == '\0')
+            continue;
+        if (buffer[0] != '\0')
+            SDL_strlcat(buffer, ", ", buffer_size);
+        SDL_strlcat(buffer, brush->tags[i], buffer_size);
+    }
+}
+
+static void publish_single_brush_inspector_state(slayer3d_game_data_runtime *runtime,
+                                                 const slayer3d_game_data_editor_selection *selection)
+{
+    slayer3d_properties *scene_state = runtime->scene_state;
+    const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, selection);
+    const slayer3d_game_data_brush *brush = inspector_brush_for_selection(runtime, &resolved);
+    char value[256];
+    char title[256];
+    const char *stable_id = resolved.element_editor != NULL && resolved.element_editor->stable_id != NULL
+                                ? resolved.element_editor->stable_id
+                                : "";
+    SDL_snprintf(title, sizeof(title), "%s", resolved.element_name != NULL ? resolved.element_name : "Brush");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "Brush");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title", title);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.count", "1 selected");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.id", stable_id);
+    if (resolved.has_bounds)
+    {
+        const slayer3d_vec3 dimensions = slayer3d_vec3_sub(resolved.bounds.max, resolved.bounds.min);
+        const slayer3d_vec3 center =
+            slayer3d_vec3_scale(slayer3d_vec3_add(resolved.bounds.min, resolved.bounds.max), 0.5f);
+        inspector_format_vec3(center, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", value);
+        inspector_format_vec3(dimensions, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", value);
+        inspector_format_bounds(resolved.bounds, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", value);
+    }
+    else
+    {
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", "");
+    }
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.material",
+                                   resolved.material_name != NULL ? resolved.material_name : "");
+    if (resolved.face_index >= 0)
+        SDL_snprintf(value, sizeof(value), "%d", resolved.face_index);
+    else
+        SDL_strlcpy(value, "all", sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.face", value);
+    inspector_format_brush_contents(brush != NULL ? brush->contents : 0U, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.contents", value);
+    const slayer3d_game_data_brush_face *face =
+        brush != NULL && resolved.face_index >= 0 && resolved.face_index < brush->face_count
+            ? &brush->faces[resolved.face_index]
+            : NULL;
+    if (face != NULL && face->has_color)
+        inspector_format_color(face->color, value, sizeof(value));
+    else
+        SDL_strlcpy(value, "", sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", value);
+    if (face != NULL && face->tint_enabled)
+        inspector_format_color(face->tint, value, sizeof(value));
+    else
+        SDL_strlcpy(value, "", sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab",
+                                   resolved.element_editor != NULL && resolved.element_editor->prefab != NULL
+                                       ? resolved.element_editor->prefab
+                                       : "");
+    inspector_join_brush_tags(brush, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", value);
+}
+
+static void publish_multi_brush_inspector_state(slayer3d_game_data_runtime *runtime, int count)
+{
+    slayer3d_properties *scene_state = runtime->scene_state;
+    char value[256];
+    char title[64];
+    bool has_bounds = false;
+    slayer3d_bounding_box bounds;
+    SDL_zero(bounds);
+    for (int i = 0; i < count; ++i)
+    {
+        const slayer3d_game_data_editor_selection resolved =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!resolved.hit || !resolved.has_bounds)
+            continue;
+        if (!has_bounds)
+        {
+            bounds = resolved.bounds;
+            has_bounds = true;
+            continue;
+        }
+        bounds.min.x = SDL_min(bounds.min.x, resolved.bounds.min.x);
+        bounds.min.y = SDL_min(bounds.min.y, resolved.bounds.min.y);
+        bounds.min.z = SDL_min(bounds.min.z, resolved.bounds.min.z);
+        bounds.max.x = SDL_max(bounds.max.x, resolved.bounds.max.x);
+        bounds.max.y = SDL_max(bounds.max.y, resolved.bounds.max.y);
+        bounds.max.z = SDL_max(bounds.max.z, resolved.bounds.max.z);
+    }
+    SDL_snprintf(title, sizeof(title), "%d Brushes", count);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "Brushes");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title", title);
+    SDL_snprintf(value, sizeof(value), "%d selected", count);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.count", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.id", "mixed");
+    if (has_bounds)
+    {
+        const slayer3d_vec3 dimensions = slayer3d_vec3_sub(bounds.max, bounds.min);
+        const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+        inspector_format_vec3(center, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", value);
+        inspector_format_vec3(dimensions, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", value);
+        inspector_format_bounds(bounds, value, sizeof(value));
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", value);
+    }
+    else
+    {
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", "");
+    }
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.material", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.face", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.contents", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab", "mixed");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", "mixed");
+}
+
+static void publish_actor_inspector_state(slayer3d_game_data_runtime *runtime,
+                                          const slayer3d_game_data_editor_selection *selection)
+{
+    slayer3d_properties *scene_state = runtime->scene_state;
+    const editor_actor_runtime *actor = selection != NULL && selection->element_name != NULL
+                                            ? find_editor_actor(runtime, selection->element_name)
+                                            : NULL;
+    if (actor == NULL)
+    {
+        inspector_set_empty_selection(scene_state);
+        return;
+    }
+    char value[256];
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "Actor");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title",
+                                   actor->display_name != NULL && actor->display_name[0] != '\0' ? actor->display_name
+                                                                                                 : actor->name);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.count", "1 selected");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.id",
+                                   actor->name != NULL ? actor->name : "");
+    inspector_format_vec3(actor->position, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", value);
+    inspector_format_vec3(actor->scale, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.bounds", "");
+    slayer3d_properties_set_string(
+        scene_state, "editor.inspector.selection.material",
+        actor->mesh != NULL && actor->mesh[0] != '\0' ? actor->mesh : (actor->model != NULL ? actor->model : ""));
+    inspector_format_vec3(actor->rotation, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.face", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.contents",
+                                   actor->archetype != NULL ? actor->archetype : "");
+    inspector_format_color(actor->color, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab",
+                                   actor->prefab != NULL ? actor->prefab : "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags",
+                                   actor->group != NULL ? actor->group : "");
+}
+
+static void publish_active_inspector_selection_state(slayer3d_game_data_runtime *runtime, int selected_brush_count)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    if (selected_brush_count > 1)
+    {
+        publish_multi_brush_inspector_state(runtime, selected_brush_count);
+        return;
+    }
+    if (selected_brush_count == 1)
+    {
+        publish_single_brush_inspector_state(runtime, &runtime->editor_selected_brushes[0]);
+        return;
+    }
+    if (editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
+        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+    {
+        publish_actor_inspector_state(runtime, &runtime->editor_active_selection);
+        return;
+    }
+    inspector_set_empty_selection(runtime->scene_state);
+}
+
 bool editor_selected_brushes_active_for_scene(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
@@ -237,6 +533,7 @@ void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
     const int count = editor_selected_brushes_active_for_scene(runtime) ? runtime->editor_selected_brush_count : 0;
     slayer3d_properties_set_int(runtime->scene_state, "editor.selection.count", count);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.selection.multiple", count > 1);
+    publish_active_inspector_selection_state(runtime, count);
 }
 
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)

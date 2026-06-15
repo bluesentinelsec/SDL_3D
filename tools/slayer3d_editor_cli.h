@@ -30,17 +30,37 @@ extern "C"
         const char *project;
         const char *input_path;
         const char *output_path;
+        char *owned_project;
+        char *owned_output_path;
         bool overwrite;
     } slayer3d_editor_args;
+
+    typedef struct slayer3d_editor_asset_source
+    {
+        char *path;
+        char *relative_path;
+        bool available;
+    } slayer3d_editor_asset_source;
+
+    typedef struct slayer3d_editor_asset_sources
+    {
+        slayer3d_editor_asset_source textures;
+        slayer3d_editor_asset_source models;
+        slayer3d_editor_asset_source sprites;
+        slayer3d_editor_asset_source skyboxes;
+        slayer3d_editor_asset_source effects;
+    } slayer3d_editor_asset_sources;
 
     typedef struct slayer3d_editor_project
     {
         char *project_dir;
         char *data_root;
+        char *data_root_relative_path;
         char *editor_entry;
         const char *media_dir;
         char *owned_media_dir;
         char *test_run_path;
+        slayer3d_editor_asset_sources asset_sources;
     } slayer3d_editor_project;
 
     typedef struct slayer3d_editor_launch
@@ -51,6 +71,9 @@ extern "C"
         const char *input_path;
         const char *save_path;
         const char *test_run_path;
+        const char *project_dir;
+        const char *data_root_relative_path;
+        const slayer3d_editor_asset_sources *asset_sources;
     } slayer3d_editor_launch;
 
     typedef struct slayer3d_editor_runner_invocation
@@ -61,6 +84,9 @@ extern "C"
         char *owned_input_assignment;
         char *owned_save_assignment;
         char *owned_test_run_assignment;
+        char *owned_project_dir_assignment;
+        char *owned_project_data_root_assignment;
+        char *owned_asset_source_assignments[16];
     } slayer3d_editor_runner_invocation;
 
     slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args,

@@ -222,10 +222,14 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.height_mode = height != NULL ? ui_widget_size_mode_from_value(height) : SLAYER3D_UI_LAYOUT_SIZE_FILL;
     desc.rect.x = json_float(node, "x", 0.0f);
     desc.rect.y = json_float(node, "y", 0.0f);
+    float scroll_y = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "scroll_y_key", NULL), &scroll_y))
+        desc.rect.y -= scroll_y;
     desc.rect.w = ui_widget_size_number(width, 1.0f);
     desc.rect.h = ui_widget_size_number(height, 1.0f);
     desc.padding = json_float(node, "padding", 0.0f);
     desc.gap = json_float(node, "gap", 0.0f);
+    desc.clip_children = ui_widget_bool(node, "clip_children", false);
     desc.layer = ui_widget_int(node, "layer", "z", 0);
     desc.interactive = ui_widget_bool(node, "interactive", false);
 

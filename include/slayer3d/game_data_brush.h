@@ -91,6 +91,14 @@ extern "C"
         float uv_rotation_degrees;
         /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_SURFACE_* flags. */
         unsigned int surface_flags;
+        /** @brief True when this face carries an authored editor/runtime RGBA color. */
+        bool has_color;
+        /** @brief Authored RGBA color used for untextured graybox rendering. */
+        slayer3d_color color;
+        /** @brief True when @p tint should modulate this face even if textured. */
+        bool tint_enabled;
+        /** @brief Explicit RGBA texture tint/alpha override. */
+        slayer3d_color tint;
         /** @brief Optional editor/tooling metadata. */
         slayer3d_game_data_editor_metadata editor;
     } slayer3d_game_data_brush_face;

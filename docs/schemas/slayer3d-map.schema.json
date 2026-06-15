@@ -1,0 +1,396 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://slayer3d.local/schemas/slayer3d-map.schema.json",
+  "title": "Slayer3D Map",
+  "description": "Initial JSON format for Slayer3D authored level maps.",
+  "type": "object",
+  "required": ["format", "version"],
+  "additionalProperties": true,
+  "properties": {
+    "format": {
+      "const": "slayer3d.map"
+    },
+    "version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "author": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "units": {
+      "enum": ["meters", "source_units"]
+    },
+    "coordinate_system": {
+      "const": "y_up"
+    },
+    "assets": {
+      "$ref": "#/$defs/assets"
+    },
+    "materials": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/material" }
+    },
+    "brushes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/brush" }
+    },
+    "actors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/actor" }
+    },
+    "connections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/connection" }
+    },
+    "properties": {
+      "$ref": "#/$defs/properties"
+    },
+    "prefabs": {
+      "description": "Reusable prefab definitions for linked brush, actor, or mixed editor instances.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/prefab" }
+    },
+    "lights": {
+      "description": "Authored dynamic/runtime and baked/build-time light markers.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/light" }
+    },
+    "effects": {
+      "description": "Authored particles, fog volumes, fire/smoke markers, and other effect primitives.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/effect" }
+    },
+    "skybox": {
+      "description": "Map-level skybox selection.",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/skybox" }
+      ]
+    },
+    "editor": {
+      "description": "Editor-only state that runtime consumers may ignore.",
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "positiveVec3": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "number", "exclusiveMinimum": 0 },
+        { "type": "number", "exclusiveMinimum": 0 }
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "rgba": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "minItems": 3,
+      "maxItems": 4
+    },
+    "properties": {
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": true
+    },
+    "assetEntry": {
+      "type": "object",
+      "required": ["id", "path"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "textures": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        },
+        "models": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        },
+        "sprites": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        },
+        "skyboxes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/assetEntry" }
+        }
+      }
+    },
+    "material": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "texture": { "type": "string", "minLength": 1 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "boxGeometry": {
+      "type": "object",
+      "required": ["kind", "min", "max"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "const": "box" },
+        "min": { "$ref": "#/$defs/vec3" },
+        "max": { "$ref": "#/$defs/vec3" }
+      }
+    },
+    "plane": {
+      "type": "object",
+      "required": ["normal", "distance"],
+      "additionalProperties": true,
+      "properties": {
+        "normal": { "$ref": "#/$defs/vec3" },
+        "distance": { "type": "number" },
+        "material": { "type": "string", "minLength": 1 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" }
+      }
+    },
+    "planeGeometry": {
+      "type": "object",
+      "required": ["kind", "planes"],
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "const": "planes" },
+        "planes": {
+          "type": "array",
+          "minItems": 4,
+          "items": { "$ref": "#/$defs/plane" }
+        }
+      }
+    },
+    "face": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "side": { "type": "string", "minLength": 1 },
+        "normal": { "$ref": "#/$defs/vec3" },
+        "material": { "type": "string", "minLength": 1 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "brush": {
+      "type": "object",
+      "required": ["id", "geometry"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "geometry": {
+          "oneOf": [
+            { "$ref": "#/$defs/boxGeometry" },
+            { "$ref": "#/$defs/planeGeometry" }
+          ]
+        },
+        "material": { "type": "string", "minLength": 1 },
+        "color": { "$ref": "#/$defs/rgba" },
+        "tint": { "$ref": "#/$defs/rgba" },
+        "tint_enabled": { "type": "boolean" },
+        "faces": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/face" }
+        },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "scale": { "$ref": "#/$defs/positiveVec3" },
+        "facing": { "$ref": "#/$defs/vec3" }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "archetype": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "sprite": { "type": "string", "minLength": 1 },
+        "prefab": { "type": "string", "minLength": 1 },
+        "prefab_linked": { "type": "boolean" },
+        "primitive": {
+          "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger", "light", "effect"]
+        },
+        "transform": { "$ref": "#/$defs/transform" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "prefab": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["actor", "brush", "mixed"] },
+        "archetype": { "type": "string", "minLength": 1 },
+        "mesh": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "group": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/vec3" },
+        "rotation": { "$ref": "#/$defs/vec3" },
+        "scale": { "$ref": "#/$defs/positiveVec3" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "properties": { "$ref": "#/$defs/properties" },
+        "brushes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/brush" }
+        },
+        "actors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/actor" }
+        }
+      }
+    },
+    "light": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source_actor": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["dynamic", "baked", "both"] },
+        "type": { "enum": ["directional", "point", "spot"] },
+        "transform": { "$ref": "#/$defs/transform" },
+        "direction": { "$ref": "#/$defs/vec3" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "intensity": { "type": "number", "minimum": 0 },
+        "range": { "type": "number", "exclusiveMinimum": 0 },
+        "inner_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
+        "outer_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
+        "casts_shadow": { "type": "boolean" },
+        "bake_group": { "type": "string", "minLength": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source_actor": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "transform": { "$ref": "#/$defs/transform" },
+        "color": { "$ref": "#/$defs/rgba" },
+        "asset": { "type": "string", "minLength": 1 },
+        "texture": { "type": "string", "minLength": 1 },
+        "sprite": { "type": "string", "minLength": 1 },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
+        "duration": { "type": "number", "minimum": 0 },
+        "density": { "type": "number", "minimum": 0 },
+        "max_particles": { "type": "integer", "minimum": 0 },
+        "loop": { "type": "boolean" },
+        "emissive": { "type": "boolean" },
+        "preview": { "type": "boolean" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "skyboxFaces": {
+      "type": "object",
+      "required": ["pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"],
+      "additionalProperties": true,
+      "properties": {
+        "pos_x": { "type": "string", "minLength": 1 },
+        "neg_x": { "type": "string", "minLength": 1 },
+        "pos_y": { "type": "string", "minLength": 1 },
+        "neg_y": { "type": "string", "minLength": 1 },
+        "pos_z": { "type": "string", "minLength": 1 },
+        "neg_z": { "type": "string", "minLength": 1 }
+      }
+    },
+    "skybox": {
+      "type": "object",
+      "additionalProperties": true,
+      "anyOf": [
+        { "required": ["asset"] },
+        { "required": ["faces"] }
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "asset": { "type": "string", "minLength": 1 },
+        "faces": { "$ref": "#/$defs/skyboxFaces" },
+        "size": { "type": "number", "exclusiveMinimum": 1 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "connectionEndpoint": {
+      "type": "object",
+      "required": ["entity"],
+      "additionalProperties": true,
+      "properties": {
+        "entity": { "type": "string", "minLength": 1 },
+        "event": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "external": { "type": "boolean" }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "required": ["from", "to"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "from": { "$ref": "#/$defs/connectionEndpoint" },
+        "to": { "$ref": "#/$defs/connectionEndpoint" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    }
+  }
+}

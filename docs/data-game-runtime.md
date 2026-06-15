@@ -239,26 +239,49 @@ build/MyGame
 launches a data-authored editor project, injects editor input/output paths as
 scene state, and leaves the actual tool behavior in JSON/Lua.
 
+Running it with no arguments opens the bundled editor shell project with a new
+untitled `.slayermap.json` save target in SDL's per-user preferences directory:
+
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
+build/debug/slayer3d_editor
+```
+
+```sh
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```
 
 Projects are described by `slayer3d.project.json` manifests. `new` starts from
-the project's empty editor scene; `open` loads an existing editable fragment and
+the project's empty editor scene; `open` loads an existing Slayer3D map and
 saves back to `--input` unless `--output` is supplied:
 
 ```sh
-build/debug/slayer3d_editor open --project path/to/project --input path/to/level.fragment.json
+build/debug/slayer3d_editor open --project path/to/project --input path/to/level.slayermap.json
 ```
 
-For the current graybox editor workflow, the saved file is a source-backed
-editable level fragment. The editor source model is the truth: brush creation,
-movement, resizing, duplication, deletion, save/reopen, and test-run handoff all
-operate on `editor_brush_sources`, then compile runtime brush geometry from that
-source. A typical blockout loop is:
+For the current graybox editor workflow, the saved file is a `.slayermap.json`
+document that embeds the source-backed editable level fragment. The editor
+source model is the truth: brush creation, movement, resizing, duplication,
+deletion, save/reopen, and test-run handoff all operate on
+`editor_brush_sources`, then compile runtime brush geometry from that source. A
+typical blockout loop is:
+
+Source-backed brushes may also carry RGBA graybox colors and explicit texture
+tints. Untextured brushes render with their authored color, while textured
+brushes keep their normal texture appearance unless a tint override is enabled.
+This lets designers color-code floors, walls, triggers, and hazards during
+grayboxing without losing that intent when textures are applied later.
+
+Slayer3D maps also carry normalized light, effect, and skybox authoring data. Light
+markers remain generic editor actors while editing, then export as top-level
+`lights` entries with dynamic/baked intent, type, transform, color, range, and
+arbitrary properties. Effect markers also remain generic editor actors and
+export as top-level `effects` entries for particle emitters, fog volumes,
+fire/smoke markers, or custom game-defined effect types. Active scene skybox
+data exports as a top-level `skybox` object when present, so game runtimes can
+consume environment selection without understanding the editor-only fragment.
 
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```
 
 Inside the editor, use Brush Tool and Select mode to create and edit floors,
@@ -266,7 +289,7 @@ walls, ceilings, pits, platforms, and corridors, place a player start, then save
 with the normal save command. Reopen the same source fragment with:
 
 ```sh
-build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.fragment.json
+build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.slayermap.json
 ```
 
 The editor test-run command validates the source model, warns about leaks,
@@ -276,12 +299,31 @@ identity errors remain hard failures because stale runtime brush geometry must
 not become the shipped level.
 
 The manifest currently carries `data_root`, `editor_entry`, optional
-`media_root`, and optional `test_run_output`. The editor host translates those
-fields into a normal runner launch and injects `editor.command`,
-`editor.input.path`, `editor.save.path`, and `editor.test_run.path` as scene
-state. This keeps the shell data-authored while still giving users a stable CLI:
-`--project` selects the editor project, `--input` selects the editable fragment
-for `open`, and `--output` selects the save target.
+`media_root`, optional `asset_sources`, and optional `test_run_output`.
+`asset_sources` may define `textures`, `models`, `sprites`, `skyboxes`, and
+`effects` directories. Missing entries default to the same directory name under
+`media_root` when `media_root` is present, or to project-local directories with
+those names otherwise. Missing directories do not abort editor startup; the host
+publishes `editor.asset_source.<kind>.available` and
+`editor.asset_source.any_missing` so data-authored UI can surface path controls.
+
+The editor host translates the manifest into a normal runner launch and injects
+`editor.command`, `editor.input.path`, `editor.save.path`,
+`editor.test_run.path`, `editor.project.dir`, `editor.project.data_root`, and
+`editor.asset_source.<kind>.path` / `.relative` / `.available` as scene state.
+This keeps the shell data-authored while still giving users a stable CLI:
+`--project` selects the editor project, `--input` selects a `.slayermap.json`
+file for `open`, and `--output` selects the save target.
+
+When game data is loaded directly from a filesystem path, the runtime also
+remembers that file's parent directory as a filesystem source root even though
+normal asset-relative paths still use the resolver's virtual asset namespace.
+Data-authored editor actions such as `editor.texture.scan` and
+`editor.actor.scan` can therefore use project-relative fallbacks like `textures`
+or `models` during tests or direct runner launches, while the editor host can
+override those paths through injected `editor.asset_source.*` scene state.
+Scanned actor model rows keep both a resolved runtime `path` for loading and a
+project-relative `relative_path` for authored map metadata.
 
 For low-level debugging, the same launch can be written directly with the
 generic runner:
@@ -291,8 +333,8 @@ build/debug/slayer3d_runner \
   --root demos/editor_shell_dojo/data \
   --data asset://editor_shell_dojo.game.json \
   --state editor.command=open \
-  --state editor.input.path=/tmp/level.fragment.json \
-  --state editor.save.path=/tmp/level.fragment.json
+  --state editor.input.path=/tmp/level.slayermap.json \
+  --state editor.save.path=/tmp/level.slayermap.json
 ```
 
 The fused executable path is still the same generic runner. The game data is

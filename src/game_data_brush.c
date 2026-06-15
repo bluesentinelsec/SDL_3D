@@ -287,6 +287,19 @@ static slayer3d_color brush_material_color(const slayer3d_game_data_brush_materi
     };
 }
 
+static slayer3d_color brush_face_render_color(const slayer3d_game_data_brush_material *material,
+                                              const slayer3d_game_data_brush_face *face)
+{
+    if (face != NULL && face->tint_enabled)
+        return face->tint;
+    if (face != NULL && face->has_color &&
+        (material == NULL || material->texture == NULL || material->texture[0] == '\0'))
+    {
+        return face->color;
+    }
+    return brush_material_color(material);
+}
+
 static void brush_mesh_bounds_add(slayer3d_mesh *mesh, slayer3d_vec3 p)
 {
     if (mesh == NULL)
@@ -1501,7 +1514,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             const float uv_rotation = face->uv_rotation_degrees * SDL_PI_F / 180.0f;
             const float uv_cos = SDL_cosf(uv_rotation);
             const float uv_sin = SDL_sinf(uv_rotation);
-            const slayer3d_color color = brush_material_color(material);
+            const slayer3d_color color = brush_face_render_color(material, face);
             const float rgba[4] = {
                 (float)color.r / 255.0f,
                 (float)color.g / 255.0f,
@@ -1784,6 +1797,10 @@ Uint64 slayer3d_game_data_brush_world_compute_source_hash(const slayer3d_game_da
             brush_compile_hash_bytes(&hash, face->uv_offset, sizeof(face->uv_offset));
             brush_compile_hash_float(&hash, face->uv_rotation_degrees);
             brush_compile_hash_uint(&hash, face->surface_flags);
+            brush_compile_hash_bool(&hash, face->has_color);
+            brush_compile_hash_bytes(&hash, &face->color, sizeof(face->color));
+            brush_compile_hash_bool(&hash, face->tint_enabled);
+            brush_compile_hash_bytes(&hash, &face->tint, sizeof(face->tint));
         }
     }
     return hash;

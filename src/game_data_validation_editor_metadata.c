@@ -542,6 +542,41 @@ static bool validate_editor_brush_source_face_materials(validation_context *ctx,
     return true;
 }
 
+static bool validate_editor_brush_source_color(validation_context *ctx, yyjson_val *value, const char *path,
+                                               const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!is_exact_vec3_or_vec4_array(value) || !numeric_array_values_in_range(value, 0.0, 255.0))
+        return validation_error(ctx, path, "%s must be a numeric RGB or RGBA array in 0..255", description);
+    return true;
+}
+
+static bool validate_editor_brush_source_face_visuals(validation_context *ctx, yyjson_val *values, const char *box_path,
+                                                      const char *key_name)
+{
+    if (values == NULL)
+        return true;
+    if (!yyjson_is_obj(values))
+        return validation_error(ctx, box_path, "editor brush source %s must be an object", key_name);
+
+    size_t index = 0;
+    size_t max = 0;
+    yyjson_val *key = NULL;
+    yyjson_val *value = NULL;
+    yyjson_obj_foreach(values, index, max, key, value)
+    {
+        const char *face_key = yyjson_get_str(key);
+        char face_path[PATH_BUFFER_SIZE];
+        format_path(face_path, sizeof(face_path), "%s.%s.%s", box_path, key_name, face_key != NULL ? face_key : "");
+        if (!editor_brush_source_face_key_valid(face_key))
+            return validation_error(ctx, face_path, "editor brush source %s keys must be px/nx/py/ny/pz/nz", key_name);
+        if (!validate_editor_brush_source_color(ctx, value, face_path, key_name))
+            return false;
+    }
+    return true;
+}
+
 bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *sources = obj_get(root, "editor_brush_sources");
@@ -616,18 +651,27 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             yyjson_val *min_value = obj_get(box, "min");
             yyjson_val *max_value = obj_get(box, "max");
             yyjson_val *vertices = obj_get(box, "vertices");
+            yyjson_val *tint_enabled = obj_get(box, "tint_enabled");
+            yyjson_val *properties = obj_get(box, "properties");
             const bool is_convex = kind != NULL && SDL_strcmp(kind, "convex") == 0;
-            ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
-                 require_unique_name(ctx, &box_names, "editor brush source name", name, box_path) &&
-                 (kind == NULL || SDL_strcmp(kind, "box") == 0 || is_convex) && (prefab == NULL || prefab[0] != '\0') &&
-                 material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
-                 (is_convex ? editor_brush_source_vertices_valid(vertices, source_snap_units)
-                            : (editor_brush_source_box_has_positive_extent(min_value, max_value) &&
-                               editor_brush_source_box_aligned_to_snap(min_value, max_value, source_snap_units))) &&
-                 validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
-                                                       brush_content_name_valid, false) &&
-                 validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
-                                                             &material_names);
+            ok =
+                require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
+                require_unique_name(ctx, &box_names, "editor brush source name", name, box_path) &&
+                (kind == NULL || SDL_strcmp(kind, "box") == 0 || is_convex) && (prefab == NULL || prefab[0] != '\0') &&
+                material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
+                validate_editor_brush_source_color(ctx, obj_get(box, "color"), box_path, "editor brush source color") &&
+                validate_editor_brush_source_color(ctx, obj_get(box, "tint"), box_path, "editor brush source tint") &&
+                (tint_enabled == NULL || yyjson_is_bool(tint_enabled)) &&
+                (is_convex ? editor_brush_source_vertices_valid(vertices, source_snap_units)
+                           : (editor_brush_source_box_has_positive_extent(min_value, max_value) &&
+                              editor_brush_source_box_aligned_to_snap(min_value, max_value, source_snap_units))) &&
+                validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
+                                                      brush_content_name_valid, false) &&
+                validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
+                                                            &material_names) &&
+                validate_editor_brush_source_face_visuals(ctx, obj_get(box, "face_colors"), box_path, "face_colors") &&
+                validate_editor_brush_source_face_visuals(ctx, obj_get(box, "face_tints"), box_path, "face_tints") &&
+                (properties == NULL || yyjson_is_obj(properties));
             if (!ok && !ctx->failed)
             {
                 ok = validation_error(ctx, box_path,

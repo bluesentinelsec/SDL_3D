@@ -39,6 +39,28 @@ bool validate_editor_brush_duplicate_action(validation_context *ctx, yyjson_val 
                                             validation_names *names, const char *type);
 bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
+bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type);
+bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
+bool validate_editor_actor_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+bool validate_editor_actor_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
+bool validate_editor_actor_place_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
+bool validate_editor_connection_mark_source_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type);
+bool validate_editor_connection_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type);
+bool validate_editor_property_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type);
+bool validate_editor_property_remove_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type);
+bool validate_editor_property_select_slot_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type);
 bool validate_editor_selection_run_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -57,6 +79,12 @@ bool validate_editor_level_save_action(validation_context *ctx, yyjson_val *acti
                                        validation_names *names, const char *type);
 bool validate_editor_level_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                        validation_names *names, const char *type);
+bool validate_editor_map_export_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+bool validate_editor_map_save_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type);
+bool validate_editor_map_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                     validation_names *names, const char *type);
 bool validate_editor_test_run_prepare_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                              validation_names *names, const char *type);
 bool validate_editor_test_run_save_manifest_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -79,5 +107,11 @@ bool validate_editor_player_start_delete_action(validation_context *ctx, yyjson_
                                                 validation_names *names, const char *type);
 bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
+bool validate_editor_prefab_define_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type);
+bool validate_editor_prefab_instantiate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
+bool validate_editor_prefab_unlink_actor_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type);
 
 #endif
