@@ -903,7 +903,7 @@
             "layer": 121,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.status.label", "type": "label", "w": 96, "h": "fill", "text": "Size / Scale" },
+              { "id": "ui.editor_shell.left_inspector.row.status.label", "type": "label", "w": 96, "h": "fill", "text": "Size" },
               {
                 "id": "ui.editor_shell.left_inspector.row.status.value",
                 "type": "label",
@@ -4540,7 +4540,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 384,
+            "y": 334,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
@@ -4563,7 +4563,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 414,
+            "y": 364,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
@@ -4593,7 +4593,7 @@
             "layer": 121,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Mat / Mesh" },
+              { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Material" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview.value",
                 "type": "label",
@@ -4632,14 +4632,14 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 564,
+            "y": 424,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
             "layer": 121,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Prefab / Group" },
+              { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Prefab / Tags" },
               {
                 "id": "ui.editor_shell.left_inspector.row.move_delta.value",
                 "type": "label",
@@ -4658,14 +4658,14 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 504,
+            "y": 394,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
             "layer": 121,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Contents / Type" },
+              { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Contents" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview_state.value",
                 "type": "label",
@@ -4688,18 +4688,179 @@
             "layer": 121,
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Color / Tint" },
+              { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Color" },
               {
                 "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.value",
                 "type": "label",
                 "w": "fill",
                 "h": "fill",
-                "format": "%s / %s",
-                "bindings": [
-                  { "type": "scene_state", "key": "editor.inspector.selection.color", "default": "" },
-                  { "type": "scene_state", "key": "editor.inspector.selection.tint", "default": "" }
-                ]
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.color", "default": "" }]
               }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.title",
+            "type": "label",
+            "x": 12,
+            "y": 464,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 18,
+            "layer": 121,
+            "text": "Brush Color",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.r",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 486,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.brush_color.r.label", "type": "label", "w": 68, "h": "fill", "text": "Red" },
+              { "id": "ui.editor_shell.left_inspector.brush_color.r.down", "type": "button", "w": 28, "h": "fill", "text": "-", "text_scale": 0.42, "action": "editor.inspector.brush.color.r.down" },
+              {
+                "id": "ui.editor_shell.left_inspector.brush_color.r.value",
+                "type": "label",
+                "w": 64,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.brush.color.r", "default": 180 }]
+              },
+              { "id": "ui.editor_shell.left_inspector.brush_color.r.up", "type": "button", "w": 28, "h": "fill", "text": "+", "text_scale": 0.42, "action": "editor.inspector.brush.color.r.up" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.g",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 514,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.brush_color.g.label", "type": "label", "w": 68, "h": "fill", "text": "Green" },
+              { "id": "ui.editor_shell.left_inspector.brush_color.g.down", "type": "button", "w": 28, "h": "fill", "text": "-", "text_scale": 0.42, "action": "editor.inspector.brush.color.g.down" },
+              {
+                "id": "ui.editor_shell.left_inspector.brush_color.g.value",
+                "type": "label",
+                "w": 64,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.brush.color.g", "default": 184 }]
+              },
+              { "id": "ui.editor_shell.left_inspector.brush_color.g.up", "type": "button", "w": 28, "h": "fill", "text": "+", "text_scale": 0.42, "action": "editor.inspector.brush.color.g.up" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.b",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 542,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.brush_color.b.label", "type": "label", "w": 68, "h": "fill", "text": "Blue" },
+              { "id": "ui.editor_shell.left_inspector.brush_color.b.down", "type": "button", "w": 28, "h": "fill", "text": "-", "text_scale": 0.42, "action": "editor.inspector.brush.color.b.down" },
+              {
+                "id": "ui.editor_shell.left_inspector.brush_color.b.value",
+                "type": "label",
+                "w": 64,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.brush.color.b", "default": 192 }]
+              },
+              { "id": "ui.editor_shell.left_inspector.brush_color.b.up", "type": "button", "w": 28, "h": "fill", "text": "+", "text_scale": 0.42, "action": "editor.inspector.brush.color.b.up" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.a",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 570,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.brush_color.a.label", "type": "label", "w": 68, "h": "fill", "text": "Alpha" },
+              { "id": "ui.editor_shell.left_inspector.brush_color.a.down", "type": "button", "w": 28, "h": "fill", "text": "-", "text_scale": 0.42, "action": "editor.inspector.brush.color.a.down" },
+              {
+                "id": "ui.editor_shell.left_inspector.brush_color.a.value",
+                "type": "label",
+                "w": 64,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.inspector.brush.color.a", "default": 255 }]
+              },
+              { "id": "ui.editor_shell.left_inspector.brush_color.a.up", "type": "button", "w": 28, "h": "fill", "text": "+", "text_scale": 0.42, "action": "editor.inspector.brush.color.a.up" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.brush_color.actions",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 600,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.brush.editable", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.brush_color.apply", "type": "button", "w": 128, "h": "fill", "text": "Apply Color", "text_scale": 0.34, "action": "editor.inspector.brush.color.apply" },
+              { "id": "ui.editor_shell.left_inspector.brush_color.reset", "type": "button", "w": 92, "h": "fill", "text": "Reset", "text_scale": 0.34, "action": "editor.inspector.brush.color.reset" }
             ]
           }
         ]

@@ -32,6 +32,52 @@ static void inspector_format_color(slayer3d_color color, char *buffer, size_t bu
     SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", color.r, color.g, color.b, color.a);
 }
 
+static bool inspector_color_equal(slayer3d_color lhs, slayer3d_color rhs)
+{
+    return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
+}
+
+static void inspector_publish_brush_color_draft(slayer3d_properties *scene_state, slayer3d_color color, bool editable)
+{
+    char value[64];
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(scene_state, "editor.inspector.brush.editable", editable);
+    slayer3d_properties_set_color(scene_state, "editor.inspector.brush.color", color);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.brush.color.r", (int)color.r);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.brush.color.g", (int)color.g);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.brush.color.b", (int)color.b);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.brush.color.a", (int)color.a);
+    inspector_format_color(color, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.brush.color.label", value);
+}
+
+static bool inspector_brush_uniform_color(const slayer3d_game_data_brush *brush, slayer3d_color *out_color)
+{
+    if (brush == NULL || brush->faces == NULL || brush->face_count <= 0 || out_color == NULL)
+        return false;
+    bool found = false;
+    slayer3d_color color = {180, 184, 192, 255};
+    for (int i = 0; i < brush->face_count; ++i)
+    {
+        const slayer3d_game_data_brush_face *face = &brush->faces[i];
+        if (!face->has_color)
+            return false;
+        if (!found)
+        {
+            color = face->color;
+            found = true;
+            continue;
+        }
+        if (!inspector_color_equal(color, face->color))
+            return false;
+    }
+    if (!found)
+        return false;
+    *out_color = color;
+    return true;
+}
+
 static void inspector_format_brush_contents(unsigned int contents, char *buffer, size_t buffer_size)
 {
     if (buffer == NULL || buffer_size == 0U)
@@ -84,6 +130,7 @@ static void inspector_set_empty_selection(slayer3d_properties *scene_state)
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab", "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", "");
+    inspector_publish_brush_color_draft(scene_state, (slayer3d_color){180, 184, 192, 255}, false);
 }
 
 static const slayer3d_game_data_brush *inspector_brush_for_selection(
@@ -165,11 +212,16 @@ static void publish_single_brush_inspector_state(slayer3d_game_data_runtime *run
         brush != NULL && resolved.face_index >= 0 && resolved.face_index < brush->face_count
             ? &brush->faces[resolved.face_index]
             : NULL;
+    slayer3d_color brush_color = {180, 184, 192, 255};
+    const bool has_uniform_color = inspector_brush_uniform_color(brush, &brush_color);
     if (face != NULL && face->has_color)
         inspector_format_color(face->color, value, sizeof(value));
+    else if (has_uniform_color)
+        inspector_format_color(brush_color, value, sizeof(value));
     else
-        SDL_strlcpy(value, "", sizeof(value));
+        SDL_strlcpy(value, "default", sizeof(value));
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", value);
+    inspector_publish_brush_color_draft(scene_state, brush_color, true);
     if (face != NULL && face->tint_enabled)
         inspector_format_color(face->tint, value, sizeof(value));
     else
@@ -240,6 +292,7 @@ static void publish_multi_brush_inspector_state(slayer3d_game_data_runtime *runt
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "mixed");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab", "mixed");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", "mixed");
+    inspector_publish_brush_color_draft(scene_state, (slayer3d_color){180, 184, 192, 255}, true);
 }
 
 static void publish_actor_inspector_state(slayer3d_game_data_runtime *runtime,
@@ -281,6 +334,7 @@ static void publish_actor_inspector_state(slayer3d_game_data_runtime *runtime,
                                    actor->prefab != NULL ? actor->prefab : "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags",
                                    actor->group != NULL ? actor->group : "");
+    inspector_publish_brush_color_draft(scene_state, (slayer3d_color){180, 184, 192, 255}, false);
 }
 
 static void publish_active_inspector_selection_state(slayer3d_game_data_runtime *runtime, int selected_brush_count)

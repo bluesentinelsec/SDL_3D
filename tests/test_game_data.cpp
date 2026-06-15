@@ -20139,7 +20139,9 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_LE(inspector.y + inspector.h, console.y);
 
     std::vector<std::string> text_names = visible_text_names();
-    EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
+    EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
+              text_names.end());
+    EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.brush_color.r.value"),
               text_names.end());
     RectSummary scroll_track = visible_frame("ui.editor_shell.left_inspector.scroll.track");
     EXPECT_TRUE(scroll_track.found);
@@ -25580,6 +25582,14 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        EXPECT_GE(signal, 0) << name;
+        if (signal >= 0)
+            slayer3d_signal_emit(bus, signal, nullptr);
+    };
 
     editor_brush_source_prefab_result first_result{};
     const int first_min[3] = {0, 0, 0};
@@ -25637,6 +25647,36 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.count", ""), "1 selected");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.size", ""),
                  "1.000, 1.000, 1.000");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.brush.editable", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.color", ""), "default");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.r", 0), 180);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.g", 0), 184);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.b", 0), 192);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.a", 0), 255);
+
+    emit_signal("signal.editor.inspector.brush.color.r.up");
+    emit_signal("signal.editor.inspector.brush.color.g.down");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.r", 0), 196);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.brush.color.g", 0), 168);
+    emit_signal("signal.editor.inspector.brush.color.apply");
+    slayer3d_game_data_brush_world colored_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &colored_world));
+    const int colored_first_index = brush_index(first_result.brush_name);
+    ASSERT_GE(colored_first_index, 0);
+    ASSERT_LT(colored_first_index, colored_world.brush_count);
+    for (int i = 0; i < colored_world.brushes[colored_first_index].face_count; ++i)
+    {
+        const slayer3d_game_data_brush_face &face = colored_world.brushes[colored_first_index].faces[i];
+        EXPECT_TRUE(face.has_color);
+        EXPECT_EQ(face.color.r, 196);
+        EXPECT_EQ(face.color.g, 168);
+        EXPECT_EQ(face.color.b, 192);
+        EXPECT_EQ(face.color.a, 255);
+    }
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(first_result.brush_name), -1, &first_selection));
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(second_result.brush_name), -1, &second_selection));
 
     SDL_SetModState(SDL_KMOD_CTRL);
     ASSERT_TRUE(editor_select_mode_primary_click(runtime, &second_selection));
@@ -25681,6 +25721,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "none");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "No selection");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.brush.editable", true));
 
     SDL_SetModState(SDL_KMOD_NONE);
     slayer3d_game_data_destroy(runtime);

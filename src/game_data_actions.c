@@ -1441,6 +1441,72 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     return true;
 }
 
+static void publish_editor_brush_color_draft(slayer3d_properties *scene_state, const char *color_key,
+                                             slayer3d_color color)
+{
+    char key[128];
+    char label[64];
+    if (scene_state == NULL || color_key == NULL || color_key[0] == '\0')
+        return;
+
+    slayer3d_properties_set_color(scene_state, color_key, color);
+    SDL_snprintf(key, sizeof(key), "%s.r", color_key);
+    slayer3d_properties_set_int(scene_state, key, (int)color.r);
+    SDL_snprintf(key, sizeof(key), "%s.g", color_key);
+    slayer3d_properties_set_int(scene_state, key, (int)color.g);
+    SDL_snprintf(key, sizeof(key), "%s.b", color_key);
+    slayer3d_properties_set_int(scene_state, key, (int)color.b);
+    SDL_snprintf(key, sizeof(key), "%s.a", color_key);
+    slayer3d_properties_set_int(scene_state, key, (int)color.a);
+    SDL_snprintf(label, sizeof(label), "%u, %u, %u, %u", color.r, color.g, color.b, color.a);
+    SDL_snprintf(key, sizeof(key), "%s.label", color_key);
+    slayer3d_properties_set_string(scene_state, key, label);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", label);
+}
+
+static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || action == NULL)
+        return false;
+
+    const char *color_key = json_string(action, "color_key", "editor.inspector.brush.color");
+    if (color_key == NULL || color_key[0] == '\0')
+        return false;
+
+    slayer3d_color color =
+        slayer3d_properties_get_color(runtime->scene_state, color_key, (slayer3d_color){180, 184, 192, 255});
+    if (obj_get(action, "color") != NULL)
+    {
+        color = json_color(action, "color", color);
+    }
+    else
+    {
+        const char channel = first_json_string_char(action, "channel", '\0');
+        const int delta = json_int(action, "delta", 0);
+        switch (channel)
+        {
+        case 'r':
+            color.r = (Uint8)SDL_clamp((int)color.r + delta, 0, 255);
+            break;
+        case 'g':
+            color.g = (Uint8)SDL_clamp((int)color.g + delta, 0, 255);
+            break;
+        case 'b':
+            color.b = (Uint8)SDL_clamp((int)color.b + delta, 0, 255);
+            break;
+        case 'a':
+            color.a = (Uint8)SDL_clamp((int)color.a + delta, 0, 255);
+            break;
+        default:
+            return false;
+        }
+    }
+
+    publish_editor_brush_color_draft(runtime->scene_state, color_key, color);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush color edited");
+    return true;
+}
+
 static bool editor_selected_brushes_bounds(const slayer3d_game_data_runtime *runtime, slayer3d_bounding_box *out_bounds)
 {
     if (runtime == NULL || out_bounds == NULL || runtime->editor_selected_brush_count <= 0)
@@ -2212,6 +2278,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.brush.color") == 0)
         return slayer3d_game_data_color_selected_editor_brushes(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.inspector.brush.color_channel") == 0)
+        return execute_editor_brush_color_channel_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.texture.scan") == 0)
         return execute_editor_texture_scan_action(runtime, action);

@@ -559,6 +559,40 @@ bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *act
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_inspector_brush_color_channel_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    (void)names;
+    yyjson_val *color_key = obj_get(action, "color_key");
+    if (color_key != NULL && (!yyjson_is_str(color_key) || yyjson_get_str(color_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s color_key must be a non-empty string", type);
+
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *channel = obj_get(action, "channel");
+    yyjson_val *delta = obj_get(action, "delta");
+    if (color != NULL)
+    {
+        if (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 255.0))
+            return validation_error(ctx, json_path, "%s color must be a numeric RGB or RGBA array in 0..255", type);
+        if (channel != NULL || delta != NULL)
+            return validation_error(ctx, json_path, "%s color cannot be combined with channel or delta", type);
+        return true;
+    }
+
+    if (channel == NULL || !yyjson_is_str(channel))
+        return validation_error(ctx, json_path, "%s channel must be r, g, b, or a", type);
+    const char *channel_text = yyjson_get_str(channel);
+    if (channel_text == NULL || channel_text[1] != '\0' ||
+        (channel_text[0] != 'r' && channel_text[0] != 'g' && channel_text[0] != 'b' && channel_text[0] != 'a'))
+    {
+        return validation_error(ctx, json_path, "%s channel must be r, g, b, or a", type);
+    }
+    if (delta == NULL || !yyjson_is_int(delta))
+        return validation_error(ctx, json_path, "%s delta must be an integer", type);
+    return true;
+}
+
 bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                          validation_names *names, const char *type)
 {

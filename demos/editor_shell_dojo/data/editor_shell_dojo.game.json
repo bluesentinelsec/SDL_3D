@@ -295,6 +295,16 @@
     "signal.editor.inspector.tab.data",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
+    "signal.editor.inspector.brush.color.r.down",
+    "signal.editor.inspector.brush.color.r.up",
+    "signal.editor.inspector.brush.color.g.down",
+    "signal.editor.inspector.brush.color.g.up",
+    "signal.editor.inspector.brush.color.b.down",
+    "signal.editor.inspector.brush.color.b.up",
+    "signal.editor.inspector.brush.color.a.down",
+    "signal.editor.inspector.brush.color.a.up",
+    "signal.editor.inspector.brush.color.apply",
+    "signal.editor.inspector.brush.color.reset",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -1611,6 +1621,69 @@
         "actions": [
           { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.r.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "r", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.r.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "r", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.g.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "g", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.g.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "g", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.b.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "b", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.b.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "b", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.a.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "a", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.a.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "a", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.apply",
+        "actions": [
+          {
+            "type": "editor.brush.color",
+            "target": "selection",
+            "color_key": "editor.inspector.brush.color",
+            "outputs": {
+              "valid_key": "editor.inspector.brush.color.apply.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.reset",
+        "actions": [
+          { "type": "editor.inspector.brush.color_channel", "color": [180, 184, 192, 255] },
+          {
+            "type": "editor.brush.color",
+            "target": "selection",
+            "color_key": "editor.inspector.brush.color",
+            "outputs": {
+              "valid_key": "editor.inspector.brush.color.apply.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
