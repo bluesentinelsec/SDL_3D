@@ -1872,9 +1872,10 @@ designer-authored key/value pairs on editor objects. The first implementation
 supports `target_type: "editor_actor"` with `target` or `target_from_state`, and
 `target_type: "selection"` for the selected editor actor. Keys can come from
 `key` or `key_from_state`; values can be scalar JSON, vec3/color arrays,
-`value_from_state`, or `value_from_payload`. Selection publishing mirrors the
-first property slots into `editor.property.slot.N.key`, `.type`, `.value`, and
-`.available` for generic inspector UI.
+`value_from_state`, or `value_from_payload`. Editor objects expose up to 64
+designer-authored properties. Selection publishing mirrors those slots into
+`editor.property.slot.N.key`, `.type`, `.value`, and `.available` for generic
+inspector UI.
 
 ```json
 {

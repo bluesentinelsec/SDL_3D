@@ -8,6 +8,8 @@
  * types have been declared, so it intentionally does not include that header.
  */
 
+#define SLAYER3D_EDITOR_PROPERTY_SLOT_CAP 64
+
 yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
 
 typedef struct editor_trace_viewport_config

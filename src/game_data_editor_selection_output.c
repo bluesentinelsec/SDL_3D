@@ -75,5 +75,5 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
     editor_set_vec3_output(scene_state, outputs, "normal_key",
                            resolved.hit ? resolved.normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     if (obj_get(outputs, "type_key") != NULL)
-        publish_editor_selection_properties(runtime, &resolved, 6);
+        publish_editor_selection_properties(runtime, &resolved, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
 }

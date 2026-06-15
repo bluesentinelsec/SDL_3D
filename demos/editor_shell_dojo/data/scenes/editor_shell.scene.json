@@ -1346,6 +1346,3196 @@
             ]
           },
           {
+            "id": "ui.editor_shell.left_inspector.row.property6",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 344,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.6",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.6.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property6.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.6.key", "default": "" }],
+                "action": "editor.property.select_slot_key.6",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 6, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property6.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.6.value", "default": "" }],
+                "action": "editor.property.select_slot_value.6",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 6, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property6.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.6"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property7",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 374,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.7",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.7.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property7.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.7.key", "default": "" }],
+                "action": "editor.property.select_slot_key.7",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 7, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property7.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.7.value", "default": "" }],
+                "action": "editor.property.select_slot_value.7",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 7, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property7.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.7"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property8",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 404,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.8",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.8.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property8.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.8.key", "default": "" }],
+                "action": "editor.property.select_slot_key.8",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 8, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property8.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.8.value", "default": "" }],
+                "action": "editor.property.select_slot_value.8",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 8, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property8.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.8"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property9",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 434,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.9",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.9.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property9.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.9.key", "default": "" }],
+                "action": "editor.property.select_slot_key.9",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 9, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property9.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.9.value", "default": "" }],
+                "action": "editor.property.select_slot_value.9",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 9, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property9.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.9"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property10",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 464,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.10",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.10.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property10.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.10.key", "default": "" }],
+                "action": "editor.property.select_slot_key.10",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 10, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property10.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.10.value", "default": "" }],
+                "action": "editor.property.select_slot_value.10",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 10, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property10.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.10"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property11",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 494,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.11",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.11.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property11.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.11.key", "default": "" }],
+                "action": "editor.property.select_slot_key.11",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 11, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property11.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.11.value", "default": "" }],
+                "action": "editor.property.select_slot_value.11",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 11, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property11.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.11"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property12",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 524,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.12",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.12.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property12.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.12.key", "default": "" }],
+                "action": "editor.property.select_slot_key.12",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 12, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property12.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.12.value", "default": "" }],
+                "action": "editor.property.select_slot_value.12",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 12, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property12.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.12"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property13",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 554,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.13",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.13.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property13.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.13.key", "default": "" }],
+                "action": "editor.property.select_slot_key.13",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 13, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property13.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.13.value", "default": "" }],
+                "action": "editor.property.select_slot_value.13",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 13, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property13.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.13"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property14",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 584,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.14",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.14.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property14.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.14.key", "default": "" }],
+                "action": "editor.property.select_slot_key.14",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 14, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property14.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.14.value", "default": "" }],
+                "action": "editor.property.select_slot_value.14",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 14, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property14.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.14"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property15",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 614,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.15",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.15.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property15.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.15.key", "default": "" }],
+                "action": "editor.property.select_slot_key.15",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 15, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property15.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.15.value", "default": "" }],
+                "action": "editor.property.select_slot_value.15",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 15, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property15.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.15"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property16",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 644,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.16",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.16.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property16.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.16.key", "default": "" }],
+                "action": "editor.property.select_slot_key.16",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 16, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property16.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.16.value", "default": "" }],
+                "action": "editor.property.select_slot_value.16",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 16, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property16.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.16"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property17",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 674,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.17",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.17.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property17.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.17.key", "default": "" }],
+                "action": "editor.property.select_slot_key.17",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 17, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property17.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.17.value", "default": "" }],
+                "action": "editor.property.select_slot_value.17",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 17, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property17.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.17"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property18",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 704,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.18",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.18.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property18.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.18.key", "default": "" }],
+                "action": "editor.property.select_slot_key.18",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 18, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property18.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.18.value", "default": "" }],
+                "action": "editor.property.select_slot_value.18",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 18, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property18.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.18"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property19",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 734,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.19",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.19.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property19.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.19.key", "default": "" }],
+                "action": "editor.property.select_slot_key.19",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 19, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property19.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.19.value", "default": "" }],
+                "action": "editor.property.select_slot_value.19",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 19, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property19.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.19"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property20",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 764,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.20",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.20.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property20.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.20.key", "default": "" }],
+                "action": "editor.property.select_slot_key.20",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 20, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property20.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.20.value", "default": "" }],
+                "action": "editor.property.select_slot_value.20",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 20, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property20.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.20"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property21",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 794,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.21",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.21.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property21.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.21.key", "default": "" }],
+                "action": "editor.property.select_slot_key.21",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 21, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property21.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.21.value", "default": "" }],
+                "action": "editor.property.select_slot_value.21",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 21, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property21.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.21"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property22",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 824,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.22",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.22.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property22.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.22.key", "default": "" }],
+                "action": "editor.property.select_slot_key.22",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 22, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property22.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.22.value", "default": "" }],
+                "action": "editor.property.select_slot_value.22",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 22, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property22.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.22"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property23",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 854,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.23",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.23.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property23.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.23.key", "default": "" }],
+                "action": "editor.property.select_slot_key.23",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 23, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property23.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.23.value", "default": "" }],
+                "action": "editor.property.select_slot_value.23",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 23, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property23.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.23"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property24",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 884,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.24",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.24.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property24.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.24.key", "default": "" }],
+                "action": "editor.property.select_slot_key.24",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 24, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property24.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.24.value", "default": "" }],
+                "action": "editor.property.select_slot_value.24",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 24, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property24.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.24"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property25",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 914,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.25",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.25.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property25.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.25.key", "default": "" }],
+                "action": "editor.property.select_slot_key.25",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 25, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property25.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.25.value", "default": "" }],
+                "action": "editor.property.select_slot_value.25",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 25, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property25.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.25"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property26",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 944,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.26",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.26.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property26.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.26.key", "default": "" }],
+                "action": "editor.property.select_slot_key.26",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 26, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property26.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.26.value", "default": "" }],
+                "action": "editor.property.select_slot_value.26",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 26, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property26.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.26"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property27",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 974,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.27",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.27.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property27.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.27.key", "default": "" }],
+                "action": "editor.property.select_slot_key.27",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 27, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property27.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.27.value", "default": "" }],
+                "action": "editor.property.select_slot_value.27",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 27, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property27.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.27"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property28",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1004,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.28",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.28.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property28.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.28.key", "default": "" }],
+                "action": "editor.property.select_slot_key.28",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 28, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property28.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.28.value", "default": "" }],
+                "action": "editor.property.select_slot_value.28",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 28, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property28.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.28"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property29",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1034,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.29",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.29.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property29.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.29.key", "default": "" }],
+                "action": "editor.property.select_slot_key.29",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 29, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property29.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.29.value", "default": "" }],
+                "action": "editor.property.select_slot_value.29",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 29, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property29.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.29"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property30",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1064,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.30",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.30.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property30.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.30.key", "default": "" }],
+                "action": "editor.property.select_slot_key.30",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 30, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property30.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.30.value", "default": "" }],
+                "action": "editor.property.select_slot_value.30",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 30, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property30.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.30"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property31",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1094,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.31",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.31.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property31.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.31.key", "default": "" }],
+                "action": "editor.property.select_slot_key.31",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 31, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property31.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.31.value", "default": "" }],
+                "action": "editor.property.select_slot_value.31",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 31, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property31.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.31"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property32",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1124,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.32",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.32.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property32.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.32.key", "default": "" }],
+                "action": "editor.property.select_slot_key.32",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 32, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property32.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.32.value", "default": "" }],
+                "action": "editor.property.select_slot_value.32",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 32, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property32.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.32"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property33",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1154,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.33",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.33.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property33.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.33.key", "default": "" }],
+                "action": "editor.property.select_slot_key.33",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 33, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property33.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.33.value", "default": "" }],
+                "action": "editor.property.select_slot_value.33",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 33, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property33.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.33"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property34",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1184,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.34",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.34.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property34.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.34.key", "default": "" }],
+                "action": "editor.property.select_slot_key.34",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 34, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property34.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.34.value", "default": "" }],
+                "action": "editor.property.select_slot_value.34",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 34, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property34.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.34"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property35",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1214,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.35",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.35.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property35.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.35.key", "default": "" }],
+                "action": "editor.property.select_slot_key.35",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 35, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property35.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.35.value", "default": "" }],
+                "action": "editor.property.select_slot_value.35",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 35, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property35.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.35"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property36",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1244,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.36",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.36.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property36.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.36.key", "default": "" }],
+                "action": "editor.property.select_slot_key.36",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 36, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property36.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.36.value", "default": "" }],
+                "action": "editor.property.select_slot_value.36",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 36, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property36.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.36"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property37",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1274,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.37",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.37.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property37.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.37.key", "default": "" }],
+                "action": "editor.property.select_slot_key.37",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 37, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property37.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.37.value", "default": "" }],
+                "action": "editor.property.select_slot_value.37",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 37, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property37.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.37"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property38",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1304,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.38",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.38.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property38.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.38.key", "default": "" }],
+                "action": "editor.property.select_slot_key.38",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 38, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property38.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.38.value", "default": "" }],
+                "action": "editor.property.select_slot_value.38",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 38, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property38.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.38"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property39",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1334,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.39",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.39.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property39.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.39.key", "default": "" }],
+                "action": "editor.property.select_slot_key.39",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 39, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property39.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.39.value", "default": "" }],
+                "action": "editor.property.select_slot_value.39",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 39, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property39.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.39"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property40",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1364,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.40",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.40.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property40.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.40.key", "default": "" }],
+                "action": "editor.property.select_slot_key.40",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 40, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property40.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.40.value", "default": "" }],
+                "action": "editor.property.select_slot_value.40",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 40, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property40.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.40"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property41",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1394,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.41",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.41.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property41.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.41.key", "default": "" }],
+                "action": "editor.property.select_slot_key.41",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 41, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property41.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.41.value", "default": "" }],
+                "action": "editor.property.select_slot_value.41",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 41, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property41.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.41"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property42",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1424,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.42",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.42.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property42.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.42.key", "default": "" }],
+                "action": "editor.property.select_slot_key.42",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 42, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property42.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.42.value", "default": "" }],
+                "action": "editor.property.select_slot_value.42",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 42, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property42.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.42"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property43",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1454,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.43",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.43.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property43.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.43.key", "default": "" }],
+                "action": "editor.property.select_slot_key.43",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 43, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property43.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.43.value", "default": "" }],
+                "action": "editor.property.select_slot_value.43",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 43, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property43.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.43"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property44",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1484,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.44",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.44.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property44.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.44.key", "default": "" }],
+                "action": "editor.property.select_slot_key.44",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 44, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property44.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.44.value", "default": "" }],
+                "action": "editor.property.select_slot_value.44",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 44, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property44.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.44"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property45",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1514,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.45",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.45.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property45.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.45.key", "default": "" }],
+                "action": "editor.property.select_slot_key.45",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 45, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property45.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.45.value", "default": "" }],
+                "action": "editor.property.select_slot_value.45",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 45, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property45.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.45"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property46",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1544,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.46",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.46.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property46.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.46.key", "default": "" }],
+                "action": "editor.property.select_slot_key.46",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 46, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property46.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.46.value", "default": "" }],
+                "action": "editor.property.select_slot_value.46",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 46, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property46.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.46"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property47",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1574,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.47",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.47.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property47.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.47.key", "default": "" }],
+                "action": "editor.property.select_slot_key.47",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 47, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property47.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.47.value", "default": "" }],
+                "action": "editor.property.select_slot_value.47",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 47, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property47.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.47"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property48",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1604,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.48",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.48.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property48.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.48.key", "default": "" }],
+                "action": "editor.property.select_slot_key.48",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 48, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property48.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.48.value", "default": "" }],
+                "action": "editor.property.select_slot_value.48",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 48, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property48.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.48"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property49",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1634,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.49",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.49.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property49.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.49.key", "default": "" }],
+                "action": "editor.property.select_slot_key.49",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 49, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property49.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.49.value", "default": "" }],
+                "action": "editor.property.select_slot_value.49",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 49, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property49.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.49"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property50",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1664,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.50",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.50.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property50.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.50.key", "default": "" }],
+                "action": "editor.property.select_slot_key.50",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 50, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property50.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.50.value", "default": "" }],
+                "action": "editor.property.select_slot_value.50",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 50, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property50.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.50"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property51",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1694,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.51",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.51.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property51.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.51.key", "default": "" }],
+                "action": "editor.property.select_slot_key.51",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 51, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property51.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.51.value", "default": "" }],
+                "action": "editor.property.select_slot_value.51",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 51, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property51.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.51"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property52",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1724,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.52",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.52.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property52.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.52.key", "default": "" }],
+                "action": "editor.property.select_slot_key.52",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 52, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property52.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.52.value", "default": "" }],
+                "action": "editor.property.select_slot_value.52",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 52, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property52.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.52"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property53",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1754,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.53",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.53.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property53.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.53.key", "default": "" }],
+                "action": "editor.property.select_slot_key.53",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 53, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property53.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.53.value", "default": "" }],
+                "action": "editor.property.select_slot_value.53",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 53, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property53.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.53"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property54",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1784,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.54",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.54.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property54.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.54.key", "default": "" }],
+                "action": "editor.property.select_slot_key.54",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 54, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property54.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.54.value", "default": "" }],
+                "action": "editor.property.select_slot_value.54",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 54, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property54.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.54"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property55",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1814,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.55",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.55.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property55.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.55.key", "default": "" }],
+                "action": "editor.property.select_slot_key.55",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 55, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property55.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.55.value", "default": "" }],
+                "action": "editor.property.select_slot_value.55",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 55, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property55.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.55"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property56",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1844,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.56",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.56.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property56.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.56.key", "default": "" }],
+                "action": "editor.property.select_slot_key.56",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 56, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property56.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.56.value", "default": "" }],
+                "action": "editor.property.select_slot_value.56",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 56, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property56.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.56"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property57",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1874,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.57",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.57.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property57.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.57.key", "default": "" }],
+                "action": "editor.property.select_slot_key.57",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 57, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property57.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.57.value", "default": "" }],
+                "action": "editor.property.select_slot_value.57",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 57, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property57.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.57"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property58",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1904,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.58",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.58.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property58.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.58.key", "default": "" }],
+                "action": "editor.property.select_slot_key.58",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 58, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property58.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.58.value", "default": "" }],
+                "action": "editor.property.select_slot_value.58",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 58, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property58.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.58"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property59",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1934,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.59",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.59.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property59.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.59.key", "default": "" }],
+                "action": "editor.property.select_slot_key.59",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 59, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property59.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.59.value", "default": "" }],
+                "action": "editor.property.select_slot_value.59",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 59, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property59.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.59"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property60",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1964,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.60",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.60.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property60.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.60.key", "default": "" }],
+                "action": "editor.property.select_slot_key.60",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 60, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property60.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.60.value", "default": "" }],
+                "action": "editor.property.select_slot_value.60",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 60, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property60.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.60"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property61",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 1994,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.61",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.61.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property61.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.61.key", "default": "" }],
+                "action": "editor.property.select_slot_key.61",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 61, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property61.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.61.value", "default": "" }],
+                "action": "editor.property.select_slot_value.61",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 61, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property61.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.61"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property62",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 2024,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.62",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.62.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property62.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.62.key", "default": "" }],
+                "action": "editor.property.select_slot_key.62",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 62, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property62.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.62.value", "default": "" }],
+                "action": "editor.property.select_slot_value.62",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 62, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property62.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.62"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.property63",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 2054,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.63",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.property.slot.63.available", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              {
+                "id": "ui.editor_shell.left_inspector.row.property63.label",
+                "type": "button",
+                "w": 88,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.63.key", "default": "" }],
+                "action": "editor.property.select_slot_key.63",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 63, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property63.value",
+                "type": "button",
+                "w": 140,
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.63.value", "default": "" }],
+                "action": "editor.property.select_slot_value.63",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 63, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property63.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.63"
+              }
+            ]
+          },
+          {
             "id": "ui.editor_shell.left_inspector.row.vertex",
             "type": "panel",
             "layout": "row",

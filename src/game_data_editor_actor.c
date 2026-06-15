@@ -421,6 +421,7 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
 {
     if (runtime == NULL || runtime->scene_state == NULL || slot_count <= 0)
         return;
+    slot_count = SDL_min(slot_count, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
 
     slayer3d_properties *scene_state = runtime->scene_state;
     const bool has_actor = selection != NULL && selection->hit &&
@@ -557,7 +558,7 @@ static void refresh_editor_property_selection_if_needed(slayer3d_game_data_runti
         selection.hit && selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR &&
         selection.element_name != NULL && SDL_strcmp(selection.element_name, target) == 0)
     {
-        publish_editor_selection_properties(runtime, &selection, 6);
+        publish_editor_selection_properties(runtime, &selection, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
     }
 }
 
@@ -579,19 +580,25 @@ static bool editor_property_prepare_key(slayer3d_properties *properties, const c
         SDL_snprintf(error, error_size, "editor property action requires a key");
         return false;
     }
-    if (editor_property_string_is_blank(original_key) || SDL_strcmp(original_key, key) == 0 ||
-        !slayer3d_properties_has(properties, original_key))
+    const bool has_original =
+        !editor_property_string_is_blank(original_key) && slayer3d_properties_has(properties, original_key);
+    if (has_original && SDL_strcmp(original_key, key) != 0)
     {
-        return true;
+        if (slayer3d_properties_has(properties, key))
+        {
+            SDL_snprintf(error, error_size, "editor property key already exists");
+            return false;
+        }
+        if (!slayer3d_properties_rename(properties, original_key, key))
+        {
+            SDL_snprintf(error, error_size, "failed to rename editor property");
+            return false;
+        }
     }
-    if (slayer3d_properties_has(properties, key))
+    if (!slayer3d_properties_has(properties, key) &&
+        slayer3d_properties_count(properties) >= SLAYER3D_EDITOR_PROPERTY_SLOT_CAP)
     {
-        SDL_snprintf(error, error_size, "editor property key already exists");
-        return false;
-    }
-    if (!slayer3d_properties_rename(properties, original_key, key))
-    {
-        SDL_snprintf(error, error_size, "failed to rename editor property");
+        SDL_snprintf(error, error_size, "editor property limit reached");
         return false;
     }
     return true;
@@ -647,7 +654,7 @@ static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *r
         SDL_snprintf(error, error_size, "selected brush does not support editable properties");
         return false;
     }
-    publish_editor_selection_properties(runtime, &runtime->editor_active_selection, 6);
+    publish_editor_selection_properties(runtime, &runtime->editor_active_selection, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
     return true;
 }
 

@@ -43,6 +43,7 @@ extern "C"
 #define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
 #define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
 #define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
+#define SLAYER3D_EDITOR_PROPERTY_SLOT_CAP 64
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
 #define SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY 64
@@ -17990,7 +17991,6 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
         ASSERT_GE(signal, 0) << name;
         slayer3d_signal_emit(bus, signal, nullptr);
     };
-
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     slayer3d_game_data_editor_selection active_selection{};
@@ -18948,7 +18948,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
     selection.type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
     selection.world_name = "editor_actors";
     selection.element_name = "actor.editor_shell.door.test";
-    publish_editor_selection_properties(runtime, &selection, 6);
+    publish_editor_selection_properties(runtime, &selection, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.type", ""), "editor_actor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.name", ""),
                  "actor.editor_shell.door.test");
@@ -18958,7 +18958,8 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
     bool saw_opens_with = false;
     bool saw_trigger_radius = false;
     int visible_slot_count = 0;
-    for (int i = 0; i < 6; ++i)
+    const int published_property_count = slayer3d_properties_get_int(scene_state, "editor.property.count", 0);
+    for (int i = 0; i < SLAYER3D_EDITOR_PROPERTY_SLOT_CAP; ++i)
     {
         char key_name[96];
         char value_name[96];
@@ -18979,7 +18980,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
         if (SDL_strcmp(key, "trigger_radius") == 0 && SDL_strcmp(value, "3.500") == 0)
             saw_trigger_radius = true;
     }
-    EXPECT_EQ(visible_slot_count, 6);
+    EXPECT_EQ(visible_slot_count, published_property_count);
     EXPECT_TRUE(saw_locked);
     EXPECT_TRUE(saw_tint);
     EXPECT_TRUE(saw_opens_with);
@@ -19050,6 +19051,9 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
         ASSERT_GE(signal, 0) << name;
         slayer3d_signal_emit(bus, signal, nullptr);
     };
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.editor.property.select_slot_key.63"), 0);
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.editor.property.select_slot_value.63"), 0);
+    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.editor.property.delete.63"), 0);
 
     editor_brush_source_prefab_result first_result{};
     const int first_min[3] = {0, 0, 0};
@@ -19172,6 +19176,43 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "test.editor.property.blank_value.message", ""))
                   .find("value is invalid"),
               std::string::npos);
+
+    for (int i = 2; i < SLAYER3D_EDITOR_PROPERTY_SLOT_CAP; ++i)
+    {
+        char action_json[256];
+        SDL_snprintf(action_json, sizeof(action_json),
+                     R"json({
+                       "type": "editor.property.set",
+                       "target_type": "selection",
+                       "key": "prop_%02d",
+                       "value": "value_%02d"
+                     })json",
+                     i, i);
+        ASSERT_TRUE(execute_json_action(action_json)) << i;
+    }
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.property.count", 0), SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.slot.7.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.slot.7.key", ""), "prop_07");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.slot.7.value", ""), "value_07");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.slot.63.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.slot.63.key", ""), "prop_63");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.slot.63.value", ""), "value_63");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.set",
+      "target_type": "selection",
+      "key": "overflow",
+      "value": "rejected",
+      "outputs": {
+        "valid_key": "test.editor.property.cap.valid",
+        "message_key": "test.editor.property.cap.message"
+      }
+    })json"));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "test.editor.property.cap.valid", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "test.editor.property.cap.message", ""))
+                  .find("limit reached"),
+              std::string::npos);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.property.slot.64.available", false));
 
     int encounter_slot = -1;
     int zone_slot = -1;
