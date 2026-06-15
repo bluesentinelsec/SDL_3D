@@ -20141,7 +20141,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_LE(inspector.y + inspector.h, console.y);
 
     std::vector<std::string> text_names = visible_text_names();
-    EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
+    EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.preview.value"),
               text_names.end());
     EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.brush_color.r.value"),
               text_names.end());
@@ -20326,12 +20326,18 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         60.0f);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.1").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.selection").found);
     RectSummary map_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.map.tab");
     RectSummary entity_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.entity.tab");
     ASSERT_TRUE(map_tab_scrolled.found);
     ASSERT_TRUE(entity_tab_scrolled.found);
     EXPECT_FLOAT_EQ(map_tab_scrolled.y, map_tab_initial.y);
     EXPECT_FLOAT_EQ(entity_tab_scrolled.y, entity_tab_initial.y);
+    EXPECT_EQ(
+        retained_ui_hit(map_tab_scrolled.x + map_tab_scrolled.w * 0.5f, map_tab_scrolled.y + map_tab_scrolled.h * 0.5f)
+            .id,
+        "ui.editor_shell.left_inspector.map.tab");
 
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);

@@ -89,6 +89,8 @@ extern "C"
         float gap;
         /** @brief Clip descendant rendering and hit testing to this node's padded content rect. */
         bool clip_children;
+        /** @brief Optional resolved node id whose rect clips this node and its descendants. */
+        const char *clip_rect_id;
         int layer;
         bool interactive;
         const char *text;

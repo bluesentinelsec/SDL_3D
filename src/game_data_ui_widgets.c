@@ -230,6 +230,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.padding = json_float(node, "padding", 0.0f);
     desc.gap = json_float(node, "gap", 0.0f);
     desc.clip_children = ui_widget_bool(node, "clip_children", false);
+    desc.clip_rect_id = json_string(node, "clip_rect_id", NULL);
     desc.layer = ui_widget_int(node, "layer", "z", 0);
     desc.interactive = ui_widget_bool(node, "interactive", false);
 
