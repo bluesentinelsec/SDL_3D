@@ -11,6 +11,18 @@ extern "C"
 #include "slayer3d/properties.h"
 }
 
+static void expect_property_order(const slayer3d_properties *properties, const char *const *expected,
+                                  int expected_count)
+{
+    ASSERT_EQ(slayer3d_properties_count(properties), expected_count);
+    for (int i = 0; i < expected_count; ++i)
+    {
+        const char *key = NULL;
+        ASSERT_TRUE(slayer3d_properties_get_key_at(properties, i, &key, NULL)) << "index=" << i;
+        EXPECT_STREQ(key, expected[i]) << "index=" << i;
+    }
+}
+
 /* ================================================================== */
 /* Lifecycle                                                          */
 /* ================================================================== */
@@ -285,6 +297,35 @@ TEST(Properties, RemoveNonexistentIsNoOp)
     slayer3d_properties_destroy(p);
 }
 
+TEST(Properties, RenamePreservesValueAndOrder)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    slayer3d_properties_set_string(p, "first", "a");
+    slayer3d_properties_set_int(p, "old", 2);
+    slayer3d_properties_set_bool(p, "last", true);
+
+    ASSERT_TRUE(slayer3d_properties_rename(p, "old", "renamed"));
+    EXPECT_FALSE(slayer3d_properties_has(p, "old"));
+    EXPECT_EQ(slayer3d_properties_get_int(p, "renamed", 0), 2);
+    const char *expected[] = {"first", "renamed", "last"};
+    expect_property_order(p, expected, 3);
+    slayer3d_properties_destroy(p);
+}
+
+TEST(Properties, RenameRejectsExistingTarget)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    slayer3d_properties_set_int(p, "first", 1);
+    slayer3d_properties_set_int(p, "second", 2);
+
+    EXPECT_FALSE(slayer3d_properties_rename(p, "first", "second"));
+    EXPECT_EQ(slayer3d_properties_get_int(p, "first", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(p, "second", 0), 2);
+    const char *expected[] = {"first", "second"};
+    expect_property_order(p, expected, 2);
+    slayer3d_properties_destroy(p);
+}
+
 TEST(Properties, ClearRemovesAll)
 {
     slayer3d_properties *p = slayer3d_properties_create();
@@ -371,6 +412,65 @@ TEST(Properties, GetKeyAtTypeParamIsOptional)
     const char *key = NULL;
     EXPECT_TRUE(slayer3d_properties_get_key_at(p, 0, &key, NULL));
     EXPECT_STREQ(key, "x");
+    slayer3d_properties_destroy(p);
+}
+
+TEST(Properties, GetKeyAtUsesInsertionOrder)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    slayer3d_properties_set_int(p, "b", 1);
+    slayer3d_properties_set_int(p, "a", 2);
+    slayer3d_properties_set_int(p, "c", 3);
+
+    const char *expected[] = {"b", "a", "c"};
+    expect_property_order(p, expected, 3);
+    slayer3d_properties_destroy(p);
+}
+
+TEST(Properties, OverwriteKeepsInsertionOrder)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    slayer3d_properties_set_int(p, "first", 1);
+    slayer3d_properties_set_int(p, "second", 2);
+    slayer3d_properties_set_string(p, "first", "updated");
+
+    EXPECT_STREQ(slayer3d_properties_get_string(p, "first", ""), "updated");
+    const char *expected[] = {"first", "second"};
+    expect_property_order(p, expected, 2);
+    slayer3d_properties_destroy(p);
+}
+
+TEST(Properties, RemoveClosesInsertionOrderGap)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    slayer3d_properties_set_int(p, "first", 1);
+    slayer3d_properties_set_int(p, "remove_me", 2);
+    slayer3d_properties_set_int(p, "last", 3);
+
+    slayer3d_properties_remove(p, "remove_me");
+    const char *expected[] = {"first", "last"};
+    expect_property_order(p, expected, 2);
+    slayer3d_properties_destroy(p);
+}
+
+TEST(Properties, GrowthPreservesInsertionOrder)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    char key[32];
+    for (int i = 0; i < 80; ++i)
+    {
+        SDL_snprintf(key, sizeof(key), "key_%02d", i);
+        slayer3d_properties_set_int(p, key, i);
+    }
+
+    for (int i = 0; i < 80; ++i)
+    {
+        const char *actual = NULL;
+        char expected[32];
+        SDL_snprintf(expected, sizeof(expected), "key_%02d", i);
+        ASSERT_TRUE(slayer3d_properties_get_key_at(p, i, &actual, NULL)) << "index=" << i;
+        EXPECT_STREQ(actual, expected) << "index=" << i;
+    }
     slayer3d_properties_destroy(p);
 }
 

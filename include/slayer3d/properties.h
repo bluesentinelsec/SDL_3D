@@ -193,6 +193,17 @@ extern "C"
     bool slayer3d_properties_has(const slayer3d_properties *props, const char *key);
 
     /**
+     * @brief Rename an existing key while preserving its value and insertion order.
+     *
+     * The rename fails if `old_key` does not exist, `new_key` is empty, or
+     * `new_key` already exists as a different entry. This avoids silently
+     * merging unrelated user-authored data.
+     *
+     * @return true if the key was renamed or already had the requested name.
+     */
+    bool slayer3d_properties_rename(slayer3d_properties *props, const char *old_key, const char *new_key);
+
+    /**
      * @brief Remove a key from the property bag.
      *
      * If the key holds a string value, the string is freed. No-op if the
@@ -219,9 +230,10 @@ extern "C"
     /**
      * @brief Get the key and value type at a given index.
      *
-     * Indices are in the range [0, count). The order is arbitrary and may
-     * change when entries are added or removed. This is intended for
-     * serialization and editor inspection, not indexed access by design.
+     * Indices are in the range [0, count). Entries are returned in insertion
+     * order. Overwriting a key keeps its existing position, removing a key
+     * closes the gap, and renaming a key with slayer3d_properties_rename keeps
+     * the renamed entry in its original position.
      *
      * @param index   Zero-based index into the entry array.
      * @param out_key Receives a pointer to the key string (owned by the bag).

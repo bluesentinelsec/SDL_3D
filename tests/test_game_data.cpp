@@ -19139,6 +19139,13 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     ASSERT_TRUE(execute_json_action(R"json({
       "type": "editor.property.set",
       "target_type": "selection",
+      "key": "zone",
+      "value": "cellar"
+    })json"));
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.set",
+      "target_type": "selection",
       "key": "",
       "value": "ignored",
       "outputs": {
@@ -19167,6 +19174,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
               std::string::npos);
 
     int encounter_slot = -1;
+    int zone_slot = -1;
     bool saw_empty_value_slot = false;
     for (int i = 0; i < 6; ++i)
     {
@@ -19178,10 +19186,14 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
         const char *value = slayer3d_properties_get_string(scene_state, value_name, "");
         if (SDL_strcmp(key, "encounter") == 0 && SDL_strcmp(value, "alpha") == 0)
             encounter_slot = i;
+        if (SDL_strcmp(key, "zone") == 0 && SDL_strcmp(value, "cellar") == 0)
+            zone_slot = i;
         if (SDL_strcmp(key, "empty_value") == 0)
             saw_empty_value_slot = true;
     }
     ASSERT_GE(encounter_slot, 0);
+    ASSERT_GE(zone_slot, 0);
+    EXPECT_LT(encounter_slot, zone_slot);
     EXPECT_FALSE(saw_empty_value_slot);
 
     char select_slot_action[128];
@@ -19212,6 +19224,14 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.applied_key", ""), "encounter_id");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", "set"), "");
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.key", encounter_slot);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, slot_state_key, ""), "encounter_id");
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.value", encounter_slot);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, slot_state_key, ""), "gamma");
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.key", zone_slot);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, slot_state_key, ""), "zone");
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.value", zone_slot);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, slot_state_key, ""), "cellar");
 
     char *export_json = nullptr;
     size_t export_size = 0u;

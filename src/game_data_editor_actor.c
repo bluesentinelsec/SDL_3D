@@ -571,6 +571,32 @@ static bool editor_property_ensure_properties(slayer3d_properties **properties)
     return *properties != NULL;
 }
 
+static bool editor_property_prepare_key(slayer3d_properties *properties, const char *key, const char *original_key,
+                                        char *error, size_t error_size)
+{
+    if (properties == NULL || editor_property_string_is_blank(key))
+    {
+        SDL_snprintf(error, error_size, "editor property action requires a key");
+        return false;
+    }
+    if (editor_property_string_is_blank(original_key) || SDL_strcmp(original_key, key) == 0 ||
+        !slayer3d_properties_has(properties, original_key))
+    {
+        return true;
+    }
+    if (slayer3d_properties_has(properties, key))
+    {
+        SDL_snprintf(error, error_size, "editor property key already exists");
+        return false;
+    }
+    if (!slayer3d_properties_rename(properties, original_key, key))
+    {
+        SDL_snprintf(error, error_size, "failed to rename editor property");
+        return false;
+    }
+    return true;
+}
+
 static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *runtime, const char *key,
                                                    const char *original_key, yyjson_val *action,
                                                    const slayer3d_properties *payload, bool remove, char *error,
@@ -605,13 +631,13 @@ static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *r
                 SDL_snprintf(error, error_size, "failed to allocate brush properties");
                 return false;
             }
+            if (!editor_property_prepare_key(box->properties, key, original_key, error, error_size))
+                return false;
             if (!editor_property_action_value(runtime, box->properties, key, action, payload))
             {
                 SDL_snprintf(error, error_size, "editor property value is invalid");
                 return false;
             }
-            if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
-                slayer3d_properties_remove(box->properties, original_key);
         }
         editor_brush_world_mark_dirty(world);
         changed = true;
@@ -1987,14 +2013,17 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
                                                        target, key);
                 return true;
             }
+            if (!editor_property_prepare_key(actor->properties, key, original_key, error, sizeof(error)))
+            {
+                publish_editor_property_action_outputs(runtime, outputs, false, error, target, key);
+                return true;
+            }
             if (!editor_property_action_value(runtime, actor->properties, key, action, payload))
             {
                 publish_editor_property_action_outputs(runtime, outputs, false, "editor property value is invalid",
                                                        target, key);
                 return true;
             }
-            if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
-                slayer3d_properties_remove(actor->properties, original_key);
             mark_editor_actors_dirty(runtime);
             refresh_editor_property_selection_if_needed(runtime, target);
             publish_editor_property_action_outputs(runtime, outputs, true,
@@ -2034,14 +2063,17 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
                                                key);
         return true;
     }
+    if (!editor_property_prepare_key(actor->properties, key, original_key, error, sizeof(error)))
+    {
+        publish_editor_property_action_outputs(runtime, outputs, false, error, target, key);
+        return true;
+    }
     if (!editor_property_action_value(runtime, actor->properties, key, action, payload))
     {
         publish_editor_property_action_outputs(runtime, outputs, false, "editor property value is invalid", target,
                                                key);
         return true;
     }
-    if (!editor_property_string_is_blank(original_key) && SDL_strcmp(original_key, key) != 0)
-        slayer3d_properties_remove(actor->properties, original_key);
     mark_editor_actors_dirty(runtime);
     refresh_editor_property_selection_if_needed(runtime, target);
     publish_editor_property_action_outputs(runtime, outputs, true, json_string(action, "message", "property set"),

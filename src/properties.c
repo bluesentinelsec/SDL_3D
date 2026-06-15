@@ -4,12 +4,15 @@
  *
  * Keys are copied on insert. String values are copied and owned.
  * The hash map uses linear probing with a load factor threshold of 0.7.
- * Tombstones are used for deletion to preserve probe chains.
+ * Tombstones are used for deletion to preserve probe chains. Entries also
+ * carry an insertion-order sequence so editor and serializer iteration is
+ * deterministic and human-readable.
  */
 
 #include "slayer3d/properties.h"
 
 #include <SDL3/SDL_stdinc.h>
+#include <limits.h>
 
 /* ================================================================== */
 /* Internal types                                                     */
@@ -27,6 +30,7 @@ typedef struct entry
     entry_state state;
     char *key; /* Owned copy of the key string. */
     slayer3d_value value;
+    int order;
 } entry;
 
 struct slayer3d_properties
@@ -35,6 +39,7 @@ struct slayer3d_properties
     int capacity;
     int count;    /* Number of OCCUPIED entries. */
     int occupied; /* OCCUPIED + TOMBSTONE (for load factor). */
+    int next_order;
 };
 
 #define INITIAL_CAPACITY 16
@@ -76,6 +81,7 @@ static void free_entry(entry *e)
     e->key = NULL;
     free_value(&e->value);
     e->state = ENTRY_EMPTY;
+    e->order = 0;
 }
 
 /**
@@ -170,6 +176,7 @@ static void set_value(slayer3d_properties *props, const char *key, slayer3d_valu
         }
         e->value = value;
         e->state = ENTRY_OCCUPIED;
+        e->order = props->next_order++;
         props->count++;
         if (!was_tombstone)
             props->occupied++;
@@ -327,6 +334,59 @@ bool slayer3d_properties_has(const slayer3d_properties *props, const char *key)
     return lookup(props, key) != NULL;
 }
 
+bool slayer3d_properties_rename(slayer3d_properties *props, const char *old_key, const char *new_key)
+{
+    if (props == NULL || old_key == NULL || new_key == NULL || old_key[0] == '\0' || new_key[0] == '\0' ||
+        props->capacity == 0)
+    {
+        return false;
+    }
+    if (SDL_strcmp(old_key, new_key) == 0)
+        return lookup(props, old_key) != NULL;
+    if (lookup(props, new_key) != NULL)
+        return false;
+
+    entry *old = find_entry(props->entries, props->capacity, old_key);
+    if (old == NULL || old->state != ENTRY_OCCUPIED)
+        return false;
+
+    char *new_key_copy = SDL_strdup(new_key);
+    if (new_key_copy == NULL)
+        return false;
+
+    char *old_key_copy = old->key;
+    slayer3d_value moved_value = old->value;
+    const int moved_order = old->order;
+    old->key = NULL;
+    SDL_zero(old->value);
+    old->state = ENTRY_TOMBSTONE;
+    old->order = 0;
+    props->count--;
+
+    entry *dest = find_entry(props->entries, props->capacity, new_key);
+    if (dest == NULL || dest->state == ENTRY_OCCUPIED)
+    {
+        old->key = old_key_copy;
+        old->value = moved_value;
+        old->state = ENTRY_OCCUPIED;
+        old->order = moved_order;
+        props->count++;
+        SDL_free(new_key_copy);
+        return false;
+    }
+
+    const bool was_empty = (dest->state == ENTRY_EMPTY);
+    dest->key = new_key_copy;
+    dest->value = moved_value;
+    dest->state = ENTRY_OCCUPIED;
+    dest->order = moved_order;
+    props->count++;
+    if (was_empty)
+        props->occupied++;
+    SDL_free(old_key_copy);
+    return true;
+}
+
 void slayer3d_properties_remove(slayer3d_properties *props, const char *key)
 {
     if (props == NULL || key == NULL || props->capacity == 0)
@@ -338,6 +398,7 @@ void slayer3d_properties_remove(slayer3d_properties *props, const char *key)
     SDL_free(e->key);
     e->key = NULL;
     e->state = ENTRY_TOMBSTONE;
+    e->order = 0;
     props->count--;
     /* occupied stays the same — tombstones count toward load factor. */
 }
@@ -355,6 +416,7 @@ void slayer3d_properties_clear(slayer3d_properties *props)
     }
     props->count = 0;
     props->occupied = 0;
+    props->next_order = 0;
 }
 
 /* ================================================================== */
@@ -374,19 +436,32 @@ bool slayer3d_properties_get_key_at(const slayer3d_properties *props, int index,
     if (props == NULL || index < 0 || index >= props->count || out_key == NULL)
         return false;
 
-    int seen = 0;
-    for (int i = 0; i < props->capacity; ++i)
+    int previous_order = -1;
+    for (int seen = 0; seen <= index; ++seen)
     {
-        if (props->entries[i].state != ENTRY_OCCUPIED)
-            continue;
+        const entry *best = NULL;
+        int best_order = INT_MAX;
+        for (int i = 0; i < props->capacity; ++i)
+        {
+            const entry *candidate = &props->entries[i];
+            if (candidate->state != ENTRY_OCCUPIED || candidate->order <= previous_order ||
+                candidate->order >= best_order)
+            {
+                continue;
+            }
+            best = candidate;
+            best_order = candidate->order;
+        }
+        if (best == NULL)
+            return false;
         if (seen == index)
         {
-            *out_key = props->entries[i].key;
+            *out_key = best->key;
             if (out_type != NULL)
-                *out_type = props->entries[i].value.type;
+                *out_type = best->value.type;
             return true;
         }
-        seen++;
+        previous_order = best_order;
     }
     return false;
 }
