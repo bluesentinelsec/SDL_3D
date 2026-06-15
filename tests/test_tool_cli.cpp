@@ -335,7 +335,7 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     }
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
-    EXPECT_NE(joined.find("editor.project.dir=" + std::string(SLAYER3D_EDITOR_DEFAULT_PROJECT)), std::string::npos);
+    EXPECT_NE(joined.find("editor.project.dir=" + std::string(launch.project_dir)), std::string::npos);
 
     slayer3d_editor_runner_invocation_destroy(&invocation);
     slayer3d_editor_launch_destroy(&launch);
