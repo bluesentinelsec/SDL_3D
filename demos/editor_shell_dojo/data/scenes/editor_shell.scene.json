@@ -803,7 +803,9 @@
             "w": 82,
             "h": 28,
             "layer": 121,
-            "selected": true,
+            "interactive": true,
+            "action": "editor.inspector.tab.object",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [{ "id": "ui.editor_shell.left_inspector.tab.map.label", "type": "label", "w": "fill", "h": "fill", "text": "Object" }]
           },
           {
@@ -815,6 +817,9 @@
             "w": 82,
             "h": 28,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.inspector.tab.data",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [{ "id": "ui.editor_shell.left_inspector.tab.entity.label", "type": "label", "w": "fill", "h": "fill", "text": "Data" }]
           },
           {
@@ -826,6 +831,9 @@
             "w": 82,
             "h": 28,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.inspector.tab.face",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Face", "default": "Object" },
             "children": [{ "id": "ui.editor_shell.left_inspector.tab.face.label", "type": "label", "w": "fill", "h": "fill", "text": "Face" }]
           },
           {
@@ -838,6 +846,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.name.label", "type": "label", "w": 96, "h": "fill", "text": "Object" },
               {
@@ -860,6 +869,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.selection.label", "type": "label", "w": 96, "h": "fill", "text": "Type" },
               {
@@ -882,6 +892,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.brushes.label", "type": "label", "w": 96, "h": "fill", "text": "Count" },
               {
@@ -904,6 +915,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.status.label", "type": "label", "w": 96, "h": "fill", "text": "Size / Scale" },
               {
@@ -926,6 +938,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.id.label", "type": "label", "w": 96, "h": "fill", "text": "Stable ID" },
               {
@@ -942,18 +955,19 @@
             "id": "ui.editor_shell.left_inspector.properties.title",
             "type": "label",
             "x": 12,
-            "y": 246,
+            "y": 94,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 18,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "text": "Gameplay Data"
           },
           {
             "id": "ui.editor_shell.left_inspector.connection.source.button",
             "type": "button",
             "x": 166,
-            "y": 242,
+            "y": 90,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 54,
             "h": 24,
@@ -961,13 +975,14 @@
             "text_scale": 0.36,
             "interactive": true,
             "action": "editor.connection.mark_source",
-            "layer": 121
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
           },
           {
             "id": "ui.editor_shell.left_inspector.connection.connect.button",
             "type": "button",
             "x": 224,
-            "y": 242,
+            "y": 90,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 60,
             "h": 24,
@@ -975,18 +990,20 @@
             "text_scale": 0.34,
             "interactive": true,
             "action": "editor.connection.add_to_selection",
-            "layer": 121
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
           },
           {
             "id": "ui.editor_shell.left_inspector.row.property0",
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 274,
+            "y": 124,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property0.label",
@@ -1011,11 +1028,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 300,
+            "y": 150,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property1.label",
@@ -1040,11 +1058,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 326,
+            "y": 176,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property2.label",
@@ -1069,11 +1088,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 352,
+            "y": 202,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property3.label",
@@ -1103,6 +1123,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.vertex.label", "type": "label", "w": 96, "h": "fill", "text": "Position" },
               {
@@ -1125,6 +1146,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.vertex_coord.label", "type": "label", "w": 96, "h": "fill", "text": "Bounds" },
               {
@@ -1142,11 +1164,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 444,
+            "y": 94,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Face", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Mat / Mesh" },
               {
@@ -1164,11 +1187,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 474,
+            "y": 124,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Face", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.preview_dims.label", "type": "label", "w": 96, "h": "fill", "text": "Face / Rot" },
               {
@@ -1191,6 +1215,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Prefab / Group" },
               {
@@ -1216,6 +1241,7 @@
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Contents / Type" },
               {
@@ -1233,11 +1259,12 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 534,
+            "y": 154,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 26,
             "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Face", "default": "Object" },
             "children": [
               { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Color / Tint" },
               {

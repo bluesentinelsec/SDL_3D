@@ -19829,6 +19829,30 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     ASSERT_TRUE(map_tab_initial.found);
     ASSERT_TRUE(entity_tab_initial.found);
     ASSERT_TRUE(face_tab_initial.found);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
+                 "Object");
+    click_editor(entity_tab_initial.x + entity_tab_initial.w * 0.5f,
+                 entity_tab_initial.y + entity_tab_initial.h * 0.5f);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
+                 "Data");
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
+    RectSummary face_tab_after_data = visible_frame("ui.editor_shell.left_inspector.face.tab");
+    ASSERT_TRUE(face_tab_after_data.found);
+    click_editor(face_tab_after_data.x + face_tab_after_data.w * 0.5f,
+                 face_tab_after_data.y + face_tab_after_data.h * 0.5f);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
+                 "Face");
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    RectSummary object_tab_after_face = visible_frame("ui.editor_shell.left_inspector.map.tab");
+    ASSERT_TRUE(object_tab_after_face.found);
+    click_editor(object_tab_after_face.x + object_tab_after_face.w * 0.5f,
+                 object_tab_after_face.y + object_tab_after_face.h * 0.5f);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
+                 "Object");
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");
     HitSummary track_hit = retained_ui_hit(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
     EXPECT_EQ(track_hit.id, "ui.editor_shell.left_inspector.scroll.track");
