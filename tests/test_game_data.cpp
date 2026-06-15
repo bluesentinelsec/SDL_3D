@@ -19265,6 +19265,11 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.applied_key", ""), "encounter_id");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", "set"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.original_key", "set"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.key", "set"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.value", "set"), "");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.property.edit.selected_slot", 42), -1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.replace_on_text", true));
     SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.key", encounter_slot);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, slot_state_key, ""), "encounter_id");
     SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.value", encounter_slot);

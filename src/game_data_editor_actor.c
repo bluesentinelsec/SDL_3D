@@ -550,6 +550,19 @@ static void publish_editor_property_action_outputs(slayer3d_game_data_runtime *r
     editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_actor_count : 0);
 }
 
+static void clear_editor_property_edit_draft(slayer3d_game_data_runtime *runtime)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.original_key", "");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.key", "");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.value", "");
+    slayer3d_properties_set_int(scene_state, "editor.property.edit.selected_slot", -1);
+    slayer3d_properties_set_bool(scene_state, "editor.property.edit.replace_on_text", false);
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.focus", "");
+}
+
 static void refresh_editor_property_selection_if_needed(slayer3d_game_data_runtime *runtime, const char *target)
 {
     slayer3d_game_data_editor_selection selection;
@@ -2035,6 +2048,7 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
             refresh_editor_property_selection_if_needed(runtime, target);
             publish_editor_property_action_outputs(runtime, outputs, true,
                                                    json_string(action, "message", "property set"), target, key);
+            clear_editor_property_edit_draft(runtime);
             return true;
         }
         if (editor_property_selected_brushes_apply(runtime, key, original_key, action, payload, false, error,
@@ -2043,6 +2057,7 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
             publish_editor_property_action_outputs(
                 runtime, outputs, true, json_string(action, "message", "property set"),
                 slayer3d_properties_get_string(runtime->scene_state, "editor.property.target.name", ""), key);
+            clear_editor_property_edit_draft(runtime);
             return true;
         }
         publish_editor_property_action_outputs(runtime, outputs, false, error, "", key);
@@ -2085,6 +2100,7 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
     refresh_editor_property_selection_if_needed(runtime, target);
     publish_editor_property_action_outputs(runtime, outputs, true, json_string(action, "message", "property set"),
                                            target, key);
+    clear_editor_property_edit_draft(runtime);
     return true;
 }
 
