@@ -20311,7 +20311,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                  "Object");
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview").found);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview_dims").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.preview_dims").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.preview_grid_axis").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");

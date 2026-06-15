@@ -4626,29 +4626,6 @@
             ]
           },
           {
-            "id": "ui.editor_shell.left_inspector.row.preview_dims",
-            "type": "panel",
-            "layout": "row",
-            "x": 12,
-            "y": 274,
-            "scroll_y_key": "editor.inspector.scroll",
-            "w": 272,
-            "h": 26,
-            "layer": 121,
-            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
-            "children": [
-              { "id": "ui.editor_shell.left_inspector.row.preview_dims.label", "type": "label", "w": 96, "h": "fill", "text": "Face" },
-              {
-                "id": "ui.editor_shell.left_inspector.row.preview_dims.value",
-                "type": "label",
-                "w": "fill",
-                "h": "fill",
-                "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.inspector.selection.face", "default": "" }]
-              }
-            ]
-          },
-          {
             "id": "ui.editor_shell.left_inspector.row.move_delta",
             "type": "panel",
             "layout": "row",
