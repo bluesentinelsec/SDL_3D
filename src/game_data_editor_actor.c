@@ -644,7 +644,13 @@ bool slayer3d_game_data_select_editor_property_slot_action(slayer3d_game_data_ru
     if (key == NULL || key[0] == '\0')
         return true;
 
-    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.original_key", key);
+    const int previous_slot =
+        slayer3d_properties_get_int(runtime->scene_state, "editor.property.edit.selected_slot", -1);
+    const char *previous_original_key =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.property.edit.original_key", "");
+    slayer3d_properties_set_string(
+        runtime->scene_state, "editor.property.edit.original_key",
+        previous_slot == slot && !editor_property_string_is_blank(previous_original_key) ? previous_original_key : key);
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.key", key);
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.value", value != NULL ? value : "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", focus);

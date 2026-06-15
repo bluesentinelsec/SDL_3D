@@ -19196,6 +19196,18 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.replace_on_text", false));
     slayer3d_properties_set_string(scene_state, "editor.property.edit.key", "encounter_id");
     slayer3d_properties_set_string(scene_state, "editor.property.edit.value", "beta");
+    char slot_state_key[96];
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.key", encounter_slot);
+    slayer3d_properties_set_string(scene_state, slot_state_key, "encounter_id");
+    SDL_snprintf(slot_state_key, sizeof(slot_state_key), "editor.property.slot.%d.value", encounter_slot);
+    slayer3d_properties_set_string(scene_state, slot_state_key, "beta");
+    SDL_snprintf(select_slot_action, sizeof(select_slot_action),
+                 R"json({ "type": "editor.property.select_slot", "slot": %d, "focus": "value" })json", encounter_slot);
+    ASSERT_TRUE(execute_json_action(select_slot_action));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.original_key", ""), "encounter");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.key", ""), "encounter_id");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", ""), "value");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.value", "gamma");
     emit_signal("signal.editor.property.apply");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.applied_key", ""), "encounter_id");
@@ -19215,8 +19227,8 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     ASSERT_TRUE(yyjson_is_obj(second_properties));
     EXPECT_EQ(yyjson_obj_get(first_properties, "encounter"), nullptr);
     EXPECT_EQ(yyjson_obj_get(second_properties, "encounter"), nullptr);
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(first_properties, "encounter_id")), "beta");
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(second_properties, "encounter_id")), "beta");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(first_properties, "encounter_id")), "gamma");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(second_properties, "encounter_id")), "gamma");
     yyjson_doc_free(export_doc);
     SDL_free(export_json);
 
