@@ -20132,6 +20132,8 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     };
 
     emit_signal("signal.editor.scene.enter");
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
     RectSummary inspector = visible_frame("ui.editor_shell.left_inspector.panel");
     RectSummary console = visible_frame("ui.editor_shell.console.panel");
     ASSERT_TRUE(inspector.found);
@@ -20310,7 +20312,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview").found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview_dims").found);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.preview_grid_axis").found);
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.preview_grid_axis").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");
     HitSummary track_hit = retained_ui_hit(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
@@ -20328,15 +20330,27 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     RectSummary entity_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.entity.tab");
     ASSERT_TRUE(map_tab_scrolled.found);
     ASSERT_TRUE(entity_tab_scrolled.found);
-    EXPECT_LT(map_tab_scrolled.y, map_tab_initial.y);
-    EXPECT_LT(entity_tab_scrolled.y, entity_tab_initial.y);
+    EXPECT_FLOAT_EQ(map_tab_scrolled.y, map_tab_initial.y);
+    EXPECT_FLOAT_EQ(entity_tab_scrolled.y, entity_tab_initial.y);
 
+    click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     click_editor(scroll_down.x + scroll_down.w * 0.5f, scroll_down.y + scroll_down.h * 0.5f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        180.0f);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.3").found);
+        240.0f);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.4").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.brush_color.apply").found);
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.brush_color.reset").found);
+    RectSummary red_up = visible_frame("ui.editor_shell.left_inspector.brush_color.r.up");
+    ASSERT_TRUE(red_up.found);
+    EXPECT_EQ(retained_ui_hit(red_up.x + red_up.w * 0.5f, red_up.y + red_up.h * 0.5f).action,
+              "editor.inspector.brush.color.r.up");
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "editor.inspector.brush.color.r", 0),
+              180);
+    click_editor(red_up.x + red_up.w * 0.5f, red_up.y + red_up.h * 0.5f);
+    EXPECT_EQ(slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "editor.inspector.brush.color.r", 0),
+              196);
     text_names = visible_text_names();
     EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.move_delta.value"),
               text_names.end());
@@ -20353,7 +20367,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     click_editor(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        120.0f);
+        180.0f);
     slayer3d_properties_set_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f);
 
     RectSummary thumb0 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0");
@@ -20362,13 +20376,13 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                 scroll_track.y + scroll_track.h - 4.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        180.0f);
+        240.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
                                               "editor.inspector.scroll.drag.active", true));
 
-    RectSummary thumb3 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.3");
-    ASSERT_TRUE(thumb3.found);
-    drag_editor(thumb3.x + thumb3.w * 0.5f, thumb3.y + thumb3.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
+    RectSummary thumb4 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.4");
+    ASSERT_TRUE(thumb4.found);
+    drag_editor(thumb4.x + thumb4.w * 0.5f, thumb4.y + thumb4.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
                 scroll_track.y + 4.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),

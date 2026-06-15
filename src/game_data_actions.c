@@ -1503,6 +1503,7 @@ static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime
     }
 
     publish_editor_brush_color_draft(runtime->scene_state, color_key, color);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.brush.color.dirty", true);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush color edited");
     return true;
 }
