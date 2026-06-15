@@ -1093,6 +1093,13 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
             set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source box");
         return false;
     }
+    out_box->properties = properties_from_json_payload(obj_get(box, "properties"), NULL);
+    if (out_box->properties == NULL)
+    {
+        free_editor_brush_source_box(out_box);
+        set_errorf(error_buffer, error_buffer_size, "invalid editor brush source properties for '%s'", stable_id);
+        return false;
+    }
     if (obj_get(box, "color") != NULL)
     {
         out_box->visual.has_color = true;

@@ -2249,6 +2249,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.property.remove") == 0)
         return slayer3d_game_data_remove_editor_property_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.property.select_slot") == 0)
+        return slayer3d_game_data_select_editor_property_slot_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);
 

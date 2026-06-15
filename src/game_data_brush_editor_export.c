@@ -288,6 +288,7 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
            export_add_source_face_material_overrides(doc, obj, box->material, face_materials) &&
            export_add_source_face_visuals(doc, obj, box, false) &&
            export_add_source_face_visuals(doc, obj, box, true) &&
+           export_add_properties(doc, obj, "properties", box->properties) &&
            export_add_brush_contents(doc, obj,
                                      box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
 }

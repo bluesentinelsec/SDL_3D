@@ -964,10 +964,40 @@
             "text": "Gameplay Data"
           },
           {
+            "id": "ui.editor_shell.left_inspector.property.new.button",
+            "type": "button",
+            "x": 206,
+            "y": 90,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 36,
+            "h": 24,
+            "text": "Add",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.property.new",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.property.apply.button",
+            "type": "button",
+            "x": 246,
+            "y": 90,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 38,
+            "h": 24,
+            "text": "Set",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.property.apply",
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
+          },
+          {
             "id": "ui.editor_shell.left_inspector.connection.source.button",
             "type": "button",
             "x": 166,
-            "y": 90,
+            "y": 314,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 54,
             "h": 24,
@@ -982,7 +1012,7 @@
             "id": "ui.editor_shell.left_inspector.connection.connect.button",
             "type": "button",
             "x": 224,
-            "y": 90,
+            "y": 314,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 60,
             "h": 24,
@@ -994,11 +1024,47 @@
             "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
           },
           {
+            "id": "ui.editor_shell.left_inspector.property.edit.key",
+            "type": "button",
+            "x": 12,
+            "y": 122,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 118,
+            "h": 26,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.property.edit.key", "default": "key" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "interactive": true,
+            "action": "editor.property.focus.key",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" },
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.property.edit.value",
+            "type": "button",
+            "x": 136,
+            "y": 122,
+            "scroll_y_key": "editor.inspector.scroll",
+            "w": 148,
+            "h": 26,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.property.edit.value", "default": "value" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "interactive": true,
+            "action": "editor.property.focus.value",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" },
+            "layer": 121,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" }
+          },
+          {
             "id": "ui.editor_shell.left_inspector.row.property0",
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 124,
+            "y": 164,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
@@ -1007,19 +1073,34 @@
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property0.label",
-                "type": "label",
-                "w": 96,
+                "type": "button",
+                "w": 88,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.key", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.key", "default": "" }],
+                "action": "editor.property.select_slot.0",
+                "text_scale": 0.34,
+                "align": "left"
               },
               {
                 "id": "ui.editor_shell.left_inspector.row.property0.value",
-                "type": "label",
-                "w": "fill",
+                "type": "button",
+                "w": 140,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.value", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.value", "default": "" }],
+                "action": "editor.property.select_slot.0",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property0.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.0"
               }
             ]
           },
@@ -1028,7 +1109,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 150,
+            "y": 194,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
@@ -1037,19 +1118,34 @@
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property1.label",
-                "type": "label",
-                "w": 96,
+                "type": "button",
+                "w": 88,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.key", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.key", "default": "" }],
+                "action": "editor.property.select_slot.1",
+                "text_scale": 0.34,
+                "align": "left"
               },
               {
                 "id": "ui.editor_shell.left_inspector.row.property1.value",
-                "type": "label",
-                "w": "fill",
+                "type": "button",
+                "w": 140,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.value", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.value", "default": "" }],
+                "action": "editor.property.select_slot.1",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property1.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.1"
               }
             ]
           },
@@ -1058,7 +1154,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 176,
+            "y": 224,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
@@ -1067,19 +1163,34 @@
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property2.label",
-                "type": "label",
-                "w": 96,
+                "type": "button",
+                "w": 88,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.key", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.key", "default": "" }],
+                "action": "editor.property.select_slot.2",
+                "text_scale": 0.34,
+                "align": "left"
               },
               {
                 "id": "ui.editor_shell.left_inspector.row.property2.value",
-                "type": "label",
-                "w": "fill",
+                "type": "button",
+                "w": 140,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.value", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.value", "default": "" }],
+                "action": "editor.property.select_slot.2",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property2.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.2"
               }
             ]
           },
@@ -1088,7 +1199,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 202,
+            "y": 254,
             "scroll_y_key": "editor.inspector.scroll",
             "w": 272,
             "h": 24,
@@ -1097,19 +1208,34 @@
             "children": [
               {
                 "id": "ui.editor_shell.left_inspector.row.property3.label",
-                "type": "label",
-                "w": 96,
+                "type": "button",
+                "w": 88,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.key", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.key", "default": "" }],
+                "action": "editor.property.select_slot.3",
+                "text_scale": 0.34,
+                "align": "left"
               },
               {
                 "id": "ui.editor_shell.left_inspector.row.property3.value",
-                "type": "label",
-                "w": "fill",
+                "type": "button",
+                "w": 140,
                 "h": "fill",
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.value", "default": "" }]
+                "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.value", "default": "" }],
+                "action": "editor.property.select_slot.3",
+                "text_scale": 0.34,
+                "align": "left"
+              },
+              {
+                "id": "ui.editor_shell.left_inspector.row.property3.delete",
+                "type": "button",
+                "w": 34,
+                "h": "fill",
+                "text": "Del",
+                "text_scale": 0.32,
+                "action": "editor.property.delete.3"
               }
             ]
           },

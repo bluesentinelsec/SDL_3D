@@ -296,6 +296,18 @@
     "signal.editor.inspector.tab.face",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
+    "signal.editor.property.new",
+    "signal.editor.property.focus.key",
+    "signal.editor.property.focus.value",
+    "signal.editor.property.apply",
+    "signal.editor.property.select_slot.0",
+    "signal.editor.property.select_slot.1",
+    "signal.editor.property.select_slot.2",
+    "signal.editor.property.select_slot.3",
+    "signal.editor.property.delete.0",
+    "signal.editor.property.delete.1",
+    "signal.editor.property.delete.2",
+    "signal.editor.property.delete.3",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.clip.cycle_keep_mode",
@@ -1326,6 +1338,104 @@
         "actions": [
           { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.new",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.property.edit.original_key", "value": "" },
+          { "type": "scene_state.set", "key": "editor.property.edit.key", "value": "" },
+          { "type": "scene_state.set", "key": "editor.property.edit.value", "value": "" },
+          { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "new property" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.focus.key",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing property key" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.focus.value",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "value" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing property value" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.apply",
+        "actions": [
+          {
+            "type": "editor.property.remove",
+            "target_type": "selection",
+            "key_from_state": "editor.property.edit.original_key",
+            "outputs": {
+              "valid_key": "editor.property.edit.remove.valid",
+              "message_key": "editor.property.edit.message",
+              "target_key": "editor.property.edit.target",
+              "key_key": "editor.property.edit.applied_key"
+            }
+          },
+          {
+            "type": "editor.property.set",
+            "target_type": "selection",
+            "key_from_state": "editor.property.edit.key",
+            "value_from_state": "editor.property.edit.value",
+            "outputs": {
+              "valid_key": "editor.property.edit.valid",
+              "message_key": "editor.property.edit.message",
+              "target_key": "editor.property.edit.target",
+              "key_key": "editor.property.edit.applied_key"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "" },
+          { "type": "console.write", "message_from_state": "editor.property.edit.message" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.select_slot.0",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 0 }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot.1",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 1 }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot.2",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 2 }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot.3",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 3 }]
+      },
+      {
+        "signal": "signal.editor.property.delete.0",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.0.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.delete.1",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.1.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.delete.2",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.2.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
+        ]
+      },
+      {
+        "signal": "signal.editor.property.delete.3",
+        "actions": [
+          { "type": "editor.property.remove", "target_type": "selection", "key_from_state": "editor.property.slot.3.key" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "property deleted" }
         ]
       },
       {

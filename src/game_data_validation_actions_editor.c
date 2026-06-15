@@ -807,6 +807,16 @@ bool validate_editor_property_remove_action(validation_context *ctx, yyjson_val 
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_property_select_slot_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *slot = obj_get(action, "slot");
+    if (!yyjson_is_int(slot) || yyjson_get_int(slot) < 0)
+        return validation_error(ctx, json_path, "%s requires non-negative integer slot", type);
+    return true;
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {

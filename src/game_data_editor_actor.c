@@ -315,21 +315,61 @@ static void clear_editor_property_slots(slayer3d_properties *scene_state, int sl
     }
 }
 
-void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
-                                         const slayer3d_game_data_editor_selection *selection, int slot_count)
+static const editor_brush_source_box_runtime *editor_property_source_box_for_selection(
+    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection)
 {
-    if (runtime == NULL || runtime->scene_state == NULL || slot_count <= 0)
-        return;
+    if (runtime == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->world_name == NULL)
+    {
+        return NULL;
+    }
+    const brush_world_runtime *world = find_brush_world_runtime(runtime, selection->world_name);
+    if (world == NULL || !world->editor_has_source_model)
+        return NULL;
+    const char *identity = selection->element_editor != NULL && selection->element_editor->stable_id != NULL &&
+                                   selection->element_editor->stable_id[0] != '\0'
+                               ? selection->element_editor->stable_id
+                               : selection->element_name;
+    int source_index = editor_brush_world_find_source_box_index(world, identity);
+    if (source_index < 0 && selection->element_name != NULL)
+        source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
+    if (source_index < 0 || source_index >= world->editor_source_box_count)
+        return NULL;
+    return &world->editor_source_boxes[source_index];
+}
 
-    slayer3d_properties *scene_state = runtime->scene_state;
-    const bool has_actor = selection != NULL && selection->hit &&
-                           selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR &&
-                           selection->element_name != NULL && selection->element_name[0] != '\0';
-    const editor_actor_runtime *actor = has_actor ? find_editor_actor(runtime, selection->element_name) : NULL;
-    const int property_count =
-        actor != NULL && actor->properties != NULL ? slayer3d_properties_count(actor->properties) : 0;
-    slayer3d_properties_set_string(scene_state, "editor.property.target.type", actor != NULL ? "editor_actor" : "none");
-    slayer3d_properties_set_string(scene_state, "editor.property.target.name", actor != NULL ? actor->name : "");
+static editor_brush_source_box_runtime *editor_property_source_box_for_selection_mutable(
+    slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection,
+    brush_world_runtime **out_world)
+{
+    if (out_world != NULL)
+        *out_world = NULL;
+    if (runtime == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->world_name == NULL)
+    {
+        return NULL;
+    }
+    brush_world_runtime *world = find_brush_world_runtime_mutable(runtime, selection->world_name);
+    if (world == NULL || !world->editor_has_source_model)
+        return NULL;
+    const char *identity = selection->element_editor != NULL && selection->element_editor->stable_id != NULL &&
+                                   selection->element_editor->stable_id[0] != '\0'
+                               ? selection->element_editor->stable_id
+                               : selection->element_name;
+    int source_index = editor_brush_world_find_source_box_index(world, identity);
+    if (source_index < 0 && selection->element_name != NULL)
+        source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
+    if (source_index < 0 || source_index >= world->editor_source_box_count)
+        return NULL;
+    if (out_world != NULL)
+        *out_world = world;
+    return &world->editor_source_boxes[source_index];
+}
+
+static void publish_editor_property_slots(slayer3d_properties *scene_state, const slayer3d_properties *properties,
+                                          int slot_count)
+{
+    const int property_count = properties != NULL ? slayer3d_properties_count(properties) : 0;
     slayer3d_properties_set_int(scene_state, "editor.property.count", property_count);
     clear_editor_property_slots(scene_state, slot_count);
 
@@ -337,9 +377,9 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
     {
         const char *key_name = NULL;
         slayer3d_value_type type = SLAYER3D_VALUE_STRING;
-        if (!slayer3d_properties_get_key_at(actor->properties, i, &key_name, &type) || key_name == NULL)
+        if (!slayer3d_properties_get_key_at(properties, i, &key_name, &type) || key_name == NULL)
             continue;
-        const slayer3d_value *value = slayer3d_properties_get_value(actor->properties, key_name);
+        const slayer3d_value *value = slayer3d_properties_get_value(properties, key_name);
         char slot_key[96];
         char formatted[256];
         editor_property_value_to_string(value, formatted, sizeof(formatted));
@@ -352,6 +392,41 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
         SDL_snprintf(slot_key, sizeof(slot_key), "editor.property.slot.%d.value", i);
         slayer3d_properties_set_string(scene_state, slot_key, formatted);
     }
+}
+
+void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_editor_selection *selection, int slot_count)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || slot_count <= 0)
+        return;
+
+    slayer3d_properties *scene_state = runtime->scene_state;
+    const bool has_actor = selection != NULL && selection->hit &&
+                           selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR &&
+                           selection->element_name != NULL && selection->element_name[0] != '\0';
+    const editor_actor_runtime *actor = has_actor ? find_editor_actor(runtime, selection->element_name) : NULL;
+    if (actor != NULL)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.property.target.type", "editor_actor");
+        slayer3d_properties_set_string(scene_state, "editor.property.target.name", actor->name);
+        publish_editor_property_slots(scene_state, actor->properties, slot_count);
+        return;
+    }
+
+    const editor_brush_source_box_runtime *brush = editor_property_source_box_for_selection(runtime, selection);
+    if (brush != NULL)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.property.target.type", "editor_brush");
+        slayer3d_properties_set_string(scene_state, "editor.property.target.name",
+                                       brush->stable_id != NULL ? brush->stable_id : "");
+        publish_editor_property_slots(scene_state, brush->properties, slot_count);
+        return;
+    }
+
+    slayer3d_properties_set_string(scene_state, "editor.property.target.type", "none");
+    slayer3d_properties_set_string(scene_state, "editor.property.target.name", "");
+    slayer3d_properties_set_int(scene_state, "editor.property.count", 0);
+    clear_editor_property_slots(scene_state, slot_count);
 }
 
 static const char *editor_property_action_string_from_state(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -396,7 +471,7 @@ static const char *editor_property_action_target_name(slayer3d_game_data_runtime
     return NULL;
 }
 
-static bool editor_property_action_value(slayer3d_game_data_runtime *runtime, editor_actor_runtime *actor,
+static bool editor_property_action_value(slayer3d_game_data_runtime *runtime, slayer3d_properties *properties,
                                          const char *key, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *value_from_state = json_string(action, "value_from_state", NULL);
@@ -405,16 +480,16 @@ static bool editor_property_action_value(slayer3d_game_data_runtime *runtime, ed
         const slayer3d_value *value = runtime != NULL && runtime->scene_state != NULL
                                           ? slayer3d_properties_get_value(runtime->scene_state, value_from_state)
                                           : NULL;
-        return value != NULL && set_property_from_value(actor->properties, key, value);
+        return value != NULL && set_property_from_value(properties, key, value);
     }
     const char *value_from_payload = json_string(action, "value_from_payload", NULL);
     if (value_from_payload != NULL)
     {
         const slayer3d_value *value =
             payload != NULL ? slayer3d_properties_get_value(payload, value_from_payload) : NULL;
-        return value != NULL && set_property_from_value(actor->properties, key, value);
+        return value != NULL && set_property_from_value(properties, key, value);
     }
-    return set_property_from_json_with_payload(actor->properties, key, obj_get(action, "value"), payload);
+    return set_property_from_json_with_payload(properties, key, obj_get(action, "value"), payload);
 }
 
 static void publish_editor_property_action_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
@@ -441,6 +516,91 @@ static void refresh_editor_property_selection_if_needed(slayer3d_game_data_runti
     {
         publish_editor_selection_properties(runtime, &selection, 6);
     }
+}
+
+static bool editor_property_ensure_properties(slayer3d_properties **properties)
+{
+    if (properties == NULL)
+        return false;
+    if (*properties != NULL)
+        return true;
+    *properties = slayer3d_properties_create();
+    return *properties != NULL;
+}
+
+static bool editor_property_selected_brushes_apply(slayer3d_game_data_runtime *runtime, const char *key,
+                                                   yyjson_val *action, const slayer3d_properties *payload, bool remove,
+                                                   char *error, size_t error_size)
+{
+    if (runtime == NULL || key == NULL || key[0] == '\0' || !editor_selected_brushes_active_for_scene(runtime) ||
+        runtime->editor_selected_brush_count <= 0)
+    {
+        SDL_snprintf(error, error_size, "select a brush or actor before editing properties");
+        return false;
+    }
+
+    bool changed = false;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        brush_world_runtime *world = NULL;
+        editor_brush_source_box_runtime *box =
+            editor_property_source_box_for_selection_mutable(runtime, &selection, &world);
+        if (box == NULL || world == NULL)
+            continue;
+        if (remove)
+        {
+            if (box->properties != NULL)
+                slayer3d_properties_remove(box->properties, key);
+        }
+        else
+        {
+            if (!editor_property_ensure_properties(&box->properties))
+            {
+                SDL_snprintf(error, error_size, "failed to allocate brush properties");
+                return false;
+            }
+            if (!editor_property_action_value(runtime, box->properties, key, action, payload))
+            {
+                SDL_snprintf(error, error_size, "editor property value is invalid");
+                return false;
+            }
+        }
+        editor_brush_world_mark_dirty(world);
+        changed = true;
+    }
+    if (!changed)
+    {
+        SDL_snprintf(error, error_size, "selected brush does not support editable properties");
+        return false;
+    }
+    publish_editor_selection_properties(runtime, &runtime->editor_active_selection, 6);
+    return true;
+}
+
+bool slayer3d_game_data_select_editor_property_slot_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const int slot = json_int(action, "slot", -1);
+    if (slot < 0)
+        return false;
+
+    char state_key[96];
+    SDL_snprintf(state_key, sizeof(state_key), "editor.property.slot.%d.key", slot);
+    const char *key = slayer3d_properties_get_string(runtime->scene_state, state_key, "");
+    SDL_snprintf(state_key, sizeof(state_key), "editor.property.slot.%d.value", slot);
+    const char *value = slayer3d_properties_get_string(runtime->scene_state, state_key, "");
+    if (key == NULL || key[0] == '\0')
+        return true;
+
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.original_key", key);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.key", key);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.value", value != NULL ? value : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "value");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "property selected");
+    return true;
 }
 
 bool slayer3d_game_data_get_editor_actor(const slayer3d_game_data_runtime *runtime, const char *name,
@@ -1738,12 +1898,63 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
     yyjson_val *outputs = obj_get(action, "outputs");
     char error[192];
     error[0] = '\0';
-    const char *target = editor_property_action_target_name(runtime, action, error, sizeof(error));
     const char *key = editor_property_action_string_from_state(runtime, action, "key", "key_from_state", NULL);
-    if (runtime == NULL || target == NULL || key == NULL || key[0] == '\0')
+    const char *target_type = json_string(action, "target_type", "selection");
+    if (runtime == NULL || key == NULL || key[0] == '\0')
     {
         publish_editor_property_action_outputs(
-            runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", target, key);
+            runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", "", key);
+        return true;
+    }
+
+    if (SDL_strcmp(target_type, "selection") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit &&
+            selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+        {
+            const char *target = selection.element_name;
+            editor_actor_runtime *actor = find_editor_actor_mutable(runtime, target);
+            if (actor == NULL)
+            {
+                SDL_snprintf(error, sizeof(error), "editor actor '%s' not found", target != NULL ? target : "");
+                publish_editor_property_action_outputs(runtime, outputs, false, error, target, key);
+                return true;
+            }
+            if (!editor_property_ensure_properties(&actor->properties))
+            {
+                publish_editor_property_action_outputs(runtime, outputs, false, "failed to allocate actor properties",
+                                                       target, key);
+                return true;
+            }
+            if (!editor_property_action_value(runtime, actor->properties, key, action, payload))
+            {
+                publish_editor_property_action_outputs(runtime, outputs, false, "editor property value is invalid",
+                                                       target, key);
+                return true;
+            }
+            mark_editor_actors_dirty(runtime);
+            refresh_editor_property_selection_if_needed(runtime, target);
+            publish_editor_property_action_outputs(runtime, outputs, true,
+                                                   json_string(action, "message", "property set"), target, key);
+            return true;
+        }
+        if (editor_property_selected_brushes_apply(runtime, key, action, payload, false, error, sizeof(error)))
+        {
+            publish_editor_property_action_outputs(
+                runtime, outputs, true, json_string(action, "message", "property set"),
+                slayer3d_properties_get_string(runtime->scene_state, "editor.property.target.name", ""), key);
+            return true;
+        }
+        publish_editor_property_action_outputs(runtime, outputs, false, error, "", key);
+        return true;
+    }
+
+    const char *target = editor_property_action_target_name(runtime, action, error, sizeof(error));
+    if (target == NULL)
+    {
+        publish_editor_property_action_outputs(runtime, outputs, false, error, target, key);
         return true;
     }
 
@@ -1755,17 +1966,13 @@ bool slayer3d_game_data_set_editor_property_action(slayer3d_game_data_runtime *r
         return true;
     }
 
-    if (actor->properties == NULL)
+    if (!editor_property_ensure_properties(&actor->properties))
     {
-        actor->properties = slayer3d_properties_create();
-        if (actor->properties == NULL)
-        {
-            publish_editor_property_action_outputs(runtime, outputs, false, "failed to allocate actor properties",
-                                                   target, key);
-            return true;
-        }
+        publish_editor_property_action_outputs(runtime, outputs, false, "failed to allocate actor properties", target,
+                                               key);
+        return true;
     }
-    if (!editor_property_action_value(runtime, actor, key, action, payload))
+    if (!editor_property_action_value(runtime, actor->properties, key, action, payload))
     {
         publish_editor_property_action_outputs(runtime, outputs, false, "editor property value is invalid", target,
                                                key);
@@ -1783,12 +1990,47 @@ bool slayer3d_game_data_remove_editor_property_action(slayer3d_game_data_runtime
     yyjson_val *outputs = obj_get(action, "outputs");
     char error[192];
     error[0] = '\0';
-    const char *target = editor_property_action_target_name(runtime, action, error, sizeof(error));
     const char *key = editor_property_action_string_from_state(runtime, action, "key", "key_from_state", NULL);
-    if (runtime == NULL || target == NULL || key == NULL || key[0] == '\0')
+    const char *target_type = json_string(action, "target_type", "selection");
+    if (runtime == NULL || key == NULL || key[0] == '\0')
     {
         publish_editor_property_action_outputs(
-            runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", target, key);
+            runtime, outputs, false, error[0] != '\0' ? error : "editor property action requires a key", "", key);
+        return true;
+    }
+
+    if (SDL_strcmp(target_type, "selection") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit &&
+            selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+        {
+            const char *target = selection.element_name;
+            editor_actor_runtime *actor = find_editor_actor_mutable(runtime, target);
+            if (actor != NULL && actor->properties != NULL)
+                slayer3d_properties_remove(actor->properties, key);
+            mark_editor_actors_dirty(runtime);
+            refresh_editor_property_selection_if_needed(runtime, target);
+            publish_editor_property_action_outputs(runtime, outputs, true,
+                                                   json_string(action, "message", "property removed"), target, key);
+            return true;
+        }
+        if (editor_property_selected_brushes_apply(runtime, key, action, NULL, true, error, sizeof(error)))
+        {
+            publish_editor_property_action_outputs(
+                runtime, outputs, true, json_string(action, "message", "property removed"),
+                slayer3d_properties_get_string(runtime->scene_state, "editor.property.target.name", ""), key);
+            return true;
+        }
+        publish_editor_property_action_outputs(runtime, outputs, false, error, "", key);
+        return true;
+    }
+
+    const char *target = editor_property_action_target_name(runtime, action, error, sizeof(error));
+    if (target == NULL)
+    {
+        publish_editor_property_action_outputs(runtime, outputs, false, error, target, key);
         return true;
     }
 

@@ -6,7 +6,10 @@
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
+
+static bool editor_emit_signal(slayer3d_game_data_runtime *runtime, const char *signal);
 
 static bool editor_retained_ui_hit(const slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
                                    slayer3d_ui_layout_model **out_layout, const slayer3d_ui_layout_hit_region **out_hit)
@@ -110,6 +113,78 @@ static float editor_round_to_step(float value, float step)
     const float normalized = value / step;
     const float rounded = normalized >= 0.0f ? SDL_floorf(normalized + 0.5f) : SDL_ceilf(normalized - 0.5f);
     return rounded * step;
+}
+
+static bool editor_property_edit_append_text(slayer3d_properties *scene_state, const char *key, const char *text,
+                                             size_t max_len)
+{
+    if (scene_state == NULL || key == NULL || text == NULL || text[0] == '\0' || max_len == 0U)
+        return false;
+    char buffer[256];
+    SDL_strlcpy(buffer, slayer3d_properties_get_string(scene_state, key, ""), sizeof(buffer));
+    const size_t len = SDL_strlen(buffer);
+    if (len >= max_len)
+        return false;
+    SDL_strlcpy(buffer + len, text, SDL_min(sizeof(buffer) - len, max_len - len + 1U));
+    slayer3d_properties_set_string(scene_state, key, buffer);
+    return true;
+}
+
+static bool editor_property_edit_backspace(slayer3d_properties *scene_state, const char *key)
+{
+    if (scene_state == NULL || key == NULL)
+        return false;
+    char buffer[256];
+    SDL_strlcpy(buffer, slayer3d_properties_get_string(scene_state, key, ""), sizeof(buffer));
+    size_t len = SDL_strlen(buffer);
+    if (len == 0U)
+        return false;
+    do
+    {
+        --len;
+    } while (len > 0U && ((unsigned char)buffer[len] & 0xC0U) == 0x80U);
+    buffer[len] = '\0';
+    slayer3d_properties_set_string(scene_state, key, buffer);
+    return true;
+}
+
+static bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const char *focus = slayer3d_properties_get_string(runtime->scene_state, "editor.property.edit.focus", "");
+    const bool key_focus = SDL_strcmp(focus, "key") == 0;
+    const bool value_focus = SDL_strcmp(focus, "value") == 0;
+    if (!key_focus && !value_focus)
+        return false;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return false;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_ESCAPE))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "property edit cancelled");
+        return true;
+    }
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RETURN) ||
+        slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_KP_ENTER))
+    {
+        (void)editor_emit_signal(runtime, "signal.editor.property.apply");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
+        return true;
+    }
+
+    const char *edit_key = key_focus ? "editor.property.edit.key" : "editor.property.edit.value";
+    bool changed = false;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE))
+        changed = editor_property_edit_backspace(runtime->scene_state, edit_key) || changed;
+    changed = editor_property_edit_append_text(runtime->scene_state, edit_key, slayer3d_input_get_text_input(input),
+                                               key_focus ? 64U : 192U) ||
+              changed;
+    if (changed)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "editing property");
+    return changed;
 }
 
 static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runtime,
@@ -358,7 +433,8 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
     }
     if (runtime != NULL &&
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
-         SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0))
+         SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
+         SDL_strncmp(action, "editor.property.", 16) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
@@ -385,6 +461,12 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool clicked = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
     const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
     const bool released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    if (editor_update_property_text_edit(runtime))
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);

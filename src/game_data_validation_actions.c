@@ -1008,6 +1008,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.prefab.unlink_actor", validate_editor_prefab_unlink_actor_action),
         ACTION_RULE_EXACT_HANDLER("editor.property.set", validate_editor_property_set_action),
         ACTION_RULE_EXACT_HANDLER("editor.property.remove", validate_editor_property_remove_action),
+        ACTION_RULE_EXACT_HANDLER("editor.property.select_slot", validate_editor_property_select_slot_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.shear_selected", validate_editor_selection_shear_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.run", validate_editor_selection_run_action),
         ACTION_RULE_EXACT_HANDLER("editor.command.preview", validate_editor_command_preview_action),

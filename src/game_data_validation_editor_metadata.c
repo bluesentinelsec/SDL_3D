@@ -652,6 +652,7 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             yyjson_val *max_value = obj_get(box, "max");
             yyjson_val *vertices = obj_get(box, "vertices");
             yyjson_val *tint_enabled = obj_get(box, "tint_enabled");
+            yyjson_val *properties = obj_get(box, "properties");
             const bool is_convex = kind != NULL && SDL_strcmp(kind, "convex") == 0;
             ok =
                 require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
@@ -669,7 +670,8 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
                 validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
                                                             &material_names) &&
                 validate_editor_brush_source_face_visuals(ctx, obj_get(box, "face_colors"), box_path, "face_colors") &&
-                validate_editor_brush_source_face_visuals(ctx, obj_get(box, "face_tints"), box_path, "face_tints");
+                validate_editor_brush_source_face_visuals(ctx, obj_get(box, "face_tints"), box_path, "face_tints") &&
+                (properties == NULL || yyjson_is_obj(properties));
             if (!ok && !ctx->failed)
             {
                 ok = validation_error(ctx, box_path,

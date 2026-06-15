@@ -133,6 +133,7 @@ extern "C"
         int vertex_count;
         int vertices[16][3];
         unsigned int contents;
+        slayer3d_properties *properties;
     } editor_brush_source_box_runtime;
     typedef struct editor_brush_source_prefab_result
     {
@@ -19001,6 +19002,158 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    editor_brush_source_prefab_result first_result{};
+    const int first_min[3] = {0, 0, 0};
+    const int first_max[3] = {1000, 1000, 1000};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.floor", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, first_min,
+        first_max, &first_result));
+    ASSERT_TRUE(first_result.valid);
+    ASSERT_STRNE(first_result.brush_name, "");
+
+    editor_brush_source_prefab_result second_result{};
+    const int second_min[3] = {2000, 0, 0};
+    const int second_max[3] = {3000, 1000, 1000};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, second_min,
+        second_max, &second_result));
+    ASSERT_TRUE(second_result.valid);
+    ASSERT_STRNE(second_result.brush_name, "");
+
+    auto brush_index = [&](const char *brush_name) {
+        slayer3d_game_data_brush_world brush_world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+        for (int i = 0; i < brush_world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = brush_world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return i;
+        }
+        ADD_FAILURE() << "brush not found: " << (brush_name != nullptr ? brush_name : "<null>");
+        return -1;
+    };
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+    auto exported_box_properties = [&](yyjson_val *root, const char *stable_id) -> yyjson_val * {
+        yyjson_val *sources = yyjson_obj_get(root, "editor_brush_sources");
+        if (!yyjson_is_arr(sources))
+            return nullptr;
+        for (size_t source_index = 0; source_index < yyjson_arr_size(sources); ++source_index)
+        {
+            yyjson_val *source = yyjson_arr_get(sources, source_index);
+            yyjson_val *boxes = yyjson_obj_get(source, "boxes");
+            if (!yyjson_is_arr(boxes))
+                continue;
+            for (size_t box_index = 0; box_index < yyjson_arr_size(boxes); ++box_index)
+            {
+                yyjson_val *box = yyjson_arr_get(boxes, box_index);
+                const char *box_stable_id = yyjson_get_str(yyjson_obj_get(box, "stable_id"));
+                if (box_stable_id != nullptr && SDL_strcmp(box_stable_id, stable_id) == 0)
+                    return yyjson_obj_get(box, "properties");
+            }
+        }
+        return nullptr;
+    };
+
+    slayer3d_game_data_editor_selection first_selection{};
+    slayer3d_game_data_editor_selection second_selection{};
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(first_result.brush_name), -1, &first_selection));
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(second_result.brush_name), -1, &second_selection));
+
+    SDL_SetModState(SDL_KMOD_NONE);
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &first_selection));
+    SDL_SetModState(SDL_KMOD_CTRL);
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &second_selection));
+    SDL_SetModState(SDL_KMOD_NONE);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.set",
+      "target_type": "selection",
+      "key": "encounter",
+      "value": "alpha"
+    })json"));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.type", ""), "editor_brush");
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.property.count", 0), 1);
+
+    bool saw_encounter_slot = false;
+    for (int i = 0; i < 6; ++i)
+    {
+        char key_name[96];
+        char value_name[96];
+        SDL_snprintf(key_name, sizeof(key_name), "editor.property.slot.%d.key", i);
+        SDL_snprintf(value_name, sizeof(value_name), "editor.property.slot.%d.value", i);
+        const char *key = slayer3d_properties_get_string(scene_state, key_name, "");
+        const char *value = slayer3d_properties_get_string(scene_state, value_name, "");
+        if (SDL_strcmp(key, "encounter") == 0 && SDL_strcmp(value, "alpha") == 0)
+            saw_encounter_slot = true;
+    }
+    EXPECT_TRUE(saw_encounter_slot);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *export_doc = yyjson_read(export_json, export_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(export_doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(export_doc);
+    yyjson_val *first_properties = exported_box_properties(root, first_result.brush_name);
+    yyjson_val *second_properties = exported_box_properties(root, second_result.brush_name);
+    ASSERT_TRUE(yyjson_is_obj(first_properties));
+    ASSERT_TRUE(yyjson_is_obj(second_properties));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(first_properties, "encounter")), "alpha");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(second_properties, "encounter")), "alpha");
+    yyjson_doc_free(export_doc);
+    SDL_free(export_json);
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.property.remove",
+      "target_type": "selection",
+      "key": "encounter"
+    })json"));
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    export_doc = yyjson_read(export_json, export_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(export_doc, nullptr);
+    root = yyjson_doc_get_root(export_doc);
+    first_properties = exported_box_properties(root, first_result.brush_name);
+    second_properties = exported_box_properties(root, second_result.brush_name);
+    ASSERT_TRUE(yyjson_is_obj(first_properties));
+    ASSERT_TRUE(yyjson_is_obj(second_properties));
+    EXPECT_EQ(yyjson_obj_get(first_properties, "encounter"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(second_properties, "encounter"), nullptr);
+    yyjson_doc_free(export_doc);
+    SDL_free(export_json);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -19836,6 +19989,33 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.inspector.tab", ""),
                  "Data");
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
+    RectSummary property_add = visible_frame("ui.editor_shell.left_inspector.property.new.button");
+    RectSummary property_apply = visible_frame("ui.editor_shell.left_inspector.property.apply.button");
+    RectSummary property_key = visible_frame("ui.editor_shell.left_inspector.property.edit.key");
+    RectSummary property_value = visible_frame("ui.editor_shell.left_inspector.property.edit.value");
+    ASSERT_TRUE(property_add.found);
+    ASSERT_TRUE(property_apply.found);
+    ASSERT_TRUE(property_key.found);
+    ASSERT_TRUE(property_value.found);
+    EXPECT_EQ(retained_ui_hit(property_add.x + property_add.w * 0.5f, property_add.y + property_add.h * 0.5f).action,
+              "editor.property.new");
+    EXPECT_EQ(
+        retained_ui_hit(property_apply.x + property_apply.w * 0.5f, property_apply.y + property_apply.h * 0.5f).action,
+        "editor.property.apply");
+    click_editor(property_add.x + property_add.w * 0.5f, property_add.y + property_add.h * 0.5f);
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),
+        "key");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.key", "missing"),
+        "");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.value",
+                                                "missing"),
+                 "");
+    click_editor(property_value.x + property_value.w * 0.5f, property_value.y + property_value.h * 0.5f);
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),
+        "value");
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
     RectSummary face_tab_after_data = visible_frame("ui.editor_shell.left_inspector.face.tab");
     ASSERT_TRUE(face_tab_after_data.found);

@@ -238,6 +238,7 @@ typedef struct editor_brush_source_box_runtime
     int vertex_count;
     int vertices[16][3];
     unsigned int contents;
+    slayer3d_properties *properties;
 } editor_brush_source_box_runtime;
 
 #define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8

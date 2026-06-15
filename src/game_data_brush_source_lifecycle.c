@@ -17,6 +17,7 @@ void free_editor_brush_source_box(editor_brush_source_box_runtime *box)
     SDL_free(box->material);
     for (size_t i = 0; i < SDL_arraysize(box->face_materials); ++i)
         SDL_free(box->face_materials[i]);
+    slayer3d_properties_destroy(box->properties);
     SDL_zero(*box);
 }
 
@@ -87,5 +88,25 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
         dest->vertices[i][2] = source->vertices[i][2];
     }
     dest->contents = source->contents;
+    dest->properties = slayer3d_properties_create();
+    if (dest->properties == NULL)
+    {
+        free_editor_brush_source_box(dest);
+        return false;
+    }
+    const int property_count = source->properties != NULL ? slayer3d_properties_count(source->properties) : 0;
+    for (int i = 0; i < property_count; ++i)
+    {
+        const char *key = NULL;
+        slayer3d_value_type type = SLAYER3D_VALUE_STRING;
+        if (!slayer3d_properties_get_key_at(source->properties, i, &key, &type))
+            continue;
+        const slayer3d_value *value = slayer3d_properties_get_value(source->properties, key);
+        if (key != NULL && value != NULL && !set_property_from_value(dest->properties, key, value))
+        {
+            free_editor_brush_source_box(dest);
+            return false;
+        }
+    }
     return true;
 }
