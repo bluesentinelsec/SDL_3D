@@ -19186,11 +19186,12 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
 
     char select_slot_action[128];
     SDL_snprintf(select_slot_action, sizeof(select_slot_action),
-                 R"json({ "type": "editor.property.select_slot", "slot": %d })json", encounter_slot);
+                 R"json({ "type": "editor.property.select_slot", "slot": %d, "focus": "key" })json", encounter_slot);
     ASSERT_TRUE(execute_json_action(select_slot_action));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.original_key", ""), "encounter");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.key", ""), "encounter");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.value", ""), "alpha");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", ""), "key");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.property.edit.selected_slot", -1), encounter_slot);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.replace_on_text", false));
     slayer3d_properties_set_string(scene_state, "editor.property.edit.key", "encounter_id");
@@ -20117,11 +20118,23 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.row.property5").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property1").found);
+    RectSummary property5_label = visible_frame("ui.editor_shell.left_inspector.row.property5.label");
+    RectSummary property5_value = visible_frame("ui.editor_shell.left_inspector.row.property5.value");
+    ASSERT_TRUE(property5_label.found);
+    ASSERT_TRUE(property5_value.found);
     EXPECT_EQ(retained_ui_hit(visible_frame("ui.editor_shell.left_inspector.row.property5").x + 16.0f,
                               visible_frame("ui.editor_shell.left_inspector.row.property5").y + 12.0f)
                   .action,
-              "editor.property.select_slot.5");
-    emit_signal("signal.editor.property.select_slot.5");
+              "editor.property.select_slot_key.5");
+    EXPECT_EQ(
+        retained_ui_hit(property5_label.x + property5_label.w * 0.5f, property5_label.y + property5_label.h * 0.5f)
+            .action,
+        "editor.property.select_slot_key.5");
+    EXPECT_EQ(
+        retained_ui_hit(property5_value.x + property5_value.w * 0.5f, property5_value.y + property5_value.h * 0.5f)
+            .action,
+        "editor.property.select_slot_value.5");
+    emit_signal("signal.editor.property.select_slot_value.5");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime),
                                                 "editor.property.edit.original_key", ""),
                  "trigger_radius");
@@ -20143,7 +20156,10 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_STREQ(
         slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.slot.5.value", ""),
         "4.000");
-    click_editor(property_key.x + property_key.w * 0.5f, property_key.y + property_key.h * 0.5f);
+    emit_signal("signal.editor.property.select_slot_key.5");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),
+        "key");
     staged_text_event.text.text = "radius";
     slayer3d_input_process_event(input, &staged_text_event);
     slayer3d_input_update(input, input_tick++);

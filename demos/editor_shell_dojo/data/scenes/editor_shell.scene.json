@@ -1042,7 +1042,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.key", "default": "" }],
-                "action": "editor.property.select_slot.0",
+                "action": "editor.property.select_slot_key.0",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 0, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1053,7 +1054,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.0.value", "default": "" }],
-                "action": "editor.property.select_slot.0",
+                "action": "editor.property.select_slot_value.0",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 0, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1095,7 +1097,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.key", "default": "" }],
-                "action": "editor.property.select_slot.1",
+                "action": "editor.property.select_slot_key.1",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 1, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1106,7 +1109,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.1.value", "default": "" }],
-                "action": "editor.property.select_slot.1",
+                "action": "editor.property.select_slot_value.1",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 1, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1148,7 +1152,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.key", "default": "" }],
-                "action": "editor.property.select_slot.2",
+                "action": "editor.property.select_slot_key.2",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 2, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1159,7 +1164,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.2.value", "default": "" }],
-                "action": "editor.property.select_slot.2",
+                "action": "editor.property.select_slot_value.2",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 2, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1201,7 +1207,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.key", "default": "" }],
-                "action": "editor.property.select_slot.3",
+                "action": "editor.property.select_slot_key.3",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 3, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1212,7 +1219,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.3.value", "default": "" }],
-                "action": "editor.property.select_slot.3",
+                "action": "editor.property.select_slot_value.3",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 3, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1254,7 +1262,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.4.key", "default": "" }],
-                "action": "editor.property.select_slot.4",
+                "action": "editor.property.select_slot_key.4",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 4, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1265,7 +1274,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.4.value", "default": "" }],
-                "action": "editor.property.select_slot.4",
+                "action": "editor.property.select_slot_value.4",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 4, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1307,7 +1317,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.5.key", "default": "" }],
-                "action": "editor.property.select_slot.5",
+                "action": "editor.property.select_slot_key.5",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 5, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "key", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },
@@ -1318,7 +1329,8 @@
                 "h": "fill",
                 "format": "%s",
                 "bindings": [{ "type": "scene_state", "key": "editor.property.slot.5.value", "default": "" }],
-                "action": "editor.property.select_slot.5",
+                "action": "editor.property.select_slot_value.5",
+                "selected_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.selected_slot", "op": "==", "value": 5, "default": -1 }, { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "value", "default": "" }] },
                 "text_scale": 0.34,
                 "align": "left"
               },

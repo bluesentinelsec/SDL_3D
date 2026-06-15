@@ -305,6 +305,18 @@
     "signal.editor.property.select_slot.3",
     "signal.editor.property.select_slot.4",
     "signal.editor.property.select_slot.5",
+    "signal.editor.property.select_slot_key.0",
+    "signal.editor.property.select_slot_key.1",
+    "signal.editor.property.select_slot_key.2",
+    "signal.editor.property.select_slot_key.3",
+    "signal.editor.property.select_slot_key.4",
+    "signal.editor.property.select_slot_key.5",
+    "signal.editor.property.select_slot_value.0",
+    "signal.editor.property.select_slot_value.1",
+    "signal.editor.property.select_slot_value.2",
+    "signal.editor.property.select_slot_value.3",
+    "signal.editor.property.select_slot_value.4",
+    "signal.editor.property.select_slot_value.5",
     "signal.editor.property.delete.0",
     "signal.editor.property.delete.1",
     "signal.editor.property.delete.2",
@@ -1442,6 +1454,54 @@
       {
         "signal": "signal.editor.property.select_slot.5",
         "actions": [{ "type": "editor.property.select_slot", "slot": 5 }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.0",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 0, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.1",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 1, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.2",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 2, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.3",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 3, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.4",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 4, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_key.5",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 5, "focus": "key" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.0",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 0, "focus": "value" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.1",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 1, "focus": "value" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.2",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 2, "focus": "value" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.3",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 3, "focus": "value" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.4",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 4, "focus": "value" }]
+      },
+      {
+        "signal": "signal.editor.property.select_slot_value.5",
+        "actions": [{ "type": "editor.property.select_slot", "slot": 5, "focus": "value" }]
       },
       {
         "signal": "signal.editor.property.delete.0",

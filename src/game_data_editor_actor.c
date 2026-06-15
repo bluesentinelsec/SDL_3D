@@ -632,6 +632,9 @@ bool slayer3d_game_data_select_editor_property_slot_action(slayer3d_game_data_ru
     const int slot = json_int(action, "slot", -1);
     if (slot < 0)
         return false;
+    const char *focus = json_string(action, "focus", "value");
+    if (SDL_strcmp(focus, "key") != 0 && SDL_strcmp(focus, "value") != 0)
+        focus = "value";
 
     char state_key[96];
     SDL_snprintf(state_key, sizeof(state_key), "editor.property.slot.%d.key", slot);
@@ -644,7 +647,7 @@ bool slayer3d_game_data_select_editor_property_slot_action(slayer3d_game_data_ru
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.original_key", key);
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.key", key);
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.value", value != NULL ? value : "");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "value");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", focus);
     slayer3d_properties_set_int(runtime->scene_state, "editor.property.edit.selected_slot", slot);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", true);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "property selected");

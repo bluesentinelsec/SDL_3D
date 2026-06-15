@@ -814,6 +814,9 @@ bool validate_editor_property_select_slot_action(validation_context *ctx, yyjson
     yyjson_val *slot = obj_get(action, "slot");
     if (!yyjson_is_int(slot) || yyjson_get_int(slot) < 0)
         return validation_error(ctx, json_path, "%s requires non-negative integer slot", type);
+    const char *focus = json_string(action, "focus");
+    if (focus != NULL && SDL_strcmp(focus, "key") != 0 && SDL_strcmp(focus, "value") != 0)
+        return validation_error(ctx, json_path, "%s focus must be key or value", type);
     return true;
 }
 
