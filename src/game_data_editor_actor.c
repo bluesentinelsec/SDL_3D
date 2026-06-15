@@ -394,6 +394,28 @@ static void publish_editor_property_slots(slayer3d_properties *scene_state, cons
     }
 }
 
+static void publish_editor_property_edit_overlay(slayer3d_properties *scene_state, int slot_count)
+{
+    if (scene_state == NULL || slot_count <= 0)
+        return;
+    const char *focus = slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", "");
+    if (SDL_strcmp(focus, "key") != 0 && SDL_strcmp(focus, "value") != 0)
+        return;
+    const int slot = slayer3d_properties_get_int(scene_state, "editor.property.edit.selected_slot", -1);
+    if (slot < 0 || slot >= slot_count)
+        return;
+
+    char slot_key[96];
+    SDL_snprintf(slot_key, sizeof(slot_key), "editor.property.slot.%d.available", slot);
+    slayer3d_properties_set_bool(scene_state, slot_key, true);
+    SDL_snprintf(slot_key, sizeof(slot_key), "editor.property.slot.%d.key", slot);
+    slayer3d_properties_set_string(scene_state, slot_key,
+                                   slayer3d_properties_get_string(scene_state, "editor.property.edit.key", ""));
+    SDL_snprintf(slot_key, sizeof(slot_key), "editor.property.slot.%d.value", slot);
+    slayer3d_properties_set_string(scene_state, slot_key,
+                                   slayer3d_properties_get_string(scene_state, "editor.property.edit.value", ""));
+}
+
 void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
                                          const slayer3d_game_data_editor_selection *selection, int slot_count)
 {
@@ -410,6 +432,7 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
         slayer3d_properties_set_string(scene_state, "editor.property.target.type", "editor_actor");
         slayer3d_properties_set_string(scene_state, "editor.property.target.name", actor->name);
         publish_editor_property_slots(scene_state, actor->properties, slot_count);
+        publish_editor_property_edit_overlay(scene_state, slot_count);
         return;
     }
 
@@ -420,6 +443,7 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
         slayer3d_properties_set_string(scene_state, "editor.property.target.name",
                                        brush->stable_id != NULL ? brush->stable_id : "");
         publish_editor_property_slots(scene_state, brush->properties, slot_count);
+        publish_editor_property_edit_overlay(scene_state, slot_count);
         return;
     }
 
@@ -427,6 +451,7 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
     slayer3d_properties_set_string(scene_state, "editor.property.target.name", "");
     slayer3d_properties_set_int(scene_state, "editor.property.count", 0);
     clear_editor_property_slots(scene_state, slot_count);
+    publish_editor_property_edit_overlay(scene_state, slot_count);
 }
 
 static const char *editor_property_action_string_from_state(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -620,6 +645,8 @@ bool slayer3d_game_data_select_editor_property_slot_action(slayer3d_game_data_ru
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.key", key);
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.value", value != NULL ? value : "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "value");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.property.edit.selected_slot", slot);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", true);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "property selected");
     return true;
 }

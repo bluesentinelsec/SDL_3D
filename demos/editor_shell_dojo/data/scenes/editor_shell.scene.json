@@ -1025,6 +1025,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.0",
             "visible_if": {
               "type": "all",
               "conditions": [
@@ -1076,6 +1078,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.1",
             "visible_if": {
               "type": "all",
               "conditions": [
@@ -1127,6 +1131,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.2",
             "visible_if": {
               "type": "all",
               "conditions": [
@@ -1178,6 +1184,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.3",
             "visible_if": {
               "type": "all",
               "conditions": [
@@ -1229,6 +1237,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.4",
             "visible_if": {
               "type": "all",
               "conditions": [
@@ -1280,6 +1290,8 @@
             "w": 272,
             "h": 24,
             "layer": 121,
+            "interactive": true,
+            "action": "editor.property.select_slot.5",
             "visible_if": {
               "type": "all",
               "conditions": [

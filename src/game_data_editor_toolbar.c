@@ -88,6 +88,23 @@ static bool editor_hit_is_property_control(const slayer3d_ui_layout_hit_region *
            editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.row.property");
 }
 
+static const char *editor_property_row_select_action(const slayer3d_ui_layout_hit_region *hit, char *buffer,
+                                                     size_t buffer_size)
+{
+    if (hit == NULL || buffer == NULL || buffer_size == 0U || hit->action[0] != '\0' ||
+        !editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.row.property") ||
+        SDL_strstr(hit->id, ".delete") != NULL)
+    {
+        return hit != NULL ? hit->action : "";
+    }
+    const char *slot_text = hit->id + SDL_strlen("ui.editor_shell.left_inspector.row.property");
+    if (slot_text[0] < '0' || slot_text[0] > '9')
+        return "";
+    const int slot = slot_text[0] - '0';
+    SDL_snprintf(buffer, buffer_size, "editor.property.select_slot.%d", slot);
+    return buffer;
+}
+
 static bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime)
 {
     const char *focus = runtime != NULL && runtime->scene_state != NULL
@@ -148,6 +165,12 @@ static bool editor_property_edit_backspace(slayer3d_properties *scene_state, con
 {
     if (scene_state == NULL || key == NULL)
         return false;
+    if (slayer3d_properties_get_bool(scene_state, "editor.property.edit.replace_on_text", false))
+    {
+        slayer3d_properties_set_string(scene_state, key, "");
+        slayer3d_properties_set_bool(scene_state, "editor.property.edit.replace_on_text", false);
+        return true;
+    }
     char buffer[256];
     SDL_strlcpy(buffer, slayer3d_properties_get_string(scene_state, key, ""), sizeof(buffer));
     size_t len = SDL_strlen(buffer);
@@ -160,6 +183,19 @@ static bool editor_property_edit_backspace(slayer3d_properties *scene_state, con
     buffer[len] = '\0';
     slayer3d_properties_set_string(scene_state, key, buffer);
     return true;
+}
+
+static void editor_property_edit_sync_selected_slot(slayer3d_properties *scene_state, const char *edit_key,
+                                                    const char *slot_suffix)
+{
+    if (scene_state == NULL || edit_key == NULL || slot_suffix == NULL)
+        return;
+    const int slot = slayer3d_properties_get_int(scene_state, "editor.property.edit.selected_slot", -1);
+    if (slot < 0)
+        return;
+    char slot_key[96];
+    SDL_snprintf(slot_key, sizeof(slot_key), "editor.property.slot.%d.%s", slot, slot_suffix);
+    slayer3d_properties_set_string(scene_state, slot_key, slayer3d_properties_get_string(scene_state, edit_key, ""));
 }
 
 static bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime)
@@ -193,11 +229,21 @@ static bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime
     bool changed = false;
     if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE))
         changed = editor_property_edit_backspace(runtime->scene_state, edit_key) || changed;
+    const char *input_text = slayer3d_input_get_text_input(input);
+    if (input_text != NULL && input_text[0] != '\0' &&
+        slayer3d_properties_get_bool(runtime->scene_state, "editor.property.edit.replace_on_text", false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, edit_key, "");
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", false);
+    }
     changed = editor_property_edit_append_text(runtime->scene_state, edit_key, slayer3d_input_get_text_input(input),
                                                key_focus ? 64U : 192U) ||
               changed;
     if (changed)
+    {
+        editor_property_edit_sync_selected_slot(runtime->scene_state, edit_key, key_focus ? "key" : "value");
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "editing property");
+    }
     return true;
 }
 
@@ -527,10 +573,12 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
             slayer3d_ui_layout_destroy(layout);
             return true;
         }
-        if (clicked && hit->action[0] != '\0' && !editor_texture_select_action_is_blocked(runtime, hit->action))
+        char derived_action[96];
+        const char *hit_action = editor_property_row_select_action(hit, derived_action, sizeof(derived_action));
+        if (clicked && hit_action[0] != '\0' && !editor_texture_select_action_is_blocked(runtime, hit_action))
         {
-            (void)editor_apply_tool_action(runtime, hit->action);
-            if (editor_actor_select_action(hit->action))
+            (void)editor_apply_tool_action(runtime, hit_action);
+            if (editor_actor_select_action(hit_action))
             {
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", true);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",

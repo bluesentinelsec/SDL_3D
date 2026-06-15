@@ -19043,6 +19043,13 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
 
     editor_brush_source_prefab_result first_result{};
     const int first_min[3] = {0, 0, 0};
@@ -19159,7 +19166,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
                   .find("value is invalid"),
               std::string::npos);
 
-    bool saw_encounter_slot = false;
+    int encounter_slot = -1;
     bool saw_empty_value_slot = false;
     for (int i = 0; i < 6; ++i)
     {
@@ -19170,12 +19177,28 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
         const char *key = slayer3d_properties_get_string(scene_state, key_name, "");
         const char *value = slayer3d_properties_get_string(scene_state, value_name, "");
         if (SDL_strcmp(key, "encounter") == 0 && SDL_strcmp(value, "alpha") == 0)
-            saw_encounter_slot = true;
+            encounter_slot = i;
         if (SDL_strcmp(key, "empty_value") == 0)
             saw_empty_value_slot = true;
     }
-    EXPECT_TRUE(saw_encounter_slot);
+    ASSERT_GE(encounter_slot, 0);
     EXPECT_FALSE(saw_empty_value_slot);
+
+    char select_slot_action[128];
+    SDL_snprintf(select_slot_action, sizeof(select_slot_action),
+                 R"json({ "type": "editor.property.select_slot", "slot": %d })json", encounter_slot);
+    ASSERT_TRUE(execute_json_action(select_slot_action));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.original_key", ""), "encounter");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.key", ""), "encounter");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.value", ""), "alpha");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.property.edit.selected_slot", -1), encounter_slot);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.replace_on_text", false));
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.key", "encounter_id");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.value", "beta");
+    emit_signal("signal.editor.property.apply");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.property.edit.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.applied_key", ""), "encounter_id");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", "set"), "");
 
     char *export_json = nullptr;
     size_t export_size = 0u;
@@ -19189,8 +19212,10 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
     yyjson_val *second_properties = exported_box_properties(root, second_result.brush_name);
     ASSERT_TRUE(yyjson_is_obj(first_properties));
     ASSERT_TRUE(yyjson_is_obj(second_properties));
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(first_properties, "encounter")), "alpha");
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(second_properties, "encounter")), "alpha");
+    EXPECT_EQ(yyjson_obj_get(first_properties, "encounter"), nullptr);
+    EXPECT_EQ(yyjson_obj_get(second_properties, "encounter"), nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(first_properties, "encounter_id")), "beta");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(second_properties, "encounter_id")), "beta");
     yyjson_doc_free(export_doc);
     SDL_free(export_json);
 
@@ -20096,6 +20121,39 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                               visible_frame("ui.editor_shell.left_inspector.row.property5").y + 12.0f)
                   .action,
               "editor.property.select_slot.5");
+    emit_signal("signal.editor.property.select_slot.5");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime),
+                                                "editor.property.edit.original_key", ""),
+                 "trigger_radius");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.value", ""),
+        "3.500");
+    EXPECT_EQ(
+        slayer3d_properties_get_int(slayer3d_game_data_scene_state(runtime), "editor.property.edit.selected_slot", -1),
+        5);
+    SDL_Event staged_text_event{};
+    staged_text_event.type = SDL_EVENT_TEXT_INPUT;
+    staged_text_event.text.text = "4.000";
+    slayer3d_input_process_event(input, &staged_text_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.value", ""),
+        "4.000");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.slot.5.value", ""),
+        "4.000");
+    click_editor(property_key.x + property_key.w * 0.5f, property_key.y + property_key.h * 0.5f);
+    staged_text_event.text.text = "radius";
+    slayer3d_input_process_event(input, &staged_text_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.key", ""),
+        "radius");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.slot.5.key", ""),
+        "radius");
     click_editor(property_key.x + property_key.w * 0.5f, property_key.y + property_key.h * 0.5f);
     EXPECT_STREQ(
         slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", ""),

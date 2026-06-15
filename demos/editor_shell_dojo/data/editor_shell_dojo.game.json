@@ -1375,6 +1375,8 @@
           { "type": "scene_state.set", "key": "editor.property.edit.original_key", "value": "" },
           { "type": "scene_state.set", "key": "editor.property.edit.key", "value": "" },
           { "type": "scene_state.set", "key": "editor.property.edit.value", "value": "" },
+          { "type": "scene_state.set", "key": "editor.property.edit.selected_slot", "value": -1 },
+          { "type": "scene_state.set", "key": "editor.property.edit.replace_on_text", "value": false },
           { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "key" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "new property" }
         ]
@@ -1383,6 +1385,7 @@
         "signal": "signal.editor.property.focus.key",
         "actions": [
           { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "key" },
+          { "type": "scene_state.set", "key": "editor.property.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing property key" }
         ]
       },
@@ -1390,6 +1393,7 @@
         "signal": "signal.editor.property.focus.value",
         "actions": [
           { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "value" },
+          { "type": "scene_state.set", "key": "editor.property.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing property value" }
         ]
       },
@@ -1410,6 +1414,8 @@
             }
           },
           { "type": "scene_state.set", "key": "editor.property.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.property.edit.selected_slot", "value": -1 },
+          { "type": "scene_state.set", "key": "editor.property.edit.replace_on_text", "value": false },
           { "type": "console.write", "message_from_state": "editor.property.edit.message" }
         ]
       },
