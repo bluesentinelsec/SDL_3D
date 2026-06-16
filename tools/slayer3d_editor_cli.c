@@ -126,6 +126,25 @@ static char *path_join_tool(const char *base, const char *path)
     return joined;
 }
 
+static char *path_make_absolute_tool(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (path_is_absolute_tool(path))
+    {
+        char *copy = SDL_strdup(path);
+        path_normalize_host_separators_tool(copy);
+        return copy;
+    }
+
+    char *cwd = SDL_GetCurrentDirectory();
+    if (cwd == NULL)
+        return NULL;
+    char *absolute = path_join_tool(cwd, path);
+    SDL_free(cwd);
+    return absolute;
+}
+
 static char *path_join_relative_tool(const char *base, const char *path)
 {
     if (path == NULL || path[0] == '\0')
@@ -785,16 +804,24 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->asset_sources = &project->asset_sources;
     if (args->texture_path != NULL && args->texture_path[0] != '\0')
     {
+        char *absolute_texture_path = path_make_absolute_tool(args->texture_path);
+        if (absolute_texture_path == NULL)
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to resolve texture path override");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
         if (!editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
         {
+            SDL_free(absolute_texture_path);
             editor_set_error(error_buffer, error_buffer_size, "failed to allocate texture path override");
             slayer3d_editor_launch_destroy(out_launch);
             return false;
         }
         editor_asset_source_destroy(&out_launch->owned_asset_sources.textures);
-        out_launch->owned_asset_sources.textures.path = SDL_strdup(args->texture_path);
+        out_launch->owned_asset_sources.textures.path = absolute_texture_path;
         out_launch->owned_asset_sources.textures.relative_path = SDL_strdup(args->texture_path);
-        out_launch->owned_asset_sources.textures.available = editor_asset_source_available(args->texture_path);
+        out_launch->owned_asset_sources.textures.available = editor_asset_source_available(absolute_texture_path);
         if (out_launch->owned_asset_sources.textures.path == NULL ||
             out_launch->owned_asset_sources.textures.relative_path == NULL)
         {

@@ -20613,6 +20613,60 @@ TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTex
     remove_test_dir(root_dir);
 }
 
+TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbsoluteSlotPaths)
+{
+    ASSERT_TRUE(std::filesystem::is_directory("media/textures"));
+
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", "media/textures");
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "media/textures");
+
+    emit_signal("signal.editor.texture.refresh");
+
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.texture.count", 0), 0);
+    const char *slot_path = slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.path", "");
+    ASSERT_NE(slot_path, nullptr);
+    EXPECT_TRUE(std::filesystem::path(slot_path).is_absolute()) << slot_path;
+    EXPECT_TRUE(std::filesystem::is_regular_file(slot_path)) << slot_path;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    bool saw_project_texture = false;
+    for (int i = 0; i < world.material_count; ++i)
+    {
+        const slayer3d_game_data_brush_material &material = world.materials[i];
+        if (material.name != nullptr && SDL_strncmp(material.name, "mat.project.texture.", 20) == 0)
+        {
+            saw_project_texture = true;
+            ASSERT_NE(material.texture, nullptr);
+            EXPECT_TRUE(std::filesystem::path(material.texture).is_absolute()) << material.texture;
+        }
+    }
+    EXPECT_TRUE(saw_project_texture);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

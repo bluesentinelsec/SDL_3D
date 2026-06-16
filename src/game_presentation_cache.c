@@ -5,6 +5,19 @@
 
 #include "game_presentation_internal.h"
 
+static bool presentation_path_absolute(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+#if defined(_WIN32)
+    const size_t len = SDL_strlen(path);
+    return (len >= 3U && path[0] >= 'A' && path[0] <= 'Z' && path[1] == ':' && (path[2] == '\\' || path[2] == '/')) ||
+           (len >= 2U && path[0] == '\\' && path[1] == '\\');
+#else
+    return path[0] == '/';
+#endif
+}
+
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -256,7 +269,20 @@ bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *as
     slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char error[256];
-    if (!slayer3d_asset_resolver_read_file(assets, asset->path, &buffer, error, (int)sizeof(error)))
+    if (presentation_path_absolute(asset->path))
+    {
+        size_t size = 0U;
+        void *data = SDL_LoadFile(asset->path, &size);
+        if (data == NULL)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image file %s: %s", asset->path,
+                         SDL_GetError());
+            return false;
+        }
+        buffer.data = data;
+        buffer.size = size;
+    }
+    else if (!slayer3d_asset_resolver_read_file(assets, asset->path, &buffer, error, (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image asset %s: %s", asset->path, error);
         return false;

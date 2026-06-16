@@ -82,6 +82,8 @@ static char editor_path_separator(void)
 #endif
 }
 
+static bool editor_path_absolute(const char *path);
+
 static char *editor_path_join(const char *base, const char *leaf)
 {
     if (leaf == NULL)
@@ -100,6 +102,21 @@ static char *editor_path_join(const char *base, const char *leaf)
         joined[offset++] = editor_path_separator();
     SDL_memcpy(joined + offset, leaf, leaf_len + 1U);
     return joined;
+}
+
+static char *editor_path_make_absolute_from_cwd(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (editor_path_absolute(path))
+        return SDL_strdup(path);
+
+    char *cwd = SDL_GetCurrentDirectory();
+    if (cwd == NULL)
+        return NULL;
+    char *absolute = editor_path_join(cwd, path);
+    SDL_free(cwd);
+    return absolute;
 }
 
 static bool editor_path_absolute(const char *path)
@@ -711,10 +728,24 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
     const char *search_query = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.search", "");
     char *resolved_fallback_directory = NULL;
+    char *resolved_texture_directory = NULL;
     if (directory == NULL || directory[0] == '\0')
     {
         resolved_fallback_directory = editor_resolve_directory(runtime, fallback_directory);
         directory = resolved_fallback_directory != NULL ? resolved_fallback_directory : "";
+    }
+    else if (!editor_path_absolute(directory))
+    {
+        resolved_texture_directory = editor_path_make_absolute_from_cwd(directory);
+        SDL_PathInfo texture_info;
+        SDL_zero(texture_info);
+        if (resolved_texture_directory == NULL || !SDL_GetPathInfo(resolved_texture_directory, &texture_info) ||
+            texture_info.type != SDL_PATHTYPE_DIRECTORY)
+        {
+            SDL_free(resolved_texture_directory);
+            resolved_texture_directory = editor_resolve_directory(runtime, directory);
+        }
+        directory = resolved_texture_directory != NULL ? resolved_texture_directory : directory;
     }
     if (relative_directory == NULL || relative_directory[0] == '\0')
         relative_directory = fallback_relative_directory != NULL ? fallback_relative_directory : "";
@@ -734,6 +765,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status",
                                        "texture directory unavailable");
         SDL_free(resolved_fallback_directory);
+        SDL_free(resolved_texture_directory);
         return true;
     }
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, world_name);
@@ -825,6 +857,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
     editor_texture_scan_list_free(&list);
     SDL_free(resolved_fallback_directory);
+    SDL_free(resolved_texture_directory);
     return true;
 }
 
@@ -839,24 +872,27 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
     const char *available_key = json_string(action, "available_key", "editor.asset_source.textures.available");
     const char *status_key = json_string(action, "status_key", "editor.texture.path.status");
     const char *path = slayer3d_properties_get_string(runtime->scene_state, path_key, "");
+    char *absolute_path = editor_path_make_absolute_from_cwd(path);
     SDL_PathInfo info;
     SDL_zero(info);
-    const bool valid_directory =
-        path != NULL && path[0] != '\0' && SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
+                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
     if (!valid_directory)
     {
         slayer3d_properties_set_bool(runtime->scene_state, available_key, false);
         slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path is not a directory");
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
                                        "texture path is not a directory");
+        SDL_free(absolute_path);
         return true;
     }
 
-    slayer3d_properties_set_string(runtime->scene_state, directory_key, path);
+    slayer3d_properties_set_string(runtime->scene_state, directory_key, absolute_path);
     slayer3d_properties_set_string(runtime->scene_state, relative_directory_key, path);
     slayer3d_properties_set_bool(runtime->scene_state, available_key, true);
     slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path updated");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture path updated");
+    SDL_free(absolute_path);
     return true;
 }
 

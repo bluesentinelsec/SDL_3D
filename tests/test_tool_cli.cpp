@@ -356,6 +356,31 @@ TEST(ToolCli, EditorDefaultLaunchAcceptsTexturePathOverride)
     std::filesystem::remove_all(textures_dir);
 }
 
+TEST(ToolCli, EditorDefaultLaunchResolvesRelativeTexturePathOverride)
+{
+    ASSERT_TRUE(std::filesystem::is_directory("media/textures"));
+
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "--texture-path", "media/textures"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_STREQ(args.texture_path, "media/textures");
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    ASSERT_NE(launch.asset_sources, nullptr);
+    EXPECT_TRUE(std::filesystem::path(launch.asset_sources->textures.path).is_absolute());
+    EXPECT_TRUE(std::filesystem::is_directory(launch.asset_sources->textures.path));
+    EXPECT_STREQ(launch.asset_sources->textures.relative_path, "media/textures");
+
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+}
+
 TEST(ToolCli, EditorTexturePathOverrideRequiresExistingDirectory)
 {
     const std::filesystem::path project_dir = unique_cli_test_dir("editor_texture_override_missing");
