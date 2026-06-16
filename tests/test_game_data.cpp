@@ -34179,7 +34179,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
-    EXPECT_TRUE(visible_view_label("3D Perspective / Flyby"));
+    EXPECT_FALSE(visible_view_label("3D Perspective / Flyby"));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));

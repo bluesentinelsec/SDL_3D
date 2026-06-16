@@ -6172,44 +6172,6 @@
         "layer": 130
 },
 {
-        "id": "ui.editor_shell.title",
-        "type": "label",
-        "x": 954.4,
-        "y": 93.6,
-        "w": 300,
-        "h": 35,
-        "layer": 141,
-        "font": "font.editor_shell.ui",
-        "text": "Editor Shell Dojo",
-        "text_color": [
-                235,
-                242,
-                255,
-                230
-        ],
-        "text_scale": 0.8,
-        "align": "right"
-},
-{
-        "id": "ui.editor_shell.view_label.perspective",
-        "type": "label",
-        "x": 1004.4,
-        "y": 144.0,
-        "w": 250,
-        "h": 26,
-        "layer": 141,
-        "font": "font.editor_shell.ui",
-        "text": "3D Perspective / Flyby",
-        "text_color": [
-                160,
-                220,
-                255,
-                235
-        ],
-        "text_scale": 0.6,
-        "align": "right"
-},
-{
         "id": "ui.editor_shell.palette.modal.title.material",
         "type": "label",
         "x": 394,
@@ -6957,25 +6919,6 @@
                 "op": "!=",
                 "value": ""
         }
-},
-{
-        "id": "ui.editor_shell.help",
-        "type": "label",
-        "x": 394.4,
-        "y": 122.4,
-        "w": 860,
-        "h": 26,
-        "layer": 141,
-        "font": "font.editor_shell.ui",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex. Edge Tool exposes selected-brush edges. Esc clears selection/back to select.",
-        "text_color": [
-                190,
-                205,
-                230,
-                215
-        ],
-        "text_scale": 0.6,
-        "align": "right"
 }
     ],
     "images": [
