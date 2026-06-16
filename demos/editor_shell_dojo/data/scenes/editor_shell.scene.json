@@ -5023,7 +5023,7 @@
             "type": "button",
             "x": 12,
             "y": 88,
-            "w": 214,
+            "w": 156,
             "h": 24,
             "text_scale": 0.34,
             "format": "Search: %s",
@@ -5031,6 +5031,19 @@
             "interactive": true,
             "action": "editor.texture.focus.search",
             "selected_if": { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "search", "default": "" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.texture_viewer.search.apply",
+            "type": "button",
+            "x": 174,
+            "y": 88,
+            "w": 52,
+            "h": 24,
+            "text": "Search",
+            "text_scale": 0.32,
+            "interactive": true,
+            "action": "editor.texture.search.apply",
             "layer": 121
           },
           {

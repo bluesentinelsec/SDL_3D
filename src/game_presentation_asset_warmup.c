@@ -25,6 +25,7 @@ typedef struct asset_warmup_prepared_texture
 typedef struct asset_warmup_prepared_image
 {
     slayer3d_texture2d texture;
+    char *source_path;
     const char *effect;
     float effect_delay;
     float effect_duration;
@@ -92,6 +93,7 @@ static void free_prepared_image(asset_warmup_prepared_image *prepared)
     if (prepared == NULL)
         return;
     slayer3d_free_texture(&prepared->texture);
+    SDL_free(prepared->source_path);
     SDL_free(prepared->shader_vertex_source);
     SDL_free(prepared->shader_fragment_source);
     SDL_free(prepared);
@@ -274,8 +276,17 @@ static bool worker_can_prepare_entry(const asset_warmup_worker_state *worker_sta
     if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE && worker_state->runtime != NULL)
     {
         slayer3d_game_data_image_asset asset;
-        return slayer3d_game_data_get_image_asset(worker_state->runtime, entry->id, &asset) &&
-               (asset.path != NULL || asset.sprite != NULL);
+        if (!slayer3d_game_data_get_image_asset(worker_state->runtime, entry->id, &asset) ||
+            (asset.path == NULL && asset.sprite == NULL))
+        {
+            return false;
+        }
+        if (entry->source_path != NULL)
+        {
+            const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
+            return asset_source_path != NULL && SDL_strcmp(asset_source_path, entry->source_path) == 0;
+        }
+        return true;
     }
     if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE && worker_state->runtime != NULL)
         return true;
@@ -386,6 +397,7 @@ static bool prepare_image_request(asset_warmup_worker_state *worker_state, const
 
     if (asset.sprite != NULL)
     {
+        prepared->source_path = SDL_strdup(asset.sprite);
         if (!slayer3d_game_data_prepare_sprite_backed_image_texture(
                 worker_state->runtime, &asset, &prepared->texture, &prepared->effect, &prepared->effect_delay,
                 &prepared->effect_duration, &prepared->shader_vertex_source, &prepared->shader_fragment_source))
@@ -396,6 +408,7 @@ static bool prepare_image_request(asset_warmup_worker_state *worker_state, const
     }
     else if (asset.path != NULL)
     {
+        prepared->source_path = SDL_strdup(asset.path);
         if (!slayer3d_game_data_prepare_direct_image_texture(worker_state->assets, &asset, &prepared->texture))
         {
             free_prepared_image(prepared);
@@ -406,6 +419,11 @@ static bool prepare_image_request(asset_warmup_worker_state *worker_state, const
     {
         free_prepared_image(prepared);
         return false;
+    }
+    if (prepared->source_path == NULL)
+    {
+        free_prepared_image(prepared);
+        return SDL_OutOfMemory();
     }
 
     *out_prepared = prepared;
@@ -727,6 +745,12 @@ bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_w
     return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL, image_id, NULL);
 }
 
+bool slayer3d_game_data_asset_warmup_request_ui_image_source(slayer3d_game_data_asset_warmup_queue *queue,
+                                                             const char *source_path, const char *image_id)
+{
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, source_path, image_id, NULL);
+}
+
 bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue, const char *font_id)
 {
     return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id, NULL);
@@ -857,6 +881,15 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT:
         return slayer3d_game_data_find_or_load_font(runtime, font_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
+        if (entry->source_path != NULL)
+        {
+            slayer3d_game_data_image_asset asset;
+            if (!slayer3d_game_data_get_image_asset(runtime, entry->id, &asset))
+                return false;
+            const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
+            if (asset_source_path == NULL || SDL_strcmp(asset_source_path, entry->source_path) != 0)
+                return false;
+        }
         return slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE: {
         if (renderer == NULL)
@@ -916,6 +949,9 @@ static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry
             return false;
         asset_warmup_prepared_image *prepared = (asset_warmup_prepared_image *)prepared_payload;
         const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
+        const char *prepared_source_path = prepared->source_path != NULL ? prepared->source_path : "";
+        if (asset_source_path == NULL || SDL_strcmp(asset_source_path, prepared_source_path) != 0)
+            return false;
         slayer3d_game_data_image_cache_entry *cache_entry = slayer3d_game_data_image_cache_insert_prepared(
             image_cache, asset.id, &prepared->texture, prepared->effect, prepared->effect_delay,
             prepared->effect_duration, &prepared->shader_vertex_source, &prepared->shader_fragment_source,

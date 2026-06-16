@@ -156,6 +156,7 @@ static const char *data_game_warmup_state_name(slayer3d_game_data_asset_warmup_s
 
 typedef struct data_game_publish_ui_image_warmup_context
 {
+    const slayer3d_game_data_runtime *runtime;
     const slayer3d_game_data_asset_warmup_queue *queue;
     slayer3d_properties *state;
     const char *prefix;
@@ -184,9 +185,14 @@ static bool data_game_publish_ui_image_warmup(void *userdata, const slayer3d_gam
         return true;
     }
 
+    const char *source_path = NULL;
+    slayer3d_game_data_image_asset asset;
+    if (context->runtime != NULL && slayer3d_game_data_get_image_asset(context->runtime, image->image, &asset))
+        source_path = asset.path != NULL ? asset.path : asset.sprite;
+
     slayer3d_game_data_asset_warmup_state state;
-    if (!slayer3d_game_data_asset_warmup_request_state(context->queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL,
-                                                       image->image, &state))
+    if (!slayer3d_game_data_asset_warmup_request_state(context->queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                       source_path, image->image, &state))
     {
         return true;
     }
@@ -1304,6 +1310,7 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
 
     data_game_publish_ui_image_warmup_context image_context;
     SDL_zero(image_context);
+    image_context.runtime = runtime->data;
     image_context.queue = &runtime->asset_warmup;
     image_context.state = state;
     image_context.prefix = prefix;

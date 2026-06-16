@@ -605,6 +605,7 @@
     "signal.editor.texture.select.radioactive_crate",
     "signal.editor.texture.refresh",
     "signal.editor.texture.filter",
+    "signal.editor.texture.search.apply",
     "signal.editor.texture.focus.search",
     "signal.editor.texture.focus.path",
     "signal.editor.texture.path.apply",
@@ -1461,6 +1462,24 @@
               "status_key": "editor.texture.scan.status"
             }
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.search.apply",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
+          { "type": "scene_state.set", "key": "editor.texture.search.pending", "value": false },
+          {
+            "type": "editor.texture.filter",
+            "collection": "editor.textures",
+            "catalog_collection": "editor.textures.catalog",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "" }
         ]
       },
       {

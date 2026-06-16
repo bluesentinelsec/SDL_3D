@@ -276,8 +276,12 @@ static bool draw_ui_image(void *userdata, const slayer3d_game_data_ui_image *ima
         return true;
 
     slayer3d_game_data_asset_warmup_state warmup_state;
+    const char *source_path = NULL;
+    slayer3d_game_data_image_asset asset;
+    if (slayer3d_game_data_get_image_asset(draw->runtime, resolved.image, &asset))
+        source_path = asset.path != NULL ? asset.path : asset.sprite;
     if (slayer3d_game_data_asset_warmup_request_state(draw->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
-                                                      NULL, resolved.image, &warmup_state) &&
+                                                      source_path, resolved.image, &warmup_state) &&
         warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
     {
         return true;

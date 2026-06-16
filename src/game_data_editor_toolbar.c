@@ -336,8 +336,8 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
     if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RETURN) ||
         slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_KP_ENTER))
     {
-        (void)editor_emit_signal(runtime,
-                                 path_focus ? "signal.editor.texture.path.apply" : "signal.editor.texture.filter");
+        (void)editor_emit_signal(runtime, path_focus ? "signal.editor.texture.path.apply"
+                                                     : "signal.editor.texture.search.apply");
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
         editor_update_texture_edit_display(runtime);
         return true;
@@ -365,8 +365,7 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
                                        search_focus ? "editing texture search" : "editing texture path");
         if (search_focus)
         {
-            slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", 0);
-            (void)editor_emit_signal(runtime, "signal.editor.texture.filter");
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.search.pending", true);
         }
         editor_update_texture_edit_display(runtime);
     }

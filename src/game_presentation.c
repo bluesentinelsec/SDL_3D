@@ -128,8 +128,19 @@ static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer
 
 typedef struct queue_scene_assets_context
 {
+    const slayer3d_game_data_runtime *runtime;
     slayer3d_game_data_asset_warmup_queue *queue;
 } queue_scene_assets_context;
+
+static const char *queue_scene_image_source_path(const queue_scene_assets_context *context, const char *image_id)
+{
+    if (context == NULL || context->runtime == NULL || image_id == NULL || image_id[0] == '\0')
+        return NULL;
+    slayer3d_game_data_image_asset asset;
+    if (!slayer3d_game_data_get_image_asset(context->runtime, image_id, &asset))
+        return NULL;
+    return asset.path != NULL ? asset.path : asset.sprite;
+}
 
 static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_image *image)
 {
@@ -138,7 +149,8 @@ static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_ima
     {
         return true;
     }
-    (void)slayer3d_game_data_asset_warmup_request_ui_image(context->queue, image->image);
+    (void)slayer3d_game_data_asset_warmup_request_ui_image_source(
+        context->queue, queue_scene_image_source_path(context, image->image), image->image);
     return true;
 }
 
@@ -266,6 +278,7 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
 
     queue_scene_assets_context context;
     SDL_zero(context);
+    context.runtime = frame->runtime;
     context.queue = frame->asset_warmup;
     (void)slayer3d_game_data_for_each_font_asset(frame->runtime, queue_font_asset, &context);
     (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
