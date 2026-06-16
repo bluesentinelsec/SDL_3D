@@ -999,6 +999,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.inspector.brush.color_channel",
                                   validate_editor_inspector_brush_color_channel_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.scan", validate_editor_texture_scan_action),
+        ACTION_RULE_EXACT_HANDLER("editor.texture.filter", validate_editor_texture_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.path.apply", validate_editor_texture_path_apply_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.select_index", validate_editor_texture_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.scan", validate_editor_actor_scan_action),

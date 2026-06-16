@@ -8,6 +8,7 @@
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 static bool editor_emit_signal(slayer3d_game_data_runtime *runtime, const char *signal);
 
@@ -131,6 +132,26 @@ static bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runt
                             ? slayer3d_properties_get_string(runtime->scene_state, "editor.texture.edit.focus", "")
                             : "";
     return SDL_strcmp(focus, "search") == 0 || SDL_strcmp(focus, "path") == 0;
+}
+
+static void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const char *focus = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.edit.focus", "");
+    const bool search_focus = SDL_strcmp(focus, "search") == 0;
+    const bool path_focus = SDL_strcmp(focus, "path") == 0;
+    const bool cursor_visible = ((SDL_GetTicks() / 500U) % 2U) == 0U;
+    const char *search = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.search", "");
+    const char *path = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.path.input", "");
+
+    char display[320];
+    SDL_snprintf(display, sizeof(display), "%s%s", search != NULL ? search : "",
+                 search_focus && cursor_visible ? "|" : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search.display", display);
+    SDL_snprintf(display, sizeof(display), "%s%s", path != NULL ? path : "", path_focus && cursor_visible ? "|" : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.display", display);
 }
 
 static const slayer3d_ui_layout_hit_region *editor_find_layout_hit_by_id(const slayer3d_ui_layout_model *layout,
@@ -295,6 +316,7 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
         return false;
+    editor_update_texture_edit_display(runtime);
     const char *focus = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.edit.focus", "");
     const bool search_focus = SDL_strcmp(focus, "search") == 0;
     const bool path_focus = SDL_strcmp(focus, "path") == 0;
@@ -307,6 +329,7 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
     if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_ESCAPE))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
+        editor_update_texture_edit_display(runtime);
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture edit cancelled");
         return true;
     }
@@ -314,15 +337,19 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
         slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_KP_ENTER))
     {
         (void)editor_emit_signal(runtime,
-                                 path_focus ? "signal.editor.texture.path.apply" : "signal.editor.texture.refresh");
+                                 path_focus ? "signal.editor.texture.path.apply" : "signal.editor.texture.filter");
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
+        editor_update_texture_edit_display(runtime);
         return true;
     }
 
     const char *edit_key = search_focus ? "editor.texture.search" : "editor.texture.path.input";
     bool changed = false;
-    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE))
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE) ||
+        slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DELETE))
+    {
         changed = editor_texture_edit_backspace(runtime->scene_state, edit_key) || changed;
+    }
     const char *input_text = slayer3d_input_get_text_input(input);
     if (input_text != NULL && input_text[0] != '\0' &&
         slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.edit.replace_on_text", false))
@@ -339,8 +366,9 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
         if (search_focus)
         {
             slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", 0);
-            (void)editor_emit_signal(runtime, "signal.editor.texture.refresh");
+            (void)editor_emit_signal(runtime, "signal.editor.texture.filter");
         }
+        editor_update_texture_edit_display(runtime);
     }
     return true;
 }
@@ -406,7 +434,7 @@ static bool editor_update_texture_scroll_drag(slayer3d_game_data_runtime *runtim
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", scroll_index);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture browser scrolled");
     if (scroll_index != previous)
-        (void)editor_emit_signal(runtime, "signal.editor.texture.refresh");
+        (void)editor_emit_signal(runtime, "signal.editor.texture.filter");
     return true;
 }
 
@@ -645,6 +673,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     yyjson_val *buttons = obj_get(editor, "tool_mode_buttons");
     if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_arr(buttons))
         return true;
+    editor_update_texture_edit_display(runtime);
 
     slayer3d_input_manager *input = runtime_input(runtime);
     float mouse_x = 0.0f;
@@ -671,6 +700,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     if (texture_focus_active && clicked && !editor_hit_is_texture_edit_control(hit))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
+        editor_update_texture_edit_display(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
         slayer3d_ui_layout_destroy(layout);

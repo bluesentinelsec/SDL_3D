@@ -604,6 +604,7 @@
     "signal.editor.texture.select.lava",
     "signal.editor.texture.select.radioactive_crate",
     "signal.editor.texture.refresh",
+    "signal.editor.texture.filter",
     "signal.editor.texture.focus.search",
     "signal.editor.texture.focus.path",
     "signal.editor.texture.path.apply",
@@ -1445,6 +1446,21 @@
             }
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "textures refreshed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.filter",
+        "actions": [
+          {
+            "type": "editor.texture.filter",
+            "collection": "editor.textures",
+            "catalog_collection": "editor.textures.catalog",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "status_key": "editor.texture.scan.status"
+            }
+          }
         ]
       },
       {

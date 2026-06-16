@@ -20020,6 +20020,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.search", ""), "b");
+    EXPECT_EQ(
+        std::string(slayer3d_properties_get_string(scene_state, "editor.texture.search.display", "")).rfind("b", 0),
+        0U);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.edit.focus", ""), "search");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
     key_event.type = SDL_EVENT_KEY_UP;
@@ -20027,8 +20030,17 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     slayer3d_input_update(input, input_tick++);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    emit_signal("signal.editor.texture.refresh");
-    slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
+
+    key_event = {};
+    key_event.type = SDL_EVENT_KEY_DOWN;
+    key_event.key.scancode = SDL_SCANCODE_BACKSPACE;
+    slayer3d_input_process_event(input, &key_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.search", ""), "");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", false));
+
     slayer3d_properties_set_string(scene_state, "editor.texture.edit.focus", "");
     emit_signal("signal.editor.texture.refresh");
 
@@ -20583,7 +20595,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.3.available", true));
 
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "met beta");
-    emit_signal("signal.editor.texture.refresh");
+    emit_signal("signal.editor.texture.filter");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Beta Panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
@@ -20591,7 +20603,12 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.1.available", true));
 
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
-    emit_signal("signal.editor.texture.refresh");
+    emit_signal("signal.editor.texture.filter");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 3);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Alpha Wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.1.label", ""), "Beta Panel");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.2.label", ""), "Zeta Panel");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.3.available", true));
 
     emit_signal("signal.editor.texture.select_slot.2");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),

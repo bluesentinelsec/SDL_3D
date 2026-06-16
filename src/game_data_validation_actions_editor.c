@@ -597,9 +597,16 @@ bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *ac
                                          validation_names *names, const char *type)
 {
     (void)names;
-    static const char *const optional_strings[] = {
-        "directory_key", "relative_directory_key", "directory",        "relative_directory", "collection",
-        "world",         "material_prefix",        "scroll_index_key", "scroll_y_key"};
+    static const char *const optional_strings[] = {"directory_key",
+                                                   "relative_directory_key",
+                                                   "directory",
+                                                   "relative_directory",
+                                                   "collection",
+                                                   "catalog_collection",
+                                                   "world",
+                                                   "material_prefix",
+                                                   "scroll_index_key",
+                                                   "scroll_y_key"};
     for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
     {
         yyjson_val *value = obj_get(action, optional_strings[i]);
