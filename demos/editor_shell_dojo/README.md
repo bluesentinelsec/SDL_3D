@@ -20,6 +20,13 @@ Reopen that saved level:
 Use a custom texture directory for a session:
 
 ```sh
+./build/debug/slayer3d_editor --texture-path /path/to/textures
+```
+
+The explicit `new` command supports the same override when you also want to
+choose the output map path:
+
+```sh
 ./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.fragment.json --texture-path /path/to/textures --overwrite
 ```
 

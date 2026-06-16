@@ -31,7 +31,7 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
-        "  %s\n"
+        "  %s [--texture-path <dir>]\n"
         "  %s new --project <project-dir-or-json> --output <level.json> [--texture-path <dir>] [--overwrite]\n"
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--texture-path <dir>] "
         "[--overwrite]\n"
@@ -486,12 +486,30 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_HELP;
     }
 
+    bool default_launch_with_options = false;
+    const char *command_name = argv[1];
+    int parse_argc = argc - 1;
+    char **parse_argv = argv + 1;
     if (SDL_strcmp(argv[1], "new") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+    }
     else if (SDL_strcmp(argv[1], "open") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_OPEN;
+    }
     else if (SDL_strcmp(argv[1], "check") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_CHECK;
+    }
+    else if (argv[1][0] == '-')
+    {
+        default_launch_with_options = true;
+        command_name = "default";
+        args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+        parse_argc = argc;
+        parse_argv = argv;
+    }
     else
     {
         fprintf(out, "%s: unknown editor command '%s'\n", program, argv[1]);
@@ -507,8 +525,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_ERROR;
     }
 
-    const int parse_argc = argc - 1;
-    char **parse_argv = argv + 1;
     const int errors = arg_parse(parse_argc, parse_argv, argtable);
     if (help->count > 0)
     {
@@ -530,9 +546,40 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
     args->overwrite = overwrite->count > 0;
 
+    if (default_launch_with_options)
+    {
+        if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
+        {
+            fprintf(out, "%s: default editor launch only accepts --texture-path; use 'new' or 'open' for map paths.\n",
+                    program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->texture_path != NULL && args->texture_path[0] == '\0')
+        {
+            fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        args->owned_project = editor_default_project_path();
+        args->owned_output_path = editor_default_output_path();
+        args->project = args->owned_project;
+        args->output_path = args->owned_output_path;
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        if (args->project == NULL || args->project[0] == '\0' || args->output_path == NULL ||
+            args->output_path[0] == '\0')
+        {
+            slayer3d_editor_args_destroy(args);
+            if (out != NULL)
+                fprintf(out, "%s: failed to resolve default editor project or output path.\n", program);
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        return SLAYER3D_TOOL_CLI_OK;
+    }
+
     if (args->project == NULL || args->project[0] == '\0')
     {
-        fprintf(out, "%s: --project is required for '%s'.\n", program, argv[1]);
+        fprintf(out, "%s: --project is required for '%s'.\n", program, command_name);
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
