@@ -20002,6 +20002,36 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               scroll_rects.end());
     EXPECT_TRUE(visible_texture_status_labels().empty());
 
+    emit_signal("signal.editor.texture.focus.search");
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 1064.0f;
+    motion.motion.y = 236.0f;
+    slayer3d_input_process_event(input, &motion);
+    SDL_Event key_event{};
+    key_event.type = SDL_EVENT_KEY_DOWN;
+    key_event.key.scancode = SDL_SCANCODE_B;
+    slayer3d_input_process_event(input, &key_event);
+    SDL_Event text_event{};
+    text_event.type = SDL_EVENT_TEXT_INPUT;
+    text_event.text.text = "b";
+    slayer3d_input_process_event(input, &text_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.search", ""), "b");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.edit.focus", ""), "search");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
+    key_event.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key_event);
+    slayer3d_input_update(input, input_tick++);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    emit_signal("signal.editor.texture.refresh");
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
+    slayer3d_properties_set_string(scene_state, "editor.texture.edit.focus", "");
+    emit_signal("signal.editor.texture.refresh");
+
     slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.slot_0.pending", true);
     slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.slot_4.failed", true);
     std::vector<std::string> status_labels = visible_texture_status_labels();
