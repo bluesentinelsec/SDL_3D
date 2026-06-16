@@ -19913,6 +19913,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.texture.count", 0), 0);
+    EXPECT_STRNE(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.path", ""), "");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     int input_tick = 1;
@@ -20535,6 +20538,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", texture_dir.string().c_str());
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "custom_textures");
 
+    emit_signal("signal.editor.texture.refresh");
     emit_signal("signal.editor.palette.material");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 3);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "loaded 3 textures");
@@ -20629,6 +20633,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", texture_dir.string().c_str());
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "scroll_textures");
 
+    emit_signal("signal.editor.texture.refresh");
     emit_signal("signal.editor.palette.material");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 8);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.scroll.index", -1), 0);

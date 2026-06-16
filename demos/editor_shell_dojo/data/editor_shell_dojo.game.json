@@ -887,6 +887,18 @@
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
@@ -1074,17 +1086,6 @@
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
           { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
-          {
-            "type": "editor.texture.scan",
-            "world": "brush.editor_shell.target",
-            "collection": "editor.textures",
-            "slot_count": 6,
-            "outputs": {
-              "count_key": "editor.texture.count",
-              "registered_count_key": "editor.texture.registered_count",
-              "status_key": "editor.texture.scan.status"
-            }
-          },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture paint mode" }
         ]
       },
