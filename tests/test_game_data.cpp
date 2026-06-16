@@ -20604,6 +20604,10 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
                  "mat.project.texture.metal_beta_panel");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.1.available", true));
+    slayer3d_game_data_image_asset filtered_slot_image{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &filtered_slot_image));
+    EXPECT_STREQ(filtered_slot_image.path, (texture_dir / "metal" / "beta-panel.png").string().c_str());
+    const std::string filtered_slot_image_id = filtered_slot_image.id != nullptr ? filtered_slot_image.id : "";
 
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
     emit_signal("signal.editor.texture.search.apply");
@@ -20612,6 +20616,10 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.1.label", ""), "Beta Panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.2.label", ""), "Zeta Panel");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.3.available", true));
+    slayer3d_game_data_image_asset restored_slot_image{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &restored_slot_image));
+    EXPECT_STREQ(restored_slot_image.path, (texture_dir / "alpha-wall.jpg").string().c_str());
+    EXPECT_NE(restored_slot_image.id != nullptr ? restored_slot_image.id : "", filtered_slot_image_id);
 
     emit_signal("signal.editor.texture.select_slot.2");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),

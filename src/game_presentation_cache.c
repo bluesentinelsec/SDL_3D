@@ -473,10 +473,11 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entr
     if (!slayer3d_game_data_get_image_asset(runtime, image_id, &asset))
         return NULL;
     const char *asset_source_path = asset.path != NULL ? asset.path : asset.sprite;
+    const char *cache_image_id = asset.id != NULL ? asset.id : image_id;
 
     for (int i = 0; i < cache->count; ++i)
     {
-        if (cache->entries[i].image_id == NULL || SDL_strcmp(cache->entries[i].image_id, image_id) != 0)
+        if (cache->entries[i].image_id == NULL || SDL_strcmp(cache->entries[i].image_id, cache_image_id) != 0)
             continue;
         if (image_cache_source_matches(&cache->entries[i], asset_source_path))
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
