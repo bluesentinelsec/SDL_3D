@@ -613,6 +613,21 @@ bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *ac
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_texture_path_apply_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"path_key", "directory_key", "relative_directory_key",
+                                                   "available_key", "status_key"};
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_strings[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, optional_strings[i]);
+    }
+    return true;
+}
+
 bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                  validation_names *names, const char *type)
 {

@@ -1796,15 +1796,19 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 
-Use `editor.texture.scan` to populate an editor texture browser from a configured
-filesystem directory. By default it reads `editor.asset_source.textures.path`
-and `editor.asset_source.textures.relative`, falling back to `textures` relative
-to the loaded game-data file. The scan publishes rows into a runtime collection
+Use `editor.texture.scan` to populate an editor texture browser from one
+configured filesystem directory. By default it reads
+`editor.asset_source.textures.path` and
+`editor.asset_source.textures.relative`, falling back to `textures` relative to
+the loaded game-data file. The scan walks nested subdirectories, accepts common
+image extensions, publishes directory/search metadata into a runtime collection,
 and mirrors the first visible page into `editor.texture.slot.N.*` scene-state
 keys so authored UI can bind labels, thumbnails, and buttons without hard-coded
-paths. Files matching existing brush material textures reuse those material
-names; new files register `mat.project.texture.<slug>` materials on the target
-brush world.
+paths. New files register `mat.project.texture.<slug>` materials on the target
+brush world using path-aware slugs such as `metal_wall_panel`. If a rescan no
+longer sees a previous `mat.project.texture.*` material path, that material is
+made textureless and `editor.texture.invalidated_count` is updated so the UI can
+warn about stale brush textures.
 
 ```json
 {
@@ -1819,6 +1823,11 @@ brush world.
   }
 }
 ```
+
+Use `editor.texture.path.apply` from GUI controls that let users change the
+authoritative texture directory at runtime. It validates the path stored in
+`editor.texture.path.input`, updates `editor.asset_source.textures.path`,
+`.relative`, and `.available`, and writes a status message for the editor UI.
 
 Use `editor.texture.select_index` to choose a scanned texture row by index. The
 action updates `editor.palette.material.cursor`, `editor.texture.material`, and

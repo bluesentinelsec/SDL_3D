@@ -313,7 +313,9 @@ The editor host translates the manifest into a normal runner launch and injects
 `editor.asset_source.<kind>.path` / `.relative` / `.available` as scene state.
 This keeps the shell data-authored while still giving users a stable CLI:
 `--project` selects the editor project, `--input` selects a `.slayermap.json`
-file for `open`, and `--output` selects the save target.
+file for `open`, `--output` selects the save target, and `--texture-path`
+overrides the project texture source for the current session. The editor treats
+the effective texture source as one authoritative directory.
 
 When game data is loaded directly from a filesystem path, the runtime also
 remembers that file's parent directory as a filesystem source root even though

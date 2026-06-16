@@ -604,6 +604,9 @@
     "signal.editor.texture.select.lava",
     "signal.editor.texture.select.radioactive_crate",
     "signal.editor.texture.refresh",
+    "signal.editor.texture.focus.search",
+    "signal.editor.texture.focus.path",
+    "signal.editor.texture.path.apply",
     "signal.editor.texture.select_slot.0",
     "signal.editor.texture.select_slot.1",
     "signal.editor.texture.select_slot.2",
@@ -1440,6 +1443,40 @@
             }
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "textures refreshed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.focus.search",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "search" },
+          { "type": "scene_state.set", "key": "editor.texture.edit.replace_on_text", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing texture search" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.focus.path",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "path" },
+          { "type": "scene_state.set", "key": "editor.texture.edit.replace_on_text", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing texture path" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.path.apply",
+        "actions": [
+          { "type": "editor.texture.path.apply" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          }
         ]
       },
       {
@@ -4605,7 +4642,13 @@
           "front_camera": "camera.editor_shell.ortho_front",
           "side_camera": "camera.editor_shell.ortho_side",
           "orthographic_size_key": "editor.ortho.size",
-          "controls_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+          "controls_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+              { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }
+            ]
+          },
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 14.0,
           "fast_speed": 40.0,
