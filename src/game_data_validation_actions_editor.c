@@ -598,8 +598,8 @@ bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *ac
 {
     (void)names;
     static const char *const optional_strings[] = {
-        "directory_key", "relative_directory_key", "directory", "relative_directory", "collection",
-        "world",         "material_prefix"};
+        "directory_key", "relative_directory_key", "directory",        "relative_directory", "collection",
+        "world",         "material_prefix",        "scroll_index_key", "scroll_y_key"};
     for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
     {
         yyjson_val *value = obj_get(action, optional_strings[i]);
@@ -638,6 +638,9 @@ bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson
     yyjson_val *index_key = obj_get(action, "index_key");
     if (index_key != NULL && (!yyjson_is_str(index_key) || yyjson_get_str(index_key)[0] == '\0'))
         return validation_error(ctx, json_path, "%s index_key must be a non-empty string", type);
+    yyjson_val *index_offset_key = obj_get(action, "index_offset_key");
+    if (index_offset_key != NULL && (!yyjson_is_str(index_offset_key) || yyjson_get_str(index_offset_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s index_offset_key must be a non-empty string", type);
     yyjson_val *collection = obj_get(action, "collection");
     if (collection != NULL && (!yyjson_is_str(collection) || yyjson_get_str(collection)[0] == '\0'))
         return validation_error(ctx, json_path, "%s collection must be a non-empty string", type);

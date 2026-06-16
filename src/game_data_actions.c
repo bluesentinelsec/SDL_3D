@@ -724,6 +724,8 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     const char *world_name = json_string(action, "world", "brush.editor_shell.target");
     const char *material_prefix = json_string(action, "material_prefix", "mat.project.texture.");
     const int slot_count = SDL_max(0, json_int(action, "slot_count", 6));
+    const char *scroll_index_key = json_string(action, "scroll_index_key", "editor.texture.scroll.index");
+    const char *scroll_y_key = json_string(action, "scroll_y_key", "editor.texture.scroll.y");
     const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
     const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
     const char *search_query = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.search", "");
@@ -800,6 +802,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
 
     int published_count = 0;
     int selected_index = -1;
+    int selected_slot = -1;
     const char *current_material =
         slayer3d_properties_get_string(runtime->scene_state, "editor.palette.material.cursor", "");
     for (int i = 0; i < list.count; ++i)
@@ -813,12 +816,40 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
             editor_texture_directory_collapsed(runtime->scene_state, entry))
             continue;
         (void)editor_texture_collection_publish_row(runtime, collection, published_count, entry);
-        if (published_count < slot_count)
-            editor_texture_publish_slot(runtime->scene_state, published_count, entry);
         if (current_material != NULL && current_material[0] != '\0' &&
             SDL_strcmp(current_material, entry->material) == 0)
             selected_index = published_count;
         ++published_count;
+    }
+
+    const int max_scroll_index = SDL_max(0, published_count - slot_count);
+    int scroll_index = slayer3d_properties_get_int(runtime->scene_state, scroll_index_key, 0);
+    scroll_index = SDL_clamp(scroll_index, 0, max_scroll_index);
+    slayer3d_properties_set_int(runtime->scene_state, scroll_index_key, scroll_index);
+    const float thumb_travel = 246.0f;
+    const float thumb_offset =
+        max_scroll_index > 0 ? -((float)scroll_index / (float)max_scroll_index) * thumb_travel : 0.0f;
+    slayer3d_properties_set_float(runtime->scene_state, scroll_y_key, thumb_offset);
+    for (int slot_index = 0; slot_index < slot_count; ++slot_index)
+    {
+        char slot_material[128];
+        const int collection_index = scroll_index + slot_index;
+        if (collection_index >= published_count ||
+            !runtime_collection_field_to_string(find_runtime_collection_const(runtime, collection), collection_index,
+                                                "material", slot_material, sizeof(slot_material)) ||
+            slot_material[0] == '\0')
+        {
+            continue;
+        }
+        for (int i = 0; i < list.count; ++i)
+        {
+            const editor_texture_scan_entry *entry = &list.entries[i];
+            if (SDL_strcmp(entry->material, slot_material) == 0)
+            {
+                editor_texture_publish_slot(runtime->scene_state, slot_index, entry);
+                break;
+            }
+        }
     }
 
     if (published_count > 0)
@@ -835,11 +866,15 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
                 selected_index = 0;
             }
         }
+        if (selected_index >= scroll_index && selected_index < scroll_index + slot_count)
+            selected_slot = selected_index - scroll_index;
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", selected_index);
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", selected_slot);
     }
     else
     {
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", -1);
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", -1);
     }
 
     char status[128];
@@ -903,19 +938,23 @@ static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtim
 
     const char *collection_name = json_string(action, "collection", "editor.textures");
     const char *index_key = json_string(action, "index_key", NULL);
-    const int index = index_key != NULL ? slayer3d_properties_get_int(runtime->scene_state, index_key, 0)
-                                        : json_int(action, "index", 0);
+    const char *index_offset_key = json_string(action, "index_offset_key", NULL);
+    const int slot_index = index_key != NULL ? slayer3d_properties_get_int(runtime->scene_state, index_key, 0)
+                                             : json_int(action, "index", 0);
+    const int index_offset =
+        index_offset_key != NULL ? slayer3d_properties_get_int(runtime->scene_state, index_offset_key, 0) : 0;
+    const int index = slot_index + index_offset;
     const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
     char warmup_key[128];
     SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending",
-                 index);
+                 slot_index);
     if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture loading");
         return true;
     }
     SDL_snprintf(warmup_key, sizeof(warmup_key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.failed",
-                 index);
+                 slot_index);
     if (slayer3d_properties_get_bool(runtime->scene_state, warmup_key, false))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture unavailable");
@@ -934,6 +973,7 @@ static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtim
         SDL_strlcpy(label, "texture", sizeof(label));
 
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", index);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", slot_index);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.material.cursor", material);
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.material", material);
     char message[192];

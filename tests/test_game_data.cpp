@@ -19779,11 +19779,24 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         ASSERT_GE(signal, 0) << name;
         slayer3d_signal_emit(bus, signal, nullptr);
     };
-    auto visible_thumbnail_names = [&]() {
+    struct TextureThumbnailSummary
+    {
+        std::string name;
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        bool has_clip_rect = false;
+        float clip_x = 0.0f;
+        float clip_y = 0.0f;
+        float clip_w = 0.0f;
+        float clip_h = 0.0f;
+    };
+    auto visible_thumbnails = [&]() {
         struct Capture
         {
             slayer3d_game_data_runtime *runtime = nullptr;
-            std::vector<std::string> names;
+            std::vector<TextureThumbnailSummary> thumbnails;
         } capture{runtime, {}};
         auto collect = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
             auto *capture = static_cast<Capture *>(userdata);
@@ -19802,11 +19815,28 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             }
             EXPECT_FLOAT_EQ(resolved.w, 62.0f);
             EXPECT_FLOAT_EQ(resolved.h, 62.0f);
-            capture->names.emplace_back(resolved.name);
+            EXPECT_TRUE(resolved.has_clip_rect);
+            EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_y, 246.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_h, 354.0f);
+            EXPECT_GE(resolved.x, resolved.clip_x);
+            EXPECT_GE(resolved.y, resolved.clip_y);
+            EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
+            EXPECT_LE(resolved.y + resolved.h, resolved.clip_y + resolved.clip_h);
+            capture->thumbnails.push_back({resolved.name, resolved.x, resolved.y, resolved.w, resolved.h,
+                                           resolved.has_clip_rect, resolved.clip_x, resolved.clip_y, resolved.clip_w,
+                                           resolved.clip_h});
             return true;
         };
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect, &capture));
-        return capture.names;
+        return capture.thumbnails;
+    };
+    auto visible_thumbnail_names = [&]() {
+        std::vector<std::string> names;
+        for (const TextureThumbnailSummary &thumbnail : visible_thumbnails())
+            names.emplace_back(thumbnail.name);
+        return names;
     };
     auto visible_rect_names = [&]() {
         struct Capture
@@ -19921,7 +19951,33 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.palette.material.page", -1), 0);
-    std::vector<std::string> thumbnails = visible_thumbnail_names();
+    std::vector<TextureThumbnailSummary> thumbnail_summaries = visible_thumbnails();
+    EXPECT_EQ(thumbnail_summaries.size(), 6U);
+    auto find_thumbnail = [&](const char *name) -> const TextureThumbnailSummary * {
+        for (const TextureThumbnailSummary &thumbnail : thumbnail_summaries)
+        {
+            if (thumbnail.name == name)
+                return &thumbnail;
+        }
+        return nullptr;
+    };
+    const TextureThumbnailSummary *wall_thumbnail =
+        find_thumbnail("ui.editor_shell.texture_viewer.wall_metal.thumbnail");
+    ASSERT_NE(wall_thumbnail, nullptr);
+    EXPECT_FLOAT_EQ(wall_thumbnail->x, 1058.0f);
+    EXPECT_FLOAT_EQ(wall_thumbnail->y, 266.0f);
+    const TextureThumbnailSummary *rock_thumbnail =
+        find_thumbnail("ui.editor_shell.texture_viewer.rock_floor.thumbnail");
+    ASSERT_NE(rock_thumbnail, nullptr);
+    EXPECT_FLOAT_EQ(rock_thumbnail->x, 1154.0f);
+    EXPECT_FLOAT_EQ(rock_thumbnail->y, 266.0f);
+    const TextureThumbnailSummary *lava_thumbnail = find_thumbnail("ui.editor_shell.texture_viewer.lava.thumbnail");
+    ASSERT_NE(lava_thumbnail, nullptr);
+    EXPECT_FLOAT_EQ(lava_thumbnail->x, 1058.0f);
+    EXPECT_FLOAT_EQ(lava_thumbnail->y, 486.0f);
+    std::vector<std::string> thumbnails;
+    for (const TextureThumbnailSummary &thumbnail : thumbnail_summaries)
+        thumbnails.emplace_back(thumbnail.name);
     EXPECT_EQ(thumbnails.size(), 6U);
     EXPECT_NE(std::find(thumbnails.begin(), thumbnails.end(), "ui.editor_shell.texture_viewer.wall_metal.thumbnail"),
               thumbnails.end());
@@ -19979,8 +20035,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 
     emit_signal("signal.editor.texture.viewer.toggle");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", false));
-    thumbnails = visible_thumbnail_names();
-    EXPECT_TRUE(thumbnails.empty());
+    EXPECT_TRUE(visible_thumbnails().empty());
     EXPECT_TRUE(visible_texture_status_labels().empty());
     emit_signal("signal.editor.texture.viewer.toggle");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
@@ -20536,6 +20591,68 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_TRUE(saw_alpha);
     EXPECT_TRUE(saw_beta);
     EXPECT_TRUE(saw_zeta);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(texture_dir.parent_path());
+}
+
+TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path texture_dir = unique_test_dir("editor_texture_scroll_source") / "textures";
+    std::filesystem::create_directories(texture_dir);
+    for (int i = 0; i < 8; ++i)
+    {
+        const std::string filename = "scroll-panel-" + std::to_string(i) + ".png";
+        write_text(texture_dir / filename, "fake texture bytes");
+    }
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", texture_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "scroll_textures");
+
+    emit_signal("signal.editor.palette.material");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.scroll.index", -1), 0);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.texture.scroll.y", 99.0f), 0.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Scroll Panel 0");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.5.label", ""), "Scroll Panel 5");
+
+    slayer3d_properties_set_int(scene_state, "editor.texture.scroll.index", 2);
+    emit_signal("signal.editor.texture.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.scroll.index", -1), 2);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.texture.scroll.y", 0.0f), -246.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Scroll Panel 2");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.5.label", ""), "Scroll Panel 7");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.selected_slot", -2), -1);
+
+    emit_signal("signal.editor.texture.select_slot.0");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.selected_index", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.selected_slot", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
+                 "mat.project.texture.scroll_panel_2");
+
+    slayer3d_properties_set_int(scene_state, "editor.texture.scroll.index", 99);
+    emit_signal("signal.editor.texture.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.scroll.index", -1), 2);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

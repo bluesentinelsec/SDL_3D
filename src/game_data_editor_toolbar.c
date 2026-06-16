@@ -82,6 +82,12 @@ static bool editor_hit_is_inspector_scrollbar(const slayer3d_ui_layout_hit_regio
            editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.scroll.thumb.");
 }
 
+static bool editor_hit_is_texture_scrollbar(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.scroll.track") ||
+           editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.scroll.thumb");
+}
+
 static bool editor_hit_is_property_control(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.property.") ||
@@ -331,7 +337,10 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
                                        search_focus ? "editing texture search" : "editing texture path");
         if (search_focus)
+        {
+            slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", 0);
             (void)editor_emit_signal(runtime, "signal.editor.texture.refresh");
+        }
     }
     return true;
 }
@@ -362,6 +371,42 @@ static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runt
     scroll = editor_clamp_float(scroll, scroll_min, scroll_max);
     slayer3d_properties_set_float(runtime->scene_state, "editor.inspector.scroll", scroll);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "inspector scrolled");
+    return true;
+}
+
+static bool editor_update_texture_scroll_drag(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_ui_layout_model *layout, float mouse_y)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
+        return false;
+
+    const slayer3d_ui_layout_hit_region *track =
+        editor_find_layout_hit_by_id(layout, "ui.editor_shell.texture_viewer.scroll.track");
+    if (track == NULL)
+        return false;
+
+    const int texture_count = slayer3d_properties_get_int(runtime->scene_state, "editor.texture.count", 0);
+    const int visible_slots = 6;
+    const int max_scroll_index = SDL_max(0, texture_count - visible_slots);
+    if (max_scroll_index <= 0)
+    {
+        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", 0);
+        return true;
+    }
+
+    const float thumb_h = 72.0f;
+    const float travel = track->rect.h - thumb_h;
+    if (travel <= 0.0f)
+        return false;
+
+    const float local_y = editor_clamp_float(mouse_y - track->rect.y - thumb_h * 0.5f, 0.0f, travel);
+    const float ratio = local_y / travel;
+    const int scroll_index = SDL_clamp((int)SDL_floorf(ratio * (float)max_scroll_index + 0.5f), 0, max_scroll_index);
+    const int previous = slayer3d_properties_get_int(runtime->scene_state, "editor.texture.scroll.index", 0);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", scroll_index);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture browser scrolled");
+    if (scroll_index != previous)
+        (void)editor_emit_signal(runtime, "signal.editor.texture.refresh");
     return true;
 }
 
@@ -662,6 +707,21 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
             return true;
         }
     }
+    if (slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false))
+    {
+        if (released || !left_down)
+        {
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false);
+        }
+        else
+        {
+            if (out_consumed != NULL)
+                *out_consumed = true;
+            (void)editor_update_texture_scroll_drag(runtime, layout, mouse_y);
+            slayer3d_ui_layout_destroy(layout);
+            return true;
+        }
+    }
     if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
         editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) || editor_hit_is_console(hit))
     {
@@ -671,11 +731,19 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         {
             slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false);
         }
         if (clicked && editor_hit_is_inspector_scrollbar(hit))
         {
             slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", true);
             (void)editor_update_inspector_scroll_drag(runtime, layout, mouse_y);
+            slayer3d_ui_layout_destroy(layout);
+            return true;
+        }
+        if (clicked && editor_hit_is_texture_scrollbar(hit))
+        {
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", true);
+            (void)editor_update_texture_scroll_drag(runtime, layout, mouse_y);
             slayer3d_ui_layout_destroy(layout);
             return true;
         }
