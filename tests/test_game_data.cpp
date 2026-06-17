@@ -18562,22 +18562,38 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     emit_signal("signal.editor.things.category.objects");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Objects");
     labels = visible_palette_text();
-    EXPECT_TRUE(contains_text(labels, "Engine mesh catalog will appear here."));
+    EXPECT_TRUE(contains_text(labels, "Box"));
+    EXPECT_TRUE(contains_text(labels, "Capsule"));
+    EXPECT_TRUE(contains_text(labels, "Sphere"));
+    EXPECT_TRUE(contains_text(labels, "Rectangle"));
+    EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.object_box.button"));
     EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.player_capsule.button"));
 
     emit_signal("signal.editor.things.category.lights");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
     labels = visible_palette_text();
-    EXPECT_TRUE(contains_text(labels, "Light presets will appear here."));
+    EXPECT_TRUE(contains_text(labels, "Ambient"));
+    EXPECT_TRUE(contains_text(labels, "Directional"));
+    EXPECT_TRUE(contains_text(labels, "Point"));
+    EXPECT_TRUE(contains_text(labels, "Spot"));
+    EXPECT_TRUE(contains_text(labels, "Area"));
+    EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.light_point.button"));
+    EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.object_box.button"));
 
     emit_signal("signal.editor.things.category.effects");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Effects");
     labels = visible_palette_text();
-    EXPECT_TRUE(contains_text(labels, "Effect presets will appear here."));
+    EXPECT_TRUE(contains_text(labels, "Particle Emitter"));
+    EXPECT_TRUE(contains_text(labels, "Fog Volume"));
+    EXPECT_TRUE(contains_text(labels, "Fire"));
+    EXPECT_TRUE(contains_text(labels, "Smoke"));
+    EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.particle_emitter.button"));
+    EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.light_point.button"));
 
     emit_signal("signal.editor.things.category.actors");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Actors");
     EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.player_capsule.button"));
+    EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.particle_emitter.button"));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -18614,16 +18630,19 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
 
     emit_signal("signal.editor.palette.game_object");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 10);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 10 actors");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 19);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 19 actors");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.5.available", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.label", ""), "Alpha Guard");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.model", ""),
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.label", ""), "Box");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.9.label", ""), "Ambient");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.14.label", ""), "Particle Emitter");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.18.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.18.label", ""), "Alpha Guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.18.model", ""),
                  "model.project.actor.alpha_guard");
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.6.available", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.3.available", false));
 
     slayer3d_game_data_model_asset scanned_model{};
@@ -18632,6 +18651,21 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
 
     emit_signal("signal.editor.actor.select_slot.5");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 5);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_object");
+
+    emit_signal("signal.editor.actor.select_slot.11");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 11);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_light");
+
+    emit_signal("signal.editor.actor.select_slot.14");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 14);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "particle_emitter");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_effect");
+
+    emit_signal("signal.editor.actor.select_slot.18");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 18);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "alpha_guard");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_model");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "alpha_guard");

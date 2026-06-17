@@ -1374,7 +1374,7 @@ static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, sl
     SDL_strlcpy(entry->sensor_profile, "model", sizeof(entry->sensor_profile));
     entry->color = (slayer3d_color){112, 178, 255, 210};
     entry->scale = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
-    entry->sort_order = 1000 + list->count;
+    entry->sort_order = 5000 + list->count;
     entry->scanned_model = true;
     if (entry->filename == NULL || entry->path == NULL || entry->relative_path == NULL)
     {
@@ -1626,6 +1626,42 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    &list, "simple_robot", "Robot", "box", "model.editor_shell.simple_robot", "actor.editor_shell.robot",
                    "actor.editor_shell.simple_robot", "Meshes", "actor_robot", "simple_robot", "actor", "robot",
                    (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 4);
+    ok = ok && editor_actor_scan_list_append_builtin(&list, "object_box", "Box", "box", "", "object.editor_shell.box",
+                                                     "object.editor_shell.box", "Objects", "actor_object", "object_box",
+                                                     "object", "box", (slayer3d_color){128, 174, 245, 190},
+                                                     slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1000);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_capsule", "Capsule", "capsule", "", "object.editor_shell.capsule",
+                   "object.editor_shell.capsule", "Objects", "actor_object", "object_capsule", "object", "capsule",
+                   (slayer3d_color){120, 210, 180, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_sphere", "Sphere", "sphere", "", "object.editor_shell.sphere",
+                   "object.editor_shell.sphere", "Objects", "actor_object", "object_sphere", "object", "sphere",
+                   (slayer3d_color){198, 158, 245, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1002);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_rectangle", "Rectangle", "rectangle", "", "object.editor_shell.rectangle",
+                   "object.editor_shell.rectangle", "Objects", "actor_object", "object_rectangle", "object",
+                   "rectangle", (slayer3d_color){230, 166, 108, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1003);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_ambient", "Ambient", "sphere", "", "light.editor_shell.ambient",
+                   "light.editor_shell.ambient", "Lights", "actor_light", "ambient_light", "light", "ambient",
+                   (slayer3d_color){190, 205, 255, 165}, slayer3d_vec3_make(0.7f, 0.7f, 0.7f), 1500);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_directional", "Directional", "rectangle", "", "light.editor_shell.directional",
+                   "light.editor_shell.directional", "Lights", "actor_light", "directional_light", "light",
+                   "directional", (slayer3d_color){255, 238, 160, 205}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 1501);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_point", "Point", "sphere", "", "light.editor_shell.point", "light.editor_shell.point",
+                   "Lights", "actor_light", "point_light", "light", "point", (slayer3d_color){255, 230, 112, 220},
+                   slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 1502);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_spot", "Spot", "sphere", "", "light.editor_shell.spot", "light.editor_shell.spot",
+                   "Lights", "actor_light", "spot_light", "light", "spot", (slayer3d_color){255, 208, 130, 210},
+                   slayer3d_vec3_make(0.75f, 0.75f, 0.75f), 1503);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_area", "Area", "rectangle", "", "light.editor_shell.area", "light.editor_shell.area",
+                   "Lights", "actor_light", "area_light", "light", "area", (slayer3d_color){255, 222, 178, 195},
+                   slayer3d_vec3_make(1.5f, 0.2f, 1.5f), 1504);
     ok = ok &&
          editor_actor_scan_list_append_builtin(
              &list, "particle_emitter", "Particle Emitter", "sphere", "", "actor.editor_shell.effect.particles",
@@ -1786,6 +1822,19 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
     slayer3d_properties_set_string(properties, "role", role[0] != '\0' ? role : "actor");
     if (sensor_profile[0] != '\0')
         slayer3d_properties_set_string(properties, "sensor_profile", sensor_profile);
+    if (SDL_strcmp(role, "light") == 0)
+    {
+        slayer3d_properties_set_string(properties, "light_type", sensor_profile[0] != '\0' ? sensor_profile : "point");
+        slayer3d_properties_set_string(properties, "light_kind", "dynamic");
+        slayer3d_properties_set_float(properties, "light_intensity", 1.0f);
+        slayer3d_properties_set_float(properties, "light_range", 8.0f);
+    }
+    else if (SDL_strcmp(role, "effect") == 0)
+    {
+        slayer3d_properties_set_string(properties, "effect_kind",
+                                       sensor_profile[0] != '\0' ? sensor_profile : "effect");
+        slayer3d_properties_set_bool(properties, "preview", true);
+    }
     slayer3d_properties_set_string(properties, "actor_browser_id", id);
     if (model[0] != '\0')
         slayer3d_properties_set_string(properties, "model", model);
