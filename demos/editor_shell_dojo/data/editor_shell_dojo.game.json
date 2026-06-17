@@ -637,6 +637,10 @@
     "signal.editor.actor.viewer.toggle",
     "signal.editor.actor.group.placeholders.toggle",
     "signal.editor.actor.group.models.toggle",
+    "signal.editor.things.category.actors",
+    "signal.editor.things.category.objects",
+    "signal.editor.things.category.lights",
+    "signal.editor.things.category.effects",
     "signal.editor.open",
     "signal.editor.export",
     "signal.editor.save_as",
@@ -1083,6 +1087,8 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
@@ -1097,8 +1103,11 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Actors" },
           {
             "type": "editor.actor.scan",
             "collection": "editor.actors",
@@ -1199,6 +1208,35 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.actor.group.models.collapsed", "default": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor models group toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.actors",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Actors" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things actors category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.objects",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Objects" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things objects category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.lights",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Lights" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things lights category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.effects",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Effects" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things effects category" }
         ]
       },
       {

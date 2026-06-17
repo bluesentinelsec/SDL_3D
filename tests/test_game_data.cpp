@@ -18504,7 +18504,11 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     };
 
     std::vector<std::string> labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Things"));
     EXPECT_TRUE(contains_text(labels, "Actors"));
+    EXPECT_TRUE(contains_text(labels, "Objects"));
+    EXPECT_TRUE(contains_text(labels, "Lights"));
+    EXPECT_TRUE(contains_text(labels, "Effects"));
     EXPECT_TRUE(contains_text(labels, "Placeholders"));
     EXPECT_TRUE(contains_text(labels, "Meshes"));
     EXPECT_TRUE(contains_text(labels, "Player"));
@@ -18549,6 +18553,31 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.ready", false);
     slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.failed", true);
     EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.simple_robot.ready_badge"));
+
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+    emit_signal("signal.editor.things.category.objects");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Objects");
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Engine mesh catalog will appear here."));
+    EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.player_capsule.button"));
+
+    emit_signal("signal.editor.things.category.lights");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Light presets will appear here."));
+
+    emit_signal("signal.editor.things.category.effects");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Effects");
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Effect presets will appear here."));
+
+    emit_signal("signal.editor.things.category.actors");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Actors");
+    EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.player_capsule.button"));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -24628,7 +24657,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_player");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "player_capsule");
     std::vector<std::string> actor_text = visible_ui_text("ui.editor_shell.actor_viewer.");
+    EXPECT_TRUE(contains_ui_text(actor_text, "Things"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Actors"));
+    EXPECT_TRUE(contains_ui_text(actor_text, "Objects"));
+    EXPECT_TRUE(contains_ui_text(actor_text, "Lights"));
+    EXPECT_TRUE(contains_ui_text(actor_text, "Effects"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Placeholders"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Meshes"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Player"));
