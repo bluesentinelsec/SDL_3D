@@ -102,6 +102,8 @@ extern "C"
         const slayer3d_properties *initial_scene_payload;
         /** @brief Optional editor player start to apply for direct test-run workflows. */
         const char *initial_player_start;
+        /** @brief Optional filesystem base directory for authored tools that enumerate loose source assets. */
+        const char *source_base_dir;
     } slayer3d_game_data_load_options;
 
     /**

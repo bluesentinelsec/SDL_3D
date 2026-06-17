@@ -31,9 +31,10 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
-        "  %s\n"
-        "  %s new --project <project-dir-or-json> --output <level.json> [--overwrite]\n"
-        "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--overwrite]\n"
+        "  %s [--texture-path <dir>]\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--texture-path <dir>] [--overwrite]\n"
+        "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--texture-path <dir>] "
+        "[--overwrite]\n"
         "\n"
         "Commands:\n"
         "  no args  Launch the bundled editor shell project with a new untitled map.\n"
@@ -123,6 +124,25 @@ static char *path_join_tool(const char *base, const char *path)
     SDL_memcpy(joined + offset, path, path_len + 1u);
     path_normalize_host_separators_tool(joined);
     return joined;
+}
+
+static char *path_make_absolute_tool(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (path_is_absolute_tool(path))
+    {
+        char *copy = SDL_strdup(path);
+        path_normalize_host_separators_tool(copy);
+        return copy;
+    }
+
+    char *cwd = SDL_GetCurrentDirectory();
+    if (cwd == NULL)
+        return NULL;
+    char *absolute = path_join_tool(cwd, path);
+    SDL_free(cwd);
+    return absolute;
 }
 
 static char *path_join_relative_tool(const char *base, const char *path)
@@ -244,6 +264,43 @@ static void editor_asset_source_destroy(slayer3d_editor_asset_source *source)
     SDL_free(source->path);
     SDL_free(source->relative_path);
     SDL_zero(*source);
+}
+
+static void editor_asset_sources_destroy(slayer3d_editor_asset_sources *sources);
+
+static bool editor_asset_source_copy(const slayer3d_editor_asset_source *source,
+                                     slayer3d_editor_asset_source *out_source)
+{
+    if (source == NULL || out_source == NULL)
+        return false;
+    SDL_zero(*out_source);
+    out_source->path = SDL_strdup(source->path != NULL ? source->path : "");
+    out_source->relative_path = SDL_strdup(source->relative_path != NULL ? source->relative_path : "");
+    out_source->available = source->available;
+    if (out_source->path == NULL || out_source->relative_path == NULL)
+    {
+        editor_asset_source_destroy(out_source);
+        return false;
+    }
+    return true;
+}
+
+static bool editor_asset_sources_copy(const slayer3d_editor_asset_sources *sources,
+                                      slayer3d_editor_asset_sources *out_sources)
+{
+    if (sources == NULL || out_sources == NULL)
+        return false;
+    SDL_zero(*out_sources);
+    if (!editor_asset_source_copy(&sources->textures, &out_sources->textures) ||
+        !editor_asset_source_copy(&sources->models, &out_sources->models) ||
+        !editor_asset_source_copy(&sources->sprites, &out_sources->sprites) ||
+        !editor_asset_source_copy(&sources->skyboxes, &out_sources->skyboxes) ||
+        !editor_asset_source_copy(&sources->effects, &out_sources->effects))
+    {
+        editor_asset_sources_destroy(out_sources);
+        return false;
+    }
+    return true;
 }
 
 static bool editor_asset_source_available(const char *path)
@@ -405,10 +462,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     struct arg_str *project = arg_str0(NULL, "project", "<project>", "project directory or slayer3d.project.json");
     struct arg_str *input = arg_str0(NULL, "input", "<level.json>", "editable level fragment to open");
     struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
+    struct arg_str *texture_path =
+        arg_str0(NULL, "texture-path", "<dir>", "authoritative texture directory for this editor session");
     struct arg_lit *overwrite = arg_lit0(NULL, "overwrite", "allow new/open to replace an existing output path");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
-    void *argtable[] = {project, input, output, overwrite, help, end};
+    void *argtable[] = {project, input, output, texture_path, overwrite, help, end};
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_editor";
     FILE *out = stream != NULL ? stream : stderr;
 
@@ -446,12 +505,30 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_HELP;
     }
 
+    bool default_launch_with_options = false;
+    const char *command_name = argv[1];
+    int parse_argc = argc - 1;
+    char **parse_argv = argv + 1;
     if (SDL_strcmp(argv[1], "new") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+    }
     else if (SDL_strcmp(argv[1], "open") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_OPEN;
+    }
     else if (SDL_strcmp(argv[1], "check") == 0)
+    {
         args->command = SLAYER3D_EDITOR_COMMAND_CHECK;
+    }
+    else if (argv[1][0] == '-')
+    {
+        default_launch_with_options = true;
+        command_name = "default";
+        args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+        parse_argc = argc;
+        parse_argv = argv;
+    }
     else
     {
         fprintf(out, "%s: unknown editor command '%s'\n", program, argv[1]);
@@ -467,8 +544,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_ERROR;
     }
 
-    const int parse_argc = argc - 1;
-    char **parse_argv = argv + 1;
     const int errors = arg_parse(parse_argc, parse_argv, argtable);
     if (help->count > 0)
     {
@@ -487,11 +562,43 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->project = project->count > 0 ? project->sval[0] : NULL;
     args->input_path = input->count > 0 ? input->sval[0] : NULL;
     args->output_path = output->count > 0 ? output->sval[0] : NULL;
+    args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
     args->overwrite = overwrite->count > 0;
+
+    if (default_launch_with_options)
+    {
+        if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
+        {
+            fprintf(out, "%s: default editor launch only accepts --texture-path; use 'new' or 'open' for map paths.\n",
+                    program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->texture_path != NULL && args->texture_path[0] == '\0')
+        {
+            fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        args->owned_project = editor_default_project_path();
+        args->owned_output_path = editor_default_output_path();
+        args->project = args->owned_project;
+        args->output_path = args->owned_output_path;
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        if (args->project == NULL || args->project[0] == '\0' || args->output_path == NULL ||
+            args->output_path[0] == '\0')
+        {
+            slayer3d_editor_args_destroy(args);
+            if (out != NULL)
+                fprintf(out, "%s: failed to resolve default editor project or output path.\n", program);
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        return SLAYER3D_TOOL_CLI_OK;
+    }
 
     if (args->project == NULL || args->project[0] == '\0')
     {
-        fprintf(out, "%s: --project is required for '%s'.\n", program, argv[1]);
+        fprintf(out, "%s: --project is required for '%s'.\n", program, command_name);
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
@@ -524,6 +631,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
+    }
+    if (args->texture_path != NULL && args->texture_path[0] == '\0')
+    {
+        fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
     }
 
     arg_freetable(argtable, SDL_arraysize(argtable));
@@ -689,6 +802,36 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
     out_launch->asset_sources = &project->asset_sources;
+    if (args->texture_path != NULL && args->texture_path[0] != '\0')
+    {
+        char *absolute_texture_path = path_make_absolute_tool(args->texture_path);
+        if (absolute_texture_path == NULL)
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to resolve texture path override");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
+        if (!editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
+        {
+            SDL_free(absolute_texture_path);
+            editor_set_error(error_buffer, error_buffer_size, "failed to allocate texture path override");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
+        editor_asset_source_destroy(&out_launch->owned_asset_sources.textures);
+        out_launch->owned_asset_sources.textures.path = absolute_texture_path;
+        out_launch->owned_asset_sources.textures.relative_path = SDL_strdup(args->texture_path);
+        out_launch->owned_asset_sources.textures.available = editor_asset_source_available(absolute_texture_path);
+        if (out_launch->owned_asset_sources.textures.path == NULL ||
+            out_launch->owned_asset_sources.textures.relative_path == NULL)
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to allocate texture path override");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
+        out_launch->asset_sources = &out_launch->owned_asset_sources;
+        out_launch->owns_asset_sources = true;
+    }
     return true;
 }
 
@@ -696,6 +839,8 @@ void slayer3d_editor_launch_destroy(slayer3d_editor_launch *launch)
 {
     if (launch == NULL)
         return;
+    if (launch->owns_asset_sources)
+        editor_asset_sources_destroy(&launch->owned_asset_sources);
     SDL_zero(*launch);
 }
 
@@ -705,6 +850,12 @@ bool slayer3d_editor_validate_paths(const slayer3d_editor_args *args, const slay
     if (args == NULL || launch == NULL)
     {
         editor_set_error(error_buffer, error_buffer_size, "editor path validation requires args and launch");
+        return false;
+    }
+    if (args->texture_path != NULL && args->texture_path[0] != '\0' && !directory_exists_tool(args->texture_path))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "texture path '%s' is not an existing directory",
+                          args->texture_path);
         return false;
     }
     bool is_file = false;

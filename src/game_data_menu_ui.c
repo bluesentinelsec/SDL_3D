@@ -1890,6 +1890,14 @@ static void ui_image_from_json(yyjson_val *item, slayer3d_game_data_ui_image *im
     image->color = json_color(item, "color", (slayer3d_color){255, 255, 255, 255});
     image->effect = parse_ui_image_effect(json_string(item, "effect", NULL));
     image->effect_speed = json_float(item, "effect_speed", 1.0f);
+    image->scroll_y_key = json_string(item, "scroll_y_key", NULL);
+    image->has_clip_rect = obj_get(item, "clip_rect") != NULL;
+    yyjson_val *clip_rect = obj_get(item, "clip_rect");
+    image->clip_x = json_float(clip_rect, "x", 0.0f);
+    image->clip_y = json_float(clip_rect, "y", 0.0f);
+    image->clip_w = json_float(clip_rect, "w", 0.0f);
+    image->clip_h = json_float(clip_rect, "h", 0.0f);
+    image->clip_normalized = json_bool(clip_rect, "normalized", false);
 }
 
 static void ui_rect_from_json(yyjson_val *item, slayer3d_game_data_ui_rect *rect)

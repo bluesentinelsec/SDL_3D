@@ -114,6 +114,8 @@ extern "C"
         const char *effect;
         /** @brief Effect progression speed in effect-seconds per second. */
         float effect_speed;
+        /** @brief Optional scene-state float key subtracted from y for scrollable image panes. */
+        const char *scroll_y_key;
         /** @brief True when this image should be clipped to clip_x/clip_y/clip_w/clip_h. */
         bool has_clip_rect;
         /** @brief Optional clipping rectangle in the descriptor coordinate space. */

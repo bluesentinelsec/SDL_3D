@@ -383,9 +383,12 @@ bool slayer3d_game_data_load_asset_with_options(slayer3d_asset_resolver *assets,
     runtime->session = options->session;
     runtime->assets = assets;
     runtime->base_dir = path_dirname(asset_path_without_scheme(asset_path));
+    if (options->source_base_dir != NULL && options->source_base_dir[0] != '\0')
+        runtime->file_base_dir = SDL_strdup(options->source_base_dir);
     runtime->scene_state = slayer3d_properties_create();
     runtime->rng_state = 0xC0FFEEu;
-    if (runtime->base_dir == NULL || runtime->scene_state == NULL)
+    if (runtime->base_dir == NULL || runtime->scene_state == NULL ||
+        (options->source_base_dir != NULL && options->source_base_dir[0] != '\0' && runtime->file_base_dir == NULL))
     {
         slayer3d_game_data_source_map_destroy(source_map);
         slayer3d_game_data_destroy(runtime);
@@ -476,8 +479,12 @@ bool slayer3d_game_data_load_file(const char *path, slayer3d_game_session *sessi
         return false;
     }
 
-    const bool ok =
-        slayer3d_game_data_load_asset(assets, asset_name, session, out_runtime, error_buffer, error_buffer_size);
+    slayer3d_game_data_load_options options;
+    SDL_zero(options);
+    options.session = session;
+    options.source_base_dir = base_dir;
+    const bool ok = slayer3d_game_data_load_asset_with_options(assets, asset_name, &options, out_runtime, error_buffer,
+                                                               error_buffer_size);
     if (ok && out_runtime != NULL && *out_runtime != NULL)
     {
         (*out_runtime)->owns_assets = true;

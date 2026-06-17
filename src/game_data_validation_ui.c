@@ -598,6 +598,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.padding = parse_ui_widget_float(node, "padding", 0.0f);
     desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
     desc.clip_children = parse_ui_widget_bool(node, "clip_children", false);
+    desc.clip_rect_id = json_string(node, "clip_rect_id");
     desc.layer = parse_ui_widget_int(node, "layer", "z", 0);
     desc.interactive = parse_ui_widget_bool(node, "interactive", false);
     desc.text = parse_ui_widget_string(node, "text", "label");

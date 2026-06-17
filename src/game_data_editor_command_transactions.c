@@ -3477,6 +3477,8 @@ bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime
     if (colored_count <= 0)
         goto fail;
 
+    if (runtime->scene_state != NULL)
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.brush.color.dirty", false);
     publish_editor_transaction_selection_state(runtime);
     char message[160];
     SDL_snprintf(message, sizeof(message), colored_count == 1 ? "colored 1 brush" : "colored %d brushes",

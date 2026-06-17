@@ -295,6 +295,16 @@
     "signal.editor.inspector.tab.data",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
+    "signal.editor.inspector.brush.color.r.down",
+    "signal.editor.inspector.brush.color.r.up",
+    "signal.editor.inspector.brush.color.g.down",
+    "signal.editor.inspector.brush.color.g.up",
+    "signal.editor.inspector.brush.color.b.down",
+    "signal.editor.inspector.brush.color.b.up",
+    "signal.editor.inspector.brush.color.a.down",
+    "signal.editor.inspector.brush.color.a.up",
+    "signal.editor.inspector.brush.color.apply",
+    "signal.editor.inspector.brush.color.reset",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -594,6 +604,11 @@
     "signal.editor.texture.select.lava",
     "signal.editor.texture.select.radioactive_crate",
     "signal.editor.texture.refresh",
+    "signal.editor.texture.filter",
+    "signal.editor.texture.search.apply",
+    "signal.editor.texture.focus.search",
+    "signal.editor.texture.focus.path",
+    "signal.editor.texture.path.apply",
     "signal.editor.texture.select_slot.0",
     "signal.editor.texture.select_slot.1",
     "signal.editor.texture.select_slot.2",
@@ -632,205 +647,205 @@
     "sensors": [
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.tool.cycle",
         "on_pressed": "signal.editor.tool.cycle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.selection.clear",
         "on_pressed": "signal.editor.selection.clear"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.escape",
         "on_pressed": "signal.editor.escape"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.inspector.toggle",
         "on_pressed": "signal.editor.inspector.toggle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.commit",
         "on_pressed": "signal.editor.command.commit"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.clip.cycle_keep_mode",
         "on_pressed": "signal.editor.clip.cycle_keep_mode"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.accept",
         "on_pressed": "signal.editor.palette.accept"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.undo",
         "on_pressed": "signal.editor.command.undo"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.delete_selected",
         "on_pressed": "signal.editor.delete_selected"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.lower_y",
         "on_pressed": "signal.editor.brush.lower_y"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.raise_y",
         "on_pressed": "signal.editor.brush.raise_y"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.duplicate",
         "on_pressed": "signal.editor.brush.duplicate"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.flip_horizontal",
         "on_pressed": "signal.editor.brush.flip_horizontal"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.flip_vertical",
         "on_pressed": "signal.editor.brush.flip_vertical"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.open",
         "on_pressed": "signal.editor.open"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.export",
         "on_pressed": "signal.editor.export"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.save_as",
         "on_pressed": "signal.editor.save_as"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.test_run.prepare",
         "on_pressed": "signal.editor.test_run.prepare"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.test_run.enter",
         "on_pressed": "signal.editor.test_run.enter"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.grid.decrease",
         "on_pressed": "signal.editor.grid.decrease"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.grid.increase",
         "on_pressed": "signal.editor.grid.increase"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.wall_axis.toggle",
         "on_pressed": "signal.editor.wall_axis.toggle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.select",
         "on_pressed": "signal.editor.mode.select"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.brush",
         "on_pressed": "signal.editor.mode.brush"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.face",
         "on_pressed": "signal.editor.mode.face"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.clip",
         "on_pressed": "signal.editor.mode.clip"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.vertex",
         "on_pressed": "signal.editor.mode.vertex"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.rotate",
         "on_pressed": "signal.editor.mode.rotate"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.material",
         "on_pressed": "signal.editor.palette.material"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.game_object",
         "on_pressed": "signal.editor.palette.game_object"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.close",
         "on_pressed": "signal.editor.palette.close"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.previous",
         "on_pressed": "signal.editor.palette.previous"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.next",
         "on_pressed": "signal.editor.palette.next"
       }
@@ -874,6 +889,18 @@
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
@@ -1060,17 +1087,7 @@
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
-          {
-            "type": "editor.texture.scan",
-            "world": "brush.editor_shell.target",
-            "collection": "editor.textures",
-            "slot_count": 6,
-            "outputs": {
-              "count_key": "editor.texture.count",
-              "registered_count_key": "editor.texture.registered_count",
-              "status_key": "editor.texture.scan.status"
-            }
-          },
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture paint mode" }
         ]
       },
@@ -1433,39 +1450,107 @@
         ]
       },
       {
+        "signal": "signal.editor.texture.filter",
+        "actions": [
+          {
+            "type": "editor.texture.filter",
+            "collection": "editor.textures",
+            "catalog_collection": "editor.textures.catalog",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "status_key": "editor.texture.scan.status"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.search.apply",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
+          { "type": "scene_state.set", "key": "editor.texture.search.pending", "value": false },
+          {
+            "type": "editor.texture.filter",
+            "collection": "editor.textures",
+            "catalog_collection": "editor.textures.catalog",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.focus.search",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "search" },
+          { "type": "scene_state.set", "key": "editor.texture.edit.replace_on_text", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing texture search" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.focus.path",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "path" },
+          { "type": "scene_state.set", "key": "editor.texture.edit.replace_on_text", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing texture path" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.path.apply",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
+          { "type": "editor.texture.path.apply" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          }
+        ]
+      },
+      {
         "signal": "signal.editor.texture.select_slot.0",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 0 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 0, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
         "signal": "signal.editor.texture.select_slot.1",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 1 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 1, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
         "signal": "signal.editor.texture.select_slot.2",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 2 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 2, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
         "signal": "signal.editor.texture.select_slot.3",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 3 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 3, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
         "signal": "signal.editor.texture.select_slot.4",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 4 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 4, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
         "signal": "signal.editor.texture.select_slot.5",
         "actions": [
-          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 5 }
+          { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 5, "index_offset_key": "editor.texture.scroll.index" }
         ]
       },
       {
@@ -1602,15 +1687,78 @@
       {
         "signal": "signal.editor.inspector.scroll.up",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled up" }
         ]
       },
       {
         "signal": "signal.editor.inspector.scroll.down",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 180.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.r.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "r", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.r.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "r", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.g.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "g", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.g.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "g", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.b.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "b", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.b.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "b", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.a.down",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "a", "delta": -16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.a.up",
+        "actions": [{ "type": "editor.inspector.brush.color_channel", "channel": "a", "delta": 16 }]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.apply",
+        "actions": [
+          {
+            "type": "editor.brush.color",
+            "target": "selection",
+            "color_key": "editor.inspector.brush.color",
+            "outputs": {
+              "valid_key": "editor.inspector.brush.color.apply.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.brush.color.reset",
+        "actions": [
+          { "type": "editor.inspector.brush.color_channel", "color": [180, 184, 192, 255] },
+          {
+            "type": "editor.brush.color",
+            "target": "selection",
+            "color_key": "editor.inspector.brush.color",
+            "outputs": {
+              "valid_key": "editor.inspector.brush.color.apply.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -4532,7 +4680,13 @@
           "front_camera": "camera.editor_shell.ortho_front",
           "side_camera": "camera.editor_shell.ortho_side",
           "orthographic_size_key": "editor.ortho.size",
-          "controls_if": { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+          "controls_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
+              { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }
+            ]
+          },
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 14.0,
           "fast_speed": 40.0,

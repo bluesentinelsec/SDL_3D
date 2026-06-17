@@ -435,6 +435,8 @@ bool slayer3d_game_data_resolve_ui_image(const slayer3d_game_data_runtime *runti
 
     slayer3d_game_data_ui_image resolved = *image;
     bool visible = ui_image_authored_is_visible(runtime, image, metrics);
+    if (image->scroll_y_key != NULL && image->scroll_y_key[0] != '\0')
+        resolved.y -= slayer3d_properties_get_float(runtime->scene_state, image->scroll_y_key, 0.0f);
     slayer3d_game_data_ui_state state;
     if (slayer3d_game_data_get_ui_state(runtime, image->name, &state))
     {

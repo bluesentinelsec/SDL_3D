@@ -313,6 +313,64 @@ TEST(SLAYER3DUI, RetainedClipChildrenConstrainsRenderingAndHitTesting)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedClipRectIdConstrainsRenderingAndHitTesting)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc root{};
+    root.id = "root";
+    root.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    root.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.rect = {0.0f, 0.0f, 240.0f, 180.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
+
+    slayer3d_ui_layout_node_desc viewport{};
+    viewport.id = "viewport";
+    viewport.parent_id = "root";
+    viewport.type = SLAYER3D_UI_LAYOUT_NODE_SPACER;
+    viewport.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    viewport.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    viewport.rect = {20.0f, 60.0f, 120.0f, 80.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &viewport));
+
+    slayer3d_ui_layout_node_desc clipped{};
+    clipped.id = "clipped";
+    clipped.parent_id = "root";
+    clipped.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    clipped.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    clipped.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    clipped.rect = {30.0f, 70.0f, 40.0f, 24.0f};
+    clipped.clip_rect_id = "viewport";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &clipped));
+
+    slayer3d_ui_layout_node_desc hidden{};
+    hidden.id = "hidden";
+    hidden.parent_id = "root";
+    hidden.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    hidden.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    hidden.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    hidden.rect = {30.0f, 20.0f, 40.0f, 24.0f};
+    hidden.clip_rect_id = "viewport";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &hidden));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    const slayer3d_ui_layout_render_command *clipped_render = find_render_command(layout, "clipped");
+    ASSERT_NE(clipped_render, nullptr);
+    EXPECT_TRUE(clipped_render->has_clip_rect);
+    EXPECT_FLOAT_EQ(clipped_render->clip_rect.x, 20.0f);
+    EXPECT_FLOAT_EQ(clipped_render->clip_rect.y, 60.0f);
+    EXPECT_FLOAT_EQ(clipped_render->clip_rect.w, 120.0f);
+    EXPECT_FLOAT_EQ(clipped_render->clip_rect.h, 80.0f);
+    EXPECT_EQ(find_render_command(layout, "hidden"), nullptr);
+    EXPECT_NE(slayer3d_ui_layout_hit_test(layout, 35.0f, 75.0f), nullptr);
+    EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 35.0f, 25.0f), nullptr);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
 {
     slayer3d_ui_layout_model *layout = nullptr;

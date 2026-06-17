@@ -559,13 +559,54 @@ bool validate_editor_brush_color_action(validation_context *ctx, yyjson_val *act
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_inspector_brush_color_channel_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    (void)names;
+    yyjson_val *color_key = obj_get(action, "color_key");
+    if (color_key != NULL && (!yyjson_is_str(color_key) || yyjson_get_str(color_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s color_key must be a non-empty string", type);
+
+    yyjson_val *color = obj_get(action, "color");
+    yyjson_val *channel = obj_get(action, "channel");
+    yyjson_val *delta = obj_get(action, "delta");
+    if (color != NULL)
+    {
+        if (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 255.0))
+            return validation_error(ctx, json_path, "%s color must be a numeric RGB or RGBA array in 0..255", type);
+        if (channel != NULL || delta != NULL)
+            return validation_error(ctx, json_path, "%s color cannot be combined with channel or delta", type);
+        return true;
+    }
+
+    if (channel == NULL || !yyjson_is_str(channel))
+        return validation_error(ctx, json_path, "%s channel must be r, g, b, or a", type);
+    const char *channel_text = yyjson_get_str(channel);
+    if (channel_text == NULL || channel_text[1] != '\0' ||
+        (channel_text[0] != 'r' && channel_text[0] != 'g' && channel_text[0] != 'b' && channel_text[0] != 'a'))
+    {
+        return validation_error(ctx, json_path, "%s channel must be r, g, b, or a", type);
+    }
+    if (delta == NULL || !yyjson_is_int(delta))
+        return validation_error(ctx, json_path, "%s delta must be an integer", type);
+    return true;
+}
+
 bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                          validation_names *names, const char *type)
 {
     (void)names;
-    static const char *const optional_strings[] = {
-        "directory_key", "relative_directory_key", "directory", "relative_directory", "collection",
-        "world",         "material_prefix"};
+    static const char *const optional_strings[] = {"directory_key",
+                                                   "relative_directory_key",
+                                                   "directory",
+                                                   "relative_directory",
+                                                   "collection",
+                                                   "catalog_collection",
+                                                   "world",
+                                                   "material_prefix",
+                                                   "scroll_index_key",
+                                                   "scroll_y_key"};
     for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
     {
         yyjson_val *value = obj_get(action, optional_strings[i]);
@@ -579,6 +620,21 @@ bool validate_editor_texture_scan_action(validation_context *ctx, yyjson_val *ac
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_texture_path_apply_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)names;
+    static const char *const optional_strings[] = {"path_key", "directory_key", "relative_directory_key",
+                                                   "available_key", "status_key"};
+    for (size_t i = 0; i < SDL_arraysize(optional_strings); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_strings[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, optional_strings[i]);
+    }
+    return true;
+}
+
 bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                  validation_names *names, const char *type)
 {
@@ -589,6 +645,9 @@ bool validate_editor_texture_select_index_action(validation_context *ctx, yyjson
     yyjson_val *index_key = obj_get(action, "index_key");
     if (index_key != NULL && (!yyjson_is_str(index_key) || yyjson_get_str(index_key)[0] == '\0'))
         return validation_error(ctx, json_path, "%s index_key must be a non-empty string", type);
+    yyjson_val *index_offset_key = obj_get(action, "index_offset_key");
+    if (index_offset_key != NULL && (!yyjson_is_str(index_offset_key) || yyjson_get_str(index_offset_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s index_offset_key must be a non-empty string", type);
     yyjson_val *collection = obj_get(action, "collection");
     if (collection != NULL && (!yyjson_is_str(collection) || yyjson_get_str(collection)[0] == '\0'))
         return validation_error(ctx, json_path, "%s collection must be a non-empty string", type);

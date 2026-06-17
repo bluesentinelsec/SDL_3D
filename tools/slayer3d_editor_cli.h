@@ -30,6 +30,7 @@ extern "C"
         const char *project;
         const char *input_path;
         const char *output_path;
+        const char *texture_path;
         char *owned_project;
         char *owned_output_path;
         bool overwrite;
@@ -74,6 +75,8 @@ extern "C"
         const char *project_dir;
         const char *data_root_relative_path;
         const slayer3d_editor_asset_sources *asset_sources;
+        slayer3d_editor_asset_sources owned_asset_sources;
+        bool owns_asset_sources;
     } slayer3d_editor_launch;
 
     typedef struct slayer3d_editor_runner_invocation

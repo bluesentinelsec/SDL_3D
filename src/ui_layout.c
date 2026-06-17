@@ -23,6 +23,7 @@ typedef struct ui_layout_node
     float padding;
     float gap;
     bool clip_children;
+    char clip_rect_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     int layer;
     int resolved_layer;
     bool interactive;
@@ -210,6 +211,11 @@ static bool ui_layout_action_valid(const char *action)
     return action == NULL || SDL_strlen(action) < SLAYER3D_UI_LAYOUT_ACTION_MAX;
 }
 
+static bool ui_layout_optional_id_valid(const char *id)
+{
+    return id == NULL || id[0] == '\0' || ui_layout_id_valid(id);
+}
+
 static bool ui_layout_font_valid(const char *font)
 {
     return font == NULL || SDL_strlen(font) < SLAYER3D_UI_LAYOUT_FONT_MAX;
@@ -279,6 +285,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     }
     if (desc->parent_id != NULL && desc->parent_id[0] != '\0' && !ui_layout_id_valid(desc->parent_id))
         return false;
+    if (!ui_layout_optional_id_valid(desc->clip_rect_id))
+        return false;
     if (desc->padding < 0.0f || desc->gap < 0.0f || desc->border_thickness < 0.0f)
         return false;
     if (desc->text_scale < 0.0f || desc->text_align < SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO ||
@@ -313,6 +321,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->padding = desc->padding;
     node->gap = desc->gap;
     node->clip_children = desc->clip_children;
+    ui_layout_copy_id(node->clip_rect_id, desc->clip_rect_id);
     node->layer = desc->layer;
     node->resolved_layer = desc->layer;
     ui_layout_copy_text(node->text, desc->text);
@@ -510,6 +519,64 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
     }
 
     node->resolving = false;
+    return true;
+}
+
+static void ui_layout_intersect_effective_clip(ui_layout_node *node, slayer3d_ui_layout_rect clip_rect)
+{
+    if (node->has_resolved_clip_rect)
+    {
+        (void)ui_layout_rect_intersection(node->resolved_clip_rect, clip_rect, &node->resolved_clip_rect);
+        return;
+    }
+    node->has_resolved_clip_rect = true;
+    node->resolved_clip_rect = clip_rect;
+}
+
+static bool ui_layout_recompute_effective_clip(slayer3d_ui_layout_model *model, int index)
+{
+    ui_layout_node *node = &model->nodes[index];
+    if (node->parent_index >= 0)
+    {
+        const ui_layout_node *parent = &model->nodes[node->parent_index];
+        node->has_resolved_clip_rect = parent->has_resolved_clip_rect;
+        node->resolved_clip_rect = parent->resolved_clip_rect;
+        if (parent->clip_children)
+        {
+            slayer3d_ui_layout_rect content;
+            ui_layout_content_rect(parent, &content);
+            ui_layout_intersect_effective_clip(node, content);
+        }
+    }
+    else
+    {
+        node->has_resolved_clip_rect = false;
+        node->resolved_clip_rect = (slayer3d_ui_layout_rect){0.0f, 0.0f, 0.0f, 0.0f};
+    }
+
+    if (node->clip_rect_id[0] != '\0')
+    {
+        const int clip_index = ui_layout_find_node_index(model, node->clip_rect_id);
+        if (clip_index < 0 || !model->nodes[clip_index].resolved)
+            return false;
+        ui_layout_intersect_effective_clip(node, model->nodes[clip_index].resolved_rect);
+    }
+
+    for (int i = 0; i < model->count; ++i)
+    {
+        if (model->nodes[i].parent_index == index && !ui_layout_recompute_effective_clip(model, i))
+            return false;
+    }
+    return true;
+}
+
+static bool ui_layout_recompute_effective_clips(slayer3d_ui_layout_model *model)
+{
+    for (int i = 0; i < model->count; ++i)
+    {
+        if (model->nodes[i].parent_index < 0 && !ui_layout_recompute_effective_clip(model, i))
+            return false;
+    }
     return true;
 }
 
@@ -763,6 +830,8 @@ bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_
         if (model->nodes[i].parent_index < 0 && !ui_layout_resolve_node(model, i, viewport_w, viewport_h))
             return false;
     }
+    if (!ui_layout_recompute_effective_clips(model))
+        return false;
     ui_layout_store_resolved_nodes(model);
     model->resolved_viewport_w = viewport_w;
     model->resolved_viewport_h = viewport_h;

@@ -36,6 +36,9 @@ slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_image_cache *cache, const char *image_id);
 
+bool slayer3d_game_data_asset_warmup_request_ui_image_source(slayer3d_game_data_asset_warmup_queue *queue,
+                                                             const char *source_path, const char *image_id);
+
 bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *assets,
                                                      const slayer3d_game_data_image_asset *asset,
                                                      slayer3d_texture2d *out_texture);
