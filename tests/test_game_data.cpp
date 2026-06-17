@@ -18675,6 +18675,91 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     remove_test_dir(model_root);
 }
 
+TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    emit_signal("signal.editor.palette.game_object");
+    emit_signal("signal.editor.things.category.objects");
+    emit_signal("signal.editor.actor.select_slot.5");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Objects");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_object");
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.world_name = "brush.editor_shell.target";
+    hover.point = slayer3d_vec3_make(2.0f, 0.0f, -3.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.kind", ""), "actor");
+    const slayer3d_value *actor_anchor = slayer3d_properties_get_value(scene_state, "editor.placement_preview.anchor");
+    ASSERT_NE(actor_anchor, nullptr);
+    ASSERT_EQ(actor_anchor->type, SLAYER3D_VALUE_VEC3);
+
+    emit_signal("signal.editor.command.commit");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.message", ""), "Box object placed");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "object.editor_shell.box.1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
+
+    slayer3d_game_data_editor_actor placed{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    EXPECT_STREQ(placed.display_name, "Box");
+    EXPECT_STREQ(placed.archetype, "object.editor_shell.box");
+    EXPECT_STREQ(placed.mesh, "box");
+    EXPECT_STREQ(placed.group, "Objects");
+    EXPECT_EQ(placed.color.r, 128);
+    EXPECT_EQ(placed.color.g, 174);
+    EXPECT_EQ(placed.color.b, 245);
+    EXPECT_EQ(placed.color.a, 190);
+    EXPECT_NEAR(placed.position.x, actor_anchor->as_vec3.x, 0.001f);
+    EXPECT_NEAR(placed.position.y, actor_anchor->as_vec3.y, 0.001f);
+    EXPECT_NEAR(placed.position.z, actor_anchor->as_vec3.z, 0.001f);
+    ASSERT_NE(placed.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "classname", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "role", ""), "object");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "sensor_profile", ""), "box");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "actor_browser_id", ""), "object_box");
+
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_TRUE(active_selection.hit);
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(active_selection.world_name, "editor_actors");
+    EXPECT_STREQ(active_selection.element_name, "object.editor_shell.box.1");
+    EXPECT_TRUE(active_selection.has_bounds);
+    EXPECT_NEAR(active_selection.bounds.min.x, placed.position.x - 0.5f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.max.y, placed.position.y + 1.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Actor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "Box");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
