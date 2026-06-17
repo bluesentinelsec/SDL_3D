@@ -101,6 +101,13 @@ static char *editor_path_join(const char *base, const char *leaf)
     if (needs_sep)
         joined[offset++] = editor_path_separator();
     SDL_memcpy(joined + offset, leaf, leaf_len + 1U);
+#if defined(_WIN32)
+    for (char *p = joined; *p != '\0'; ++p)
+    {
+        if (*p == '/')
+            *p = '\\';
+    }
+#endif
     return joined;
 }
 

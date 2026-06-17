@@ -51,6 +51,26 @@ std::filesystem::path unique_cli_test_dir(const char *name)
     return std::filesystem::temp_directory_path() /
            ("slayer3d_tool_cli_" + std::string(name) + "_" + std::to_string(stamp));
 }
+
+class ScopedCurrentPath
+{
+  public:
+    explicit ScopedCurrentPath(const std::filesystem::path &path) : previous_(std::filesystem::current_path())
+    {
+        std::filesystem::current_path(path);
+    }
+
+    ~ScopedCurrentPath()
+    {
+        std::filesystem::current_path(previous_);
+    }
+
+    ScopedCurrentPath(const ScopedCurrentPath &) = delete;
+    ScopedCurrentPath &operator=(const ScopedCurrentPath &) = delete;
+
+  private:
+    std::filesystem::path previous_;
+};
 } // namespace
 
 TEST(ToolCli, RunnerParsesDirectoryMount)
@@ -358,6 +378,9 @@ TEST(ToolCli, EditorDefaultLaunchAcceptsTexturePathOverride)
 
 TEST(ToolCli, EditorDefaultLaunchResolvesRelativeTexturePathOverride)
 {
+    const std::filesystem::path repo_root =
+        std::filesystem::path(SLAYER3D_EDITOR_DEFAULT_PROJECT).parent_path().parent_path();
+    ScopedCurrentPath cwd(repo_root);
     ASSERT_TRUE(std::filesystem::is_directory("media/textures"));
 
     std::vector<char *> argv = argv_from({"slayer3d_editor", "--texture-path", "media/textures"});

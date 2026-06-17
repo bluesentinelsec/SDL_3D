@@ -928,6 +928,26 @@ std::filesystem::path editor_shell_dojo_data_path()
     return demo_data_path("editor_shell_dojo", "editor_shell_dojo.game.json");
 }
 
+class ScopedCurrentPath
+{
+  public:
+    explicit ScopedCurrentPath(const std::filesystem::path &path) : previous_(std::filesystem::current_path())
+    {
+        std::filesystem::current_path(path);
+    }
+
+    ~ScopedCurrentPath()
+    {
+        std::filesystem::current_path(previous_);
+    }
+
+    ScopedCurrentPath(const ScopedCurrentPath &) = delete;
+    ScopedCurrentPath &operator=(const ScopedCurrentPath &) = delete;
+
+  private:
+    std::filesystem::path previous_;
+};
+
 void configure_editor_shell_legacy_interaction_grid(slayer3d_game_data_runtime *runtime)
 {
     ASSERT_NE(runtime, nullptr);
@@ -20795,6 +20815,8 @@ TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTex
 
 TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbsoluteSlotPaths)
 {
+    const std::filesystem::path repo_root = std::filesystem::path(SLAYER3D_DEMOS_ROOT).parent_path();
+    ScopedCurrentPath cwd(repo_root);
     ASSERT_TRUE(std::filesystem::is_directory("media/textures"));
 
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
