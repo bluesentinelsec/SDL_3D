@@ -1547,6 +1547,7 @@ static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runti
 
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", index);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected.label", label);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", id);
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
@@ -1852,6 +1853,10 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
     }
     slayer3d_properties_set_string(properties, "classname", classname[0] != '\0' ? classname : id);
     slayer3d_properties_set_string(properties, "role", role[0] != '\0' ? role : "actor");
+    if (SDL_strcmp(role, "trigger") == 0 || SDL_strcmp(role, "sensor") == 0)
+        slayer3d_properties_set_string(properties, "display_mode", "wireframe");
+    else
+        slayer3d_properties_set_string(properties, "display_mode", "solid");
     if (sensor_profile[0] != '\0')
         slayer3d_properties_set_string(properties, "sensor_profile", sensor_profile);
     if (SDL_strcmp(role, "light") == 0)

@@ -1860,6 +1860,13 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
     desc.has_scale = obj_get(action, "scale") != NULL;
     desc.color = json_color(action, "color", (slayer3d_color){120, 200, 255, 210});
     desc.has_color = obj_get(action, "color") != NULL;
+    if (slayer3d_properties_get_string(properties, "display_mode", NULL) == NULL)
+    {
+        const char *role = slayer3d_properties_get_string(properties, "role", "");
+        slayer3d_properties_set_string(
+            properties, "display_mode",
+            (SDL_strcmp(role, "trigger") == 0 || SDL_strcmp(role, "sensor") == 0) ? "wireframe" : "solid");
+    }
     desc.properties = properties;
 
     char actor_name[128];
