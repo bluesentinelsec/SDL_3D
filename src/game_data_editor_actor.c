@@ -1962,6 +1962,12 @@ static void publish_editor_actor_inspector_values(slayer3d_game_data_runtime *ru
     editor_actor_format_color(actor->color, value, sizeof(value));
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", value);
     slayer3d_properties_set_color(scene_state, "editor.inspector.actor.color", actor->color);
+    slayer3d_properties_set_bool(scene_state, "editor.inspector.actor.color.dirty", false);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.r", (int)actor->color.r);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.g", (int)actor->color.g);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.b", (int)actor->color.b);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.a", (int)actor->color.a);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.actor.color.label", value);
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab",
                                    actor->prefab != NULL ? actor->prefab : "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags",
@@ -2005,7 +2011,22 @@ bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *r
         actor->scale = json_vec3(action, "scale", actor->scale);
         changed = true;
     }
-    if (obj_get(action, "color") != NULL)
+    const char *color_key = json_string(action, "color_key", NULL);
+    if (color_key != NULL && color_key[0] != '\0')
+    {
+        const slayer3d_value *color_value = runtime != NULL && runtime->scene_state != NULL
+                                                ? slayer3d_properties_get_value(runtime->scene_state, color_key)
+                                                : NULL;
+        if (color_value == NULL || color_value->type != SLAYER3D_VALUE_COLOR)
+        {
+            publish_editor_actor_outputs(runtime, outputs, false, "actor update color_key must reference a color",
+                                         target);
+            return true;
+        }
+        actor->color = color_value->as_color;
+        changed = true;
+    }
+    else if (obj_get(action, "color") != NULL)
     {
         actor->color = json_color(action, "color", actor->color);
         changed = true;

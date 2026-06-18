@@ -567,6 +567,12 @@ bool validate_editor_inspector_brush_color_channel_action(validation_context *ct
     yyjson_val *color_key = obj_get(action, "color_key");
     if (color_key != NULL && (!yyjson_is_str(color_key) || yyjson_get_str(color_key)[0] == '\0'))
         return validation_error(ctx, json_path, "%s color_key must be a non-empty string", type);
+    yyjson_val *dirty_key = obj_get(action, "dirty_key");
+    if (dirty_key != NULL && (!yyjson_is_str(dirty_key) || yyjson_get_str(dirty_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s dirty_key must be a non-empty string", type);
+    yyjson_val *message = obj_get(action, "message");
+    if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s message must be a non-empty string", type);
 
     yyjson_val *color = obj_get(action, "color");
     yyjson_val *channel = obj_get(action, "channel");
@@ -1506,8 +1512,8 @@ bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *ac
     if (SDL_strcmp(target_type, "editor_actor") == 0 && (target == NULL || target[0] == '\0') &&
         (target_from_state == NULL || target_from_state[0] == '\0'))
         return validation_error(ctx, json_path, "%s requires target or target_from_state for editor_actor", type);
-    static const char *const optional_string_fields[] = {"target", "target_from_state", "target_type", "display_mode",
-                                                         "message"};
+    static const char *const optional_string_fields[] = {"target",    "target_from_state", "target_type",
+                                                         "color_key", "display_mode",      "message"};
     char field_path[PATH_BUFFER_SIZE];
     for (size_t i = 0; i < SDL_arraysize(optional_string_fields); ++i)
     {
@@ -1520,6 +1526,7 @@ bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *ac
     yyjson_val *rotation = obj_get(action, "rotation");
     yyjson_val *scale = obj_get(action, "scale");
     yyjson_val *color = obj_get(action, "color");
+    const char *color_key = json_string(action, "color_key");
     if (position != NULL && !is_exact_vec_array(position, 3))
         return validation_error(ctx, json_path, "%s position must be a vec3", type);
     if (rotation != NULL && !is_exact_vec_array(rotation, 3))
@@ -1530,6 +1537,8 @@ bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *ac
         return validation_error(ctx, json_path, "%s scale must be a positive vec3", type);
     if (color != NULL && !is_exact_vec3_or_vec4_array(color))
         return validation_error(ctx, json_path, "%s color must be a color array", type);
+    if (color != NULL && color_key != NULL)
+        return validation_error(ctx, json_path, "%s requires color or color_key, not both", type);
     const char *display_mode = json_string(action, "display_mode");
     if (display_mode != NULL && SDL_strcmp(display_mode, "solid") != 0 && SDL_strcmp(display_mode, "wireframe") != 0)
         return validation_error(ctx, json_path, "%s display_mode must be solid or wireframe", type);

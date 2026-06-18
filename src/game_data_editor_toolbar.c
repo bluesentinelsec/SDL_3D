@@ -384,7 +384,7 @@ static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runt
         return false;
 
     const float scroll_min = 0.0f;
-    const float scroll_max = 240.0f;
+    const float scroll_max = 300.0f;
     const float scroll_step = 60.0f;
     const float thumb_h = 66.0f;
     const float travel = track->rect.h - thumb_h;

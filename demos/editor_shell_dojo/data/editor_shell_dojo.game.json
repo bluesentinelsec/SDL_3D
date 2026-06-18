@@ -305,6 +305,18 @@
     "signal.editor.inspector.brush.color.a.up",
     "signal.editor.inspector.brush.color.apply",
     "signal.editor.inspector.brush.color.reset",
+    "signal.editor.inspector.actor.color.r.down",
+    "signal.editor.inspector.actor.color.r.up",
+    "signal.editor.inspector.actor.color.g.down",
+    "signal.editor.inspector.actor.color.g.up",
+    "signal.editor.inspector.actor.color.b.down",
+    "signal.editor.inspector.actor.color.b.up",
+    "signal.editor.inspector.actor.color.a.down",
+    "signal.editor.inspector.actor.color.a.up",
+    "signal.editor.inspector.actor.color.apply",
+    "signal.editor.inspector.actor.color.reset",
+    "signal.editor.inspector.actor.display.solid",
+    "signal.editor.inspector.actor.display.wireframe",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -1816,14 +1828,14 @@
       {
         "signal": "signal.editor.inspector.scroll.up",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled up" }
         ]
       },
       {
         "signal": "signal.editor.inspector.scroll.down",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
         ]
       },
@@ -1888,6 +1900,177 @@
             }
           },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.r.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "r",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.r.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "r",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.g.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "g",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.g.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "g",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.b.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "b",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.b.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "b",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.a.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "a",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.a.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "a",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.apply",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color_key": "editor.inspector.actor.color",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.inspector.actor.color.dirty", "value": false },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.reset",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color reset",
+            "color": [120, 200, 255, 210]
+          },
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color_key": "editor.inspector.actor.color",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.inspector.actor.color.dirty", "value": false },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.display.solid",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "display_mode": "solid",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.display.wireframe",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "display_mode": "wireframe",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          }
         ]
       },
       {

@@ -18807,6 +18807,29 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
                  "32, 64, 96, 128");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.type", ""), "editor_actor");
 
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.r", 0), 32);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.g", 0), 64);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.b", 0), 96);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.a", 0), 128);
+    emit_signal("signal.editor.inspector.actor.color.r.up");
+    emit_signal("signal.editor.inspector.actor.color.b.down");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.actor.color.dirty", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.brush.color.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.r", 0), 48);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.b", 0), 80);
+    emit_signal("signal.editor.inspector.actor.color.apply");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    EXPECT_EQ(placed.color.r, 48);
+    EXPECT_EQ(placed.color.g, 64);
+    EXPECT_EQ(placed.color.b, 80);
+    EXPECT_EQ(placed.color.a, 128);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.actor.color.dirty", true));
+
+    emit_signal("signal.editor.inspector.actor.display.solid");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    ASSERT_NE(placed.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "solid");
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -20725,7 +20748,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     click_editor(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        180.0f);
+        240.0f);
     slayer3d_properties_set_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f);
 
     RectSummary thumb0 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0");
@@ -20734,13 +20757,13 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                 scroll_track.y + scroll_track.h - 4.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        240.0f);
+        300.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
                                               "editor.inspector.scroll.drag.active", true));
 
-    RectSummary thumb4 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.4");
-    ASSERT_TRUE(thumb4.found);
-    drag_editor(thumb4.x + thumb4.w * 0.5f, thumb4.y + thumb4.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
+    RectSummary thumb5 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.5");
+    ASSERT_TRUE(thumb5.found);
+    drag_editor(thumb5.x + thumb5.w * 0.5f, thumb5.y + thumb5.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
                 scroll_track.y + 4.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),

@@ -2135,6 +2135,12 @@ static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime
     const char *color_key = json_string(action, "color_key", "editor.inspector.brush.color");
     if (color_key == NULL || color_key[0] == '\0')
         return false;
+    const char *dirty_key = json_string(action, "dirty_key", "editor.inspector.brush.color.dirty");
+    if (dirty_key == NULL || dirty_key[0] == '\0')
+        return false;
+    const char *message = json_string(action, "message", "brush color edited");
+    if (message == NULL || message[0] == '\0')
+        return false;
 
     slayer3d_color color =
         slayer3d_properties_get_color(runtime->scene_state, color_key, (slayer3d_color){180, 184, 192, 255});
@@ -2166,8 +2172,8 @@ static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime
     }
 
     publish_editor_brush_color_draft(runtime->scene_state, color_key, color);
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.brush.color.dirty", true);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush color edited");
+    slayer3d_properties_set_bool(runtime->scene_state, dirty_key, true);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     return true;
 }
 
