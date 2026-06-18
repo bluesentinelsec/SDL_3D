@@ -192,6 +192,7 @@ editor does not explicitly understand.
         "facing": [1, 0, 0]
       },
       "color": [255, 80, 80, 180],
+      "display_mode": "solid",
       "properties": {
         "health": 100,
         "team": "enemy"
@@ -201,8 +202,10 @@ editor does not explicitly understand.
 }
 ```
 
-`properties` values may be strings, numbers, booleans, arrays, objects, or null.
-This is the primary escape hatch for emergent gameplay data.
+`display_mode` is optional and may be `solid` or `wireframe` for editor/game
+preview of primitive actors. `properties` values may be strings, numbers,
+booleans, arrays, objects, or null. This is the primary escape hatch for
+emergent gameplay data.
 
 ## Connections
 

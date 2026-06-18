@@ -18834,6 +18834,162 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *actor_properties = slayer3d_properties_create();
+    ASSERT_NE(actor_properties, nullptr);
+    slayer3d_properties_set_string(actor_properties, "role", "player");
+    slayer3d_properties_set_string(actor_properties, "classname", "actor_player");
+    slayer3d_properties_set_string(actor_properties, "display_mode", "solid");
+    slayer3d_properties_set_int(actor_properties, "health", 100);
+
+    slayer3d_game_data_place_editor_actor_desc actor_desc{};
+    actor_desc.name = "actor.editor_shell.player";
+    actor_desc.display_name = "Player";
+    actor_desc.archetype = "actor.editor_shell.player";
+    actor_desc.mesh = "capsule";
+    actor_desc.model = "models/player_capsule.glb";
+    actor_desc.group = "Actors";
+    actor_desc.position = slayer3d_vec3_make(1.0f, 0.5f, -2.0f);
+    actor_desc.has_position = true;
+    actor_desc.rotation = slayer3d_vec3_make(0.0f, 1.570796f, 0.0f);
+    actor_desc.has_rotation = true;
+    actor_desc.scale = slayer3d_vec3_make(1.0f, 2.0f, 1.0f);
+    actor_desc.has_scale = true;
+    actor_desc.color = slayer3d_color{64, 180, 255, 220};
+    actor_desc.has_color = true;
+    actor_desc.properties = actor_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &actor_desc, nullptr, 0u, error, sizeof(error)))
+        << error;
+    slayer3d_properties_destroy(actor_properties);
+
+    slayer3d_properties *object_properties = slayer3d_properties_create();
+    ASSERT_NE(object_properties, nullptr);
+    slayer3d_properties_set_string(object_properties, "role", "object");
+    slayer3d_properties_set_string(object_properties, "classname", "object_enemy_blocker");
+    slayer3d_properties_set_string(object_properties, "display_mode", "wireframe");
+    slayer3d_properties_set_string(object_properties, "faction", "enemy");
+
+    slayer3d_game_data_place_editor_actor_desc object_desc{};
+    object_desc.name = "object.editor_shell.enemy_blocker";
+    object_desc.display_name = "Enemy Blocker";
+    object_desc.archetype = "object.editor_shell.box";
+    object_desc.mesh = "box";
+    object_desc.group = "Objects";
+    object_desc.position = slayer3d_vec3_make(-2.0f, 0.25f, 3.0f);
+    object_desc.has_position = true;
+    object_desc.scale = slayer3d_vec3_make(1.5f, 0.5f, 1.5f);
+    object_desc.has_scale = true;
+    object_desc.color = slayer3d_color{220, 80, 72, 180};
+    object_desc.has_color = true;
+    object_desc.properties = object_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &object_desc, nullptr, 0u, error, sizeof(error)))
+        << error;
+    slayer3d_properties_destroy(object_properties);
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    ASSERT_TRUE(slayer3d_map_validate_json(map_json, map_size, nullptr, error, sizeof(error))) << error;
+
+    yyjson_doc *doc = yyjson_read(map_json, map_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *actors = yyjson_obj_get(root, "actors");
+    ASSERT_TRUE(yyjson_is_arr(actors));
+    yyjson_val *exported_actor = nullptr;
+    yyjson_val *exported_object = nullptr;
+    for (size_t i = 0; i < yyjson_arr_size(actors); ++i)
+    {
+        yyjson_val *candidate = yyjson_arr_get(actors, i);
+        const char *id = yyjson_get_str(yyjson_obj_get(candidate, "id"));
+        if (id != nullptr && SDL_strcmp(id, "actor.editor_shell.player") == 0)
+            exported_actor = candidate;
+        if (id != nullptr && SDL_strcmp(id, "object.editor_shell.enemy_blocker") == 0)
+            exported_object = candidate;
+    }
+    ASSERT_NE(exported_actor, nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_actor, "archetype")), "actor.editor_shell.player");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_actor, "model")), "models/player_capsule.glb");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_actor, "primitive")), "capsule");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_actor, "display_mode")), "solid");
+    yyjson_val *actor_properties_json = yyjson_obj_get(exported_actor, "properties");
+    ASSERT_TRUE(yyjson_is_obj(actor_properties_json));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(actor_properties_json, "role")), "player");
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(actor_properties_json, "health")), 100);
+    yyjson_val *actor_transform = yyjson_obj_get(exported_actor, "transform");
+    ASSERT_TRUE(yyjson_is_obj(actor_transform));
+    yyjson_val *actor_position = yyjson_obj_get(actor_transform, "position");
+    ASSERT_TRUE(yyjson_is_arr(actor_position));
+    EXPECT_NEAR(yyjson_get_real(yyjson_arr_get(actor_position, 0)), 1.0, 0.001);
+
+    ASSERT_NE(exported_object, nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "archetype")), "object.editor_shell.box");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "primitive")), "box");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "display_mode")), "wireframe");
+    yyjson_val *object_color = yyjson_obj_get(exported_object, "color");
+    ASSERT_TRUE(yyjson_is_arr(object_color));
+    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(object_color, 0)), 220u);
+    yyjson_val *object_properties_json = yyjson_obj_get(exported_object, "properties");
+    ASSERT_TRUE(yyjson_is_obj(object_properties_json));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(object_properties_json, "faction")), "enemy");
+
+    yyjson_val *editor = yyjson_obj_get(root, "editor");
+    ASSERT_TRUE(yyjson_is_obj(editor));
+    yyjson_val *fragment = yyjson_obj_get(editor, "editable_level_fragment");
+    ASSERT_TRUE(yyjson_is_obj(fragment));
+    yyjson_val *editor_actors = yyjson_obj_get(fragment, "editor_actors");
+    ASSERT_TRUE(yyjson_is_arr(editor_actors));
+    EXPECT_GE(yyjson_arr_size(editor_actors), 2u);
+    yyjson_doc_free(doc);
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), roundtrip_session, &roundtrip_runtime, error,
+                                             sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_map_json(roundtrip_runtime, "brush.editor_shell.target",
+                                                                map_json, map_size, nullptr, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_editor_actor roundtrip_actor{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(roundtrip_runtime, "actor.editor_shell.player", &roundtrip_actor));
+    EXPECT_STREQ(roundtrip_actor.model, "models/player_capsule.glb");
+    EXPECT_STREQ(roundtrip_actor.mesh, "capsule");
+    EXPECT_NEAR(roundtrip_actor.scale.y, 2.0f, 0.001f);
+    ASSERT_NE(roundtrip_actor.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_actor.properties, "display_mode", ""), "solid");
+
+    slayer3d_game_data_editor_actor roundtrip_object{};
+    ASSERT_TRUE(
+        slayer3d_game_data_get_editor_actor(roundtrip_runtime, "object.editor_shell.enemy_blocker", &roundtrip_object));
+    EXPECT_STREQ(roundtrip_object.mesh, "box");
+    EXPECT_EQ(roundtrip_object.color.g, 80);
+    ASSERT_NE(roundtrip_object.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "display_mode", ""), "wireframe");
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "faction", ""), "enemy");
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    SDL_free(map_json);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -42696,6 +42852,7 @@ TEST(GameDataRuntime, SlayerMapValidatesInitialFormat)
         "facing": [0, 0, 1]
       },
       "color": [255, 80, 80, 200],
+      "display_mode": "solid",
       "properties": {
         "health": 100,
         "team": "enemy"
@@ -42784,7 +42941,16 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidDocuments)
     { "id": "brush.bad", "geometry": { "kind": "box", "min": [1, 0, 0], "max": [1, 1, 1] } }
   ]
 })json",
-                           "box geometry max must be greater than min"}};
+                           "box geometry max must be greater than min"},
+                          {"bad_display_mode",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "actors": [
+    { "id": "actor.bad", "primitive": "box", "display_mode": "ghost" }
+  ]
+})json",
+                           "actor display_mode must be solid or wireframe"}};
 
     for (const Case &test_case : cases)
     {

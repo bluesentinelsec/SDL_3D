@@ -1126,16 +1126,28 @@ static const char *editor_actor_map_primitive(const editor_actor_runtime *actor)
     return "box";
 }
 
+static const char *editor_actor_map_display_mode(const editor_actor_runtime *actor)
+{
+    const char *display_mode = actor != NULL && actor->properties != NULL
+                                   ? slayer3d_properties_get_string(actor->properties, "display_mode", NULL)
+                                   : NULL;
+    if (display_mode != NULL && (SDL_strcmp(display_mode, "solid") == 0 || SDL_strcmp(display_mode, "wireframe") == 0))
+        return display_mode;
+    return NULL;
+}
+
 static bool export_add_map_editor_actor(yyjson_mut_doc *doc, yyjson_mut_val *actors, const editor_actor_runtime *actor)
 {
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
     yyjson_mut_val *transform = yyjson_mut_obj(doc);
+    const char *display_mode = editor_actor_map_display_mode(actor);
     if (obj == NULL || transform == NULL || !yyjson_mut_arr_add_val(actors, obj) ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "id", actor->name != NULL ? actor->name : "editor_actor") ||
         !export_add_optional_string(doc, obj, "archetype", actor->archetype) ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "primitive", editor_actor_map_primitive(actor)) ||
         !export_add_optional_string(doc, obj, "model", actor->model) ||
         !export_add_optional_string(doc, obj, "prefab", actor->prefab) ||
+        !export_add_optional_string(doc, obj, "display_mode", display_mode) ||
         !((actor->prefab != NULL && actor->prefab[0] != '\0')
               ? yyjson_mut_obj_add_bool(doc, obj, "prefab_linked", actor->prefab_linked)
               : true) ||
