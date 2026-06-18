@@ -31,9 +31,11 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
-        "  %s [--texture-path <dir>]\n"
-        "  %s new --project <project-dir-or-json> --output <level.json> [--texture-path <dir>] [--overwrite]\n"
+        "  %s [--texture-path <dir>] [--model-path <dir>]\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--texture-path <dir>] [--model-path <dir>] "
+        "[--overwrite]\n"
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--texture-path <dir>] "
+        "[--model-path <dir>] "
         "[--overwrite]\n"
         "\n"
         "Commands:\n"
@@ -464,10 +466,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
     struct arg_str *texture_path =
         arg_str0(NULL, "texture-path", "<dir>", "authoritative texture directory for this editor session");
+    struct arg_str *model_path =
+        arg_str0(NULL, "model-path", "<dir>", "authoritative actor model directory for this editor session");
     struct arg_lit *overwrite = arg_lit0(NULL, "overwrite", "allow new/open to replace an existing output path");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
-    void *argtable[] = {project, input, output, texture_path, overwrite, help, end};
+    void *argtable[] = {project, input, output, texture_path, model_path, overwrite, help, end};
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_editor";
     FILE *out = stream != NULL ? stream : stderr;
 
@@ -563,13 +567,16 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->input_path = input->count > 0 ? input->sval[0] : NULL;
     args->output_path = output->count > 0 ? output->sval[0] : NULL;
     args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
+    args->model_path = model_path->count > 0 ? model_path->sval[0] : NULL;
     args->overwrite = overwrite->count > 0;
 
     if (default_launch_with_options)
     {
         if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
         {
-            fprintf(out, "%s: default editor launch only accepts --texture-path; use 'new' or 'open' for map paths.\n",
+            fprintf(out,
+                    "%s: default editor launch only accepts --texture-path and --model-path; use 'new' or 'open' for "
+                    "map paths.\n",
                     program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
@@ -577,6 +584,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->texture_path != NULL && args->texture_path[0] == '\0')
         {
             fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->model_path != NULL && args->model_path[0] == '\0')
+        {
+            fprintf(out, "%s: --model-path must be non-empty when present.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -635,6 +648,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     if (args->texture_path != NULL && args->texture_path[0] == '\0')
     {
         fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+    if (args->model_path != NULL && args->model_path[0] == '\0')
+    {
+        fprintf(out, "%s: --model-path must be non-empty when present.\n", program);
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
@@ -774,6 +793,31 @@ void slayer3d_editor_project_destroy(slayer3d_editor_project *project)
     SDL_zero(*project);
 }
 
+static bool editor_override_asset_source(slayer3d_editor_asset_source *source, const char *path, const char *label,
+                                         char *error_buffer, int error_buffer_size)
+{
+    if (source == NULL || path == NULL || path[0] == '\0')
+        return true;
+    char *absolute_path = path_make_absolute_tool(path);
+    if (absolute_path == NULL)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to resolve %s path override", label);
+        return false;
+    }
+    char *relative_path = SDL_strdup(path);
+    if (relative_path == NULL)
+    {
+        SDL_free(absolute_path);
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to allocate %s path override", label);
+        return false;
+    }
+    editor_asset_source_destroy(source);
+    source->path = absolute_path;
+    source->relative_path = relative_path;
+    source->available = editor_asset_source_available(absolute_path);
+    return true;
+}
+
 bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slayer3d_editor_project *project,
                                     slayer3d_editor_launch *out_launch, char *error_buffer, int error_buffer_size)
 {
@@ -802,35 +846,26 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
     out_launch->asset_sources = &project->asset_sources;
-    if (args->texture_path != NULL && args->texture_path[0] != '\0')
+    const bool has_texture_override = args->texture_path != NULL && args->texture_path[0] != '\0';
+    const bool has_model_override = args->model_path != NULL && args->model_path[0] != '\0';
+    if (has_texture_override || has_model_override)
     {
-        char *absolute_texture_path = path_make_absolute_tool(args->texture_path);
-        if (absolute_texture_path == NULL)
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to resolve texture path override");
-            slayer3d_editor_launch_destroy(out_launch);
-            return false;
-        }
         if (!editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
         {
-            SDL_free(absolute_texture_path);
-            editor_set_error(error_buffer, error_buffer_size, "failed to allocate texture path override");
-            slayer3d_editor_launch_destroy(out_launch);
-            return false;
-        }
-        editor_asset_source_destroy(&out_launch->owned_asset_sources.textures);
-        out_launch->owned_asset_sources.textures.path = absolute_texture_path;
-        out_launch->owned_asset_sources.textures.relative_path = SDL_strdup(args->texture_path);
-        out_launch->owned_asset_sources.textures.available = editor_asset_source_available(absolute_texture_path);
-        if (out_launch->owned_asset_sources.textures.path == NULL ||
-            out_launch->owned_asset_sources.textures.relative_path == NULL)
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to allocate texture path override");
+            editor_set_error(error_buffer, error_buffer_size, "failed to allocate asset source overrides");
             slayer3d_editor_launch_destroy(out_launch);
             return false;
         }
         out_launch->asset_sources = &out_launch->owned_asset_sources;
         out_launch->owns_asset_sources = true;
+        if (!editor_override_asset_source(&out_launch->owned_asset_sources.textures, args->texture_path, "texture",
+                                          error_buffer, error_buffer_size) ||
+            !editor_override_asset_source(&out_launch->owned_asset_sources.models, args->model_path, "model",
+                                          error_buffer, error_buffer_size))
+        {
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
     }
     return true;
 }
@@ -856,6 +891,12 @@ bool slayer3d_editor_validate_paths(const slayer3d_editor_args *args, const slay
     {
         editor_set_errorf(error_buffer, error_buffer_size, "texture path '%s' is not an existing directory",
                           args->texture_path);
+        return false;
+    }
+    if (args->model_path != NULL && args->model_path[0] != '\0' && !directory_exists_tool(args->model_path))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "model path '%s' is not an existing directory",
+                          args->model_path);
         return false;
     }
     bool is_file = false;

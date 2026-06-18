@@ -17,17 +17,17 @@ Reopen that saved level:
 ./build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/slayer3d-editor-level.fragment.json
 ```
 
-Use a custom texture directory for a session:
+Use custom texture and actor-model directories for a session:
 
 ```sh
-./build/debug/slayer3d_editor --texture-path /path/to/textures
+./build/debug/slayer3d_editor --texture-path /path/to/textures --model-path /path/to/models
 ```
 
 The explicit `new` command supports the same override when you also want to
 choose the output map path:
 
 ```sh
-./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.fragment.json --texture-path /path/to/textures --overwrite
+./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.fragment.json --texture-path /path/to/textures --model-path /path/to/models --overwrite
 ```
 
 `--project` points at a directory containing `slayer3d.project.json`; the
@@ -39,8 +39,9 @@ publishes both the resolved path and the project-relative path to scene state so
 future browsers and saved maps can prefer project-relative references.
 `--texture-path` overrides only the texture source for the current session and
 becomes the one authoritative texture directory. The directory may contain image
-files directly or in nested subdirectories. `new` requires `--output`. `open`
-requires `--input` and saves back to that same file unless `--output` is
+files directly or in nested subdirectories. `--model-path` does the same for
+actor model files used by the Things browser. `new` requires `--output`.
+`open` requires `--input` and saves back to that same file unless `--output` is
 supplied. Pass `--overwrite` only when replacing an existing output file is
 intentional.
 
