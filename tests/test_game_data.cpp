@@ -18697,6 +18697,16 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
     emit_signal("signal.editor.palette.game_object");
     emit_signal("signal.editor.things.category.objects");
     emit_signal("signal.editor.actor.select_slot.5");
@@ -18755,6 +18765,47 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_NEAR(active_selection.bounds.max.y, placed.position.y + 1.0f, 0.001f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Actor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "Box");
+
+    ASSERT_TRUE(execute_json_action(R"json({
+      "type": "editor.actor.update",
+      "target_type": "selection",
+      "position": [4.0, 0.25, -5.0],
+      "rotation": [0.0, 1.570796, 0.0],
+      "scale": [2.0, 3.0, 4.0],
+      "color": [32, 64, 96, 128],
+      "display_mode": "wireframe",
+      "outputs": {
+        "valid_key": "test.editor.actor.update.valid",
+        "message_key": "test.editor.actor.update.message",
+        "actor_key": "test.editor.actor.update.actor"
+      }
+    })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.editor.actor.update.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.editor.actor.update.actor", ""),
+                 "object.editor_shell.box.1");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    EXPECT_NEAR(placed.position.x, 4.0f, 0.001f);
+    EXPECT_NEAR(placed.position.y, 0.25f, 0.001f);
+    EXPECT_NEAR(placed.position.z, -5.0f, 0.001f);
+    EXPECT_NEAR(placed.rotation.y, 1.570796f, 0.001f);
+    EXPECT_NEAR(placed.scale.x, 2.0f, 0.001f);
+    EXPECT_NEAR(placed.scale.y, 3.0f, 0.001f);
+    EXPECT_NEAR(placed.scale.z, 4.0f, 0.001f);
+    EXPECT_EQ(placed.color.r, 32);
+    EXPECT_EQ(placed.color.g, 64);
+    EXPECT_EQ(placed.color.b, 96);
+    EXPECT_EQ(placed.color.a, 128);
+    ASSERT_NE(placed.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "wireframe");
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_TRUE(active_selection.has_bounds);
+    EXPECT_NEAR(active_selection.bounds.min.x, 3.0f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.max.y, 3.25f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.position", ""),
+                 "4.000, 0.250, -5.000");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.color", ""),
+                 "32, 64, 96, 128");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.target.type", ""), "editor_actor");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

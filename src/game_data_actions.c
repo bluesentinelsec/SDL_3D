@@ -3079,6 +3079,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.actor.place") == 0)
         return slayer3d_game_data_place_editor_actor_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.actor.update") == 0)
+        return slayer3d_game_data_update_editor_actor_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.prefab.define") == 0)
         return slayer3d_game_data_place_editor_prefab_action(runtime, action);
 

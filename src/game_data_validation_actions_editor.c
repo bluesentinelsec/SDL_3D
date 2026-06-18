@@ -1491,6 +1491,52 @@ bool validate_editor_actor_place_action(validation_context *ctx, yyjson_val *act
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type)
+{
+    (void)names;
+    const char *target_type = json_string(action, "target_type");
+    if (target_type == NULL || target_type[0] == '\0')
+        target_type = "selection";
+    if (target_type == NULL ||
+        (SDL_strcmp(target_type, "selection") != 0 && SDL_strcmp(target_type, "editor_actor") != 0))
+        return validation_error(ctx, json_path, "%s target_type must be selection or editor_actor", type);
+    const char *target = json_string(action, "target");
+    const char *target_from_state = json_string(action, "target_from_state");
+    if (SDL_strcmp(target_type, "editor_actor") == 0 && (target == NULL || target[0] == '\0') &&
+        (target_from_state == NULL || target_from_state[0] == '\0'))
+        return validation_error(ctx, json_path, "%s requires target or target_from_state for editor_actor", type);
+    static const char *const optional_string_fields[] = {"target", "target_from_state", "target_type", "display_mode",
+                                                         "message"};
+    char field_path[PATH_BUFFER_SIZE];
+    for (size_t i = 0; i < SDL_arraysize(optional_string_fields); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", json_path, optional_string_fields[i]);
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(action, optional_string_fields[i]), field_path,
+                                                      "editor.actor.update field"))
+            return false;
+    }
+    yyjson_val *position = obj_get(action, "position");
+    yyjson_val *rotation = obj_get(action, "rotation");
+    yyjson_val *scale = obj_get(action, "scale");
+    yyjson_val *color = obj_get(action, "color");
+    if (position != NULL && !is_exact_vec_array(position, 3))
+        return validation_error(ctx, json_path, "%s position must be a vec3", type);
+    if (rotation != NULL && !is_exact_vec_array(rotation, 3))
+        return validation_error(ctx, json_path, "%s rotation must be a vec3", type);
+    if (scale != NULL &&
+        (!is_exact_vec_array(scale, 3) || yyjson_get_num(yyjson_arr_get(scale, 0)) <= 0.0 ||
+         yyjson_get_num(yyjson_arr_get(scale, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(scale, 2)) <= 0.0))
+        return validation_error(ctx, json_path, "%s scale must be a positive vec3", type);
+    if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+        return validation_error(ctx, json_path, "%s color must be a color array", type);
+    const char *display_mode = json_string(action, "display_mode");
+    if (display_mode != NULL && SDL_strcmp(display_mode, "solid") != 0 && SDL_strcmp(display_mode, "wireframe") != 0)
+        return validation_error(ctx, json_path, "%s display_mode must be solid or wireframe", type);
+    const char *output_keys[] = {"valid_key", "message_key", "actor_key", "dirty_key", "revision_key", "count_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
 static bool validate_editor_prefab_common_fields(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                  const char *type, bool require_id)
 {
