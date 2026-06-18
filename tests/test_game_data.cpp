@@ -18044,9 +18044,9 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
         }
     }
     ASSERT_NE(lava_material, nullptr);
-    EXPECT_STREQ(lava_material->texture, "asset://textures/lava.jpg");
+    EXPECT_TRUE(std::filesystem::is_regular_file(lava_material->texture)) << lava_material->texture;
     ASSERT_NE(wall_material, nullptr);
-    EXPECT_STREQ(wall_material->texture, "asset://textures/wall_metal.jpg");
+    EXPECT_TRUE(std::filesystem::is_regular_file(wall_material->texture)) << wall_material->texture;
     ASSERT_NE(world.render_model, nullptr);
     bool saw_lava_render_material = false;
     for (int i = 0; i < world.render_model->material_count; ++i)
@@ -18056,7 +18056,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
         {
             saw_lava_render_material = true;
             ASSERT_NE(material.albedo_map, nullptr);
-            EXPECT_STREQ(material.albedo_map, "asset://textures/lava.jpg");
+            EXPECT_TRUE(std::filesystem::is_regular_file(material.albedo_map)) << material.albedo_map;
         }
     }
     EXPECT_TRUE(saw_lava_render_material);
@@ -20805,17 +20805,17 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.alpha_wall") == 0)
         {
             saw_alpha = true;
-            EXPECT_STREQ(material.texture, "asset://custom_textures/alpha-wall.jpg");
+            EXPECT_STREQ(material.texture, (texture_dir / "alpha-wall.jpg").string().c_str());
         }
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.metal_beta_panel") == 0)
         {
             saw_beta = true;
-            EXPECT_STREQ(material.texture, "asset://custom_textures/metal/beta-panel.png");
+            EXPECT_STREQ(material.texture, (texture_dir / "metal" / "beta-panel.png").string().c_str());
         }
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.zeta_panel") == 0)
         {
             saw_zeta = true;
-            EXPECT_STREQ(material.texture, "asset://custom_textures/zeta_panel.png");
+            EXPECT_STREQ(material.texture, (texture_dir / "zeta_panel.png").string().c_str());
         }
     }
     EXPECT_TRUE(saw_alpha);
@@ -21008,7 +21008,8 @@ TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbso
         {
             saw_project_texture = true;
             ASSERT_NE(material.texture, nullptr);
-            EXPECT_EQ(std::string(material.texture).rfind("asset://media/textures/", 0), 0U) << material.texture;
+            EXPECT_TRUE(std::filesystem::path(material.texture).is_absolute()) << material.texture;
+            EXPECT_TRUE(std::filesystem::is_regular_file(material.texture)) << material.texture;
         }
     }
     EXPECT_TRUE(saw_project_texture);

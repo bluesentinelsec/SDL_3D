@@ -168,23 +168,6 @@ static bool editor_asset_uri_matches_relative_path(const char *asset_uri, const 
     return editor_path_text_equal(asset_uri + sizeof(prefix) - 1U, relative_path);
 }
 
-static char *editor_asset_uri_from_relative_path(const char *relative_path)
-{
-    static const char prefix[] = "asset://";
-    if (relative_path == NULL || relative_path[0] == '\0' || editor_path_absolute(relative_path))
-        return NULL;
-    const size_t prefix_len = sizeof(prefix) - 1U;
-    const size_t relative_len = SDL_strlen(relative_path);
-    char *uri = (char *)SDL_malloc(prefix_len + relative_len + 1U);
-    if (uri == NULL)
-        return NULL;
-    SDL_memcpy(uri, prefix, prefix_len);
-    for (size_t i = 0; i < relative_len; ++i)
-        uri[prefix_len + i] = editor_path_compare_char(relative_path[i]);
-    uri[prefix_len + relative_len] = '\0';
-    return uri;
-}
-
 static char *editor_resolve_directory(slayer3d_game_data_runtime *runtime, const char *directory)
 {
     if (directory == NULL || directory[0] == '\0')
@@ -622,21 +605,7 @@ static const char *editor_texture_material_reference(const editor_texture_scan_e
 {
     if (owned != NULL)
         *owned = NULL;
-    if (entry == NULL)
-        return NULL;
-    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' && !editor_path_absolute(entry->relative_path))
-    {
-        char *asset_uri = editor_asset_uri_from_relative_path(entry->relative_path);
-        if (asset_uri != NULL)
-        {
-            if (owned != NULL)
-                *owned = asset_uri;
-            else
-                SDL_free(asset_uri);
-            return asset_uri;
-        }
-    }
-    return entry->path;
+    return entry != NULL ? entry->path : NULL;
 }
 
 static bool editor_append_brush_material(brush_world_runtime *world_runtime, const char *material_name,
@@ -1031,8 +1000,19 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
             editor_brush_material_index_by_name_or_texture(world_runtime, NULL, entry->path, entry->relative_path);
         if (existing_index >= 0)
         {
-            const slayer3d_game_data_brush_material *material = &world_runtime->desc.materials[existing_index];
+            slayer3d_game_data_brush_material *material =
+                (slayer3d_game_data_brush_material *)&world_runtime->desc.materials[existing_index];
             SDL_strlcpy(entry->material, material->name != NULL ? material->name : "", sizeof(entry->material));
+            if (entry->path != NULL && entry->path[0] != '\0' && material->texture != NULL &&
+                !editor_path_text_equal(material->texture, entry->path))
+            {
+                char *texture_path = SDL_strdup(entry->path);
+                if (texture_path != NULL)
+                {
+                    SDL_free((void *)material->texture);
+                    material->texture = texture_path;
+                }
+            }
             entry->sort_order = existing_index;
         }
         else

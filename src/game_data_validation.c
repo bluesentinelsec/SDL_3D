@@ -8,6 +8,7 @@
 #include <float.h>
 #include <stdarg.h>
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "slayer3d/actor_controller.h"
@@ -34,6 +35,21 @@ static yyjson_val *obj_get(yyjson_val *object, const char *key)
 static const char *json_string(yyjson_val *object, const char *key)
 {
     return validation_json_string(object, key);
+}
+
+static bool validation_asset_path_is_absolute(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    const char c0 = path[0];
+    const char c1 = path[1];
+    const char c2 = path[2];
+
+    if (c0 == '/' || c0 == '\\')
+        return true;
+
+    return (((c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z')) && c1 == ':' && (c2 == '/' || c2 == '\\'));
 }
 
 static void set_first_error(validation_context *ctx, const char *json_path, const char *message)
@@ -540,6 +556,14 @@ bool asset_path_exists(validation_context *ctx, const char *asset_path, const ch
 {
     if (ctx->assets == NULL)
         return true;
+
+    if (validation_asset_path_is_absolute(asset_path))
+    {
+        SDL_PathInfo info;
+        if (SDL_GetPathInfo(asset_path, &info) && info.type == SDL_PATHTYPE_FILE)
+            return true;
+        return validation_error(ctx, json_path, "%s asset path '%s' does not exist", asset_kind, asset_path);
+    }
 
     char *resolved = asset_path != NULL && SDL_strncmp(asset_path, "asset://", 8) == 0
                          ? SDL_strdup(asset_path)
