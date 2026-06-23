@@ -1382,3 +1382,325 @@ size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document)
 {
     return map_array_count(document, "connections");
 }
+
+static yyjson_val *map_root_array_item(const slayer3d_map_document *document, const char *key, size_t index)
+{
+    if (document == NULL || document->doc == NULL || key == NULL)
+        return NULL;
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    yyjson_val *array = map_obj_get(root, key);
+    return yyjson_is_arr(array) && index < yyjson_arr_size(array) ? yyjson_arr_get(array, index) : NULL;
+}
+
+static const char *map_asset_kind_key(slayer3d_map_asset_kind kind)
+{
+    switch (kind)
+    {
+    case SLAYER3D_MAP_ASSET_TEXTURE:
+        return "textures";
+    case SLAYER3D_MAP_ASSET_MODEL:
+        return "models";
+    case SLAYER3D_MAP_ASSET_SPRITE:
+        return "sprites";
+    case SLAYER3D_MAP_ASSET_SKYBOX:
+        return "skyboxes";
+    case SLAYER3D_MAP_ASSET_EFFECT:
+        return "effects";
+    default:
+        return NULL;
+    }
+}
+
+static yyjson_val *map_asset_item(const slayer3d_map_document *document, slayer3d_map_asset_kind kind, size_t index)
+{
+    if (document == NULL || document->doc == NULL)
+        return NULL;
+    const char *key = map_asset_kind_key(kind);
+    if (key == NULL)
+        return NULL;
+    yyjson_val *assets = map_obj_get(yyjson_doc_get_root(document->doc), "assets");
+    yyjson_val *array = map_obj_get(assets, key);
+    return yyjson_is_arr(array) && index < yyjson_arr_size(array) ? yyjson_arr_get(array, index) : NULL;
+}
+
+static yyjson_val *map_properties_object(yyjson_val *object)
+{
+    yyjson_val *properties = map_obj_get(object, "properties");
+    return yyjson_is_obj(properties) ? properties : NULL;
+}
+
+static size_t map_properties_count(yyjson_val *object)
+{
+    yyjson_val *properties = map_properties_object(object);
+    return properties != NULL ? yyjson_obj_size(properties) : 0U;
+}
+
+static const char *map_property_key_at(yyjson_val *object, size_t property_index)
+{
+    yyjson_val *properties = map_properties_object(object);
+    if (properties == NULL || property_index >= yyjson_obj_size(properties))
+        return NULL;
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(properties, &iter);
+    for (size_t i = 0; (key = yyjson_obj_iter_next(&iter)) != NULL; ++i)
+    {
+        if (i == property_index)
+            return yyjson_get_str(key);
+    }
+    return NULL;
+}
+
+static bool map_write_value_json(yyjson_val *value, char **out_json, size_t *out_json_size, char *error_buffer,
+                                 int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output JSON pointer is required");
+        return false;
+    }
+    *out_json = NULL;
+    if (out_json_size != NULL)
+        *out_json_size = 0U;
+    if (value == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map property value was not found");
+        return false;
+    }
+    size_t size = 0U;
+    char *json = yyjson_val_write(value, YYJSON_WRITE_NOFLAG, &size);
+    if (json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: failed to serialize map property JSON");
+        return false;
+    }
+    *out_json = json;
+    if (out_json_size != NULL)
+        *out_json_size = size;
+    return true;
+}
+
+static bool map_get_property_json_from_object(yyjson_val *object, const char *key, char **out_json,
+                                              size_t *out_json_size, char *error_buffer, int error_buffer_size)
+{
+    if (key == NULL || key[0] == '\0')
+    {
+        map_clear_error(error_buffer, error_buffer_size);
+        map_set_error(error_buffer, error_buffer_size, "$: map property key is required");
+        return false;
+    }
+    yyjson_val *properties = map_properties_object(object);
+    return map_write_value_json(map_obj_get(properties, key), out_json, out_json_size, error_buffer, error_buffer_size);
+}
+
+static bool map_read_vec3_value(yyjson_val *array, slayer3d_vec3 *out_value)
+{
+    if (!yyjson_is_arr(array) || yyjson_arr_size(array) != 3U || out_value == NULL)
+        return false;
+    yyjson_val *x = yyjson_arr_get(array, 0);
+    yyjson_val *y = yyjson_arr_get(array, 1);
+    yyjson_val *z = yyjson_arr_get(array, 2);
+    if (!yyjson_is_num(x) || !yyjson_is_num(y) || !yyjson_is_num(z))
+        return false;
+    out_value->x = (float)yyjson_get_num(x);
+    out_value->y = (float)yyjson_get_num(y);
+    out_value->z = (float)yyjson_get_num(z);
+    return true;
+}
+
+static bool map_read_color_value(yyjson_val *array, slayer3d_color *out_color)
+{
+    if (!yyjson_is_arr(array) || yyjson_arr_size(array) != 4U || out_color == NULL)
+        return false;
+    yyjson_val *r = yyjson_arr_get(array, 0);
+    yyjson_val *g = yyjson_arr_get(array, 1);
+    yyjson_val *b = yyjson_arr_get(array, 2);
+    yyjson_val *a = yyjson_arr_get(array, 3);
+    if (!yyjson_is_num(r) || !yyjson_is_num(g) || !yyjson_is_num(b) || !yyjson_is_num(a))
+        return false;
+    out_color->r = (Uint8)SDL_clamp((int)yyjson_get_num(r), 0, 255);
+    out_color->g = (Uint8)SDL_clamp((int)yyjson_get_num(g), 0, 255);
+    out_color->b = (Uint8)SDL_clamp((int)yyjson_get_num(b), 0, 255);
+    out_color->a = (Uint8)SDL_clamp((int)yyjson_get_num(a), 0, 255);
+    return true;
+}
+
+static bool map_read_optional_color(yyjson_val *object, const char *key, slayer3d_color *out_color)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    return value != NULL && map_read_color_value(value, out_color);
+}
+
+size_t slayer3d_map_get_asset_count(const slayer3d_map_document *document, slayer3d_map_asset_kind kind)
+{
+    if (document == NULL || document->doc == NULL)
+        return 0U;
+    const char *key = map_asset_kind_key(kind);
+    if (key == NULL)
+        return 0U;
+    yyjson_val *assets = map_obj_get(yyjson_doc_get_root(document->doc), "assets");
+    yyjson_val *array = map_obj_get(assets, key);
+    return yyjson_is_arr(array) ? yyjson_arr_size(array) : 0U;
+}
+
+bool slayer3d_map_get_asset(const slayer3d_map_document *document, slayer3d_map_asset_kind kind, size_t index,
+                            slayer3d_map_asset *out_asset)
+{
+    yyjson_val *asset = map_asset_item(document, kind, index);
+    if (!yyjson_is_obj(asset) || out_asset == NULL)
+        return false;
+    SDL_zero(*out_asset);
+    out_asset->id = map_json_string(asset, "id");
+    out_asset->path = map_json_string(asset, "path");
+    out_asset->property_count = map_properties_count(asset);
+    return true;
+}
+
+static void map_read_transform(yyjson_val *object, slayer3d_map_transform *out_transform)
+{
+    if (out_transform == NULL)
+        return;
+    SDL_zero(*out_transform);
+    yyjson_val *transform = map_obj_get(object, "transform");
+    if (!yyjson_is_obj(transform))
+        return;
+    out_transform->has_position = map_read_vec3_value(map_obj_get(transform, "position"), &out_transform->position);
+    out_transform->has_rotation = map_read_vec3_value(map_obj_get(transform, "rotation"), &out_transform->rotation);
+    out_transform->has_scale = map_read_vec3_value(map_obj_get(transform, "scale"), &out_transform->scale);
+    out_transform->has_facing = map_read_vec3_value(map_obj_get(transform, "facing"), &out_transform->facing);
+}
+
+bool slayer3d_map_get_material(const slayer3d_map_document *document, size_t index, slayer3d_map_material *out_material)
+{
+    yyjson_val *material = map_root_array_item(document, "materials", index);
+    if (!yyjson_is_obj(material) || out_material == NULL)
+        return false;
+    SDL_zero(*out_material);
+    out_material->id = map_json_string(material, "id");
+    out_material->texture = map_json_string(material, "texture");
+    out_material->has_color = map_read_optional_color(material, "color", &out_material->color);
+    out_material->has_tint = map_read_optional_color(material, "tint", &out_material->tint);
+    out_material->property_count = map_properties_count(material);
+    return true;
+}
+
+bool slayer3d_map_get_brush(const slayer3d_map_document *document, size_t index, slayer3d_map_brush *out_brush)
+{
+    yyjson_val *brush = map_root_array_item(document, "brushes", index);
+    if (!yyjson_is_obj(brush) || out_brush == NULL)
+        return false;
+    SDL_zero(*out_brush);
+    out_brush->id = map_json_string(brush, "id");
+    yyjson_val *geometry = map_obj_get(brush, "geometry");
+    out_brush->geometry_kind = map_json_string(geometry, "kind");
+    if (out_brush->geometry_kind != NULL && SDL_strcmp(out_brush->geometry_kind, "box") == 0)
+    {
+        out_brush->box.valid = map_read_vec3_value(map_obj_get(geometry, "min"), &out_brush->box.min) &&
+                               map_read_vec3_value(map_obj_get(geometry, "max"), &out_brush->box.max);
+    }
+    out_brush->material = map_json_string(brush, "material");
+    out_brush->has_color = map_read_optional_color(brush, "color", &out_brush->color);
+    yyjson_val *faces = map_obj_get(brush, "faces");
+    out_brush->face_count = yyjson_is_arr(faces) ? yyjson_arr_size(faces) : 0U;
+    out_brush->property_count = map_properties_count(brush);
+    return true;
+}
+
+bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index, slayer3d_map_actor *out_actor)
+{
+    yyjson_val *actor = map_root_array_item(document, "actors", index);
+    if (!yyjson_is_obj(actor) || out_actor == NULL)
+        return false;
+    SDL_zero(*out_actor);
+    out_actor->id = map_json_string(actor, "id");
+    out_actor->archetype = map_json_string(actor, "archetype");
+    out_actor->model = map_json_string(actor, "model");
+    out_actor->sprite = map_json_string(actor, "sprite");
+    out_actor->primitive = map_json_string(actor, "primitive");
+    out_actor->prefab = map_json_string(actor, "prefab");
+    yyjson_val *prefab_linked = map_obj_get(actor, "prefab_linked");
+    out_actor->prefab_linked = yyjson_is_bool(prefab_linked) && yyjson_get_bool(prefab_linked);
+    out_actor->display_mode = map_json_string(actor, "display_mode");
+    map_read_transform(actor, &out_actor->transform);
+    out_actor->has_color = map_read_optional_color(actor, "color", &out_actor->color);
+    out_actor->property_count = map_properties_count(actor);
+    return true;
+}
+
+size_t slayer3d_map_get_property_count(const slayer3d_map_document *document)
+{
+    if (document == NULL || document->doc == NULL)
+        return 0U;
+    return map_properties_count(yyjson_doc_get_root(document->doc));
+}
+
+const char *slayer3d_map_get_property_key(const slayer3d_map_document *document, size_t property_index)
+{
+    if (document == NULL || document->doc == NULL)
+        return NULL;
+    return map_property_key_at(yyjson_doc_get_root(document->doc), property_index);
+}
+
+bool slayer3d_map_get_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
+                                    size_t *out_json_size, char *error_buffer, int error_buffer_size)
+{
+    yyjson_val *root = document != NULL && document->doc != NULL ? yyjson_doc_get_root(document->doc) : NULL;
+    return map_get_property_json_from_object(root, key, out_json, out_json_size, error_buffer, error_buffer_size);
+}
+
+const char *slayer3d_map_get_asset_property_key(const slayer3d_map_document *document, slayer3d_map_asset_kind kind,
+                                                size_t asset_index, size_t property_index)
+{
+    return map_property_key_at(map_asset_item(document, kind, asset_index), property_index);
+}
+
+bool slayer3d_map_get_asset_property_json(const slayer3d_map_document *document, slayer3d_map_asset_kind kind,
+                                          size_t asset_index, const char *key, char **out_json, size_t *out_json_size,
+                                          char *error_buffer, int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_asset_item(document, kind, asset_index), key, out_json, out_json_size,
+                                             error_buffer, error_buffer_size);
+}
+
+const char *slayer3d_map_get_material_property_key(const slayer3d_map_document *document, size_t material_index,
+                                                   size_t property_index)
+{
+    return map_property_key_at(map_root_array_item(document, "materials", material_index), property_index);
+}
+
+bool slayer3d_map_get_material_property_json(const slayer3d_map_document *document, size_t material_index,
+                                             const char *key, char **out_json, size_t *out_json_size,
+                                             char *error_buffer, int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_root_array_item(document, "materials", material_index), key, out_json,
+                                             out_json_size, error_buffer, error_buffer_size);
+}
+
+const char *slayer3d_map_get_brush_property_key(const slayer3d_map_document *document, size_t brush_index,
+                                                size_t property_index)
+{
+    return map_property_key_at(map_root_array_item(document, "brushes", brush_index), property_index);
+}
+
+bool slayer3d_map_get_brush_property_json(const slayer3d_map_document *document, size_t brush_index, const char *key,
+                                          char **out_json, size_t *out_json_size, char *error_buffer,
+                                          int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_root_array_item(document, "brushes", brush_index), key, out_json,
+                                             out_json_size, error_buffer, error_buffer_size);
+}
+
+const char *slayer3d_map_get_actor_property_key(const slayer3d_map_document *document, size_t actor_index,
+                                                size_t property_index)
+{
+    return map_property_key_at(map_root_array_item(document, "actors", actor_index), property_index);
+}
+
+bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document, size_t actor_index, const char *key,
+                                          char **out_json, size_t *out_json_size, char *error_buffer,
+                                          int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_root_array_item(document, "actors", actor_index), key, out_json,
+                                             out_json_size, error_buffer, error_buffer_size);
+}

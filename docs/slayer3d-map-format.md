@@ -22,12 +22,15 @@ provides the initial map I/O surface:
 - `slayer3d_map_to_json()` serializes a loaded document back to canonical
   pretty JSON.
 - `slayer3d_map_write_file()` writes a loaded document to disk.
-- Query helpers expose basic metadata and top-level object counts while keeping
-  arbitrary project-specific JSON data preserved inside the document.
+- Query helpers expose metadata, top-level object counts, typed views for
+  materials/brushes/actors, and arbitrary property JSON while keeping
+  project-specific data preserved inside the document.
 
-The initial handle is intentionally JSON-preserving rather than a full C object
-model. Later slices can layer editor/game-specific materialization on top of
-the same load/save primitive without losing unknown fields.
+The loaded handle is intentionally JSON-preserving. String pointers returned by
+typed read helpers are borrowed from the document and remain valid until
+`slayer3d_map_destroy()`. Arbitrary property values can be serialized with the
+`slayer3d_map_get_*_property_json()` helpers and must be released with
+`slayer3d_map_free_string()`.
 
 ## Example Game Data
 

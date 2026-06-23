@@ -29,6 +29,26 @@ int main(int argc, char **argv)
     printf("  skybox: %s\n", slayer3d_map_has_skybox(map) ? "yes" : "no");
     printf("  connections: %zu\n", slayer3d_map_get_connection_count(map));
 
+    slayer3d_map_asset texture;
+    if (slayer3d_map_get_asset(map, SLAYER3D_MAP_ASSET_TEXTURE, 0, &texture))
+        printf("  first texture asset: %s path=%s\n", texture.id, texture.path);
+
+    slayer3d_map_material material;
+    if (slayer3d_map_get_material(map, 0, &material))
+        printf("  first material: %s texture=%s\n", material.id, material.texture != NULL ? material.texture : "none");
+
+    slayer3d_map_actor actor;
+    if (slayer3d_map_get_actor(map, 0, &actor))
+    {
+        printf("  first actor: %s archetype=%s primitive=%s\n", actor.id,
+               actor.archetype != NULL ? actor.archetype : "none", actor.primitive != NULL ? actor.primitive : "none");
+        if (actor.transform.has_position)
+        {
+            printf("    position: %.2f %.2f %.2f\n", actor.transform.position.x, actor.transform.position.y,
+                   actor.transform.position.z);
+        }
+    }
+
     slayer3d_map_destroy(map);
     return 0;
 }

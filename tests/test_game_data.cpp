@@ -43218,9 +43218,18 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     "id": "map.roundtrip",
     "name": "Round Trip"
   },
+  "assets": {
+    "textures": [
+      { "id": "tex.floor", "path": "textures/floor.png" }
+    ],
+    "models": [
+      { "id": "model.spawn", "path": "models/spawn.glb" }
+    ]
+  },
   "materials": [
     {
       "id": "mat.gray",
+      "texture": "tex.floor",
       "properties": {
         "surface": {
           "footstep": "metal",
@@ -43245,6 +43254,7 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
   "actors": [
     {
       "id": "actor.spawn.1",
+      "model": "model.spawn",
       "primitive": "capsule",
       "properties": {
         "spawn_table": ["grunt", "brute"],
@@ -43283,6 +43293,49 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     EXPECT_EQ(slayer3d_map_get_actor_count(document), 1u);
     EXPECT_EQ(slayer3d_map_get_connection_count(document), 1u);
     EXPECT_EQ(slayer3d_map_get_source_path(document), nullptr);
+
+    EXPECT_EQ(slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_TEXTURE), 1u);
+    EXPECT_EQ(slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_MODEL), 1u);
+    slayer3d_map_asset texture_asset{};
+    ASSERT_TRUE(slayer3d_map_get_asset(document, SLAYER3D_MAP_ASSET_TEXTURE, 0, &texture_asset));
+    EXPECT_STREQ(texture_asset.id, "tex.floor");
+    EXPECT_STREQ(texture_asset.path, "textures/floor.png");
+    EXPECT_FALSE(slayer3d_map_get_asset(document, SLAYER3D_MAP_ASSET_TEXTURE, 99, &texture_asset));
+
+    slayer3d_map_material material{};
+    ASSERT_TRUE(slayer3d_map_get_material(document, 0, &material));
+    EXPECT_STREQ(material.id, "mat.gray");
+    EXPECT_EQ(material.property_count, 1u);
+    EXPECT_STREQ(slayer3d_map_get_material_property_key(document, 0, 0), "surface");
+
+    slayer3d_map_brush brush{};
+    ASSERT_TRUE(slayer3d_map_get_brush(document, 0, &brush));
+    EXPECT_STREQ(brush.id, "brush.trigger_floor");
+    EXPECT_STREQ(brush.geometry_kind, "box");
+    EXPECT_TRUE(brush.box.valid);
+    EXPECT_FLOAT_EQ(brush.box.max.x, 2.0f);
+    EXPECT_STREQ(brush.material, "mat.gray");
+    EXPECT_EQ(brush.property_count, 1u);
+    EXPECT_STREQ(slayer3d_map_get_brush_property_key(document, 0, 0), "trigger");
+
+    slayer3d_map_actor actor{};
+    ASSERT_TRUE(slayer3d_map_get_actor(document, 0, &actor));
+    EXPECT_STREQ(actor.id, "actor.spawn.1");
+    EXPECT_STREQ(actor.model, "model.spawn");
+    EXPECT_STREQ(actor.primitive, "capsule");
+    EXPECT_EQ(actor.property_count, 2u);
+    EXPECT_STREQ(slayer3d_map_get_actor_property_key(document, 0, 0), "spawn_table");
+    EXPECT_FALSE(slayer3d_map_get_actor(document, 99, &actor));
+
+    char *property_json = nullptr;
+    size_t property_json_size = 0;
+    ASSERT_TRUE(slayer3d_map_get_actor_property_json(document, 0, "audio", &property_json, &property_json_size, error,
+                                                     sizeof(error)))
+        << error;
+    ASSERT_NE(property_json, nullptr);
+    EXPECT_GT(property_json_size, 0u);
+    EXPECT_NE(std::string(property_json, property_json_size).find("\"cue\":\"ambush\""), std::string::npos);
+    slayer3d_map_free_string(property_json);
 
     char *serialized = nullptr;
     size_t serialized_size = 0;
@@ -43377,6 +43430,22 @@ TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
     EXPECT_EQ(slayer3d_map_get_effect_count(document), 1u);
     EXPECT_TRUE(slayer3d_map_has_skybox(document));
     EXPECT_EQ(slayer3d_map_get_connection_count(document), 4u);
+
+    slayer3d_map_asset model_asset{};
+    ASSERT_TRUE(slayer3d_map_get_asset(document, SLAYER3D_MAP_ASSET_MODEL, 0, &model_asset));
+    EXPECT_STREQ(model_asset.id, "model.player.capsule");
+    EXPECT_STREQ(model_asset.path, "models/player_capsule.glb");
+
+    slayer3d_map_actor player{};
+    ASSERT_TRUE(slayer3d_map_get_actor(document, 0, &player));
+    EXPECT_STREQ(player.id, "actor.player_start");
+    EXPECT_STREQ(player.archetype, "player_start");
+    EXPECT_STREQ(player.model, "model.player.capsule");
+    EXPECT_STREQ(player.primitive, "capsule");
+    EXPECT_TRUE(player.transform.has_position);
+    EXPECT_FLOAT_EQ(player.transform.position.z, -4.0f);
+    EXPECT_TRUE(player.has_color);
+    EXPECT_EQ(player.color.g, 150);
 
     char *serialized = nullptr;
     size_t serialized_size = 0;

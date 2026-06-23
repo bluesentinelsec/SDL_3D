@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "slayer3d/types.h"
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -55,6 +57,87 @@ extern "C"
         /** @brief When true, warnings also make validation fail. */
         bool treat_warnings_as_errors;
     } slayer3d_map_validation_options;
+
+    /** @brief Authored asset catalog kind. */
+    typedef enum slayer3d_map_asset_kind
+    {
+        SLAYER3D_MAP_ASSET_TEXTURE,
+        SLAYER3D_MAP_ASSET_MODEL,
+        SLAYER3D_MAP_ASSET_SPRITE,
+        SLAYER3D_MAP_ASSET_SKYBOX,
+        SLAYER3D_MAP_ASSET_EFFECT,
+    } slayer3d_map_asset_kind;
+
+    /** @brief Loaded asset catalog entry. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_asset
+    {
+        const char *id;
+        const char *path;
+        size_t property_count;
+    } slayer3d_map_asset;
+
+    /** @brief Optional transform authored on a map object. */
+    typedef struct slayer3d_map_transform
+    {
+        bool has_position;
+        slayer3d_vec3 position;
+        bool has_rotation;
+        slayer3d_vec3 rotation;
+        bool has_scale;
+        slayer3d_vec3 scale;
+        bool has_facing;
+        slayer3d_vec3 facing;
+    } slayer3d_map_transform;
+
+    /** @brief Loaded material view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_material
+    {
+        const char *id;
+        const char *texture;
+        bool has_color;
+        slayer3d_color color;
+        bool has_tint;
+        slayer3d_color tint;
+        size_t property_count;
+    } slayer3d_map_material;
+
+    /** @brief Box geometry view for version-1 brush maps. */
+    typedef struct slayer3d_map_box_geometry
+    {
+        bool valid;
+        slayer3d_vec3 min;
+        slayer3d_vec3 max;
+    } slayer3d_map_box_geometry;
+
+    /** @brief Loaded brush view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_brush
+    {
+        const char *id;
+        const char *geometry_kind;
+        slayer3d_map_box_geometry box;
+        const char *material;
+        bool has_color;
+        slayer3d_color color;
+        size_t face_count;
+        size_t property_count;
+    } slayer3d_map_brush;
+
+    /** @brief Loaded actor view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_actor
+    {
+        const char *id;
+        const char *archetype;
+        const char *model;
+        const char *sprite;
+        const char *primitive;
+        const char *prefab;
+        bool prefab_linked;
+        const char *display_mode;
+        slayer3d_map_transform transform;
+        bool has_color;
+        slayer3d_color color;
+        size_t property_count;
+    } slayer3d_map_actor;
 
     /**
      * @brief Validate a JSON Slayer3D map document from memory.
@@ -188,6 +271,69 @@ extern "C"
 
     /** @brief Return the number of connection entries in a loaded map. */
     size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of entries in an authored asset catalog. */
+    size_t slayer3d_map_get_asset_count(const slayer3d_map_document *document, slayer3d_map_asset_kind kind);
+
+    /** @brief Read an asset catalog entry by kind and index. Returned strings are borrowed from @p document. */
+    bool slayer3d_map_get_asset(const slayer3d_map_document *document, slayer3d_map_asset_kind kind, size_t index,
+                                slayer3d_map_asset *out_asset);
+
+    /** @brief Read a material by index. Returned string pointers are borrowed from @p document. */
+    bool slayer3d_map_get_material(const slayer3d_map_document *document, size_t index,
+                                   slayer3d_map_material *out_material);
+
+    /** @brief Read a brush by index. Returned string pointers are borrowed from @p document. */
+    bool slayer3d_map_get_brush(const slayer3d_map_document *document, size_t index, slayer3d_map_brush *out_brush);
+
+    /** @brief Read an actor by index. Returned string pointers are borrowed from @p document. */
+    bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index, slayer3d_map_actor *out_actor);
+
+    /** @brief Return the number of root-level arbitrary map properties. */
+    size_t slayer3d_map_get_property_count(const slayer3d_map_document *document);
+
+    /** @brief Return the root-level property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_property_key(const slayer3d_map_document *document, size_t property_index);
+
+    /** @brief Serialize a root-level property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
+                                        size_t *out_json_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the asset property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_asset_property_key(const slayer3d_map_document *document, slayer3d_map_asset_kind kind,
+                                                    size_t asset_index, size_t property_index);
+
+    /** @brief Serialize an asset property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_asset_property_json(const slayer3d_map_document *document, slayer3d_map_asset_kind kind,
+                                              size_t asset_index, const char *key, char **out_json,
+                                              size_t *out_json_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the material property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_material_property_key(const slayer3d_map_document *document, size_t material_index,
+                                                       size_t property_index);
+
+    /** @brief Serialize a material property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_material_property_json(const slayer3d_map_document *document, size_t material_index,
+                                                 const char *key, char **out_json, size_t *out_json_size,
+                                                 char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the brush property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_brush_property_key(const slayer3d_map_document *document, size_t brush_index,
+                                                    size_t property_index);
+
+    /** @brief Serialize a brush property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_brush_property_json(const slayer3d_map_document *document, size_t brush_index,
+                                              const char *key, char **out_json, size_t *out_json_size,
+                                              char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the actor property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_actor_property_key(const slayer3d_map_document *document, size_t actor_index,
+                                                    size_t property_index);
+
+    /** @brief Serialize an actor property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document, size_t actor_index,
+                                              const char *key, char **out_json, size_t *out_json_size,
+                                              char *error_buffer, int error_buffer_size);
 
 #ifdef __cplusplus
 }
