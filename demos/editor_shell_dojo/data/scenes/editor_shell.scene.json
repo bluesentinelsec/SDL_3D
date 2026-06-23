@@ -525,7 +525,16 @@
         "gap": 4,
         "layer": 100,
         "children": [
-          { "id": "ui.editor_shell.toolbar.file.button", "type": "button", "w": 62, "h": 28, "text": "File", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.file.button",
+            "type": "button",
+            "w": 62,
+            "h": 28,
+            "text": "File",
+            "interactive": true,
+            "action": "editor.file.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false }
+          },
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
@@ -733,6 +742,117 @@
               "Grid 256"
             ],
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+          }
+        ]
+      },
+      {
+        "id": "ui.editor_shell.file_menu.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 4,
+        "y": 38,
+        "w": 308,
+        "h": 194,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 140,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false },
+        "children": [
+          { "id": "ui.editor_shell.file_menu.title", "type": "label", "x": 12, "y": 8, "w": 120, "h": 20, "text": "File", "text_scale": 0.46, "layer": 141 },
+          {
+            "id": "ui.editor_shell.file_menu.close.button",
+            "type": "button",
+            "x": 254,
+            "y": 6,
+            "w": 44,
+            "h": 24,
+            "text": "hide",
+            "text_scale": 0.38,
+            "interactive": true,
+            "action": "editor.file.close",
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.new.button",
+            "type": "button",
+            "x": 12,
+            "y": 38,
+            "w": 284,
+            "h": 26,
+            "text": "New Document",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.new",
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.open_path.field",
+            "type": "button",
+            "x": 12,
+            "y": 72,
+            "w": 206,
+            "h": 26,
+            "format": "Open: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.file.open.path.display", "default": "" }],
+            "text_scale": 0.30,
+            "interactive": true,
+            "action": "editor.file.focus.open",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "open", "default": "" },
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.open.button",
+            "type": "button",
+            "x": 226,
+            "y": 72,
+            "w": 70,
+            "h": 26,
+            "text": "Open",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.open",
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save.button",
+            "type": "button",
+            "x": 12,
+            "y": 106,
+            "w": 284,
+            "h": 26,
+            "text": "Save Document",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.save",
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save_as_path.field",
+            "type": "button",
+            "x": 12,
+            "y": 140,
+            "w": 206,
+            "h": 26,
+            "format": "Save As: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.file.save_as.path.display", "default": "" }],
+            "text_scale": 0.30,
+            "interactive": true,
+            "action": "editor.file.focus.save_as",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "save_as", "default": "" },
+            "layer": 141
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save_as.button",
+            "type": "button",
+            "x": 226,
+            "y": 140,
+            "w": 70,
+            "h": 26,
+            "text": "Save As",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.file.save_as",
+            "layer": 141
           }
         ]
       },

@@ -3054,6 +3054,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.map.export") == 0)
         return slayer3d_game_data_export_editor_map_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.map.new") == 0)
+        return slayer3d_game_data_new_editor_map_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.map.save") == 0)
         return slayer3d_game_data_save_editor_map_action(runtime, action);
 

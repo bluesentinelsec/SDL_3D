@@ -21058,6 +21058,133 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     remove_test_dir(texture_dir.parent_path());
 }
 
+TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+    auto visible_file_rects = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr)
+                return true;
+            const std::string name = rect->name;
+            if (name.rfind("ui.editor_shell.file_menu.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_rect resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        return capture.names;
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    emit_signal("signal.editor.file.toggle");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", false));
+    std::vector<std::string> file_rects = visible_file_rects();
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.new.button"),
+              file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.open_path.field"),
+              file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.save.button"),
+              file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.save_as_path.field"),
+              file_rects.end());
+
+    emit_signal("signal.editor.file.focus.open");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", ""), "open");
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion_event{};
+    motion_event.type = SDL_EVENT_MOUSE_MOTION;
+    motion_event.motion.x = 48.0f;
+    motion_event.motion.y = 110.0f;
+    slayer3d_input_process_event(input, &motion_event);
+    SDL_Event text_event{};
+    text_event.type = SDL_EVENT_TEXT_INPUT;
+    text_event.text.text = "test_level.slayermap.json";
+    slayer3d_input_process_event(input, &text_event);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.input.path", ""), "test_level.slayermap.json");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+
+    slayer3d_game_data_create_box_brush_desc box{};
+    box.world_name = "brush.editor_shell.target";
+    box.brush_name = "brush.editor_shell.target.file_probe";
+    box.material_name = "mat.editor.floor";
+    box.min = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    box.max = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+
+    slayer3d_game_data_place_editor_actor_desc actor{};
+    actor.name = "object.editor_shell.file_probe";
+    actor.display_name = "File Probe";
+    actor.archetype = "object.editor_shell.capsule";
+    actor.mesh = "capsule";
+    actor.group = "Objects";
+    actor.position = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    actor.has_position = true;
+    actor.color = slayer3d_color{80, 235, 130, 255};
+    actor.has_color = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &actor, nullptr, 0, error, sizeof(error))) << error;
+
+    const std::filesystem::path save_dir = unique_test_dir("editor_file_menu");
+    const std::filesystem::path save_path = save_dir / "level.slayermap.json";
+    slayer3d_properties_set_string(scene_state, "editor.save_as.path", save_path.string().c_str());
+    emit_signal("signal.editor.file.save_as");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
+    EXPECT_TRUE(std::filesystem::exists(save_path));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
+
+    emit_signal("signal.editor.file.new");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.new.valid", false));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 0);
+    slayer3d_game_data_editor_actor placed{};
+    EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.file_probe", &placed));
+
+    slayer3d_properties_set_string(scene_state, "editor.input.path", save_path.string().c_str());
+    emit_signal("signal.editor.file.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.file_probe", &placed));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(save_dir);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

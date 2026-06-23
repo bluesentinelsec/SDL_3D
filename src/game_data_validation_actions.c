@@ -1025,6 +1025,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.level.save", validate_editor_level_save_action),
         ACTION_RULE_EXACT_HANDLER("editor.level.load", validate_editor_level_load_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.export", validate_editor_map_export_action),
+        ACTION_RULE_EXACT_HANDLER("editor.map.new", validate_editor_map_new_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.save", validate_editor_map_save_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.load", validate_editor_map_load_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),

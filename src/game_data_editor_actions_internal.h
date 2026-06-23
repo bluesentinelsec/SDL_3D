@@ -48,6 +48,7 @@ bool slayer3d_game_data_export_editor_level_action(slayer3d_game_data_runtime *r
 bool slayer3d_game_data_save_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_load_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_export_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_new_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_save_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_load_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);

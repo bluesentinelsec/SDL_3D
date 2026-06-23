@@ -372,6 +372,27 @@ bool slayer3d_game_data_export_editor_map_action(slayer3d_game_data_runtime *run
     return true;
 }
 
+bool slayer3d_game_data_new_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *fragment = json_string(action, "fragment", NULL);
+    char error[256];
+    error[0] = '\0';
+    const bool ok =
+        fragment != NULL && slayer3d_game_data_load_editable_level_fragment_json(
+                                runtime, world_name, fragment, SDL_strlen(fragment), NULL, error, (int)sizeof(error));
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "new map")
+                                : (error[0] != '\0' ? error : "new map failed"));
+    editor_set_string_output(scene_state, outputs, "path_key", "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    return true;
+}
+
 bool slayer3d_game_data_save_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

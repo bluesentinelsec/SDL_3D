@@ -62,6 +62,11 @@ static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hi
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
 }
 
+static bool editor_hit_is_file_menu(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.file_menu.");
+}
+
 static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
@@ -101,6 +106,12 @@ static bool editor_hit_is_texture_edit_control(const slayer3d_ui_layout_hit_regi
            editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.path.");
 }
 
+static bool editor_hit_is_file_edit_control(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.file_menu.open_path.") ||
+           editor_hit_id_has_prefix(hit, "ui.editor_shell.file_menu.save_as_path.");
+}
+
 static const char *editor_property_row_select_action(const slayer3d_ui_layout_hit_region *hit, char *buffer,
                                                      size_t buffer_size)
 {
@@ -134,6 +145,14 @@ static bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runt
     return SDL_strcmp(focus, "search") == 0 || SDL_strcmp(focus, "path") == 0;
 }
 
+static bool editor_file_edit_has_focus(const slayer3d_game_data_runtime *runtime)
+{
+    const char *focus = runtime != NULL && runtime->scene_state != NULL
+                            ? slayer3d_properties_get_string(runtime->scene_state, "editor.file.edit.focus", "")
+                            : "";
+    return SDL_strcmp(focus, "open") == 0 || SDL_strcmp(focus, "save_as") == 0;
+}
+
 static void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -152,6 +171,27 @@ static void editor_update_texture_edit_display(slayer3d_game_data_runtime *runti
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search.display", display);
     SDL_snprintf(display, sizeof(display), "%s%s", path != NULL ? path : "", path_focus && cursor_visible ? "|" : "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.display", display);
+}
+
+static void editor_update_file_edit_display(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const char *focus = slayer3d_properties_get_string(runtime->scene_state, "editor.file.edit.focus", "");
+    const bool open_focus = SDL_strcmp(focus, "open") == 0;
+    const bool save_as_focus = SDL_strcmp(focus, "save_as") == 0;
+    const bool cursor_visible = ((SDL_GetTicks() / 500U) % 2U) == 0U;
+    const char *open_path = slayer3d_properties_get_string(runtime->scene_state, "editor.input.path", "");
+    const char *save_as_path = slayer3d_properties_get_string(runtime->scene_state, "editor.save_as.path", "");
+
+    char display[320];
+    SDL_snprintf(display, sizeof(display), "%s%s", open_path != NULL ? open_path : "",
+                 open_focus && cursor_visible ? "|" : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.file.open.path.display", display);
+    SDL_snprintf(display, sizeof(display), "%s%s", save_as_path != NULL ? save_as_path : "",
+                 save_as_focus && cursor_visible ? "|" : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.file.save_as.path.display", display);
 }
 
 static const slayer3d_ui_layout_hit_region *editor_find_layout_hit_by_id(const slayer3d_ui_layout_model *layout,
@@ -234,6 +274,30 @@ static bool editor_texture_edit_backspace(slayer3d_properties *scene_state, cons
     {
         slayer3d_properties_set_string(scene_state, key, "");
         slayer3d_properties_set_bool(scene_state, "editor.texture.edit.replace_on_text", false);
+        return true;
+    }
+    char buffer[256];
+    SDL_strlcpy(buffer, slayer3d_properties_get_string(scene_state, key, ""), sizeof(buffer));
+    size_t len = SDL_strlen(buffer);
+    if (len == 0U)
+        return false;
+    do
+    {
+        --len;
+    } while (len > 0U && ((unsigned char)buffer[len] & 0xC0U) == 0x80U);
+    buffer[len] = '\0';
+    slayer3d_properties_set_string(scene_state, key, buffer);
+    return true;
+}
+
+static bool editor_file_edit_backspace(slayer3d_properties *scene_state, const char *key)
+{
+    if (scene_state == NULL || key == NULL)
+        return false;
+    if (slayer3d_properties_get_bool(scene_state, "editor.file.edit.replace_on_text", false))
+    {
+        slayer3d_properties_set_string(scene_state, key, "");
+        slayer3d_properties_set_bool(scene_state, "editor.file.edit.replace_on_text", false);
         return true;
     }
     char buffer[256];
@@ -368,6 +432,60 @@ static bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime)
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.search.pending", true);
         }
         editor_update_texture_edit_display(runtime);
+    }
+    return true;
+}
+
+static bool editor_update_file_text_edit(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    editor_update_file_edit_display(runtime);
+    const char *focus = slayer3d_properties_get_string(runtime->scene_state, "editor.file.edit.focus", "");
+    const bool open_focus = SDL_strcmp(focus, "open") == 0;
+    const bool save_as_focus = SDL_strcmp(focus, "save_as") == 0;
+    if (!open_focus && !save_as_focus)
+        return false;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return false;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_ESCAPE))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
+        editor_update_file_edit_display(runtime);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "file edit cancelled");
+        return true;
+    }
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RETURN) ||
+        slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_KP_ENTER))
+    {
+        (void)editor_emit_signal(runtime, open_focus ? "signal.editor.file.open" : "signal.editor.file.save_as");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
+        editor_update_file_edit_display(runtime);
+        return true;
+    }
+
+    const char *edit_key = open_focus ? "editor.input.path" : "editor.save_as.path";
+    bool changed = false;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE) ||
+        slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DELETE))
+    {
+        changed = editor_file_edit_backspace(runtime->scene_state, edit_key) || changed;
+    }
+    const char *input_text = slayer3d_input_get_text_input(input);
+    if (input_text != NULL && input_text[0] != '\0' &&
+        slayer3d_properties_get_bool(runtime->scene_state, "editor.file.edit.replace_on_text", false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, edit_key, "");
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.file.edit.replace_on_text", false);
+    }
+    changed = editor_property_edit_append_text(runtime->scene_state, edit_key, input_text, 240U) || changed;
+    if (changed)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                       open_focus ? "editing open path" : "editing save as path");
+        editor_update_file_edit_display(runtime);
     }
     return true;
 }
@@ -622,6 +740,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
@@ -655,7 +775,8 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
     if (runtime != NULL &&
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
          SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.things.", 14) == 0 ||
-         SDL_strncmp(action, "editor.inspector.", 17) == 0 || SDL_strncmp(action, "editor.property.", 16) == 0))
+         SDL_strncmp(action, "editor.file.", 12) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
+         SDL_strncmp(action, "editor.property.", 16) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
@@ -673,6 +794,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_arr(buttons))
         return true;
     editor_update_texture_edit_display(runtime);
+    editor_update_file_edit_display(runtime);
 
     slayer3d_input_manager *input = runtime_input(runtime);
     float mouse_x = 0.0f;
@@ -688,6 +810,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
     const bool property_focus_active = editor_property_edit_has_focus(runtime);
     const bool texture_focus_active = editor_texture_edit_has_focus(runtime);
+    const bool file_focus_active = editor_file_edit_has_focus(runtime);
     if (property_focus_active && clicked && !editor_hit_is_property_control(hit))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
@@ -705,6 +828,15 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_ui_layout_destroy(layout);
         return true;
     }
+    if (file_focus_active && clicked && !editor_hit_is_file_edit_control(hit))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
+        editor_update_file_edit_display(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
     if (property_focus_active && !clicked)
     {
         (void)editor_update_property_text_edit(runtime);
@@ -716,6 +848,14 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     if (texture_focus_active && !clicked)
     {
         (void)editor_update_texture_text_edit(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    if (file_focus_active && !clicked)
+    {
+        (void)editor_update_file_text_edit(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
         slayer3d_ui_layout_destroy(layout);
@@ -752,7 +892,8 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         }
     }
     if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
-        editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) || editor_hit_is_console(hit))
+        editor_hit_is_file_menu(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
+        editor_hit_is_console(hit))
     {
         if (out_consumed != NULL)
             *out_consumed = true;
