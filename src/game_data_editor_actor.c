@@ -1860,6 +1860,13 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
     desc.has_scale = obj_get(action, "scale") != NULL;
     desc.color = json_color(action, "color", (slayer3d_color){120, 200, 255, 210});
     desc.has_color = obj_get(action, "color") != NULL;
+    if (slayer3d_properties_get_string(properties, "display_mode", NULL) == NULL)
+    {
+        const char *role = slayer3d_properties_get_string(properties, "role", "");
+        slayer3d_properties_set_string(
+            properties, "display_mode",
+            (SDL_strcmp(role, "trigger") == 0 || SDL_strcmp(role, "sensor") == 0) ? "wireframe" : "solid");
+    }
     desc.properties = properties;
 
     char actor_name[128];
@@ -1869,6 +1876,200 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
     slayer3d_properties_destroy(properties);
     publish_editor_actor_outputs(runtime, outputs, ok, ok ? json_string(action, "message", "actor placed") : error,
                                  ok ? actor_name : "");
+    return true;
+}
+
+static const char *editor_actor_update_target_name(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    const char *target_type = json_string(action, "target_type", "selection");
+    if (SDL_strcmp(target_type, "selection") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit &&
+            selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR && selection.element_name != NULL &&
+            selection.element_name[0] != '\0')
+        {
+            return selection.element_name;
+        }
+        set_error(error_buffer, error_buffer_size, "select an actor or object before updating it");
+        return NULL;
+    }
+
+    const char *target_from_state = json_string(action, "target_from_state", NULL);
+    if (target_from_state != NULL && runtime != NULL && runtime->scene_state != NULL)
+        return slayer3d_properties_get_string(runtime->scene_state, target_from_state, NULL);
+    const char *target = json_string(action, "target", NULL);
+    if (target == NULL || target[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "actor update requires a target actor");
+        return NULL;
+    }
+    return target;
+}
+
+static slayer3d_bounding_box editor_actor_runtime_bounds(const editor_actor_runtime *actor)
+{
+    const slayer3d_vec3 scale = actor != NULL ? actor->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    slayer3d_vec3 half = slayer3d_vec3_make(0.5f * scale.x, 0.5f * scale.y, 0.5f * scale.z);
+    const char *mesh = actor != NULL ? actor->mesh : NULL;
+    if (mesh != NULL && SDL_strcmp(mesh, "capsule") == 0)
+        half = slayer3d_vec3_make(0.35f * scale.x, 0.9f * scale.y, 0.35f * scale.z);
+    else if (mesh != NULL && SDL_strcmp(mesh, "rectangle") == 0)
+        half = slayer3d_vec3_make(0.45f * scale.x, 0.9f * scale.y, 0.25f * scale.z);
+
+    const slayer3d_vec3 position = actor != NULL ? actor->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(position.x - half.x, position.y, position.z - half.z);
+    bounds.max = slayer3d_vec3_make(position.x + half.x, position.y + half.y * 2.0f, position.z + half.z);
+    return bounds;
+}
+
+static void editor_actor_format_vec3(slayer3d_vec3 value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0u)
+        return;
+    SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value.x, value.y, value.z);
+}
+
+static void editor_actor_format_color(slayer3d_color color, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0u)
+        return;
+    SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned int)color.r, (unsigned int)color.g,
+                 (unsigned int)color.b, (unsigned int)color.a);
+}
+
+static void publish_editor_actor_inspector_values(slayer3d_game_data_runtime *runtime,
+                                                  const editor_actor_runtime *actor)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    if (scene_state == NULL || actor == NULL)
+        return;
+    char value[256];
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "Actor");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title",
+                                   actor->display_name != NULL && actor->display_name[0] != '\0' ? actor->display_name
+                                                                                                 : actor->name);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.count", "1 selected");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.id",
+                                   actor->name != NULL ? actor->name : "");
+    editor_actor_format_vec3(actor->position, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.position", value);
+    editor_actor_format_vec3(actor->scale, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.size", value);
+    slayer3d_properties_set_string(
+        scene_state, "editor.inspector.selection.material",
+        actor->mesh != NULL && actor->mesh[0] != '\0' ? actor->mesh : (actor->model != NULL ? actor->model : ""));
+    editor_actor_format_vec3(actor->rotation, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.face", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.contents",
+                                   actor->archetype != NULL ? actor->archetype : "");
+    editor_actor_format_color(actor->color, value, sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.color", value);
+    slayer3d_properties_set_color(scene_state, "editor.inspector.actor.color", actor->color);
+    slayer3d_properties_set_bool(scene_state, "editor.inspector.actor.color.dirty", false);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.r", (int)actor->color.r);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.g", (int)actor->color.g);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.b", (int)actor->color.b);
+    slayer3d_properties_set_int(scene_state, "editor.inspector.actor.color.a", (int)actor->color.a);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.actor.color.label", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab",
+                                   actor->prefab != NULL ? actor->prefab : "");
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags",
+                                   actor->group != NULL ? actor->group : "");
+}
+
+bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    char error[192];
+    error[0] = '\0';
+    const char *target = editor_actor_update_target_name(runtime, action, error, sizeof(error));
+    if (target == NULL || target[0] == '\0')
+    {
+        publish_editor_actor_outputs(runtime, outputs, false,
+                                     error[0] != '\0' ? error : "actor update requires a target actor", "");
+        return true;
+    }
+
+    editor_actor_runtime *actor = find_editor_actor_mutable(runtime, target);
+    if (actor == NULL)
+    {
+        SDL_snprintf(error, sizeof(error), "editor actor '%s' not found", target);
+        publish_editor_actor_outputs(runtime, outputs, false, error, target);
+        return true;
+    }
+
+    bool changed = false;
+    if (obj_get(action, "position") != NULL)
+    {
+        actor->position = json_vec3(action, "position", actor->position);
+        changed = true;
+    }
+    if (obj_get(action, "rotation") != NULL)
+    {
+        actor->rotation = json_vec3(action, "rotation", actor->rotation);
+        changed = true;
+    }
+    if (obj_get(action, "scale") != NULL)
+    {
+        actor->scale = json_vec3(action, "scale", actor->scale);
+        changed = true;
+    }
+    const char *color_key = json_string(action, "color_key", NULL);
+    if (color_key != NULL && color_key[0] != '\0')
+    {
+        const slayer3d_value *color_value = runtime != NULL && runtime->scene_state != NULL
+                                                ? slayer3d_properties_get_value(runtime->scene_state, color_key)
+                                                : NULL;
+        if (color_value == NULL || color_value->type != SLAYER3D_VALUE_COLOR)
+        {
+            publish_editor_actor_outputs(runtime, outputs, false, "actor update color_key must reference a color",
+                                         target);
+            return true;
+        }
+        actor->color = color_value->as_color;
+        changed = true;
+    }
+    else if (obj_get(action, "color") != NULL)
+    {
+        actor->color = json_color(action, "color", actor->color);
+        changed = true;
+    }
+    const char *display_mode = json_string(action, "display_mode", NULL);
+    if (display_mode != NULL && display_mode[0] != '\0')
+    {
+        if (!editor_property_ensure_properties(&actor->properties))
+        {
+            publish_editor_actor_outputs(runtime, outputs, false, "failed to allocate actor properties", target);
+            return true;
+        }
+        slayer3d_properties_set_string(actor->properties, "display_mode", display_mode);
+        changed = true;
+    }
+    if (!changed)
+    {
+        publish_editor_actor_outputs(runtime, outputs, false, "actor update has no editable fields", target);
+        return true;
+    }
+
+    mark_editor_actors_dirty(runtime);
+    slayer3d_game_data_editor_selection selection;
+    SDL_zero(selection);
+    if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit &&
+        selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR && selection.element_name != NULL &&
+        SDL_strcmp(selection.element_name, target) == 0)
+    {
+        runtime->editor_active_selection.point = actor->position;
+        runtime->editor_active_selection.bounds = editor_actor_runtime_bounds(actor);
+        runtime->editor_active_selection.has_bounds = true;
+        publish_editor_selection_properties(runtime, &runtime->editor_active_selection,
+                                            SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
+        publish_editor_actor_inspector_values(runtime, actor);
+    }
+    publish_editor_actor_outputs(runtime, outputs, true, json_string(action, "message", "actor updated"), target);
     return true;
 }
 

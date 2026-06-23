@@ -133,6 +133,7 @@
         "facing": [0, 0, 1]
       },
       "color": [80, 150, 255, 190],
+      "display_mode": "solid",
       "properties": {
         "team": "player",
         "spawn_group": "default"
@@ -150,6 +151,7 @@
         "facing": [1, 0, -1]
       },
       "color": [230, 88, 88, 220],
+      "display_mode": "wireframe",
       "properties": {
         "team": "enemy",
         "health": 100,

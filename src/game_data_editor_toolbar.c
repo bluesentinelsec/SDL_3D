@@ -384,7 +384,7 @@ static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runt
         return false;
 
     const float scroll_min = 0.0f;
-    const float scroll_max = 240.0f;
+    const float scroll_max = 300.0f;
     const float scroll_step = 60.0f;
     const float thumb_h = 66.0f;
     const float travel = track->rect.h - thumb_h;
@@ -654,8 +654,8 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
     }
     if (runtime != NULL &&
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
-         SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
-         SDL_strncmp(action, "editor.property.", 16) == 0))
+         SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.things.", 14) == 0 ||
+         SDL_strncmp(action, "editor.inspector.", 17) == 0 || SDL_strncmp(action, "editor.property.", 16) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);

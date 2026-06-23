@@ -261,6 +261,7 @@
         "sprite": { "type": "string", "minLength": 1 },
         "prefab": { "type": "string", "minLength": 1 },
         "prefab_linked": { "type": "boolean" },
+        "display_mode": { "enum": ["solid", "wireframe"] },
         "primitive": {
           "enum": ["box", "cube", "capsule", "sphere", "cylinder", "rectangle", "billboard", "trigger", "light", "effect"]
         },

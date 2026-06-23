@@ -605,6 +605,19 @@ static bool map_validate_primitive(map_validation_context *ctx, yyjson_val *acto
                      "light, or effect");
 }
 
+static bool map_validate_actor_display_mode(map_validation_context *ctx, yyjson_val *actor, const char *path)
+{
+    yyjson_val *display_mode = map_obj_get(actor, "display_mode");
+    if (display_mode == NULL)
+        return true;
+    if (!yyjson_is_str(display_mode))
+        return map_error(ctx, path, "actor display_mode must be solid or wireframe");
+    const char *value = yyjson_get_str(display_mode);
+    if (SDL_strcmp(value, "solid") == 0 || SDL_strcmp(value, "wireframe") == 0)
+        return true;
+    return map_error(ctx, path, "actor display_mode must be solid or wireframe");
+}
+
 static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *actors = map_obj_get(root, "actors");
@@ -622,6 +635,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
         char sprite_path[MAP_PATH_MAX];
         char primitive_path[MAP_PATH_MAX];
         char prefab_path[MAP_PATH_MAX];
+        char display_mode_path[MAP_PATH_MAX];
         map_format_path(path, sizeof(path), "$.actors[%zu]", i);
         map_format_path(id_path, sizeof(id_path), "%s.id", path);
         map_format_path(transform_path, sizeof(transform_path), "%s.transform", path);
@@ -630,6 +644,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
         map_format_path(sprite_path, sizeof(sprite_path), "%s.sprite", path);
         map_format_path(primitive_path, sizeof(primitive_path), "%s.primitive", path);
         map_format_path(prefab_path, sizeof(prefab_path), "%s.prefab", path);
+        map_format_path(display_mode_path, sizeof(display_mode_path), "%s.display_mode", path);
         yyjson_val *actor = yyjson_arr_get(actors, i);
         if (!yyjson_is_obj(actor))
             return map_error(ctx, path, "actor entry must be an object");
@@ -640,6 +655,7 @@ static bool map_validate_actors(map_validation_context *ctx, yyjson_val *root)
             !map_validate_asset_reference(ctx, actor, "sprite", sprite_path, "actor sprite") ||
             !map_optional_non_empty_string(ctx, actor, "prefab", prefab_path, "actor prefab") ||
             !map_validate_primitive(ctx, actor, primitive_path) ||
+            !map_validate_actor_display_mode(ctx, actor, display_mode_path) ||
             !map_validate_transform(ctx, map_obj_get(actor, "transform"), transform_path) ||
             !map_validate_optional_color(ctx, actor, "color", color_path, "actor color") ||
             !map_validate_properties(ctx, map_obj_get(actor, "properties"), path))

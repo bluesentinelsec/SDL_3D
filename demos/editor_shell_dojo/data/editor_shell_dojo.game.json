@@ -305,6 +305,18 @@
     "signal.editor.inspector.brush.color.a.up",
     "signal.editor.inspector.brush.color.apply",
     "signal.editor.inspector.brush.color.reset",
+    "signal.editor.inspector.actor.color.r.down",
+    "signal.editor.inspector.actor.color.r.up",
+    "signal.editor.inspector.actor.color.g.down",
+    "signal.editor.inspector.actor.color.g.up",
+    "signal.editor.inspector.actor.color.b.down",
+    "signal.editor.inspector.actor.color.b.up",
+    "signal.editor.inspector.actor.color.a.down",
+    "signal.editor.inspector.actor.color.a.up",
+    "signal.editor.inspector.actor.color.apply",
+    "signal.editor.inspector.actor.color.reset",
+    "signal.editor.inspector.actor.display.solid",
+    "signal.editor.inspector.actor.display.wireframe",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -633,10 +645,27 @@
     "signal.editor.actor.select_slot.3",
     "signal.editor.actor.select_slot.4",
     "signal.editor.actor.select_slot.5",
+    "signal.editor.actor.select_slot.6",
+    "signal.editor.actor.select_slot.7",
+    "signal.editor.actor.select_slot.8",
+    "signal.editor.actor.select_slot.9",
+    "signal.editor.actor.select_slot.10",
+    "signal.editor.actor.select_slot.11",
+    "signal.editor.actor.select_slot.12",
+    "signal.editor.actor.select_slot.13",
+    "signal.editor.actor.select_slot.14",
+    "signal.editor.actor.select_slot.15",
+    "signal.editor.actor.select_slot.16",
+    "signal.editor.actor.select_slot.17",
+    "signal.editor.actor.select_slot.18",
     "signal.editor.actor.refresh",
     "signal.editor.actor.viewer.toggle",
     "signal.editor.actor.group.placeholders.toggle",
     "signal.editor.actor.group.models.toggle",
+    "signal.editor.things.category.actors",
+    "signal.editor.things.category.objects",
+    "signal.editor.things.category.lights",
+    "signal.editor.things.category.effects",
     "signal.editor.open",
     "signal.editor.export",
     "signal.editor.save_as",
@@ -1083,6 +1112,8 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
@@ -1097,12 +1128,15 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Actors" },
           {
             "type": "editor.actor.scan",
             "collection": "editor.actors",
-            "slot_count": 6,
+            "slot_count": 19,
             "outputs": {
               "count_key": "editor.actor.browser.count",
               "status_key": "editor.actor.scan.status"
@@ -1166,12 +1200,90 @@
         ]
       },
       {
+        "signal": "signal.editor.actor.select_slot.6",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 6 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.7",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 7 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.8",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 8 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.9",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 9 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.10",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 10 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.11",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 11 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.12",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 12 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.13",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 13 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.14",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 14 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.15",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 15 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.16",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 16 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.17",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 17 }
+        ]
+      },
+      {
+        "signal": "signal.editor.actor.select_slot.18",
+        "actions": [
+          { "type": "editor.actor.select_index", "collection": "editor.actors", "index": 18 }
+        ]
+      },
+      {
         "signal": "signal.editor.actor.refresh",
         "actions": [
           {
             "type": "editor.actor.scan",
             "collection": "editor.actors",
-            "slot_count": 6,
+            "slot_count": 19,
             "outputs": {
               "count_key": "editor.actor.browser.count",
               "status_key": "editor.actor.scan.status"
@@ -1199,6 +1311,35 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.actor.group.models.collapsed", "default": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor models group toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.actors",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Actors" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things actors category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.objects",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Objects" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things objects category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.lights",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Lights" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things lights category" }
+        ]
+      },
+      {
+        "signal": "signal.editor.things.category.effects",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.things.category", "value": "Effects" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things effects category" }
         ]
       },
       {
@@ -1687,14 +1828,14 @@
       {
         "signal": "signal.editor.inspector.scroll.up",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled up" }
         ]
       },
       {
         "signal": "signal.editor.inspector.scroll.down",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 240.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
         ]
       },
@@ -1759,6 +1900,177 @@
             }
           },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.r.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "r",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.r.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "r",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.g.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "g",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.g.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "g",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.b.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "b",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.b.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "b",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.a.down",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "a",
+            "delta": -16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.a.up",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color edited",
+            "channel": "a",
+            "delta": 16
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.apply",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color_key": "editor.inspector.actor.color",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.inspector.actor.color.dirty", "value": false },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.color.reset",
+        "actions": [
+          {
+            "type": "editor.inspector.brush.color_channel",
+            "color_key": "editor.inspector.actor.color",
+            "dirty_key": "editor.inspector.actor.color.dirty",
+            "message": "thing color reset",
+            "color": [120, 200, 255, 210]
+          },
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color_key": "editor.inspector.actor.color",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.inspector.actor.color.dirty", "value": false },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.display.solid",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "display_mode": "solid",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.actor.display.wireframe",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "display_mode": "wireframe",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          }
         ]
       },
       {
@@ -3364,6 +3676,21 @@
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_model" },
             "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_object" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_light" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_effect" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
           }
         ]
       },
@@ -3473,6 +3800,72 @@
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_model" },
+            "then": [
+              {
+                "type": "editor.actor.place_selected",
+                "collection": "editor.actors",
+                "index_key": "editor.actor.selected_index",
+                "scene": "scene.editor_shell.dojo",
+                "position_from": "placement_preview",
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor.actor.message}" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_object" },
+            "then": [
+              {
+                "type": "editor.actor.place_selected",
+                "collection": "editor.actors",
+                "index_key": "editor.actor.selected_index",
+                "scene": "scene.editor_shell.dojo",
+                "position_from": "placement_preview",
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor.actor.message}" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_light" },
+            "then": [
+              {
+                "type": "editor.actor.place_selected",
+                "collection": "editor.actors",
+                "index_key": "editor.actor.selected_index",
+                "scene": "scene.editor_shell.dojo",
+                "position_from": "placement_preview",
+                "outputs": {
+                  "valid_key": "editor.actor.valid",
+                  "message_key": "editor.actor.message",
+                  "actor_key": "editor.actor.name",
+                  "dirty_key": "editor.actor.dirty",
+                  "revision_key": "editor.actor.revision",
+                  "count_key": "editor.actor.count"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor.actor.message}" }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "actor_effect" },
             "then": [
               {
                 "type": "editor.actor.place_selected",

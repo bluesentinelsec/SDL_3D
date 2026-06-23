@@ -168,23 +168,6 @@ static bool editor_asset_uri_matches_relative_path(const char *asset_uri, const 
     return editor_path_text_equal(asset_uri + sizeof(prefix) - 1U, relative_path);
 }
 
-static char *editor_asset_uri_from_relative_path(const char *relative_path)
-{
-    static const char prefix[] = "asset://";
-    if (relative_path == NULL || relative_path[0] == '\0' || editor_path_absolute(relative_path))
-        return NULL;
-    const size_t prefix_len = sizeof(prefix) - 1U;
-    const size_t relative_len = SDL_strlen(relative_path);
-    char *uri = (char *)SDL_malloc(prefix_len + relative_len + 1U);
-    if (uri == NULL)
-        return NULL;
-    SDL_memcpy(uri, prefix, prefix_len);
-    for (size_t i = 0; i < relative_len; ++i)
-        uri[prefix_len + i] = editor_path_compare_char(relative_path[i]);
-    uri[prefix_len + relative_len] = '\0';
-    return uri;
-}
-
 static char *editor_resolve_directory(slayer3d_game_data_runtime *runtime, const char *directory)
 {
     if (directory == NULL || directory[0] == '\0')
@@ -622,21 +605,7 @@ static const char *editor_texture_material_reference(const editor_texture_scan_e
 {
     if (owned != NULL)
         *owned = NULL;
-    if (entry == NULL)
-        return NULL;
-    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' && !editor_path_absolute(entry->relative_path))
-    {
-        char *asset_uri = editor_asset_uri_from_relative_path(entry->relative_path);
-        if (asset_uri != NULL)
-        {
-            if (owned != NULL)
-                *owned = asset_uri;
-            else
-                SDL_free(asset_uri);
-            return asset_uri;
-        }
-    }
-    return entry->path;
+    return entry != NULL ? entry->path : NULL;
 }
 
 static bool editor_append_brush_material(brush_world_runtime *world_runtime, const char *material_name,
@@ -1031,8 +1000,19 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
             editor_brush_material_index_by_name_or_texture(world_runtime, NULL, entry->path, entry->relative_path);
         if (existing_index >= 0)
         {
-            const slayer3d_game_data_brush_material *material = &world_runtime->desc.materials[existing_index];
+            slayer3d_game_data_brush_material *material =
+                (slayer3d_game_data_brush_material *)&world_runtime->desc.materials[existing_index];
             SDL_strlcpy(entry->material, material->name != NULL ? material->name : "", sizeof(entry->material));
+            if (entry->path != NULL && entry->path[0] != '\0' && material->texture != NULL &&
+                !editor_path_text_equal(material->texture, entry->path))
+            {
+                char *texture_path = SDL_strdup(entry->path);
+                if (texture_path != NULL)
+                {
+                    SDL_free((void *)material->texture);
+                    material->texture = texture_path;
+                }
+            }
             entry->sort_order = existing_index;
         }
         else
@@ -1374,7 +1354,7 @@ static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, sl
     SDL_strlcpy(entry->sensor_profile, "model", sizeof(entry->sensor_profile));
     entry->color = (slayer3d_color){112, 178, 255, 210};
     entry->scale = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
-    entry->sort_order = 1000 + list->count;
+    entry->sort_order = 5000 + list->count;
     entry->scanned_model = true;
     if (entry->filename == NULL || entry->path == NULL || entry->relative_path == NULL)
     {
@@ -1567,6 +1547,7 @@ static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runti
 
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", index);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected.label", label);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", id);
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
@@ -1626,6 +1607,42 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    &list, "simple_robot", "Robot", "box", "model.editor_shell.simple_robot", "actor.editor_shell.robot",
                    "actor.editor_shell.simple_robot", "Meshes", "actor_robot", "simple_robot", "actor", "robot",
                    (slayer3d_color){112, 178, 255, 210}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 4);
+    ok = ok && editor_actor_scan_list_append_builtin(&list, "object_box", "Box", "box", "", "object.editor_shell.box",
+                                                     "object.editor_shell.box", "Objects", "actor_object", "object_box",
+                                                     "object", "box", (slayer3d_color){128, 174, 245, 190},
+                                                     slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1000);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_capsule", "Capsule", "capsule", "", "object.editor_shell.capsule",
+                   "object.editor_shell.capsule", "Objects", "actor_object", "object_capsule", "object", "capsule",
+                   (slayer3d_color){120, 210, 180, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_sphere", "Sphere", "sphere", "", "object.editor_shell.sphere",
+                   "object.editor_shell.sphere", "Objects", "actor_object", "object_sphere", "object", "sphere",
+                   (slayer3d_color){198, 158, 245, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1002);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "object_rectangle", "Rectangle", "rectangle", "", "object.editor_shell.rectangle",
+                   "object.editor_shell.rectangle", "Objects", "actor_object", "object_rectangle", "object",
+                   "rectangle", (slayer3d_color){230, 166, 108, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1003);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_ambient", "Ambient", "sphere", "", "light.editor_shell.ambient",
+                   "light.editor_shell.ambient", "Lights", "actor_light", "ambient_light", "light", "ambient",
+                   (slayer3d_color){190, 205, 255, 165}, slayer3d_vec3_make(0.7f, 0.7f, 0.7f), 1500);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_directional", "Directional", "rectangle", "", "light.editor_shell.directional",
+                   "light.editor_shell.directional", "Lights", "actor_light", "directional_light", "light",
+                   "directional", (slayer3d_color){255, 238, 160, 205}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 1501);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_point", "Point", "sphere", "", "light.editor_shell.point", "light.editor_shell.point",
+                   "Lights", "actor_light", "point_light", "light", "point", (slayer3d_color){255, 230, 112, 220},
+                   slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 1502);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_spot", "Spot", "sphere", "", "light.editor_shell.spot", "light.editor_shell.spot",
+                   "Lights", "actor_light", "spot_light", "light", "spot", (slayer3d_color){255, 208, 130, 210},
+                   slayer3d_vec3_make(0.75f, 0.75f, 0.75f), 1503);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_area", "Area", "rectangle", "", "light.editor_shell.area", "light.editor_shell.area",
+                   "Lights", "actor_light", "area_light", "light", "area", (slayer3d_color){255, 222, 178, 195},
+                   slayer3d_vec3_make(1.5f, 0.2f, 1.5f), 1504);
     ok = ok &&
          editor_actor_scan_list_append_builtin(
              &list, "particle_emitter", "Particle Emitter", "sphere", "", "actor.editor_shell.effect.particles",
@@ -1733,6 +1750,58 @@ static void editor_actor_publish_place_outputs(slayer3d_game_data_runtime *runti
     editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_actor_count : 0);
 }
 
+static slayer3d_bounding_box editor_actor_selection_bounds(const editor_actor_runtime *actor)
+{
+    slayer3d_vec3 scale = actor != NULL ? actor->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    slayer3d_vec3 half = slayer3d_vec3_make(0.5f * scale.x, 0.5f * scale.y, 0.5f * scale.z);
+    const char *mesh = actor != NULL ? actor->mesh : NULL;
+    if (mesh != NULL && SDL_strcmp(mesh, "capsule") == 0)
+        half = slayer3d_vec3_make(0.35f * scale.x, 0.9f * scale.y, 0.35f * scale.z);
+    else if (mesh != NULL && SDL_strcmp(mesh, "rectangle") == 0)
+        half = slayer3d_vec3_make(0.45f * scale.x, 0.9f * scale.y, 0.25f * scale.z);
+
+    slayer3d_bounding_box bounds;
+    const slayer3d_vec3 position = actor != NULL ? actor->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bounds.min = slayer3d_vec3_make(position.x - half.x, position.y, position.z - half.z);
+    bounds.max = slayer3d_vec3_make(position.x + half.x, position.y + half.y * 2.0f, position.z + half.z);
+    return bounds;
+}
+
+static void editor_select_placed_actor(slayer3d_game_data_runtime *runtime, const char *actor_name)
+{
+    if (runtime == NULL || actor_name == NULL || actor_name[0] == '\0')
+        return;
+    const editor_actor_runtime *actor = find_editor_actor(runtime, actor_name);
+    if (actor == NULL)
+        return;
+
+    clear_editor_selected_brushes(runtime);
+    init_editor_selection(&runtime->editor_active_selection);
+    runtime->editor_active_selection.hit = true;
+    runtime->editor_active_selection.type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    runtime->editor_active_selection.world_name = "editor_actors";
+    runtime->editor_active_selection.element_name = actor->name;
+    runtime->editor_active_selection.element_index = (int)(actor - runtime->editor_actors);
+    runtime->editor_active_selection.face_index = -1;
+    runtime->editor_active_selection.point = actor->position;
+    runtime->editor_active_selection.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    runtime->editor_active_selection.bounds = editor_actor_selection_bounds(actor);
+    runtime->editor_active_selection.has_bounds = true;
+    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selected_brush_count(runtime);
+}
+
+static const char *editor_actor_placement_noun(const char *role)
+{
+    if (role != NULL && SDL_strcmp(role, "object") == 0)
+        return "object";
+    if (role != NULL && SDL_strcmp(role, "light") == 0)
+        return "light";
+    if (role != NULL && SDL_strcmp(role, "effect") == 0)
+        return "effect";
+    return "actor";
+}
+
 static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");
@@ -1784,8 +1853,25 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
     }
     slayer3d_properties_set_string(properties, "classname", classname[0] != '\0' ? classname : id);
     slayer3d_properties_set_string(properties, "role", role[0] != '\0' ? role : "actor");
+    if (SDL_strcmp(role, "trigger") == 0 || SDL_strcmp(role, "sensor") == 0)
+        slayer3d_properties_set_string(properties, "display_mode", "wireframe");
+    else
+        slayer3d_properties_set_string(properties, "display_mode", "solid");
     if (sensor_profile[0] != '\0')
         slayer3d_properties_set_string(properties, "sensor_profile", sensor_profile);
+    if (SDL_strcmp(role, "light") == 0)
+    {
+        slayer3d_properties_set_string(properties, "light_type", sensor_profile[0] != '\0' ? sensor_profile : "point");
+        slayer3d_properties_set_string(properties, "light_kind", "dynamic");
+        slayer3d_properties_set_float(properties, "light_intensity", 1.0f);
+        slayer3d_properties_set_float(properties, "light_range", 8.0f);
+    }
+    else if (SDL_strcmp(role, "effect") == 0)
+    {
+        slayer3d_properties_set_string(properties, "effect_kind",
+                                       sensor_profile[0] != '\0' ? sensor_profile : "effect");
+        slayer3d_properties_set_bool(properties, "preview", true);
+    }
     slayer3d_properties_set_string(properties, "actor_browser_id", id);
     if (model[0] != '\0')
         slayer3d_properties_set_string(properties, "model", model);
@@ -1836,7 +1922,11 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
     slayer3d_properties_destroy(properties);
     char message[192];
     if (ok)
-        SDL_snprintf(message, sizeof(message), "%s actor placed", label[0] != '\0' ? label : id);
+    {
+        editor_select_placed_actor(runtime, actor_name);
+        SDL_snprintf(message, sizeof(message), "%s %s placed", label[0] != '\0' ? label : id,
+                     editor_actor_placement_noun(role));
+    }
     editor_actor_publish_place_outputs(runtime, outputs, ok, ok ? message : error, ok ? actor_name : "");
     return true;
 }
@@ -2050,6 +2140,12 @@ static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime
     const char *color_key = json_string(action, "color_key", "editor.inspector.brush.color");
     if (color_key == NULL || color_key[0] == '\0')
         return false;
+    const char *dirty_key = json_string(action, "dirty_key", "editor.inspector.brush.color.dirty");
+    if (dirty_key == NULL || dirty_key[0] == '\0')
+        return false;
+    const char *message = json_string(action, "message", "brush color edited");
+    if (message == NULL || message[0] == '\0')
+        return false;
 
     slayer3d_color color =
         slayer3d_properties_get_color(runtime->scene_state, color_key, (slayer3d_color){180, 184, 192, 255});
@@ -2081,8 +2177,8 @@ static bool execute_editor_brush_color_channel_action(slayer3d_game_data_runtime
     }
 
     publish_editor_brush_color_draft(runtime->scene_state, color_key, color);
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.brush.color.dirty", true);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush color edited");
+    slayer3d_properties_set_bool(runtime->scene_state, dirty_key, true);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     return true;
 }
 
@@ -2993,6 +3089,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.actor.place") == 0)
         return slayer3d_game_data_place_editor_actor_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.actor.update") == 0)
+        return slayer3d_game_data_update_editor_actor_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.prefab.define") == 0)
         return slayer3d_game_data_place_editor_prefab_action(runtime, action);

@@ -1039,6 +1039,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.player_start.apply", validate_editor_player_start_apply_action),
         ACTION_RULE_EXACT_HANDLER("editor.player_start.delete", validate_editor_player_start_delete_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.place", validate_editor_actor_place_action),
+        ACTION_RULE_EXACT_HANDLER("editor.actor.update", validate_editor_actor_update_action),
         ACTION_RULE_EXACT_HANDLER("editor.prefab.define", validate_editor_prefab_define_action),
         ACTION_RULE_EXACT_HANDLER("editor.prefab.instantiate", validate_editor_prefab_instantiate_action),
         ACTION_RULE_EXACT_HANDLER("editor.prefab.unlink_actor", validate_editor_prefab_unlink_actor_action),
