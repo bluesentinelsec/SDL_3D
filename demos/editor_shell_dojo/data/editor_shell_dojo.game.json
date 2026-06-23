@@ -672,6 +672,7 @@
     "signal.editor.file.open",
     "signal.editor.file.save",
     "signal.editor.file.save_as",
+    "signal.editor.file.validate",
     "signal.editor.file.focus.open",
     "signal.editor.file.focus.save_as",
     "signal.editor.open",
@@ -4576,6 +4577,40 @@
           },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
+        ]
+      },
+      {
+        "signal": "signal.editor.file.validate",
+        "actions": [
+          {
+            "type": "editor.map.validate",
+            "world": "brush.editor_shell.target",
+            "outputs": {
+              "valid_key": "editor.validate.valid",
+              "message_key": "editor.validate.message",
+              "warning_count_key": "editor.validate.warning_count",
+              "error_count_key": "editor.validate.error_count",
+              "diagnostic0_key": "editor.validate.diagnostic0",
+              "diagnostic1_key": "editor.validate.diagnostic1",
+              "diagnostic2_key": "editor.validate.diagnostic2",
+              "size_key": "editor.validate.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.validate.diagnostic0" },
+          { "type": "console.write", "message_from_state": "editor.validate.diagnostic1" },
+          { "type": "console.write", "message_from_state": "editor.validate.diagnostic2" },
+          { "type": "console.write", "message_from_state": "editor.validate.message" },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]
       },

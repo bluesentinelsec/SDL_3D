@@ -450,6 +450,90 @@ bool slayer3d_game_data_load_editor_map_action(slayer3d_game_data_runtime *runti
     return true;
 }
 
+typedef struct editor_map_validation_diagnostics
+{
+    int warnings;
+    int errors;
+    char messages[3][256];
+} editor_map_validation_diagnostics;
+
+static void editor_map_validation_diagnostic(void *userdata, slayer3d_map_diagnostic_severity severity,
+                                             const char *json_path, const char *message)
+{
+    editor_map_validation_diagnostics *diagnostics = (editor_map_validation_diagnostics *)userdata;
+    if (diagnostics == NULL)
+        return;
+    if (severity == SLAYER3D_MAP_DIAGNOSTIC_WARNING)
+        diagnostics->warnings += 1;
+    else
+        diagnostics->errors += 1;
+
+    const int index = diagnostics->warnings + diagnostics->errors - 1;
+    if (index < 0 || index >= (int)SDL_arraysize(diagnostics->messages))
+        return;
+    SDL_snprintf(diagnostics->messages[index], sizeof(diagnostics->messages[index]), "%s %s: %s",
+                 severity == SLAYER3D_MAP_DIAGNOSTIC_WARNING ? "warning" : "error",
+                 json_path != NULL && json_path[0] != '\0' ? json_path : "$",
+                 message != NULL && message[0] != '\0' ? message : "map validation diagnostic");
+}
+
+bool slayer3d_game_data_validate_editor_map_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    bool ok =
+        slayer3d_game_data_export_editable_level_map_json(runtime, world_name, &json, &size, error, (int)sizeof(error));
+
+    editor_map_validation_diagnostics diagnostics;
+    SDL_zero(diagnostics);
+    if (ok)
+    {
+        slayer3d_map_validation_options options;
+        SDL_zero(options);
+        options.diagnostic = editor_map_validation_diagnostic;
+        options.userdata = &diagnostics;
+        options.treat_warnings_as_errors = json_bool(action, "treat_warnings_as_errors", false);
+        ok = slayer3d_map_validate_json(json, size, &options, error, (int)sizeof(error));
+        if (!ok && diagnostics.errors == 0)
+            diagnostics.errors = 1;
+    }
+    else
+    {
+        diagnostics.errors = 1;
+    }
+
+    if (diagnostics.messages[0][0] == '\0' && error[0] != '\0')
+        SDL_snprintf(diagnostics.messages[0], sizeof(diagnostics.messages[0]), "error $: %s", error);
+
+    char message[128];
+    if (ok && diagnostics.warnings == 0)
+        SDL_strlcpy(message, json_string(action, "message", "map validation passed"), sizeof(message));
+    else if (ok)
+        SDL_snprintf(message, sizeof(message), "map validation passed with %d warning%s", diagnostics.warnings,
+                     diagnostics.warnings == 1 ? "" : "s");
+    else
+        SDL_snprintf(message, sizeof(message), "map validation failed with %d error%s", diagnostics.errors,
+                     diagnostics.errors == 1 ? "" : "s");
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key", message);
+    editor_set_int_output(scene_state, outputs, "warning_count_key", diagnostics.warnings);
+    editor_set_int_output(scene_state, outputs, "error_count_key", diagnostics.errors);
+    editor_set_string_output(scene_state, outputs, "diagnostic0_key", diagnostics.messages[0]);
+    editor_set_string_output(scene_state, outputs, "diagnostic1_key", diagnostics.messages[1]);
+    editor_set_string_output(scene_state, outputs, "diagnostic2_key", diagnostics.messages[2]);
+    editor_set_int_output(scene_state, outputs, "size_key",
+                          ok ? (int)(size > (size_t)SDL_MAX_SINT32 ? (size_t)SDL_MAX_SINT32 : size) : 0);
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    SDL_free(json);
+    return true;
+}
+
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

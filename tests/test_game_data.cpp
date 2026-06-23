@@ -21114,6 +21114,8 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.save_as_path.field"),
               file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.validate.button"),
+              file_rects.end());
 
     emit_signal("signal.editor.file.focus.open");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", ""), "open");
@@ -21155,6 +21157,15 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     actor.color = slayer3d_color{80, 235, 130, 255};
     actor.has_color = true;
     ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &actor, nullptr, 0, error, sizeof(error))) << error;
+
+    emit_signal("signal.editor.file.validate");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.validate.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.validate.error_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.validate.warning_count", -1), 6);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.validate.message", ""),
+                 "map validation passed with 6 warnings");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "map validation passed with 6 warnings");
 
     const std::filesystem::path save_dir = unique_test_dir("editor_file_menu");
     const std::filesystem::path save_path = save_dir / "level.slayermap.json";
