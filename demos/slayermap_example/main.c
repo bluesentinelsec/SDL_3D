@@ -49,6 +49,18 @@ int main(int argc, char **argv)
         }
     }
 
+    slayer3d_map_playable_scene_desc scene;
+    if (slayer3d_map_build_playable_scene_desc(map, &scene, error, (int)sizeof(error)))
+    {
+        printf("  playable scene: %zu box brushes, %zu actors\n", scene.box_brush_count, scene.actor_count);
+        printf("    player: %s at %.2f %.2f %.2f\n", scene.player_actor_id, scene.player_position.x,
+               scene.player_position.y, scene.player_position.z);
+    }
+    else
+    {
+        printf("  playable scene: unavailable (%s)\n", error[0] != '\0' ? error : "missing player-character");
+    }
+
     slayer3d_map_destroy(map);
     return 0;
 }

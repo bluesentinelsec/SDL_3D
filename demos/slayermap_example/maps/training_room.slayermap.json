@@ -135,6 +135,7 @@
       "color": [80, 150, 255, 190],
       "display_mode": "solid",
       "properties": {
+        "type": "player-character",
         "team": "player",
         "spawn_group": "default"
       }

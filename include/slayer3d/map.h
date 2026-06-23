@@ -140,6 +140,27 @@ extern "C"
     } slayer3d_map_actor;
 
     /**
+     * @brief Minimal playable scene descriptor derived from a loaded map.
+     *
+     * This does not own geometry or actor data. It summarizes the runtime-facing
+     * content and identifies the actor/object marked with
+     * `properties.type == "player-character"` so a game can spawn a first-person
+     * controller from an editor-authored map.
+     */
+    typedef struct slayer3d_map_playable_scene_desc
+    {
+        size_t texture_asset_count;
+        size_t model_asset_count;
+        size_t material_count;
+        size_t box_brush_count;
+        size_t actor_count;
+        bool has_player_character;
+        size_t player_actor_index;
+        const char *player_actor_id;
+        slayer3d_vec3 player_position;
+    } slayer3d_map_playable_scene_desc;
+
+    /**
      * @brief Validate a JSON Slayer3D map document from memory.
      *
      * Validation covers the initial `.slayermap.json` contract: format/version,
@@ -334,6 +355,21 @@ extern "C"
     bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document, size_t actor_index,
                                               const char *key, char **out_json, size_t *out_json_size,
                                               char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Build a minimal playable scene descriptor from a loaded map.
+     *
+     * The descriptor identifies box brush geometry and placed actors, then
+     * requires exactly the first actor/object whose arbitrary property bag
+     * contains `type = "player-character"`. The returned strings are borrowed
+     * from @p document.
+     *
+     * @return true when a playable scene descriptor was built and a
+     * player-character actor was found.
+     */
+    bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *document,
+                                                slayer3d_map_playable_scene_desc *out_desc, char *error_buffer,
+                                                int error_buffer_size);
 
 #ifdef __cplusplus
 }

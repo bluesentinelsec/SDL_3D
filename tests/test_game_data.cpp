@@ -43258,7 +43258,8 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
       "primitive": "capsule",
       "properties": {
         "spawn_table": ["grunt", "brute"],
-        "audio": { "cue": "ambush", "volume": 0.75 }
+        "audio": { "cue": "ambush", "volume": 0.75 },
+        "type": "player-character"
       }
     }
   ],
@@ -43323,9 +43324,20 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     EXPECT_STREQ(actor.id, "actor.spawn.1");
     EXPECT_STREQ(actor.model, "model.spawn");
     EXPECT_STREQ(actor.primitive, "capsule");
-    EXPECT_EQ(actor.property_count, 2u);
+    EXPECT_EQ(actor.property_count, 3u);
     EXPECT_STREQ(slayer3d_map_get_actor_property_key(document, 0, 0), "spawn_table");
     EXPECT_FALSE(slayer3d_map_get_actor(document, 99, &actor));
+
+    slayer3d_map_playable_scene_desc scene_desc{};
+    ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error))) << error;
+    EXPECT_EQ(scene_desc.texture_asset_count, 1u);
+    EXPECT_EQ(scene_desc.model_asset_count, 1u);
+    EXPECT_EQ(scene_desc.material_count, 1u);
+    EXPECT_EQ(scene_desc.box_brush_count, 1u);
+    EXPECT_EQ(scene_desc.actor_count, 1u);
+    EXPECT_TRUE(scene_desc.has_player_character);
+    EXPECT_EQ(scene_desc.player_actor_index, 0u);
+    EXPECT_STREQ(scene_desc.player_actor_id, "actor.spawn.1");
 
     char *property_json = nullptr;
     size_t property_json_size = 0;
@@ -43538,6 +43550,37 @@ TEST(GameDataRuntime, SlayerMapLoadRejectsInvalidDocuments)
         slayer3d_map_load_json(bad_map_json, SDL_strlen(bad_map_json), nullptr, &document, error, sizeof(error)));
     EXPECT_EQ(document, nullptr);
     EXPECT_NE(std::string(error).find("unknown material reference"), std::string::npos);
+}
+
+TEST(GameDataRuntime, SlayerMapPlayableSceneRequiresPlayerCharacter)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [2, 0.25, 2] } }
+  ],
+  "actors": [
+    {
+      "id": "actor.marker",
+      "primitive": "capsule",
+      "transform": { "position": [1, 0.25, 1] },
+      "properties": { "type": "spawn-marker" }
+    }
+  ]
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &document, error, sizeof(error)))
+        << error;
+    slayer3d_map_playable_scene_desc scene_desc{};
+    EXPECT_FALSE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("type = player-character"), std::string::npos);
+    EXPECT_EQ(scene_desc.box_brush_count, 1u);
+    EXPECT_EQ(scene_desc.actor_count, 1u);
+    EXPECT_FALSE(scene_desc.has_player_character);
+    slayer3d_map_destroy(document);
 }
 
 TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)

@@ -32,6 +32,13 @@ typed read helpers are borrowed from the document and remain valid until
 `slayer3d_map_get_*_property_json()` helpers and must be released with
 `slayer3d_map_free_string()`.
 
+For the initial playable-map loop, `slayer3d_map_build_playable_scene_desc()`
+derives a minimal runtime-facing summary from a loaded document. It counts
+texture/model assets, materials, box brushes, and actors, then resolves the
+actor/object whose arbitrary properties include `type = "player-character"`.
+Games can use that descriptor as the first handoff point before materializing
+their own renderer, physics, and gameplay objects.
+
 ## Example Game Data
 
 [`demos/slayermap_example`](../demos/slayermap_example) contains a small

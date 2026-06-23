@@ -1704,3 +1704,62 @@ bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document,
     return map_get_property_json_from_object(map_root_array_item(document, "actors", actor_index), key, out_json,
                                              out_json_size, error_buffer, error_buffer_size);
 }
+
+static bool map_actor_is_player_character(yyjson_val *actor)
+{
+    yyjson_val *properties = map_properties_object(actor);
+    yyjson_val *type = map_obj_get(properties, "type");
+    return yyjson_is_str(type) && SDL_strcmp(yyjson_get_str(type), "player-character") == 0;
+}
+
+bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *document,
+                                            slayer3d_map_playable_scene_desc *out_desc, char *error_buffer,
+                                            int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_desc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output playable scene descriptor is required");
+        return false;
+    }
+    SDL_zero(*out_desc);
+    if (document == NULL || document->doc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map document is required");
+        return false;
+    }
+
+    out_desc->texture_asset_count = slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_TEXTURE);
+    out_desc->model_asset_count = slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_MODEL);
+    out_desc->material_count = slayer3d_map_get_material_count(document);
+    out_desc->actor_count = slayer3d_map_get_actor_count(document);
+    out_desc->player_actor_index = (size_t)-1;
+
+    const size_t brush_count = slayer3d_map_get_brush_count(document);
+    for (size_t i = 0; i < brush_count; ++i)
+    {
+        slayer3d_map_brush brush;
+        if (slayer3d_map_get_brush(document, i, &brush) && brush.box.valid)
+            out_desc->box_brush_count += 1U;
+    }
+
+    for (size_t i = 0; i < out_desc->actor_count; ++i)
+    {
+        yyjson_val *actor_value = map_root_array_item(document, "actors", i);
+        if (!map_actor_is_player_character(actor_value))
+            continue;
+
+        slayer3d_map_actor actor;
+        if (!slayer3d_map_get_actor(document, i, &actor))
+            continue;
+        out_desc->has_player_character = true;
+        out_desc->player_actor_index = i;
+        out_desc->player_actor_id = actor.id;
+        out_desc->player_position = actor.transform.has_position ? actor.transform.position : (slayer3d_vec3){0};
+        return true;
+    }
+
+    map_set_error(error_buffer, error_buffer_size,
+                  "$.actors: playable map requires an actor/object with property type = player-character");
+    return false;
+}
