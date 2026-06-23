@@ -43595,6 +43595,94 @@ TEST(GameDataRuntime, SlayerMapPlayableSceneRequiresPlayerCharacter)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "materials": [
+    { "id": "mat.floor", "color": [128, 128, 128, 255] },
+    { "id": "mat.wall", "color": [64, 72, 88, 255] }
+  ],
+  "brushes": [
+    {
+      "id": "brush.floor",
+      "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 0.25, 4] },
+      "material": "mat.floor"
+    },
+    {
+      "id": "brush.north_wall",
+      "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 3, -3.5] },
+      "material": "mat.wall"
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.player",
+      "primitive": "capsule",
+      "transform": { "position": [0, 0.25, 1.5] },
+      "properties": { "type": "player-character" }
+    }
+  ]
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &document, error, sizeof(error)))
+        << error;
+
+    const std::filesystem::path dir = unique_test_dir("slayermap_playable_game");
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_TRUE(std::filesystem::exists(dir / "playable_map.game.json"));
+    EXPECT_TRUE(std::filesystem::exists(dir / "scenes" / "play.scene.json"));
+    slayer3d_map_destroy(document);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "playable_map.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.slayermap", &world));
+    EXPECT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.material_count, 2);
+    EXPECT_STREQ(world.materials[0].name, "mat.floor");
+    EXPECT_FLOAT_EQ(world.materials[0].albedo.x, 128.0f / 255.0f);
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(player->position.y, 1.85f, 0.001f);
+    EXPECT_NEAR(player->position.z, 1.5f, 0.001f);
+
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.play");
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+    for (int i = 0; i < 24; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(3000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    }
+    EXPECT_LT(player->position.z, 1.5f);
+    EXPECT_GT(player->position.z, -3.35f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_collision_brush", ""), "brush.north_wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_floor_brush", ""), "brush.floor");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
 {
     const char *bad_files[] = {

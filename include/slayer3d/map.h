@@ -371,6 +371,22 @@ extern "C"
                                                 slayer3d_map_playable_scene_desc *out_desc, char *error_buffer,
                                                 int error_buffer_size);
 
+    /**
+     * @brief Write a minimal data-game package that can run a map as an FPS brush scene.
+     *
+     * This emits `playable_map.game.json` and `scenes/play.scene.json` under
+     * @p output_dir. The generated game uses the existing data-game
+     * `controller.fps_brush` component, converts map box brushes into runtime
+     * brush-world planes, and spawns the player at the first actor/object marked
+     * with `properties.type == "player-character"`.
+     *
+     * The generated package is a first playable bridge. It preserves geometry,
+     * material colors, and the player spawn, but does not copy external texture
+     * or model files into @p output_dir.
+     */
+    bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *document, const char *output_dir,
+                                                char *error_buffer, int error_buffer_size);
+
 #ifdef __cplusplus
 }
 #endif

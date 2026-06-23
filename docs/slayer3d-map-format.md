@@ -39,6 +39,20 @@ actor/object whose arbitrary properties include `type = "player-character"`.
 Games can use that descriptor as the first handoff point before materializing
 their own renderer, physics, and gameplay objects.
 
+`slayer3d_map_write_playable_game_files()` builds on that descriptor and writes
+a minimal data-game package under a caller-provided directory. The package
+contains `playable_map.game.json` plus `scenes/play.scene.json`, converts map
+box brushes into a runtime brush world, and spawns the player through the
+existing `controller.fps_brush` component. Run the generated package with:
+
+```sh
+slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json
+```
+
+This bridge is intentionally conservative: it proves the first playable loop
+with brush collision and material colors, while leaving external texture/model
+asset copying and game-specific actor behavior to later project integrations.
+
 ## Example Game Data
 
 [`demos/slayermap_example`](../demos/slayermap_example) contains a small
