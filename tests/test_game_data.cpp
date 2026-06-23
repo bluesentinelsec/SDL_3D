@@ -25380,6 +25380,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"type\": \"player-character\""), std::string::npos);
+
+    slayer3d_map_document *saved_map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(save_path.string().c_str(), nullptr, &saved_map, error, sizeof(error))) << error;
+    slayer3d_map_playable_scene_desc saved_scene{};
+    ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(saved_map, &saved_scene, error, sizeof(error))) << error;
+    EXPECT_TRUE(saved_scene.has_player_character);
+    EXPECT_STREQ(saved_scene.player_actor_id, "player_start.editor_shell");
+    EXPECT_NEAR(saved_scene.player_position.x, player_start_origin.x, 0.001f);
+    EXPECT_NEAR(saved_scene.player_position.y, player_start_origin.y, 0.001f);
+    EXPECT_NEAR(saved_scene.player_position.z, player_start_origin.z, 0.001f);
+    slayer3d_map_destroy(saved_map);
 
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", false));
