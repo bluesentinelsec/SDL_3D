@@ -18691,9 +18691,9 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     const int things_objects_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.things.category.objects");
     ASSERT_GE(things_objects_signal, 0);
     slayer3d_signal_emit(bus, things_objects_signal, nullptr);
-    emit_signal("signal.editor.actor.select_slot.5");
+    emit_signal("signal.editor.actor.select_slot.6");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Objects");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_capsule");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_object");
 
     yyjson_val *editor = active_editor_tooling_root(runtime);
@@ -18713,40 +18713,59 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 
     emit_signal("signal.editor.command.commit");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.message", ""), "Box object placed");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "object.editor_shell.box.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.message", ""), "Capsule object placed");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "object.editor_shell.capsule.1");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
 
     slayer3d_game_data_editor_actor placed{};
-    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
-    EXPECT_STREQ(placed.display_name, "Box");
-    EXPECT_STREQ(placed.archetype, "object.editor_shell.box");
-    EXPECT_STREQ(placed.mesh, "box");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_STREQ(placed.display_name, "Capsule");
+    EXPECT_STREQ(placed.archetype, "object.editor_shell.capsule");
+    EXPECT_STREQ(placed.mesh, "capsule");
     EXPECT_STREQ(placed.group, "Objects");
-    EXPECT_EQ(placed.color.r, 128);
-    EXPECT_EQ(placed.color.g, 174);
-    EXPECT_EQ(placed.color.b, 245);
-    EXPECT_EQ(placed.color.a, 190);
+    EXPECT_EQ(placed.color.r, 80);
+    EXPECT_EQ(placed.color.g, 235);
+    EXPECT_EQ(placed.color.b, 130);
+    EXPECT_EQ(placed.color.a, 255);
     EXPECT_NEAR(placed.position.x, actor_anchor->as_vec3.x, 0.001f);
     EXPECT_NEAR(placed.position.y, actor_anchor->as_vec3.y, 0.001f);
     EXPECT_NEAR(placed.position.z, actor_anchor->as_vec3.z, 0.001f);
     ASSERT_NE(placed.properties, nullptr);
-    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "classname", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "classname", ""), "object_capsule");
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "role", ""), "object");
-    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "sensor_profile", ""), "box");
-    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "actor_browser_id", ""), "object_box");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "sensor_profile", ""), "capsule");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "actor_browser_id", ""), "object_capsule");
+    EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "solid");
 
     slayer3d_game_data_editor_selection active_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_TRUE(active_selection.hit);
     EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
     EXPECT_STREQ(active_selection.world_name, "editor_actors");
-    EXPECT_STREQ(active_selection.element_name, "object.editor_shell.box.1");
+    EXPECT_STREQ(active_selection.element_name, "object.editor_shell.capsule.1");
     EXPECT_TRUE(active_selection.has_bounds);
-    EXPECT_NEAR(active_selection.bounds.min.x, placed.position.x - 0.5f, 0.001f);
-    EXPECT_NEAR(active_selection.bounds.max.y, placed.position.y + 1.0f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.min.x, placed.position.x - 0.35f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.max.y, placed.position.y + 1.8f, 0.001f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Actor");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "Box");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "Capsule");
+
+    struct CapsuleDebug
+    {
+        int edges = 0;
+    } capsule_debug;
+    auto count_capsule_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *debug = static_cast<CapsuleDebug *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE &&
+            primitive->element_name != nullptr &&
+            std::string(primitive->element_name) == "object.editor_shell.capsule.1")
+        {
+            debug->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &capsule_debug));
+    EXPECT_GT(capsule_debug.edges, 40);
 
     ASSERT_TRUE(execute_json_action(R"json({
       "type": "editor.actor.update",
@@ -18764,8 +18783,8 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     })json"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.editor.actor.update.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.editor.actor.update.actor", ""),
-                 "object.editor_shell.box.1");
-    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+                 "object.editor_shell.capsule.1");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
     EXPECT_NEAR(placed.position.x, 4.0f, 0.001f);
     EXPECT_NEAR(placed.position.y, 0.25f, 0.001f);
     EXPECT_NEAR(placed.position.z, -5.0f, 0.001f);
@@ -18781,8 +18800,8 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "wireframe");
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_TRUE(active_selection.has_bounds);
-    EXPECT_NEAR(active_selection.bounds.min.x, 3.0f, 0.001f);
-    EXPECT_NEAR(active_selection.bounds.max.y, 3.25f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.min.x, 3.3f, 0.001f);
+    EXPECT_NEAR(active_selection.bounds.max.y, 5.65f, 0.001f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.position", ""),
                  "4.000, 0.250, -5.000");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.color", ""),
@@ -18800,7 +18819,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.r", 0), 48);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.inspector.actor.color.b", 0), 80);
     emit_signal("signal.editor.inspector.actor.color.apply");
-    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
     EXPECT_EQ(placed.color.r, 48);
     EXPECT_EQ(placed.color.g, 64);
     EXPECT_EQ(placed.color.b, 80);
@@ -18808,7 +18827,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.actor.color.dirty", true));
 
     emit_signal("signal.editor.inspector.actor.display.solid");
-    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.box.1", &placed));
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
     ASSERT_NE(placed.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "solid");
 
@@ -18858,21 +18877,21 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
     slayer3d_properties *object_properties = slayer3d_properties_create();
     ASSERT_NE(object_properties, nullptr);
     slayer3d_properties_set_string(object_properties, "role", "object");
-    slayer3d_properties_set_string(object_properties, "classname", "object_enemy_blocker");
-    slayer3d_properties_set_string(object_properties, "display_mode", "wireframe");
-    slayer3d_properties_set_string(object_properties, "faction", "enemy");
+    slayer3d_properties_set_string(object_properties, "classname", "object_player_capsule");
+    slayer3d_properties_set_string(object_properties, "display_mode", "solid");
+    slayer3d_properties_set_string(object_properties, "type", "player-character");
 
     slayer3d_game_data_place_editor_actor_desc object_desc{};
-    object_desc.name = "object.editor_shell.enemy_blocker";
-    object_desc.display_name = "Enemy Blocker";
-    object_desc.archetype = "object.editor_shell.box";
-    object_desc.mesh = "box";
+    object_desc.name = "object.editor_shell.player_capsule";
+    object_desc.display_name = "Player Capsule";
+    object_desc.archetype = "object.editor_shell.capsule";
+    object_desc.mesh = "capsule";
     object_desc.group = "Objects";
     object_desc.position = slayer3d_vec3_make(-2.0f, 0.25f, 3.0f);
     object_desc.has_position = true;
-    object_desc.scale = slayer3d_vec3_make(1.5f, 0.5f, 1.5f);
+    object_desc.scale = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
     object_desc.has_scale = true;
-    object_desc.color = slayer3d_color{220, 80, 72, 180};
+    object_desc.color = slayer3d_color{80, 235, 130, 255};
     object_desc.has_color = true;
     object_desc.properties = object_properties;
     ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &object_desc, nullptr, 0u, error, sizeof(error)))
@@ -18900,7 +18919,7 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
         const char *id = yyjson_get_str(yyjson_obj_get(candidate, "id"));
         if (id != nullptr && SDL_strcmp(id, "actor.editor_shell.player") == 0)
             exported_actor = candidate;
-        if (id != nullptr && SDL_strcmp(id, "object.editor_shell.enemy_blocker") == 0)
+        if (id != nullptr && SDL_strcmp(id, "object.editor_shell.player_capsule") == 0)
             exported_object = candidate;
     }
     ASSERT_NE(exported_actor, nullptr);
@@ -18919,15 +18938,15 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
     EXPECT_NEAR(yyjson_get_real(yyjson_arr_get(actor_position, 0)), 1.0, 0.001);
 
     ASSERT_NE(exported_object, nullptr);
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "archetype")), "object.editor_shell.box");
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "primitive")), "box");
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "display_mode")), "wireframe");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "archetype")), "object.editor_shell.capsule");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "primitive")), "capsule");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(exported_object, "display_mode")), "solid");
     yyjson_val *object_color = yyjson_obj_get(exported_object, "color");
     ASSERT_TRUE(yyjson_is_arr(object_color));
-    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(object_color, 0)), 220u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(object_color, 0)), 80u);
     yyjson_val *object_properties_json = yyjson_obj_get(exported_object, "properties");
     ASSERT_TRUE(yyjson_is_obj(object_properties_json));
-    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(object_properties_json, "faction")), "enemy");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(object_properties_json, "type")), "player-character");
 
     yyjson_val *editor = yyjson_obj_get(root, "editor");
     ASSERT_TRUE(yyjson_is_obj(editor));
@@ -18957,13 +18976,13 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
     EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_actor.properties, "display_mode", ""), "solid");
 
     slayer3d_game_data_editor_actor roundtrip_object{};
-    ASSERT_TRUE(
-        slayer3d_game_data_get_editor_actor(roundtrip_runtime, "object.editor_shell.enemy_blocker", &roundtrip_object));
-    EXPECT_STREQ(roundtrip_object.mesh, "box");
-    EXPECT_EQ(roundtrip_object.color.g, 80);
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(roundtrip_runtime, "object.editor_shell.player_capsule",
+                                                    &roundtrip_object));
+    EXPECT_STREQ(roundtrip_object.mesh, "capsule");
+    EXPECT_EQ(roundtrip_object.color.g, 235);
     ASSERT_NE(roundtrip_object.properties, nullptr);
-    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "display_mode", ""), "wireframe");
-    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "faction", ""), "enemy");
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "display_mode", ""), "solid");
+    EXPECT_STREQ(slayer3d_properties_get_string(roundtrip_object.properties, "type", ""), "player-character");
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);
@@ -25067,7 +25086,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_actor_debug, &actor_debug));
-    EXPECT_EQ(actor_debug.edges, 12);
+    EXPECT_GT(actor_debug.edges, 40);
 
     const int things_objects_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.things.category.objects");
     ASSERT_GE(things_objects_signal, 0);

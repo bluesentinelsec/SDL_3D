@@ -1614,7 +1614,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "object_capsule", "Capsule", "capsule", "", "object.editor_shell.capsule",
                    "object.editor_shell.capsule", "Objects", "actor_object", "object_capsule", "object", "capsule",
-                   (slayer3d_color){120, 210, 180, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
+                   (slayer3d_color){80, 235, 130, 255}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "object_sphere", "Sphere", "sphere", "", "object.editor_shell.sphere",
                    "object.editor_shell.sphere", "Objects", "actor_object", "object_sphere", "object", "sphere",

@@ -5834,7 +5834,7 @@
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "object_capsule" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.object_capsule.preview", "type": "panel", "x": 139, "y": 64, "w": 20, "h": 50, "color": [120, 210, 180, 190], "border_color": [188, 255, 230, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.object_capsule.preview", "type": "panel", "x": 139, "y": 64, "w": 20, "h": 50, "color": [80, 235, 130, 255], "border_color": [170, 255, 200, 255], "border_thickness": 1, "layer": 123 },
               { "id": "ui.editor_shell.actor_viewer.object_capsule.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.6.label", "default": "Capsule" }], "text_scale": 0.38, "align": "center", "layer": 122 },
               {
                 "id": "ui.editor_shell.actor_viewer.object_sphere.button",
