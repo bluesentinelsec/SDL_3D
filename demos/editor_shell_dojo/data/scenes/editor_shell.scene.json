@@ -6389,12 +6389,61 @@
             ]
           },
           {
+            "id": "ui.editor_shell.console.scroll.up",
+            "type": "button",
+            "x": 1264,
+            "y": 42,
+            "w": 10,
+            "h": 14,
+            "text": "^",
+            "text_scale": 0.28,
+            "interactive": true,
+            "action": "editor.console.scroll.up",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.console.scroll.track",
+            "type": "button",
+            "x": 1264,
+            "y": 58,
+            "w": 10,
+            "h": 48,
+            "text": "",
+            "interactive": true,
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.console.scroll.thumb",
+            "type": "button",
+            "x": 1266,
+            "y": 60,
+            "w": 6,
+            "h": 24,
+            "text": "",
+            "interactive": true,
+            "scroll_y_key": "editor.console.scroll.y",
+            "layer": 122
+          },
+          {
+            "id": "ui.editor_shell.console.scroll.down",
+            "type": "button",
+            "x": 1264,
+            "y": 108,
+            "w": 10,
+            "h": 14,
+            "text": "v",
+            "text_scale": 0.28,
+            "interactive": true,
+            "action": "editor.console.scroll.down",
+            "layer": 121
+          },
+          {
             "id": "ui.editor_shell.console.line0.row",
             "type": "panel",
             "x": 18,
-            "y": 44,
-            "w": 1244,
-            "h": 18,
+            "y": 42,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
               {
@@ -6402,9 +6451,11 @@
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "> %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line0", "default": "Editor ready" }]
               }
             ]
@@ -6413,9 +6464,9 @@
             "id": "ui.editor_shell.console.line1.row",
             "type": "panel",
             "x": 18,
-            "y": 64,
-            "w": 1244,
-            "h": 18,
+            "y": 58,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
               {
@@ -6423,9 +6474,11 @@
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line1", "default": "" }]
               }
             ]
@@ -6434,9 +6487,9 @@
             "id": "ui.editor_shell.console.line2.row",
             "type": "panel",
             "x": 18,
-            "y": 84,
-            "w": 1244,
-            "h": 18,
+            "y": 74,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
               {
@@ -6444,9 +6497,11 @@
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line2", "default": "" }]
               }
             ]
@@ -6455,9 +6510,9 @@
             "id": "ui.editor_shell.console.line3.row",
             "type": "panel",
             "x": 18,
-            "y": 104,
-            "w": 1244,
-            "h": 18,
+            "y": 90,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
               {
@@ -6465,9 +6520,11 @@
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line3", "default": "" }]
               }
             ]
@@ -6476,9 +6533,9 @@
             "id": "ui.editor_shell.console.line4.row",
             "type": "panel",
             "x": 18,
-            "y": 124,
-            "w": 1244,
-            "h": 18,
+            "y": 106,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
               {
@@ -6486,9 +6543,11 @@
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line4", "default": "" }]
               }
             ]

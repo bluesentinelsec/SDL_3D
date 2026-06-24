@@ -2074,11 +2074,18 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     if (message[0] == '\0')
         return false;
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
-
     const char *line_key_prefix = json_string(action, "line_key_prefix", "editor.console.line");
-    int line_count = json_int(action, "line_count", 16);
+    const char *count_key = json_string(action, "count_key", "editor.console.count");
+    int line_count = json_int(action, "line_count", 64);
     line_count = SDL_clamp(line_count, 1, 64);
+    if (SDL_strcmp(line_key_prefix, "editor.console.line") == 0 &&
+        (count_key == NULL || SDL_strcmp(count_key, "editor.console.count") == 0) && line_count == 64)
+    {
+        editor_publish_console_message(runtime, message);
+        return true;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
 
     char previous[64][512];
     SDL_zeroa(previous);
@@ -2099,7 +2106,6 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     char key[128];
     SDL_snprintf(key, sizeof(key), "%s0", line_key_prefix);
     slayer3d_properties_set_string(runtime->scene_state, key, message);
-    const char *count_key = json_string(action, "count_key", "editor.console.count");
     if (count_key != NULL && count_key[0] != '\0')
     {
         slayer3d_properties_set_int(

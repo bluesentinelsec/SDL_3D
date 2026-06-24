@@ -181,5 +181,6 @@ void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, cons
 void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, float value);
 void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
 void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message);
+void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime);
 
 #endif

@@ -2,6 +2,10 @@
 
 #include <SDL3/SDL_log.h>
 
+#define EDITOR_CONSOLE_HISTORY_COUNT 64
+#define EDITOR_CONSOLE_VISIBLE_COUNT 5
+#define EDITOR_CONSOLE_THUMB_TRAVEL 44.0f
+
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value)
 {
     const char *key = json_string(outputs, key_name, NULL);
@@ -42,14 +46,54 @@ void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const c
     if (runtime == NULL || runtime->scene_state == NULL || message == NULL || message[0] == '\0')
         return;
 
-    const char *old_line0 = slayer3d_properties_get_string(runtime->scene_state, "editor.console.line0", "");
-    const char *old_line1 = slayer3d_properties_get_string(runtime->scene_state, "editor.console.line1", "");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line2", old_line1);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line1", old_line0);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line0", message);
-    slayer3d_properties_set_int(runtime->scene_state, "editor.console.count",
-                                slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0) + 1);
+    char previous[EDITOR_CONSOLE_HISTORY_COUNT][512];
+    SDL_zeroa(previous);
+    for (int i = 0; i < EDITOR_CONSOLE_HISTORY_COUNT; ++i)
+    {
+        char key[64];
+        SDL_snprintf(key, sizeof(key), "editor.console.history%d", i);
+        SDL_strlcpy(previous[i], slayer3d_properties_get_string(runtime->scene_state, key, ""), sizeof(previous[i]));
+    }
+    for (int i = EDITOR_CONSOLE_HISTORY_COUNT - 1; i > 0; --i)
+    {
+        char key[64];
+        SDL_snprintf(key, sizeof(key), "editor.console.history%d", i);
+        slayer3d_properties_set_string(runtime->scene_state, key, previous[i - 1]);
+    }
+    slayer3d_properties_set_string(runtime->scene_state, "editor.console.history0", message);
+    const int count = SDL_min(EDITOR_CONSOLE_HISTORY_COUNT,
+                              slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0) + 1);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.console.count", count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", 0);
+    editor_refresh_console_lines(runtime);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+}
+
+void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const int count = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0), 0,
+                                EDITOR_CONSOLE_HISTORY_COUNT);
+    const int max_scroll = SDL_max(0, count - EDITOR_CONSOLE_VISIBLE_COUNT);
+    const int scroll =
+        SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.scroll", 0), 0, max_scroll);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", scroll);
+
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    {
+        char source_key[64];
+        char line_key[64];
+        SDL_snprintf(source_key, sizeof(source_key), "editor.console.history%d", scroll + i);
+        SDL_snprintf(line_key, sizeof(line_key), "editor.console.line%d", i);
+        slayer3d_properties_set_string(runtime->scene_state, line_key,
+                                       slayer3d_properties_get_string(runtime->scene_state, source_key, ""));
+    }
+
+    const float thumb_offset =
+        max_scroll > 0 ? -((float)scroll / (float)max_scroll) * EDITOR_CONSOLE_THUMB_TRAVEL : 0.0f;
+    slayer3d_properties_set_float(runtime->scene_state, "editor.console.scroll.y", thumb_offset);
 }
 
 static int editor_revision_to_int(Uint64 revision)
