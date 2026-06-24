@@ -21246,6 +21246,31 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), save_path.string().c_str());
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
 
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", "/tmp/slayer3d-textures");
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", "/tmp/slayer3d-models");
+    slayer3d_properties_set_string(scene_state, "editor.file.edit.focus", "open");
+    slayer3d_properties_set_bool(scene_state, "editor.file.edit.replace_on_text", true);
+    slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
+    slayer3d_properties_set_bool(scene_state, "editor.texture.viewer.active", true);
+    slayer3d_properties_set_bool(scene_state, "editor.actor.viewer.active", true);
+    slayer3d_properties_set_bool(scene_state, "editor.actor.drag.active", true);
+    slayer3d_properties_set_string(scene_state, "editor.palette.active", "textures");
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", "lava");
+    slayer3d_properties_set_string(scene_state, "editor.texture.edit.focus", "search");
+    slayer3d_properties_set_string(scene_state, "editor.texture.material", "mat.project.texture.lava");
+    slayer3d_properties_set_int(scene_state, "editor.texture.selected_index", 2);
+    slayer3d_properties_set_int(scene_state, "editor.texture.selected_slot", 1);
+    slayer3d_properties_set_string(scene_state, "editor.actor.selected", "object_capsule");
+    slayer3d_properties_set_int(scene_state, "editor.actor.selected_index", 6);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.tab", "Data");
+    slayer3d_properties_set_float(scene_state, "editor.inspector.scroll", 300.0f);
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.focus", "key");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.key", "type");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.value", "player-character");
+    slayer3d_properties_set_int(scene_state, "editor.selection.count", 1);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "rotate", nullptr));
+    ASSERT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "rotate");
+
     emit_signal("signal.editor.file.new");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.new.valid", false));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
@@ -21253,7 +21278,38 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_game_data_editor_actor placed{};
     EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.file_probe", &placed));
 
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), save_path.string().c_str());
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", "stale"), "");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.edit.replace_on_text", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.drag.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", "stale"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.search", "stale"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.edit.focus", "stale"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", "stale"), "");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.selected_index", 99), -1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.selected_slot", 99), -1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", "stale"), "");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", 99), -1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.tab", ""), "Object");
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.scroll", -1.0f), 0.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.focus", "stale"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.key", "stale"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.property.edit.value", "stale"), "");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 99), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", 99), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", 99), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.path", ""),
+                 "/tmp/slayer3d-textures");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.path", ""),
+                 "/tmp/slayer3d-models");
+
+    slayer3d_properties_set_string(scene_state, "editor.file.open.path", save_path.string().c_str());
     emit_signal("signal.editor.file.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());

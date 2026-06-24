@@ -69,6 +69,105 @@ static const char *editor_action_path(slayer3d_game_data_runtime *runtime, yyjso
     return json_string(action, "path", fallback);
 }
 
+static bool editor_state_key_has_prefix(const char *key, const char *prefix)
+{
+    return key != NULL && prefix != NULL && SDL_strncmp(key, prefix, SDL_strlen(prefix)) == 0;
+}
+
+static bool editor_state_key_preserved_for_new_document(const char *key)
+{
+    if (editor_state_key_has_prefix(key, "editor.asset_source."))
+        return true;
+
+    return SDL_strcmp(key, "editor.texture.path.input") == 0 || SDL_strcmp(key, "editor.texture.path.display") == 0 ||
+           SDL_strcmp(key, "editor.texture.path.status") == 0 || SDL_strcmp(key, "editor.model.path.input") == 0 ||
+           SDL_strcmp(key, "editor.model.path.display") == 0 || SDL_strcmp(key, "editor.model.path.status") == 0;
+}
+
+static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    for (int i = slayer3d_properties_count(runtime->scene_state) - 1; i >= 0; --i)
+    {
+        const char *key = NULL;
+        if (!slayer3d_properties_get_key_at(runtime->scene_state, i, &key, NULL) || key == NULL)
+            continue;
+        if (editor_state_key_has_prefix(key, "editor.") && !editor_state_key_preserved_for_new_document(key))
+            slayer3d_properties_remove(runtime->scene_state, key);
+    }
+
+    slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "select");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", "select");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.file.edit.replace_on_text", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search.display", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.search.pending", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.collapsed", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", -1);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected.label", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.material.cursor", "");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", -1);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", -1);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.material", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.inspector.tab", "Object");
+    slayer3d_properties_set_float(runtime->scene_state, "editor.inspector.scroll", 0.0f);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.original_key", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.key", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.value", "");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.property.edit.selected_slot", -1);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", false);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.property.count", 0);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.undo_count", 0);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.redo_count", 0);
+}
+
+static void reset_editor_runtime_state_for_new_document(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+
+    clear_editor_active_selection(runtime);
+    clear_editor_vertex_hover_state(runtime);
+    clear_editor_edge_hover_state(runtime);
+    clear_editor_command_preview(runtime);
+    clear_editor_placement_preview(runtime);
+    reset_editor_clip_tool_state(runtime, "");
+    reset_editor_rotate_tool_state(runtime, "");
+    reset_editor_scale_tool_state(runtime, "");
+    reset_editor_shear_tool_state(runtime, "");
+    free_editor_command_history(&runtime->editor_command_history);
+    SDL_zero(runtime->editor_drag_create);
+    SDL_zero(runtime->editor_drag_move);
+    SDL_zero(runtime->editor_camera_orbit);
+    SDL_zero(runtime->editor_camera_move);
+    runtime->editor_has_last_duplicate_offset = false;
+    runtime->editor_last_duplicate_offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    (void)slayer3d_game_data_set_editor_tool_mode(runtime, "select", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "");
+}
+
+static void reset_editor_workspace_for_new_document(slayer3d_game_data_runtime *runtime)
+{
+    reset_editor_scene_state_for_new_document(runtime);
+    reset_editor_runtime_state_for_new_document(runtime);
+}
+
 static bool append_command_text(char *buffer, size_t buffer_size, size_t *offset, const char *text)
 {
     if (buffer == NULL || buffer_size == 0u || offset == NULL || text == NULL)
@@ -382,6 +481,9 @@ bool slayer3d_game_data_new_editor_map_action(slayer3d_game_data_runtime *runtim
     const bool ok =
         fragment != NULL && slayer3d_game_data_load_editable_level_fragment_json(
                                 runtime, world_name, fragment, SDL_strlen(fragment), NULL, error, (int)sizeof(error));
+
+    if (ok)
+        reset_editor_workspace_for_new_document(runtime);
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
