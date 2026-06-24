@@ -5242,7 +5242,8 @@
             "type": "all",
             "conditions": [
               { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
-              { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }
+              { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" },
+              { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }
             ]
           },
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },

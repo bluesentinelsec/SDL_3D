@@ -21147,6 +21147,25 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", ""), "open");
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+    int input_tick = 1;
+    auto type_file_key = [&](SDL_Scancode scancode, const char *text) {
+        SDL_Event key_event{};
+        key_event.type = SDL_EVENT_KEY_DOWN;
+        key_event.key.scancode = scancode;
+        slayer3d_input_process_event(input, &key_event);
+        SDL_Event text_event{};
+        text_event.type = SDL_EVENT_TEXT_INPUT;
+        text_event.text.text = text;
+        slayer3d_input_process_event(input, &text_event);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        key_event.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key_event);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
     SDL_Event motion_event{};
     motion_event.type = SDL_EVENT_MOUSE_MOTION;
     motion_event.motion.x = 48.0f;
@@ -21156,12 +21175,34 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     text_event.type = SDL_EVENT_TEXT_INPUT;
     text_event.text.text = "b-test_level.slayermap.json";
     slayer3d_input_process_event(input, &text_event);
-    slayer3d_input_update(input, 1);
+    slayer3d_input_update(input, input_tick++);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""),
                  "b-test_level.slayermap.json");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.input.path", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(editor_camera, nullptr);
+    const slayer3d_vec3 camera_before_open_typing = editor_camera->position;
+    type_file_key(SDL_SCANCODE_B, "b");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""),
+                 "b-test_level.slayermap.jsonb");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_NEAR(editor_camera->position.x, camera_before_open_typing.x, 0.0001f);
+    EXPECT_NEAR(editor_camera->position.y, camera_before_open_typing.y, 0.0001f);
+    EXPECT_NEAR(editor_camera->position.z, camera_before_open_typing.z, 0.0001f);
+
+    emit_signal("signal.editor.file.focus.save_as");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", ""), "save_as");
+    slayer3d_properties_set_string(scene_state, "editor.save_as.path", "");
+    const slayer3d_vec3 camera_before_save_typing = editor_camera->position;
+    type_file_key(SDL_SCANCODE_S, "s");
+    type_file_key(SDL_SCANCODE_D, "d");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save_as.path", ""), "sd");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_NEAR(editor_camera->position.x, camera_before_save_typing.x, 0.0001f);
+    EXPECT_NEAR(editor_camera->position.y, camera_before_save_typing.y, 0.0001f);
+    EXPECT_NEAR(editor_camera->position.z, camera_before_save_typing.z, 0.0001f);
 
     slayer3d_game_data_create_box_brush_desc box{};
     box.world_name = "brush.editor_shell.target";
