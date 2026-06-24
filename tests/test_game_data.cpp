@@ -21125,6 +21125,58 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         EXPECT_TRUE(capture.found);
         return capture.color;
     };
+    auto resolved_rect_layer = [&](const char *expected_name) {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            int layer = 0;
+            bool found = false;
+        } capture{runtime, expected_name, 0, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                std::string(rect->name) != capture->name)
+                return true;
+            slayer3d_game_data_ui_rect resolved{};
+            bool visible = false;
+            if (slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &resolved, &visible) && visible)
+            {
+                capture->layer = resolved.layer;
+                capture->found = true;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.found) << expected_name;
+        return capture.layer;
+    };
+    auto resolved_text_layer = [&](const char *expected_name) {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            int layer = 0;
+            bool found = false;
+        } capture{runtime, expected_name, 0, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (text == nullptr || text->name == nullptr || capture->name == nullptr ||
+                std::string(text->name) != capture->name)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) && visible)
+            {
+                capture->layer = resolved.layer;
+                capture->found = true;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        EXPECT_TRUE(capture.found) << expected_name;
+        return capture.layer;
+    };
     struct HitSummary
     {
         std::string id;
@@ -21159,6 +21211,10 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     std::vector<std::string> file_rects = visible_file_rects();
     slayer3d_color file_panel_color = resolved_file_panel_color();
     EXPECT_EQ(file_panel_color.a, 255);
+    const int file_panel_layer = resolved_rect_layer("ui.editor_shell.file_menu.panel");
+    EXPECT_EQ(file_panel_layer, 500);
+    EXPECT_GT(resolved_text_layer("ui.editor_shell.file_menu.new.label"), file_panel_layer);
+    EXPECT_LT(resolved_text_layer("ui.editor_shell.tool_toolbar.select.label"), file_panel_layer);
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.new.button"),
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.open_path.field"),

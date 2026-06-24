@@ -1339,6 +1339,7 @@ static void ui_text_from_json(yyjson_val *item, slayer3d_game_data_ui_text *text
     text->format = json_string(item, "format", NULL);
     text->source = json_string(item, "source", NULL);
     text->visible = json_string(item, "visible", "always");
+    text->layer = json_int(item, "layer", json_int(item, "z", 0));
     text->x = json_float(item, "x", 0.0f);
     text->y = json_float(item, "y", 0.0f);
     text->normalized = json_bool(item, "normalized", false);
@@ -1807,6 +1808,7 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
         text.font = command->font[0] != '\0' ? command->font : "font.editor_shell.ui";
         text.text = command->text;
         text.visible = "always";
+        text.layer = command->layer;
         text.align = retained_ui_text_align(command);
         if (text.align == SLAYER3D_GAME_DATA_UI_ALIGN_LEFT)
         {
@@ -1878,6 +1880,7 @@ static void ui_image_from_json(yyjson_val *item, slayer3d_game_data_ui_image *im
     image->name = json_string(item, "name", NULL);
     image->image = json_string(item, "image", NULL);
     image->visible = json_string(item, "visible", "always");
+    image->layer = json_int(item, "layer", json_int(item, "z", 0));
     image->x = json_float(item, "x", 0.0f);
     image->y = json_float(item, "y", 0.0f);
     image->w = json_float(item, "w", json_float(item, "width", 0.0f));
@@ -1907,6 +1910,7 @@ static void ui_rect_from_json(yyjson_val *item, slayer3d_game_data_ui_rect *rect
     SDL_zero(*rect);
     rect->name = json_string(item, "name", NULL);
     rect->visible = json_string(item, "visible", "always");
+    rect->layer = json_int(item, "layer", json_int(item, "z", 0));
     rect->x = json_float(item, "x", 0.0f);
     rect->y = json_float(item, "y", 0.0f);
     rect->w = json_float(item, "w", json_float(item, "width", 0.0f));
@@ -1958,8 +1962,9 @@ static bool for_each_authored_ui_rect_root(yyjson_val *root, slayer3d_game_data_
     return true;
 }
 
-static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float x, float y, float w, float h,
-                                     slayer3d_color color, slayer3d_game_data_ui_rect_fn callback, void *userdata)
+static bool emit_ui_rect_from_values_layered(yyjson_val *source, const char *name, int layer, float x, float y, float w,
+                                             float h, slayer3d_color color, slayer3d_game_data_ui_rect_fn callback,
+                                             void *userdata)
 {
     if (color.a == 0 || w <= 0.0f || h <= 0.0f)
         return true;
@@ -1968,6 +1973,7 @@ static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float
     SDL_zero(rect);
     rect.name = name;
     rect.visible = "always";
+    rect.layer = layer;
     rect.x = x;
     rect.y = y;
     rect.w = w;
@@ -1980,10 +1986,17 @@ static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float
     return callback(userdata, &rect);
 }
 
-static bool emit_ui_rect_from_values_clipped(yyjson_val *source, const char *name, float x, float y, float w, float h,
-                                             slayer3d_color color, bool has_clip_rect,
-                                             slayer3d_ui_layout_rect clip_rect, slayer3d_game_data_ui_rect_fn callback,
-                                             void *userdata)
+static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float x, float y, float w, float h,
+                                     slayer3d_color color, slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    const int layer = json_int(source, "layer", json_int(source, "z", 0));
+    return emit_ui_rect_from_values_layered(source, name, layer, x, y, w, h, color, callback, userdata);
+}
+
+static bool emit_ui_rect_from_values_clipped_layered(yyjson_val *source, const char *name, int layer, float x, float y,
+                                                     float w, float h, slayer3d_color color, bool has_clip_rect,
+                                                     slayer3d_ui_layout_rect clip_rect,
+                                                     slayer3d_game_data_ui_rect_fn callback, void *userdata)
 {
     if (color.a == 0 || w <= 0.0f || h <= 0.0f)
         return true;
@@ -1992,6 +2005,7 @@ static bool emit_ui_rect_from_values_clipped(yyjson_val *source, const char *nam
     SDL_zero(rect);
     rect.name = name;
     rect.visible = "always";
+    rect.layer = layer;
     rect.x = x;
     rect.y = y;
     rect.w = w;
@@ -2049,20 +2063,20 @@ static bool for_each_ui_panel_rect_root(const slayer3d_game_data_runtime *runtim
     return true;
 }
 
-static bool emit_retained_ui_rect_border(const char *name, const slayer3d_ui_layout_rect *rect, float border,
+static bool emit_retained_ui_rect_border(const char *name, const slayer3d_ui_layout_rect *rect, int layer, float border,
                                          slayer3d_color color, bool has_clip_rect, slayer3d_ui_layout_rect clip_rect,
                                          slayer3d_game_data_ui_rect_fn callback, void *userdata)
 {
     if (name == NULL || rect == NULL || border <= 0.0f || color.a == 0)
         return true;
-    return emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y, rect->w, border, color, has_clip_rect,
-                                            clip_rect, callback, userdata) &&
-           emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y + rect->h - border, rect->w, border, color,
-                                            has_clip_rect, clip_rect, callback, userdata) &&
-           emit_ui_rect_from_values_clipped(NULL, name, rect->x, rect->y, border, rect->h, color, has_clip_rect,
-                                            clip_rect, callback, userdata) &&
-           emit_ui_rect_from_values_clipped(NULL, name, rect->x + rect->w - border, rect->y, border, rect->h, color,
-                                            has_clip_rect, clip_rect, callback, userdata);
+    return emit_ui_rect_from_values_clipped_layered(NULL, name, layer, rect->x, rect->y, rect->w, border, color,
+                                                    has_clip_rect, clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped_layered(NULL, name, layer, rect->x, rect->y + rect->h - border, rect->w,
+                                                    border, color, has_clip_rect, clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped_layered(NULL, name, layer, rect->x, rect->y, border, rect->h, color,
+                                                    has_clip_rect, clip_rect, callback, userdata) &&
+           emit_ui_rect_from_values_clipped_layered(NULL, name, layer, rect->x + rect->w - border, rect->y, border,
+                                                    rect->h, color, has_clip_rect, clip_rect, callback, userdata);
 }
 
 static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_command *command)
@@ -2163,17 +2177,17 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
         const slayer3d_color border = retained_ui_command_border(command);
         const float border_thickness =
             command->border_thickness > 0.0f ? command->border_thickness : (command->selected ? 3.0f : 1.0f);
-        ok = emit_ui_rect_from_values_clipped(NULL, name, command->rect.x, command->rect.y, command->rect.w,
-                                              command->rect.h, fill, command->has_clip_rect, command->clip_rect,
-                                              callback, userdata) &&
-             emit_retained_ui_rect_border(name, &command->rect, border_thickness, border, command->has_clip_rect,
-                                          command->clip_rect, callback, userdata);
+        ok = emit_ui_rect_from_values_clipped_layered(NULL, name, command->layer, command->rect.x, command->rect.y,
+                                                      command->rect.w, command->rect.h, fill, command->has_clip_rect,
+                                                      command->clip_rect, callback, userdata) &&
+             emit_retained_ui_rect_border(name, &command->rect, command->layer, border_thickness, border,
+                                          command->has_clip_rect, command->clip_rect, callback, userdata);
         if (ok && command->selected)
         {
             char selected_name[SLAYER3D_UI_LAYOUT_ID_MAX];
             if (retained_ui_selected_name(command->id, selected_name, sizeof(selected_name)))
             {
-                ok = emit_retained_ui_rect_border(selected_name, &command->rect, 4.0f,
+                ok = emit_retained_ui_rect_border(selected_name, &command->rect, command->layer, 4.0f,
                                                   (slayer3d_color){96, 255, 128, 255}, command->has_clip_rect,
                                                   command->clip_rect, callback, userdata);
             }

@@ -102,6 +102,13 @@ const slayer3d_mesh *slayer3d_game_data_find_or_build_mesh_primitive(
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive);
 
+bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                        slayer3d_game_data_font_cache *font_cache,
+                                        slayer3d_game_data_image_cache *image_cache,
+                                        const slayer3d_game_data_asset_warmup_queue *asset_warmup,
+                                        const slayer3d_game_data_ui_metrics *metrics,
+                                        const slayer3d_game_data_render_eval *render_eval, float pulse_phase);
+
 bool slayer3d_game_data_draw_mesh_primitive(primitive_draw_context *context,
                                             const slayer3d_game_data_render_primitive *primitive);
 
