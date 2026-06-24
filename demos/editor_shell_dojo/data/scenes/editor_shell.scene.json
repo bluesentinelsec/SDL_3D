@@ -756,7 +756,7 @@
         "clip_children": true,
         "interactive": true,
         "layer": 500,
-        "fill_color": [8, 13, 22, 245],
+        "fill_color": [8, 13, 22, 255],
         "border_color": [82, 112, 154, 255],
         "border_thickness": 1,
         "visible_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false },

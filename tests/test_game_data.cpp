@@ -21100,6 +21100,31 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
+    auto resolved_file_panel_color = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            slayer3d_color color{0, 0, 0, 0};
+            bool found = false;
+        } capture{runtime, {}, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr ||
+                std::string(rect->name) != "ui.editor_shell.file_menu.panel")
+                return true;
+            slayer3d_game_data_ui_rect resolved{};
+            bool visible = false;
+            if (slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &resolved, &visible) && visible)
+            {
+                capture->color = resolved.color;
+                capture->found = true;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.found);
+        return capture.color;
+    };
     struct HitSummary
     {
         std::string id;
@@ -21132,6 +21157,8 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_EQ(file_open_field_hit.id, "ui.editor_shell.file_menu.open_path.field");
     EXPECT_EQ(file_open_field_hit.action, "editor.file.focus.open");
     std::vector<std::string> file_rects = visible_file_rects();
+    slayer3d_color file_panel_color = resolved_file_panel_color();
+    EXPECT_EQ(file_panel_color.a, 255);
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.new.button"),
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.open_path.field"),
