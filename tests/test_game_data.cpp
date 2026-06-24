@@ -21100,11 +21100,37 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
+    struct HitSummary
+    {
+        std::string id;
+        std::string action;
+    };
+    auto retained_ui_hit = [&](float x, float y) {
+        HitSummary result;
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return result;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
+        if (hit != nullptr)
+        {
+            result.id = hit->id;
+            result.action = hit->action;
+        }
+        slayer3d_ui_layout_destroy(layout);
+        return result;
+    };
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     emit_signal("signal.editor.file.toggle");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", false));
+    HitSummary blank_file_menu_hit = retained_ui_hit(24.0f, 112.0f);
+    EXPECT_NE(blank_file_menu_hit.id.find("ui.editor_shell.file_menu."), std::string::npos);
+    HitSummary file_open_field_hit = retained_ui_hit(48.0f, 148.0f);
+    EXPECT_EQ(file_open_field_hit.id, "ui.editor_shell.file_menu.open_path.field");
+    EXPECT_EQ(file_open_field_hit.action, "editor.file.focus.open");
     std::vector<std::string> file_rects = visible_file_rects();
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.new.button"),
               file_rects.end());
@@ -21128,11 +21154,13 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_input_process_event(input, &motion_event);
     SDL_Event text_event{};
     text_event.type = SDL_EVENT_TEXT_INPUT;
-    text_event.text.text = "test_level.slayermap.json";
+    text_event.text.text = "b-test_level.slayermap.json";
     slayer3d_input_process_event(input, &text_event);
     slayer3d_input_update(input, 1);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.input.path", ""), "test_level.slayermap.json");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""),
+                 "b-test_level.slayermap.json");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.input.path", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
 
     slayer3d_game_data_create_box_brush_desc box{};
@@ -21168,12 +21196,13 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "map validation passed with 6 warnings");
 
     const std::filesystem::path save_dir = unique_test_dir("editor_file_menu");
-    const std::filesystem::path save_path = save_dir / "level.slayermap.json";
+    const std::filesystem::path save_path = save_dir / "map.json";
     slayer3d_properties_set_string(scene_state, "editor.save_as.path", save_path.string().c_str());
     emit_signal("signal.editor.file.save_as");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
     EXPECT_TRUE(std::filesystem::exists(save_path));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), save_path.string().c_str());
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
 
     emit_signal("signal.editor.file.new");
@@ -21183,7 +21212,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_game_data_editor_actor placed{};
     EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.file_probe", &placed));
 
-    slayer3d_properties_set_string(scene_state, "editor.input.path", save_path.string().c_str());
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), save_path.string().c_str());
     emit_signal("signal.editor.file.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());
@@ -25285,6 +25314,20 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(placed_object.properties, "display_mode", ""), "solid");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 2);
 
+    slayer3d_signal_emit(bus, clear_selection_signal, nullptr);
+    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 23);
+    slayer3d_game_data_editor_selection object_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &object_selection));
+    EXPECT_TRUE(object_selection.hit);
+    EXPECT_EQ(object_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(object_selection.world_name, "editor_actors");
+    EXPECT_STREQ(object_selection.element_name, "object.editor_shell.box.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.type", ""), "editor_actor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""),
+                 "object.editor_shell.box.1");
+
     slayer3d_properties_set_string(mutable_scene_state, "editor.mode", "thing");
     slayer3d_properties_set_string(mutable_scene_state, "editor.tool.mode", "player_start");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -25332,12 +25375,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     right_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     slayer3d_input_process_event(input, &right_click);
-    slayer3d_input_update(input, 23);
+    slayer3d_input_update(input, 30);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
     slayer3d_signal_emit(bus, mode_select_signal, nullptr);
-    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 24);
-    press_editor_key(SDL_SCANCODE_BACKSPACE, 25);
+    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 31);
+    press_editor_key(SDL_SCANCODE_BACKSPACE, 32);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.message", ""),
                  "player start deleted");

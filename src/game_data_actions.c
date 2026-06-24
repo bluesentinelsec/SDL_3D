@@ -2757,8 +2757,40 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "scene_state.set") == 0)
     {
         const char *key = json_string(action, "key", NULL);
+        const char *value_from_state = json_string(action, "value_from_state", NULL);
         yyjson_val *value = obj_get(action, "value");
-        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || value == NULL)
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+            return false;
+        if (value_from_state != NULL && value_from_state[0] != '\0')
+        {
+            const slayer3d_value *source = slayer3d_properties_get_value(runtime->scene_state, value_from_state);
+            if (source == NULL)
+                return false;
+            switch (source->type)
+            {
+            case SLAYER3D_VALUE_INT:
+                slayer3d_properties_set_int(runtime->scene_state, key, source->as_int);
+                return true;
+            case SLAYER3D_VALUE_FLOAT:
+                slayer3d_properties_set_float(runtime->scene_state, key, source->as_float);
+                return true;
+            case SLAYER3D_VALUE_BOOL:
+                slayer3d_properties_set_bool(runtime->scene_state, key, source->as_bool);
+                return true;
+            case SLAYER3D_VALUE_VEC3:
+                slayer3d_properties_set_vec3(runtime->scene_state, key, source->as_vec3);
+                return true;
+            case SLAYER3D_VALUE_STRING:
+                slayer3d_properties_set_string(runtime->scene_state, key,
+                                               source->as_string != NULL ? source->as_string : "");
+                return true;
+            case SLAYER3D_VALUE_COLOR:
+                slayer3d_properties_set_color(runtime->scene_state, key, source->as_color);
+                return true;
+            }
+            return false;
+        }
+        if (value == NULL)
             return false;
         return set_property_from_json_with_payload(runtime->scene_state, key, value, payload);
     }

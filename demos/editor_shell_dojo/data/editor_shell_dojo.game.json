@@ -4552,7 +4552,7 @@
           {
             "type": "editor.map.load",
             "world": "brush.editor_shell.target",
-            "path_from_state": "editor.input.path",
+            "path_from_state": "editor.file.open.path",
             "outputs": {
               "valid_key": "editor.load.valid",
               "message_key": "editor.load.message",
@@ -4626,6 +4626,7 @@
         "signal": "signal.editor.file.save_as",
         "actions": [
           { "type": "signal.emit", "signal": "signal.editor.save_as" },
+          { "type": "scene_state.set", "key": "editor.file.open.path", "value_from_state": "editor.save.path" },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]

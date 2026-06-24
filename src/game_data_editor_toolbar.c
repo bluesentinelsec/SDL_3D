@@ -182,7 +182,7 @@ static void editor_update_file_edit_display(slayer3d_game_data_runtime *runtime)
     const bool open_focus = SDL_strcmp(focus, "open") == 0;
     const bool save_as_focus = SDL_strcmp(focus, "save_as") == 0;
     const bool cursor_visible = ((SDL_GetTicks() / 500U) % 2U) == 0U;
-    const char *open_path = slayer3d_properties_get_string(runtime->scene_state, "editor.input.path", "");
+    const char *open_path = slayer3d_properties_get_string(runtime->scene_state, "editor.file.open.path", "");
     const char *save_as_path = slayer3d_properties_get_string(runtime->scene_state, "editor.save_as.path", "");
 
     char display[320];
@@ -466,7 +466,7 @@ static bool editor_update_file_text_edit(slayer3d_game_data_runtime *runtime)
         return true;
     }
 
-    const char *edit_key = open_focus ? "editor.input.path" : "editor.save_as.path";
+    const char *edit_key = open_focus ? "editor.file.open.path" : "editor.save_as.path";
     bool changed = false;
     if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_BACKSPACE) ||
         slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DELETE))

@@ -398,8 +398,7 @@ bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, 
     init_editor_selection(&world_selection);
     init_editor_selection(&player_start_selection);
     init_editor_selection(&actor_selection);
-    if (!slayer3d_game_data_pick_editor_world_model(runtime, trace, &world_selection))
-        return editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection);
+    (void)slayer3d_game_data_pick_editor_world_model(runtime, trace, &world_selection);
     const bool player_start_hit = pick_editor_player_start(runtime, trace, &player_start_selection);
     const bool actor_hit = pick_editor_actor(runtime, trace, &actor_selection);
     const slayer3d_game_data_editor_selection *best = NULL;

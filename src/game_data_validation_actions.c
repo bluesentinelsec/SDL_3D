@@ -1709,10 +1709,19 @@ static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val 
     if (!is_non_empty_string(action, "key"))
         return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
     yyjson_val *value = obj_get(action, "value");
+    yyjson_val *value_from_state = obj_get(action, "value_from_state");
+    if (value != NULL && value_from_state != NULL)
+        return validation_error(ctx, json_path, "scene_state.set requires value or value_from_state, not both");
+    if (value_from_state != NULL)
+    {
+        if (!yyjson_is_str(value_from_state) || yyjson_get_str(value_from_state)[0] == '\0')
+            return validation_error(ctx, json_path, "scene_state.set value_from_state must be a non-empty string");
+        return true;
+    }
     if (value == NULL ||
         !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
     {
-        return validation_error(ctx, json_path, "scene_state.set requires a scalar or vec3 value");
+        return validation_error(ctx, json_path, "scene_state.set requires a scalar, vec3, or value_from_state");
     }
     return true;
 }
