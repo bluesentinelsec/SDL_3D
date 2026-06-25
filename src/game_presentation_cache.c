@@ -114,6 +114,7 @@ static void image_cache_entry_release(slayer3d_game_data_image_cache_entry *entr
         return;
     if (entry->loaded)
         slayer3d_free_texture(&entry->texture);
+    SDL_free(entry->image_id);
     SDL_free(entry->source_path);
     SDL_free(entry->shader_vertex_source);
     SDL_free(entry->shader_fragment_source);
@@ -391,11 +392,17 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
         return NULL;
 
     char *owned_source_path = NULL;
+    char *owned_image_id = SDL_strdup(image_id);
+    if (owned_image_id == NULL)
+        return NULL;
     if (source_path != NULL && source_path[0] != '\0')
     {
         owned_source_path = SDL_strdup(source_path);
         if (owned_source_path == NULL)
+        {
+            SDL_free(owned_image_id);
             return NULL;
+        }
     }
 
     slayer3d_game_data_image_cache_entry *slot = NULL;
@@ -405,6 +412,7 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
         {
             if (image_cache_source_matches(&cache->entries[i], source_path) && cache->entries[i].loaded)
             {
+                SDL_free(owned_image_id);
                 SDL_free(owned_source_path);
                 slayer3d_free_texture(texture);
                 if (shader_vertex_source != NULL)
@@ -427,13 +435,14 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
 
     if (slot == NULL && !ensure_image_cache_capacity(cache, cache->count + 1))
     {
+        SDL_free(owned_image_id);
         SDL_free(owned_source_path);
         return NULL;
     }
 
     slayer3d_game_data_image_cache_entry *entry = slot != NULL ? slot : &cache->entries[cache->count];
     SDL_zero(*entry);
-    entry->image_id = image_id;
+    entry->image_id = owned_image_id;
     entry->source_path = owned_source_path;
     entry->effect = effect;
     entry->effect_delay = effect_delay;

@@ -54,7 +54,7 @@ extern "C"
     typedef struct slayer3d_game_data_image_cache_entry
     {
         slayer3d_texture2d texture;   /**< Loaded texture. */
-        const char *image_id;         /**< Runtime-owned image asset id. */
+        char *image_id;               /**< Owned image asset id. */
         char *source_path;            /**< Owned direct path or sprite id used to load this image. */
         const char *effect;           /**< Optional sprite-backed effect id. */
         float effect_delay;           /**< Seconds to wait before effect starts. */
@@ -533,6 +533,16 @@ extern "C"
     /** @brief Queue a UI/image asset id for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,
                                                           const char *image_id);
+
+    /**
+     * @brief Queue a UI/image asset using a caller-resolved source path.
+     *
+     * This is useful for image ids whose backing file can change at runtime.
+     * The source path participates in deduplication so a stable image id can be
+     * reloaded when it points at a different file.
+     */
+    bool slayer3d_game_data_asset_warmup_request_ui_image_source(slayer3d_game_data_asset_warmup_queue *queue,
+                                                                 const char *source_path, const char *image_id);
 
     /** @brief Queue a font asset id for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue,

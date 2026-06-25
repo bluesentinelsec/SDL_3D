@@ -148,9 +148,7 @@ bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtim
             const char *path = slayer3d_properties_get_string(runtime->scene_state, key, NULL);
             if (path != NULL && path[0] != '\0')
             {
-                SDL_snprintf(key, sizeof(key), "editor.texture.slot.%c.image_id", index_text[0]);
-                const char *dynamic_id = slayer3d_properties_get_string(runtime->scene_state, key, NULL);
-                out_image->id = dynamic_id != NULL && dynamic_id[0] != '\0' ? dynamic_id : id;
+                out_image->id = id;
                 out_image->path = path;
                 return true;
             }

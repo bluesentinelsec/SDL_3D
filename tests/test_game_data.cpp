@@ -21007,8 +21007,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.1.available", true));
     slayer3d_game_data_image_asset filtered_slot_image{};
     ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &filtered_slot_image));
+    EXPECT_STREQ(filtered_slot_image.id, "image.editor_shell.texture.slot_0");
     EXPECT_STREQ(filtered_slot_image.path, (texture_dir / "metal" / "beta-panel.png").string().c_str());
-    const std::string filtered_slot_image_id = filtered_slot_image.id != nullptr ? filtered_slot_image.id : "";
 
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
     emit_signal("signal.editor.texture.search.apply");
@@ -21019,8 +21019,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.3.available", true));
     slayer3d_game_data_image_asset restored_slot_image{};
     ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &restored_slot_image));
+    EXPECT_STREQ(restored_slot_image.id, "image.editor_shell.texture.slot_0");
     EXPECT_STREQ(restored_slot_image.path, (texture_dir / "alpha-wall.jpg").string().c_str());
-    EXPECT_NE(restored_slot_image.id != nullptr ? restored_slot_image.id : "", filtered_slot_image_id);
 
     emit_signal("signal.editor.texture.select_slot.2");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
@@ -21058,6 +21058,96 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(texture_dir.parent_path());
+}
+
+TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChanges)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path repo_root = std::filesystem::path(SLAYER3D_DEMOS_ROOT).parent_path();
+    const std::filesystem::path texture_dir = repo_root / "media" / "textures";
+    ASSERT_TRUE(std::filesystem::exists(texture_dir / "lava.jpg")) << texture_dir;
+    ASSERT_TRUE(std::filesystem::exists(texture_dir / "door-hatch.png")) << texture_dir;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", texture_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "media/textures");
+
+    emit_signal("signal.editor.texture.refresh");
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", false));
+    slayer3d_game_data_image_asset initial_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &initial_asset));
+    ASSERT_NE(initial_asset.path, nullptr);
+    EXPECT_STREQ(initial_asset.id, "image.editor_shell.texture.slot_0");
+    const std::string initial_path = initial_asset.path;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    slayer3d_game_data_image_cache image_cache{};
+    slayer3d_game_data_image_cache_init(&image_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+
+    auto warm_slot_0 = [&](const std::string &expected_source) {
+        ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image_source(&queue, expected_source.c_str(),
+                                                                            "image.editor_shell.texture.slot_0"));
+        for (int attempt = 0; attempt < 100; ++attempt)
+        {
+            (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache,
+                                                                nullptr, nullptr, nullptr, assets, 1);
+            if (image_cache.count == 1 && image_cache.entries[0].source_path != nullptr &&
+                expected_source == image_cache.entries[0].source_path)
+            {
+                return;
+            }
+            SDL_Delay(1);
+        }
+        FAIL() << "texture slot thumbnail did not warm source " << expected_source;
+    };
+
+    warm_slot_0(initial_path);
+    ASSERT_EQ(image_cache.count, 1);
+    EXPECT_STREQ(image_cache.entries[0].image_id, "image.editor_shell.texture.slot_0");
+    EXPECT_TRUE(image_cache.entries[0].loaded);
+
+    const char *query = initial_path.find("lava.jpg") == std::string::npos ? "lava" : "door";
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", query);
+    emit_signal("signal.editor.texture.search.apply");
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", false));
+    slayer3d_game_data_image_asset filtered_asset{};
+    ASSERT_TRUE(slayer3d_game_data_get_image_asset(runtime, "image.editor_shell.texture.slot_0", &filtered_asset));
+    ASSERT_NE(filtered_asset.path, nullptr);
+    EXPECT_STREQ(filtered_asset.id, "image.editor_shell.texture.slot_0");
+    const std::string filtered_path = filtered_asset.path;
+    EXPECT_NE(filtered_path, initial_path);
+
+    warm_slot_0(filtered_path);
+    ASSERT_EQ(image_cache.count, 1);
+    EXPECT_STREQ(image_cache.entries[0].image_id, "image.editor_shell.texture.slot_0");
+    EXPECT_STREQ(image_cache.entries[0].source_path, filtered_path.c_str());
+    EXPECT_TRUE(image_cache.entries[0].loaded);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_image_cache_free(&image_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
