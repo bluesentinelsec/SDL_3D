@@ -831,7 +831,7 @@ TEST(InputDemo, RecordAndPlayback)
 
     std::vector<unsigned char> bytes = read_binary_file(path);
     constexpr size_t kDemoHeaderSize = 24U;
-    constexpr size_t kDemoSnapshotSize = 13U + SLAYER3D_INPUT_MAX_ACTIONS * 5U;
+    constexpr size_t kDemoSnapshotSize = 21U + SLAYER3D_INPUT_MAX_ACTIONS * 5U;
     ASSERT_EQ(kDemoHeaderSize + 2U * kDemoSnapshotSize, bytes.size());
     EXPECT_EQ('S', bytes[0]);
     EXPECT_EQ('L', bytes[1]);
@@ -841,7 +841,7 @@ TEST(InputDemo, RecordAndPlayback)
     EXPECT_EQ('R', bytes[5]);
     EXPECT_EQ('3', bytes[6]);
     EXPECT_EQ('D', bytes[7]);
-    EXPECT_EQ(3U, read_u32_le(bytes, 8));
+    EXPECT_EQ(4U, read_u32_le(bytes, 8));
     EXPECT_EQ(2U, read_u32_le(bytes, 16));
     EXPECT_EQ(SLAYER3D_INPUT_MAX_ACTIONS, read_u32_le(bytes, 20));
 

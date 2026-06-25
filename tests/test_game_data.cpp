@@ -18712,6 +18712,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     const slayer3d_value *actor_anchor = slayer3d_properties_get_value(scene_state, "editor.placement_preview.anchor");
     ASSERT_NE(actor_anchor, nullptr);
     ASSERT_EQ(actor_anchor->type, SLAYER3D_VALUE_VEC3);
+    const slayer3d_vec3 placement_anchor = actor_anchor->as_vec3;
 
     emit_signal("signal.editor.command.commit");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.valid", false));
@@ -18729,9 +18730,9 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_EQ(placed.color.g, 235);
     EXPECT_EQ(placed.color.b, 130);
     EXPECT_EQ(placed.color.a, 255);
-    EXPECT_NEAR(placed.position.x, actor_anchor->as_vec3.x, 0.001f);
-    EXPECT_NEAR(placed.position.y, actor_anchor->as_vec3.y, 0.001f);
-    EXPECT_NEAR(placed.position.z, actor_anchor->as_vec3.z, 0.001f);
+    EXPECT_NEAR(placed.position.x, placement_anchor.x, 0.001f);
+    EXPECT_NEAR(placed.position.y, placement_anchor.y, 0.001f);
+    EXPECT_NEAR(placed.position.z, placement_anchor.z, 0.001f);
     ASSERT_NE(placed.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "classname", ""), "object_capsule");
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "role", ""), "object");
@@ -44201,7 +44202,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableGameFromEditorPlaneBrushes)
     const std::filesystem::path dir = unique_test_dir("slayermap_playable_planes");
     const std::filesystem::path texture_path = dir / "floor.png";
     write_text(texture_path, "placeholder");
-    const std::string texture = texture_path.string();
+    const std::string texture = texture_path.generic_string();
     const std::string map_json = std::string(R"json({
   "format": "slayer3d.map",
   "version": 1,
