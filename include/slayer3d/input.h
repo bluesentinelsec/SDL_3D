@@ -105,10 +105,12 @@ extern "C"
     typedef struct slayer3d_input_snapshot
     {
         slayer3d_action_state actions[SLAYER3D_INPUT_MAX_ACTIONS];
-        float mouse_dx;   /**< Raw horizontal mouse motion accumulated this tick. */
-        float mouse_dy;   /**< Raw vertical mouse motion accumulated this tick. */
-        int tick;         /**< Simulation tick number for demo synchronization. */
-        bool any_pressed; /**< True when any key, mouse button, gamepad button, or action was pressed. */
+        float mouse_dx;      /**< Raw horizontal mouse motion accumulated this tick. */
+        float mouse_dy;      /**< Raw vertical mouse motion accumulated this tick. */
+        float mouse_wheel_x; /**< Raw horizontal mouse wheel delta accumulated this tick. */
+        float mouse_wheel_y; /**< Raw vertical mouse wheel delta accumulated this tick. */
+        int tick;            /**< Simulation tick number for demo synchronization. */
+        bool any_pressed;    /**< True when any key, mouse button, gamepad button, or action was pressed. */
     } slayer3d_input_snapshot;
 
     /** @brief Opaque action input manager. */
@@ -423,6 +425,12 @@ extern "C"
 
     /** @brief Return raw vertical mouse motion for the current tick. */
     float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input);
+
+    /** @brief Return raw horizontal mouse wheel motion for the current tick. */
+    float slayer3d_input_get_mouse_wheel_x(const slayer3d_input_manager *input);
+
+    /** @brief Return raw vertical mouse wheel motion for the current tick. */
+    float slayer3d_input_get_mouse_wheel_y(const slayer3d_input_manager *input);
 
     /**
      * @brief Map subsequent absolute SDL mouse positions into logical space.

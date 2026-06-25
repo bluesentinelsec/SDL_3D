@@ -6349,6 +6349,7 @@
         "w": 1280,
         "h": 120,
         "clip_children": true,
+        "interactive": true,
         "layer": 120,
         "children": [
           {
@@ -6447,6 +6448,22 @@
             "layer": 121,
             "children": [
               {
+                "id": "ui.editor_shell.console.line0.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line0.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
+              {
                 "id": "ui.editor_shell.console.line0",
                 "type": "label",
                 "x": 12,
@@ -6469,6 +6486,22 @@
             "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line1.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line1.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line1",
                 "type": "label",
@@ -6493,6 +6526,22 @@
             "layer": 121,
             "children": [
               {
+                "id": "ui.editor_shell.console.line2.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line2.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
+              {
                 "id": "ui.editor_shell.console.line2",
                 "type": "label",
                 "x": 12,
@@ -6516,6 +6565,22 @@
             "layer": 121,
             "children": [
               {
+                "id": "ui.editor_shell.console.line3.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line3.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
+              {
                 "id": "ui.editor_shell.console.line3",
                 "type": "label",
                 "x": 12,
@@ -6538,6 +6603,22 @@
             "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line4.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line4.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line4",
                 "type": "label",

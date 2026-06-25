@@ -6,6 +6,51 @@
 #define EDITOR_CONSOLE_VISIBLE_COUNT 5
 #define EDITOR_CONSOLE_THUMB_TRAVEL 44.0f
 
+static void editor_clear_console_selection_state(slayer3d_properties *scene_state)
+{
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(scene_state, "editor.console.selection.active", false);
+    slayer3d_properties_set_bool(scene_state, "editor.console.selection.has", false);
+    slayer3d_properties_set_string(scene_state, "editor.console.selection.clipboard", "");
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    {
+        char selected_key[64];
+        SDL_snprintf(selected_key, sizeof(selected_key), "editor.console.line%d.selected", i);
+        slayer3d_properties_set_bool(scene_state, selected_key, false);
+    }
+}
+
+static void editor_refresh_console_selection_rows(slayer3d_properties *scene_state, int scroll, int count)
+{
+    if (scene_state == NULL)
+        return;
+    const bool selection_visible = slayer3d_properties_get_bool(scene_state, "editor.console.selection.has", false) ||
+                                   slayer3d_properties_get_bool(scene_state, "editor.console.selection.active", false);
+    int min_index = -1;
+    int max_index = -1;
+    if (selection_visible)
+    {
+        const int anchor = slayer3d_properties_get_int(scene_state, "editor.console.selection.anchor", -1);
+        const int cursor = slayer3d_properties_get_int(scene_state, "editor.console.selection.cursor", anchor);
+        if (anchor >= 0 && cursor >= 0)
+        {
+            min_index = SDL_min(anchor, cursor);
+            max_index = SDL_max(anchor, cursor);
+        }
+    }
+
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    {
+        char selected_key[64];
+        const int history_index = scroll + i;
+        const bool selected =
+            history_index < count && min_index >= 0 && history_index >= min_index && history_index <= max_index;
+        SDL_snprintf(selected_key, sizeof(selected_key), "editor.console.line%d.selected", i);
+        slayer3d_properties_set_bool(scene_state, selected_key, selected);
+    }
+}
+
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value)
 {
     const char *key = json_string(outputs, key_name, NULL);
@@ -65,6 +110,7 @@ void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const c
                               slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0) + 1);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.count", count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", 0);
+    editor_clear_console_selection_state(runtime->scene_state);
     editor_refresh_console_lines(runtime);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
 }
@@ -94,6 +140,7 @@ void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime)
     const float thumb_offset =
         max_scroll > 0 ? -((float)scroll / (float)max_scroll) * EDITOR_CONSOLE_THUMB_TRAVEL : 0.0f;
     slayer3d_properties_set_float(runtime->scene_state, "editor.console.scroll.y", thumb_offset);
+    editor_refresh_console_selection_rows(runtime->scene_state, scroll, count);
 }
 
 static int editor_revision_to_int(Uint64 revision)
