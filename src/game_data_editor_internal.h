@@ -152,6 +152,7 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
 void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
                                          const slayer3d_game_data_editor_selection *selection, int slot_count);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_translate_selected_editor_actor(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,
                                                        const int source_min[3], const int source_max[3],

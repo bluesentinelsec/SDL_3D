@@ -163,6 +163,7 @@ typedef struct editor_drag_move_state
     bool rotate_drag;
     bool scale_drag;
     bool shear_drag;
+    bool target_actor;
     bool vertex_toggle_on_click;
     bool lasso_additive;
     const char *scene;
