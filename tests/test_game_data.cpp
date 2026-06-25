@@ -43729,6 +43729,7 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     EXPECT_EQ(scene_desc.texture_asset_count, 1u);
     EXPECT_EQ(scene_desc.model_asset_count, 1u);
     EXPECT_EQ(scene_desc.material_count, 1u);
+    EXPECT_EQ(scene_desc.playable_brush_count, 1u);
     EXPECT_EQ(scene_desc.box_brush_count, 1u);
     EXPECT_EQ(scene_desc.actor_count, 1u);
     EXPECT_TRUE(scene_desc.has_player_character);
@@ -43973,6 +43974,7 @@ TEST(GameDataRuntime, SlayerMapPlayableSceneRequiresPlayerCharacter)
     slayer3d_map_playable_scene_desc scene_desc{};
     EXPECT_FALSE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("type = player-character"), std::string::npos);
+    EXPECT_EQ(scene_desc.playable_brush_count, 1u);
     EXPECT_EQ(scene_desc.box_brush_count, 1u);
     EXPECT_EQ(scene_desc.actor_count, 1u);
     EXPECT_FALSE(scene_desc.has_player_character);
@@ -44061,6 +44063,87 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
     EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_collision_brush", ""), "brush.north_wall");
     EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_floor_brush", ""), "brush.floor");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SlayerMapWritesPlayableGameFromEditorPlaneBrushes)
+{
+    const std::filesystem::path dir = unique_test_dir("slayermap_playable_planes");
+    const std::filesystem::path texture_path = dir / "floor.png";
+    write_text(texture_path, "placeholder");
+    const std::string texture = texture_path.string();
+    const std::string map_json = std::string(R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "materials": [
+    { "id": "mat.floor", "texture": ")json") +
+                                 texture + R"json(", "color": [128, 128, 128, 255] },
+    { "id": "mat.wall", "color": [64, 72, 88, 255] }
+  ],
+  "brushes": [
+    {
+      "id": "brush.room",
+      "geometry": {
+        "kind": "planes",
+        "planes": [
+          { "normal": [1, 0, 0], "distance": 4.0, "material": "mat.wall" },
+          { "normal": [-1, 0, 0], "distance": 4.0, "material": "mat.wall" },
+          { "normal": [0, 1, 0], "distance": 3.0, "material": "mat.wall" },
+          { "normal": [0, -1, 0], "distance": 0.0, "material": "mat.floor" },
+          { "normal": [0, 0, 1], "distance": 4.0, "material": "mat.wall" },
+          { "normal": [0, 0, -1], "distance": 4.0, "material": "mat.wall" }
+        ]
+      },
+      "material": "mat.floor"
+    }
+  ],
+  "actors": [
+    {
+      "id": "object.editor_shell.capsule.1",
+      "primitive": "capsule",
+      "transform": { "position": [0, 0, 1.5] },
+      "properties": { "actor-type": "player-character" }
+    }
+  ]
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json.c_str(), map_json.size(), nullptr, &document, error, sizeof(error)))
+        << error;
+
+    slayer3d_map_playable_scene_desc scene_desc{};
+    ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error))) << error;
+    EXPECT_EQ(scene_desc.playable_brush_count, 1u);
+    EXPECT_EQ(scene_desc.box_brush_count, 0u);
+    EXPECT_TRUE(scene_desc.has_player_character);
+    EXPECT_STREQ(scene_desc.player_actor_id, "object.editor_shell.capsule.1");
+
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
+    slayer3d_map_destroy(document);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "playable_map.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.slayermap", &world));
+    EXPECT_EQ(world.brush_count, 1);
+    ASSERT_EQ(world.material_count, 2);
+    EXPECT_STREQ(world.materials[0].name, "mat.floor");
+    ASSERT_NE(world.materials[0].texture, nullptr);
+    EXPECT_STREQ(world.materials[0].texture, texture.c_str());
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(player->position.z, 1.5f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

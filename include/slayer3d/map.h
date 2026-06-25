@@ -143,15 +143,17 @@ extern "C"
      * @brief Minimal playable scene descriptor derived from a loaded map.
      *
      * This does not own geometry or actor data. It summarizes the runtime-facing
-     * content and identifies the actor/object marked with
-     * `properties.type == "player-character"` so a game can spawn a first-person
-     * controller from an editor-authored map.
+     * content and identifies the actor/object marked with `properties.type`,
+     * `properties.actor-type`, or `properties.actor_type` equal to
+     * `"player-character"` so a game can spawn a first-person controller from
+     * an editor-authored map.
      */
     typedef struct slayer3d_map_playable_scene_desc
     {
         size_t texture_asset_count;
         size_t model_asset_count;
         size_t material_count;
+        size_t playable_brush_count;
         size_t box_brush_count;
         size_t actor_count;
         bool has_player_character;
@@ -359,10 +361,10 @@ extern "C"
     /**
      * @brief Build a minimal playable scene descriptor from a loaded map.
      *
-     * The descriptor identifies box brush geometry and placed actors, then
-     * requires exactly the first actor/object whose arbitrary property bag
-     * contains `type = "player-character"`. The returned strings are borrowed
-     * from @p document.
+     * The descriptor identifies playable brush geometry and placed actors, then
+     * requires the first actor/object whose arbitrary property bag contains
+     * `type`, `actor-type`, or `actor_type` equal to `"player-character"`. The
+     * returned strings are borrowed from @p document.
      *
      * @return true when a playable scene descriptor was built and a
      * player-character actor was found.
@@ -376,13 +378,14 @@ extern "C"
      *
      * This emits `playable_map.game.json` and `scenes/play.scene.json` under
      * @p output_dir. The generated game uses the existing data-game
-     * `controller.fps_brush` component, converts map box brushes into runtime
-     * brush-world planes, and spawns the player at the first actor/object marked
-     * with `properties.type == "player-character"`.
+     * `controller.fps_brush` component, converts map box and plane brushes into
+     * runtime brush-world planes, and spawns the player at the first
+     * actor/object marked with `properties.type`, `properties.actor-type`, or
+     * `properties.actor_type` equal to `"player-character"`.
      *
      * The generated package is a first playable bridge. It preserves geometry,
-     * material colors, and the player spawn, but does not copy external texture
-     * or model files into @p output_dir.
+     * material colors, material texture references, and the player spawn, but
+     * does not copy external texture or model files into @p output_dir.
      */
     bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *document, const char *output_dir,
                                                 char *error_buffer, int error_buffer_size);

@@ -52,7 +52,8 @@ int main(int argc, char **argv)
     slayer3d_map_playable_scene_desc scene;
     if (slayer3d_map_build_playable_scene_desc(map, &scene, error, (int)sizeof(error)))
     {
-        printf("  playable scene: %zu box brushes, %zu actors\n", scene.box_brush_count, scene.actor_count);
+        printf("  playable scene: %zu brushes (%zu box), %zu actors\n", scene.playable_brush_count,
+               scene.box_brush_count, scene.actor_count);
         printf("    player: %s at %.2f %.2f %.2f\n", scene.player_actor_id, scene.player_position.x,
                scene.player_position.y, scene.player_position.z);
     }

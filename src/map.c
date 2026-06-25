@@ -1709,8 +1709,21 @@ bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document,
 static bool map_actor_is_player_character(yyjson_val *actor)
 {
     yyjson_val *properties = map_properties_object(actor);
-    yyjson_val *type = map_obj_get(properties, "type");
-    return yyjson_is_str(type) && SDL_strcmp(yyjson_get_str(type), "player-character") == 0;
+    static const char *const keys[] = {"type", "actor-type", "actor_type"};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        yyjson_val *type = map_obj_get(properties, keys[i]);
+        if (yyjson_is_str(type) && SDL_strcmp(yyjson_get_str(type), "player-character") == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool map_brush_is_playable(const slayer3d_map_brush *brush)
+{
+    if (brush == NULL || brush->geometry_kind == NULL)
+        return false;
+    return brush->box.valid || SDL_strcmp(brush->geometry_kind, "planes") == 0;
 }
 
 bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *document,
@@ -1740,7 +1753,11 @@ bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *documen
     for (size_t i = 0; i < brush_count; ++i)
     {
         slayer3d_map_brush brush;
-        if (slayer3d_map_get_brush(document, i, &brush) && brush.box.valid)
+        if (!slayer3d_map_get_brush(document, i, &brush))
+            continue;
+        if (map_brush_is_playable(&brush))
+            out_desc->playable_brush_count += 1U;
+        if (brush.box.valid)
             out_desc->box_brush_count += 1U;
     }
 
@@ -1761,7 +1778,8 @@ bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *documen
     }
 
     map_set_error(error_buffer, error_buffer_size,
-                  "$.actors: playable map requires an actor/object with property type = player-character");
+                  "$.actors: playable map requires an actor/object with property type, actor-type, or actor_type = "
+                  "player-character");
     return false;
 }
 
@@ -1945,23 +1963,130 @@ static bool map_game_add_box_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
            map_game_add_plane(doc, faces, 0.0f, 0.0f, -1.0f, -brush->box.min.z, material);
 }
 
+static bool map_game_add_plane_brush_face(yyjson_mut_doc *doc, yyjson_mut_val *faces, yyjson_val *plane,
+                                          const char *fallback_material)
+{
+    slayer3d_vec3 normal;
+    yyjson_val *normal_value = map_obj_get(plane, "normal");
+    yyjson_val *distance_value = map_obj_get(plane, "distance");
+    if (!map_read_vec3_value(normal_value, &normal) || !yyjson_is_num(distance_value))
+        return false;
+
+    const char *material = map_json_string(plane, "material");
+    if (material == NULL || material[0] == '\0')
+        material = fallback_material;
+    return map_game_add_plane(doc, faces, normal.x, normal.y, normal.z, (float)yyjson_get_num(distance_value),
+                              material);
+}
+
+static bool map_game_add_planes_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
+                                      const slayer3d_map_document *document, size_t brush_index, int fallback_index)
+{
+    yyjson_val *brush_value = map_root_array_item(document, "brushes", brush_index);
+    yyjson_val *geometry = map_obj_get(brush_value, "geometry");
+    yyjson_val *planes = map_obj_get(geometry, "planes");
+    if (!yyjson_is_arr(planes) || yyjson_arr_size(planes) < 4u)
+        return false;
+
+    slayer3d_map_brush brush;
+    if (!slayer3d_map_get_brush(document, brush_index, &brush))
+        return false;
+
+    const char *material = brush.material != NULL && brush.material[0] != '\0' ? brush.material : "mat.default";
+    char fallback_name[64];
+    SDL_snprintf(fallback_name, sizeof(fallback_name), "brush.map.%d", fallback_index);
+
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *contents = yyjson_mut_arr(doc);
+    yyjson_mut_val *faces = yyjson_mut_arr(doc);
+    if (obj == NULL || contents == NULL || faces == NULL || !yyjson_mut_arr_add_val(brushes, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "name",
+                                   brush.id != NULL && brush.id[0] != '\0' ? brush.id : fallback_name) ||
+        !yyjson_mut_obj_add_val(doc, obj, "contents", contents) ||
+        !map_game_add_string_array_entry(doc, contents, "solid") ||
+        !map_game_add_string_array_entry(doc, contents, "player_clip") ||
+        !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
+    {
+        return false;
+    }
+
+    for (size_t i = 0, count = yyjson_arr_size(planes); i < count; ++i)
+    {
+        if (!map_game_add_plane_brush_face(doc, faces, yyjson_arr_get(planes, i), material))
+            return false;
+    }
+    return true;
+}
+
+static bool map_material_name_matches(const char *lhs, const char *rhs)
+{
+    return lhs != NULL && rhs != NULL && lhs[0] != '\0' && rhs[0] != '\0' && SDL_strcmp(lhs, rhs) == 0;
+}
+
+static bool map_brush_references_material(yyjson_val *brush, const char *material_id)
+{
+    if (!yyjson_is_obj(brush) || material_id == NULL || material_id[0] == '\0')
+        return false;
+    if (map_material_name_matches(map_json_string(brush, "material"), material_id))
+        return true;
+
+    yyjson_val *geometry = map_obj_get(brush, "geometry");
+    yyjson_val *planes = map_obj_get(geometry, "planes");
+    if (yyjson_is_arr(planes))
+    {
+        for (size_t i = 0, count = yyjson_arr_size(planes); i < count; ++i)
+        {
+            if (map_material_name_matches(map_json_string(yyjson_arr_get(planes, i), "material"), material_id))
+                return true;
+        }
+    }
+
+    yyjson_val *faces = map_obj_get(brush, "faces");
+    if (yyjson_is_arr(faces))
+    {
+        for (size_t i = 0, count = yyjson_arr_size(faces); i < count; ++i)
+        {
+            if (map_material_name_matches(map_json_string(yyjson_arr_get(faces, i), "material"), material_id))
+                return true;
+        }
+    }
+    return false;
+}
+
+static bool map_material_is_used_by_playable_brushes(const slayer3d_map_document *document, const char *material_id)
+{
+    const size_t brush_count = slayer3d_map_get_brush_count(document);
+    for (size_t i = 0; i < brush_count; ++i)
+    {
+        if (map_brush_references_material(map_root_array_item(document, "brushes", i), material_id))
+            return true;
+    }
+    return false;
+}
+
+static bool map_game_add_default_material(yyjson_mut_doc *doc, yyjson_mut_val *materials)
+{
+    yyjson_mut_val *material = yyjson_mut_obj(doc);
+    return material != NULL && yyjson_mut_arr_add_val(materials, material) &&
+           yyjson_mut_obj_add_strcpy(doc, material, "name", "mat.default") &&
+           map_game_add_color(doc, material, "albedo", (slayer3d_color){180, 184, 192, 255});
+}
+
 static bool map_game_add_materials(yyjson_mut_doc *doc, yyjson_mut_val *materials,
                                    const slayer3d_map_document *document)
 {
     const size_t count = slayer3d_map_get_material_count(document);
     if (count == 0u)
-    {
-        yyjson_mut_val *material = yyjson_mut_obj(doc);
-        return material != NULL && yyjson_mut_arr_add_val(materials, material) &&
-               yyjson_mut_obj_add_strcpy(doc, material, "name", "mat.default") &&
-               map_game_add_color(doc, material, "albedo", (slayer3d_color){180, 184, 192, 255});
-    }
+        return map_game_add_default_material(doc, materials);
 
+    size_t emitted = 0u;
     for (size_t i = 0; i < count; ++i)
     {
         slayer3d_map_material map_material;
         if (!slayer3d_map_get_material(document, i, &map_material))
             return false;
+        if (!map_material_is_used_by_playable_brushes(document, map_material.id))
+            continue;
         yyjson_mut_val *material = yyjson_mut_obj(doc);
         const slayer3d_color color = map_material.has_color ? map_material.color : (slayer3d_color){180, 184, 192, 255};
         if (material == NULL || !yyjson_mut_arr_add_val(materials, material) ||
@@ -1972,8 +2097,14 @@ static bool map_game_add_materials(yyjson_mut_doc *doc, yyjson_mut_val *material
         {
             return false;
         }
+        if (map_material.texture != NULL && map_material.texture[0] != '\0' &&
+            !yyjson_mut_obj_add_strcpy(doc, material, "texture", map_material.texture))
+        {
+            return false;
+        }
+        ++emitted;
     }
-    return true;
+    return emitted > 0u || map_game_add_default_material(doc, materials);
 }
 
 static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_document *document)
@@ -1999,11 +2130,20 @@ static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, 
     for (size_t i = 0; i < count; ++i)
     {
         slayer3d_map_brush brush;
-        if (!slayer3d_map_get_brush(document, i, &brush) || !brush.box.valid)
+        if (!slayer3d_map_get_brush(document, i, &brush))
             continue;
-        if (!map_game_add_box_brush(doc, brushes, &brush, emitted))
-            return false;
-        ++emitted;
+        if (brush.box.valid)
+        {
+            if (!map_game_add_box_brush(doc, brushes, &brush, emitted))
+                return false;
+            ++emitted;
+        }
+        else if (brush.geometry_kind != NULL && SDL_strcmp(brush.geometry_kind, "planes") == 0)
+        {
+            if (!map_game_add_planes_brush(doc, brushes, document, i, emitted))
+                return false;
+            ++emitted;
+        }
     }
     return emitted > 0;
 }
@@ -2230,10 +2370,10 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
     slayer3d_map_playable_scene_desc scene;
     if (!slayer3d_map_build_playable_scene_desc(document, &scene, error_buffer, error_buffer_size))
         return false;
-    if (scene.box_brush_count == 0u)
+    if (scene.playable_brush_count == 0u)
     {
         map_set_error(error_buffer, error_buffer_size,
-                      "$.brushes: playable game export requires at least one box brush");
+                      "$.brushes: playable game export requires at least one box or plane brush");
         return false;
     }
 

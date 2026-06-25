@@ -29,6 +29,7 @@ extern "C"
         slayer3d_runner_mount_kind mount_kind;
         const char *mount_path;
         const char *data_asset_path;
+        const char *map_path;
         const char *test_run_manifest_path;
         const char *media_dir;
         const char *scene;
