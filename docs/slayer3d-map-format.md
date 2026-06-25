@@ -49,6 +49,13 @@ existing `controller.fps_brush` component. Run the generated package with:
 slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json
 ```
 
+The standard runner can also materialize a saved map to a temporary generated
+package and launch it directly:
+
+```sh
+slayer3d_runner --map path/to/level.slayermap.json
+```
+
 This bridge is intentionally conservative: it proves the first playable loop
 with brush collision and material colors, while leaving external texture/model
 asset copying and game-specific actor behavior to later project integrations.

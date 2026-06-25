@@ -712,19 +712,6 @@ static bool editor_texture_collection_publish_row(slayer3d_game_data_runtime *ru
                                                             entry->material);
 }
 
-static unsigned int editor_texture_path_hash(const char *path)
-{
-    unsigned int hash = 2166136261U;
-    if (path == NULL)
-        return hash;
-    for (const unsigned char *p = (const unsigned char *)path; *p != '\0'; ++p)
-    {
-        hash ^= (unsigned int)(*p);
-        hash *= 16777619U;
-    }
-    return hash;
-}
-
 static bool editor_texture_collection_entry_from_row(
     const runtime_collection *collection, int row_index, editor_texture_scan_entry *entry, char *filename,
     size_t filename_size, char *path, size_t path_size, char *relative_path, size_t relative_path_size, char *directory,
@@ -784,8 +771,6 @@ static void editor_texture_clear_slots(slayer3d_properties *scene_state, int slo
         slayer3d_properties_set_string(scene_state, key, "");
         SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", i);
         slayer3d_properties_set_string(scene_state, key, "");
-        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.image_id", i);
-        slayer3d_properties_set_string(scene_state, key, "");
         SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", i);
         slayer3d_properties_set_bool(scene_state, key, false);
         SDL_snprintf(key, sizeof(key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending", i);
@@ -807,11 +792,6 @@ static void editor_texture_publish_slot(slayer3d_properties *scene_state, int sl
     slayer3d_properties_set_string(scene_state, key, entry->material);
     SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", slot_index);
     slayer3d_properties_set_string(scene_state, key, entry->path);
-    char image_id[256];
-    SDL_snprintf(image_id, sizeof(image_id), "image.editor_shell.texture.slot_%d.%08x", slot_index,
-                 editor_texture_path_hash(entry->path));
-    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.image_id", slot_index);
-    slayer3d_properties_set_string(scene_state, key, image_id);
     SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", slot_index);
     slayer3d_properties_set_bool(scene_state, key, true);
     SDL_snprintf(key, sizeof(key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending", slot_index);

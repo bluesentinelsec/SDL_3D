@@ -41,8 +41,15 @@ Current editor-to-engine workflow:
    `.slayermap.json` file.
 6. Run this example against the saved map to prove the engine library can load
    the map and resolve the player spawn.
+7. Run the map through the generic runner to materialize and play the generated
+   first-person brush scene:
 
-The final playable runner bridge will layer game materialization on top of this
-foundation: construct brush collision/render geometry, spawn the first-person
-controller, bind lights/effects, and interpret generic connections according to
-project-specific gameplay rules.
+```sh
+./build/debug/slayer3d_runner --map /tmp/level.slayermap.json
+```
+
+The playable runner bridge is intentionally conservative: it constructs
+brush-collision/render geometry, spawns the first `player-character` as a
+first-person controller, and preserves material colors. Project-specific actor
+behavior, lights/effects, and generic connections remain data for callers to
+interpret as game systems are built out.

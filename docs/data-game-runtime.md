@@ -353,6 +353,9 @@ build/debug/demos/my_game/my_game_demo
 
 Optional flags:
 
+- `--map <level.slayermap.json>` materializes a saved Slayer3D map to a
+  temporary playable data-game package and runs it with the brush FPS
+  controller.
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
 - `--scene <scene-id>` starts directly in a loaded scene instead of
