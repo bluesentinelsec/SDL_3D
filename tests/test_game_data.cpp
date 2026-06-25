@@ -20187,6 +20187,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         float y = 0.0f;
         float w = 0.0f;
         float h = 0.0f;
+        int layer = 0;
         bool has_clip_rect = false;
         float clip_x = 0.0f;
         float clip_y = 0.0f;
@@ -20216,6 +20217,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             }
             EXPECT_FLOAT_EQ(resolved.w, 62.0f);
             EXPECT_FLOAT_EQ(resolved.h, 62.0f);
+            EXPECT_EQ(resolved.layer, 123);
             EXPECT_TRUE(resolved.has_clip_rect);
             EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
             EXPECT_FLOAT_EQ(resolved.clip_y, 246.0f);
@@ -20226,8 +20228,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
             EXPECT_LE(resolved.y + resolved.h, resolved.clip_y + resolved.clip_h);
             capture->thumbnails.push_back({resolved.name, resolved.x, resolved.y, resolved.w, resolved.h,
-                                           resolved.has_clip_rect, resolved.clip_x, resolved.clip_y, resolved.clip_w,
-                                           resolved.clip_h});
+                                           resolved.layer, resolved.has_clip_rect, resolved.clip_x, resolved.clip_y,
+                                           resolved.clip_w, resolved.clip_h});
             return true;
         };
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect, &capture));
