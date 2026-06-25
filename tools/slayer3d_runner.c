@@ -148,6 +148,13 @@ static bool runner_prepare_playable_map(runner_state *state, char *error_buffer,
     if (!slayer3d_map_load_file(state->args.map_path, NULL, &map, error_buffer, error_buffer_size))
         return false;
 
+    slayer3d_map_playable_scene_desc scene_desc;
+    if (!slayer3d_map_build_playable_scene_desc(map, &scene_desc, error_buffer, error_buffer_size))
+    {
+        slayer3d_map_destroy(map);
+        return false;
+    }
+
     char *pref_path = SDL_GetPrefPath("bluesentinelsec", "Slayer3DRunner");
     char *output_dir = pref_path != NULL ? runner_join_path(pref_path, "slayermap-playable") : NULL;
     SDL_free(pref_path);
@@ -172,8 +179,10 @@ static bool runner_prepare_playable_map(runner_state *state, char *error_buffer,
     state->args.data_asset_path = "asset://playable_map.game.json";
     state->args.scene = NULL;
     state->args.player_start = NULL;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D runner materialized map '%s' to '%s'", state->args.map_path,
-                state->generated_map_output_dir);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SLAYER3D runner materialized map '%s' to '%s' (%zu playable brushes, %zu actors, player=%s)",
+                state->args.map_path, state->generated_map_output_dir, scene_desc.playable_brush_count,
+                scene_desc.actor_count, scene_desc.player_actor_id != NULL ? scene_desc.player_actor_id : "<none>");
     return true;
 }
 

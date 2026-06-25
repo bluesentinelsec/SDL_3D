@@ -2342,7 +2342,7 @@ static char *map_build_playable_scene_json(size_t *out_size, char *error_buffer,
               yyjson_mut_obj_add_strcpy(doc, brush_world, "world", "brush.slayermap") &&
               map_game_add_vec3(doc, brush_world, "position", (slayer3d_vec3){0.0f, 0.0f, 0.0f}) &&
               yyjson_mut_obj_add_bool(doc, brush_world, "acceleration", true) &&
-              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", true);
+              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", false);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);

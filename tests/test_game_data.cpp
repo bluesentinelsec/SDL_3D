@@ -44021,6 +44021,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
     EXPECT_TRUE(std::filesystem::exists(dir / "playable_map.game.json"));
     EXPECT_TRUE(std::filesystem::exists(dir / "scenes" / "play.scene.json"));
+    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;
@@ -44123,6 +44124,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableGameFromEditorPlaneBrushes)
     EXPECT_STREQ(scene_desc.player_actor_id, "object.editor_shell.capsule.1");
 
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
+    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;
