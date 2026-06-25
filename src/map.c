@@ -1912,11 +1912,17 @@ static bool map_game_add_string_array_entry(yyjson_mut_doc *doc, yyjson_mut_val 
     return yyjson_mut_arr_add_strcpy(doc, array, value != NULL ? value : "");
 }
 
-static bool map_game_add_action(yyjson_mut_doc *doc, yyjson_mut_val *actions, const char *name)
+static bool map_game_add_keyboard_action(yyjson_mut_doc *doc, yyjson_mut_val *actions, const char *name,
+                                         const char *key)
 {
     yyjson_mut_val *action = yyjson_mut_obj(doc);
-    return action != NULL && yyjson_mut_arr_add_val(actions, action) &&
-           yyjson_mut_obj_add_strcpy(doc, action, "name", name);
+    yyjson_mut_val *bindings = yyjson_mut_arr(doc);
+    yyjson_mut_val *binding = yyjson_mut_obj(doc);
+    return action != NULL && bindings != NULL && binding != NULL && yyjson_mut_arr_add_val(actions, action) &&
+           yyjson_mut_obj_add_strcpy(doc, action, "name", name) &&
+           yyjson_mut_obj_add_val(doc, action, "bindings", bindings) && yyjson_mut_arr_add_val(bindings, binding) &&
+           yyjson_mut_obj_add_strcpy(doc, binding, "device", "keyboard") &&
+           yyjson_mut_obj_add_strcpy(doc, binding, "key", key);
 }
 
 static bool map_game_add_plane(yyjson_mut_doc *doc, yyjson_mut_val *faces, float nx, float ny, float nz, float distance,
@@ -2162,11 +2168,12 @@ static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
     {
         return false;
     }
-    return map_game_add_action(doc, actions, "action.move.forward") &&
-           map_game_add_action(doc, actions, "action.move.back") &&
-           map_game_add_action(doc, actions, "action.move.left") &&
-           map_game_add_action(doc, actions, "action.move.right") && map_game_add_action(doc, actions, "action.jump") &&
-           map_game_add_action(doc, actions, "action.exit");
+    return map_game_add_keyboard_action(doc, actions, "action.move.forward", "W") &&
+           map_game_add_keyboard_action(doc, actions, "action.move.back", "S") &&
+           map_game_add_keyboard_action(doc, actions, "action.move.left", "A") &&
+           map_game_add_keyboard_action(doc, actions, "action.move.right", "D") &&
+           map_game_add_keyboard_action(doc, actions, "action.jump", "SPACE") &&
+           map_game_add_keyboard_action(doc, actions, "action.exit", "ESCAPE");
 }
 
 static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root)

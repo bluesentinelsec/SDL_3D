@@ -44021,6 +44021,13 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
     EXPECT_TRUE(std::filesystem::exists(dir / "playable_map.game.json"));
     EXPECT_TRUE(std::filesystem::exists(dir / "scenes" / "play.scene.json"));
+    const std::string game_text = read_text(dir / "playable_map.game.json");
+    EXPECT_NE(game_text.find("\"key\": \"W\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"S\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"A\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"D\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"ESCAPE\""), std::string::npos);
     EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
     slayer3d_map_destroy(document);
 
@@ -44051,9 +44058,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
-    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
-    ASSERT_GE(forward, 0);
-    slayer3d_input_set_action_override(input, forward, 1.0f);
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_W;
+    slayer3d_input_process_event(input, &key);
     for (int i = 0; i < 24; ++i)
     {
         ASSERT_NE(slayer3d_input_update(input, (Uint64)(3000 + i)), nullptr);
@@ -44064,6 +44072,32 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
     EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_collision_brush", ""), "brush.north_wall");
     EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_floor_brush", ""), "brush.floor");
+
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+    ASSERT_NE(slayer3d_input_update(input, 4000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+
+    const float before_jump_y = player->position.y;
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_SPACE;
+    slayer3d_input_process_event(input, &key);
+    for (int i = 0; i < 4; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(4100 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    }
+    EXPECT_GT(player->position.y, before_jump_y);
+
+    const float before_yaw = slayer3d_properties_get_float(player->props, "yaw", 0.0f);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.xrel = 80.0f;
+    motion.motion.yrel = 0.0f;
+    slayer3d_input_process_event(input, &motion);
+    ASSERT_NE(slayer3d_input_update(input, 4200), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(SDL_fabsf(slayer3d_properties_get_float(player->props, "yaw", 0.0f) - before_yaw), 0.01f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -44124,6 +44158,9 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableGameFromEditorPlaneBrushes)
     EXPECT_STREQ(scene_desc.player_actor_id, "object.editor_shell.capsule.1");
 
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
+    const std::string game_text = read_text(dir / "playable_map.game.json");
+    EXPECT_NE(game_text.find("\"key\": \"W\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
     EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
     slayer3d_map_destroy(document);
 
