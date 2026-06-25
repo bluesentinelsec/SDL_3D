@@ -6364,32 +6364,6 @@
             "children": [{ "id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console" }]
           },
           {
-            "id": "ui.editor_shell.console.issues.tab",
-            "type": "button",
-            "x": 124,
-            "y": 8,
-            "w": 96,
-            "h": 28,
-            "layer": 121,
-            "children": [{ "id": "ui.editor_shell.console.issues.label", "type": "label", "w": "fill", "h": "fill", "text": "Issues" }]
-          },
-          {
-            "id": "ui.editor_shell.console.issues.placeholder",
-            "type": "label",
-            "x": 930,
-            "y": 8,
-            "w": 330,
-            "h": 20,
-            "text": "Issues tab will list map leaks and validation findings.",
-            "bindings": [
-              {
-                "type": "scene_state",
-                "key": "editor.issues.line0",
-                "default": "Issues tab will list map leaks and validation findings."
-              }
-            ]
-          },
-          {
             "id": "ui.editor_shell.console.scroll.up",
             "type": "button",
             "x": 1264,

@@ -2115,6 +2115,112 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     return true;
 }
 
+static bool action_value_to_string(const slayer3d_value *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (value == NULL)
+        return true;
+
+    switch (value->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
+        return true;
+    case SLAYER3D_VALUE_FLOAT:
+        SDL_snprintf(buffer, buffer_size, "%.3f", value->as_float);
+        return true;
+    case SLAYER3D_VALUE_BOOL:
+        SDL_strlcpy(buffer, value->as_bool ? "true" : "false", buffer_size);
+        return true;
+    case SLAYER3D_VALUE_VEC3:
+        SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value->as_vec3.x, value->as_vec3.y, value->as_vec3.z);
+        return true;
+    case SLAYER3D_VALUE_STRING:
+        SDL_strlcpy(buffer, value->as_string != NULL ? value->as_string : "", buffer_size);
+        return true;
+    case SLAYER3D_VALUE_COLOR:
+        SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned)value->as_color.r, (unsigned)value->as_color.g,
+                     (unsigned)value->as_color.b, (unsigned)value->as_color.a);
+        return true;
+    }
+
+    return false;
+}
+
+static bool format_scene_state_string(const slayer3d_properties *scene_state, const slayer3d_properties *payload,
+                                      const char *format, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (format == NULL)
+        return true;
+    if (SDL_strchr(format, '{') == NULL)
+    {
+        SDL_strlcpy(buffer, format, buffer_size);
+        return SDL_strlen(format) < buffer_size;
+    }
+
+    size_t offset = 0U;
+    const char *cursor = format;
+    while (*cursor != '\0' && offset + 1U < buffer_size)
+    {
+        const char *open = SDL_strchr(cursor, '{');
+        if (open == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, cursor, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor += copied;
+            break;
+        }
+
+        const size_t literal_len = (size_t)(open - cursor);
+        const size_t literal_copy = SDL_min(literal_len, buffer_size - offset - 1U);
+        SDL_memcpy(buffer + offset, cursor, literal_copy);
+        offset += literal_copy;
+        buffer[offset] = '\0';
+        if (literal_copy < literal_len)
+            break;
+
+        const char *close = SDL_strchr(open + 1, '}');
+        if (close == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, open, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor = open + copied;
+            break;
+        }
+
+        char key[128];
+        const size_t key_len = (size_t)(close - open - 1);
+        if (key_len > 0U && key_len < sizeof(key))
+        {
+            SDL_memcpy(key, open + 1, key_len);
+            key[key_len] = '\0';
+
+            const slayer3d_value *replacement = payload != NULL ? slayer3d_properties_get_value(payload, key) : NULL;
+            if (replacement == NULL && scene_state != NULL)
+                replacement = slayer3d_properties_get_value(scene_state, key);
+
+            char replacement_text[256];
+            if (!action_value_to_string(replacement, replacement_text, sizeof(replacement_text)))
+                return false;
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, replacement_text, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+        }
+        cursor = close + 1;
+    }
+    buffer[buffer_size - 1U] = '\0';
+    return cursor[0] == '\0';
+}
+
 static void publish_editor_brush_color_draft(slayer3d_properties *scene_state, const char *color_key,
                                              slayer3d_color color)
 {
@@ -2798,6 +2904,17 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         }
         if (value == NULL)
             return false;
+        if (yyjson_is_str(value))
+        {
+            char formatted[512];
+            if (!format_scene_state_string(runtime->scene_state, payload, yyjson_get_str(value), formatted,
+                                           sizeof(formatted)))
+            {
+                return false;
+            }
+            slayer3d_properties_set_string(runtime->scene_state, key, formatted);
+            return true;
+        }
         return set_property_from_json_with_payload(runtime->scene_state, key, value, payload);
     }
 

@@ -4,7 +4,7 @@
 
 #define EDITOR_CONSOLE_HISTORY_COUNT 64
 #define EDITOR_CONSOLE_VISIBLE_COUNT 5
-#define EDITOR_CONSOLE_THUMB_TRAVEL 44.0f
+#define EDITOR_CONSOLE_THUMB_TRAVEL 24.0f
 
 static void editor_clear_console_selection_state(slayer3d_properties *scene_state)
 {

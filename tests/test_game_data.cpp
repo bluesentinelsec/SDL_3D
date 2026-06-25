@@ -21402,10 +21402,12 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_properties_set_int(scene_state, "editor.console.scroll", 99);
     editor_refresh_console_lines(runtime);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.console.scroll", -1), 59);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.scroll.y", 1.0f), -24.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "console history probe 10");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line4", ""), "console history probe 06");
     slayer3d_properties_set_int(scene_state, "editor.console.scroll", 0);
     editor_refresh_console_lines(runtime);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.scroll.y", 1.0f), 0.0f);
     wheel_editor(180.0f, 650.0f, -1.0f);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.console.scroll", -1), 3);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "console history probe 66");
@@ -21521,6 +21523,15 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.file_probe", &placed));
+
+    const std::filesystem::path missing_path = save_dir / "missing.json";
+    slayer3d_properties_set_string(scene_state, "editor.file.open.path", missing_path.string().c_str());
+    emit_signal("signal.editor.file.open");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", true));
+    const std::string open_failed_action = slayer3d_properties_get_string(scene_state, "editor.tool.last_action", "");
+    EXPECT_EQ(open_failed_action.rfind("open failed: ", 0), 0U);
+    EXPECT_EQ(open_failed_action.find("{editor.load.message}"), std::string::npos);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), open_failed_action.c_str());
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -34923,9 +34934,9 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool inspector_tab_labels[2]{};
         bool inspector_collapsed_label = false;
         bool console_panel = false;
-        bool console_tabs[2]{};
+        bool console_tab = false;
         bool console_rows[3]{};
-        bool console_tab_labels[2]{};
+        bool console_tab_label = false;
         bool console_lines[3]{};
         bool old_sidebar = false;
         bool old_inspector = false;
@@ -34961,9 +34972,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         if (name.rfind(console_prefix, 0) == 0)
         {
             if (name == "ui.editor_shell.console.console.tab")
-                capture->console_tabs[0] = true;
-            else if (name == "ui.editor_shell.console.issues.tab")
-                capture->console_tabs[1] = true;
+                capture->console_tab = true;
             else if (name == "ui.editor_shell.console.line0.row")
                 capture->console_rows[0] = true;
             else if (name == "ui.editor_shell.console.line1.row")
@@ -35060,11 +35069,9 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         if (name == "ui.editor_shell.left_inspector.collapsed.label")
             capture->inspector_collapsed_label = true;
         if (name == "ui.editor_shell.console.console.label")
-            capture->console_tab_labels[0] = true;
+            capture->console_tab_label = true;
         else if (name == "ui.editor_shell.tool_toolbar.grid.label")
             capture->grid_label = true;
-        else if (name == "ui.editor_shell.console.issues.label")
-            capture->console_tab_labels[1] = true;
         else if (name == "ui.editor_shell.console.line0")
             capture->console_lines[0] = true;
         else if (name == "ui.editor_shell.console.line1")
@@ -35169,11 +35176,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_FALSE(toolbar_capture.inspector_collapsed);
     EXPECT_FALSE(toolbar_capture.inspector_collapsed_label);
     EXPECT_TRUE(toolbar_capture.console_panel);
-    for (int i = 0; i < 2; ++i)
-    {
-        EXPECT_TRUE(toolbar_capture.console_tabs[i]) << i;
-        EXPECT_TRUE(toolbar_capture.console_tab_labels[i]) << i;
-    }
+    EXPECT_TRUE(toolbar_capture.console_tab);
+    EXPECT_TRUE(toolbar_capture.console_tab_label);
     for (int i = 0; i < 3; ++i)
     {
         EXPECT_TRUE(toolbar_capture.console_rows[i]) << i;
