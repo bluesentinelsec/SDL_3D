@@ -21067,10 +21067,25 @@ TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChan
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
-    const std::filesystem::path repo_root = std::filesystem::path(SLAYER3D_DEMOS_ROOT).parent_path();
-    const std::filesystem::path texture_dir = repo_root / "media" / "textures";
-    ASSERT_TRUE(std::filesystem::exists(texture_dir / "lava.jpg")) << texture_dir;
-    ASSERT_TRUE(std::filesystem::exists(texture_dir / "door-hatch.png")) << texture_dir;
+    const std::filesystem::path texture_root = unique_test_dir("editor_texture_thumbnail_reload");
+    const std::filesystem::path texture_dir = texture_root / "textures";
+    std::filesystem::create_directories(texture_dir);
+
+    Uint8 alpha_pixels[] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    slayer3d_image alpha_image{};
+    alpha_image.pixels = alpha_pixels;
+    alpha_image.width = 2;
+    alpha_image.height = 2;
+    ASSERT_TRUE(slayer3d_save_image_png(&alpha_image, (texture_dir / "alpha-panel.png").string().c_str()))
+        << SDL_GetError();
+
+    Uint8 beta_pixels[] = {32, 32, 32, 255, 96, 96, 96, 255, 160, 160, 160, 255, 224, 224, 224, 255};
+    slayer3d_image beta_image{};
+    beta_image.pixels = beta_pixels;
+    beta_image.width = 2;
+    beta_image.height = 2;
+    ASSERT_TRUE(slayer3d_save_image_png(&beta_image, (texture_dir / "beta-panel.png").string().c_str()))
+        << SDL_GetError();
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
@@ -21129,7 +21144,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChan
     EXPECT_STREQ(image_cache.entries[0].image_id, "image.editor_shell.texture.slot_0");
     EXPECT_TRUE(image_cache.entries[0].loaded);
 
-    const char *query = initial_path.find("lava.jpg") == std::string::npos ? "lava" : "door";
+    const char *query = initial_path.find("beta-panel.png") == std::string::npos ? "beta" : "alpha";
     slayer3d_properties_set_string(scene_state, "editor.texture.search", query);
     emit_signal("signal.editor.texture.search.apply");
     ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", false));
@@ -21151,6 +21166,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChan
     slayer3d_asset_resolver_destroy(assets);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+    remove_test_dir(texture_root);
 }
 
 TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
