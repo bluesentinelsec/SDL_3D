@@ -144,6 +144,28 @@
       }
     },
     {
+      "id": "light.showcase.fireball",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [0.0, 1.4, 0.0] },
+      "color": [255, 96, 32, 255],
+      "intensity": 1.8,
+      "range": 5.5,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "orbit",
+        "preset": "projectile_fireball",
+        "rate_hz": 0.45,
+        "radius": 2.25,
+        "axis": [0.0, 1.0, 0.0]
+      },
+      "properties": {
+        "fixture": "moving_fireball"
+      }
+    },
+    {
       "id": "light.showcase.panel",
       "kind": "baked",
       "type": "area_rect",

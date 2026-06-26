@@ -83,9 +83,9 @@ connections that a game runtime can interpret.
 
 The same demo directory also includes `maps/lighting_showcase.slayermap.json`,
 a compact fixture for the lighting milestone. It authors directional, point,
-spot, rectangular area, and spherical area lights, plus flicker and rotating
-light animation metadata, so editor, CLI, and runner work can be tested against
-one map as lighting support matures.
+spot, rectangular area, and spherical area lights, plus flicker, rotating, and
+orbiting fireball-style light animation metadata, so editor, CLI, and runner
+work can be tested against one map as lighting support matures.
 
 Build it with `SLAYER3D_BUILD_DEMOS=ON`, then run
 `slayer3d_slayermap_example` to load the bundled map through the public
@@ -367,8 +367,11 @@ Area sphere lights require a positive `radius`; area rect lights require
 positive `width` and `height`. `falloff` may be `inverse_square`, `linear`, or
 `none`. `animation` is a reusable primitive layer for common dynamic lights such
 as torch flicker, fluorescent flicker, warning alarms, rotating sirens,
-projectile fireballs, muzzle flashes, and steady room lights. Games may ignore
-unknown animation properties or reinterpret them for a custom renderer.
+projectile fireballs, muzzle flashes, and steady room lights. Generated playable
+maps currently bridge `pulse`/`flicker` to runtime intensity modulation,
+`rotate`/`sweep` to runtime direction rotation, and `orbit` to runtime
+position-orbit movement. Games may ignore unknown animation properties or
+reinterpret them for a custom renderer.
 
 The bundled editor exposes light placement through Things > Lights. Current
 entries match the canonical schema: Directional, Point, Spot, Area Rect, and

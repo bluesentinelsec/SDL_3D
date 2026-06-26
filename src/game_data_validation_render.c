@@ -126,6 +126,18 @@ bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names
                 if (axis != NULL && !is_vec_array(axis, 3))
                     return validation_error(ctx, effect_path, "light rotate_direction axis must be a vec3 array");
             }
+            else if (SDL_strcmp(type != NULL ? type : "", "orbit_position") == 0)
+            {
+                yyjson_val *axis = obj_get(effect, "axis");
+                yyjson_val *center = obj_get(effect, "center");
+                yyjson_val *radius = obj_get(effect, "radius");
+                if (axis != NULL && !is_vec_array(axis, 3))
+                    return validation_error(ctx, effect_path, "light orbit_position axis must be a vec3 array");
+                if (center != NULL && !is_vec_array(center, 3))
+                    return validation_error(ctx, effect_path, "light orbit_position center must be a vec3 array");
+                if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) < 0.0))
+                    return validation_error(ctx, effect_path, "light orbit_position radius must be non-negative");
+            }
             else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0)
             {
                 return validation_error(ctx, effect_path, "unsupported light effect type '%s'",

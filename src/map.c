@@ -2717,6 +2717,11 @@ static bool map_game_light_animation_rotates_direction(const slayer3d_map_light_
            (SDL_strcmp(animation->type, "rotate") == 0 || SDL_strcmp(animation->type, "sweep") == 0);
 }
 
+static bool map_game_light_animation_orbits_position(const slayer3d_map_light_animation *animation)
+{
+    return map_game_light_animation_active(animation) && SDL_strcmp(animation->type, "orbit") == 0;
+}
+
 static float map_game_light_base_intensity(const slayer3d_map_light *map_light, float fallback)
 {
     if (map_light != NULL && map_game_light_animation_uses_pulse(&map_light->animation) &&
@@ -2789,6 +2794,23 @@ static bool map_game_add_light_animation(yyjson_mut_doc *doc, yyjson_mut_val *li
             !yyjson_mut_obj_add_strcpy(doc, effect, "type", "rotate_direction") ||
             !yyjson_mut_obj_add_real(doc, effect, "rate", rate) ||
             !yyjson_mut_obj_add_real(doc, effect, "phase", phase) || !map_game_add_vec3(doc, effect, "axis", axis))
+        {
+            return false;
+        }
+    }
+
+    if (map_game_light_animation_orbits_position(&map_light->animation))
+    {
+        yyjson_mut_val *effect = yyjson_mut_obj(doc);
+        yyjson_mut_val *effect_list = map_game_ensure_light_effects(doc, light, &effects);
+        const slayer3d_vec3 axis =
+            map_light->animation.has_axis ? map_light->animation.axis : (slayer3d_vec3){0.0f, 1.0f, 0.0f};
+        const float radius = map_light->animation.has_radius ? map_light->animation.radius : 1.0f;
+        if (effect == NULL || effect_list == NULL || !yyjson_mut_arr_add_val(effects, effect) ||
+            !yyjson_mut_obj_add_strcpy(doc, effect, "type", "orbit_position") ||
+            !yyjson_mut_obj_add_real(doc, effect, "rate", rate) ||
+            !yyjson_mut_obj_add_real(doc, effect, "phase", phase) || !map_game_add_vec3(doc, effect, "axis", axis) ||
+            !yyjson_mut_obj_add_real(doc, effect, "radius", radius))
         {
             return false;
         }

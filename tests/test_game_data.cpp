@@ -44619,7 +44619,7 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
     EXPECT_STREQ(slayer3d_map_get_metadata_id(document), "map.example.lighting_showcase");
     EXPECT_EQ(slayer3d_map_get_brush_count(document), 4u);
     EXPECT_EQ(slayer3d_map_get_actor_count(document), 1u);
-    EXPECT_EQ(slayer3d_map_get_light_count(document), 5u);
+    EXPECT_EQ(slayer3d_map_get_light_count(document), 6u);
 
     bool saw_directional = false;
     bool saw_point = false;
@@ -44628,6 +44628,7 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
     bool saw_area_sphere = false;
     bool saw_flicker = false;
     bool saw_rotate = false;
+    bool saw_orbit = false;
     for (size_t i = 0; i < slayer3d_map_get_light_count(document); ++i)
     {
         slayer3d_map_light light{};
@@ -44639,6 +44640,7 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
         saw_area_sphere = saw_area_sphere || SDL_strcmp(light.type, "area_sphere") == 0;
         saw_flicker = saw_flicker || SDL_strcmp(light.animation.type, "flicker") == 0;
         saw_rotate = saw_rotate || SDL_strcmp(light.animation.type, "rotate") == 0;
+        saw_orbit = saw_orbit || SDL_strcmp(light.animation.type, "orbit") == 0;
     }
     EXPECT_TRUE(saw_directional);
     EXPECT_TRUE(saw_point);
@@ -44647,14 +44649,15 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
     EXPECT_TRUE(saw_area_sphere);
     EXPECT_TRUE(saw_flicker);
     EXPECT_TRUE(saw_rotate);
+    EXPECT_TRUE(saw_orbit);
 
     slayer3d_map_lighting_build_plan plan{};
     ASSERT_TRUE(slayer3d_map_build_lighting_plan(document, nullptr, &plan, error, sizeof(error))) << error;
-    EXPECT_EQ(plan.total_light_count, 5u);
-    EXPECT_EQ(plan.dynamic_light_count, 2u);
+    EXPECT_EQ(plan.total_light_count, 6u);
+    EXPECT_EQ(plan.dynamic_light_count, 3u);
     EXPECT_EQ(plan.static_light_count, 3u);
     EXPECT_EQ(plan.area_light_count, 2u);
-    EXPECT_EQ(plan.runtime_light_count, 5u);
+    EXPECT_EQ(plan.runtime_light_count, 6u);
     EXPECT_EQ(plan.bake_light_count, 3u);
     EXPECT_TRUE(plan.requires_static_bake);
     EXPECT_FALSE(plan.dynamic_light_budget_exceeded);
@@ -44675,7 +44678,7 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     slayer3d_map_playable_scene_desc scene_desc{};
     ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error))) << error;
     EXPECT_TRUE(scene_desc.has_player_character);
-    EXPECT_EQ(scene_desc.light_count, 5u);
+    EXPECT_EQ(scene_desc.light_count, 6u);
 
     const std::filesystem::path dir = unique_test_dir("lighting_showcase_playable");
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
@@ -44683,11 +44686,12 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
 
     const std::string game_text = read_text(dir / "playable_map.game.json");
     EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"orbit_position\""), std::string::npos);
     EXPECT_NE(game_text.find("\"pulse\""), std::string::npos);
     const std::string scene_text = read_text(dir / "scenes/play.scene.json");
     EXPECT_NE(scene_text.find("SlayerMap Lighting"), std::string::npos);
-    EXPECT_NE(scene_text.find("Lights total 5 runtime 5 bake 3"), std::string::npos);
-    EXPECT_NE(scene_text.find("Dynamic 2 static 3 area 2"), std::string::npos);
+    EXPECT_NE(scene_text.find("Lights total 6 runtime 6 bake 3"), std::string::npos);
+    EXPECT_NE(scene_text.find("Dynamic 3 static 3 area 2"), std::string::npos);
     EXPECT_NE(scene_text.find("Lighting requires static bake"), std::string::npos);
 
     slayer3d_game_session *session = nullptr;
@@ -44696,7 +44700,7 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "playable_map.game.json").string().c_str(), session, &runtime,
                                              error, sizeof(error)))
         << error;
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 5);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 6);
 
     slayer3d_light torch{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &torch));
@@ -44716,6 +44720,18 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &rotate_eval, &siren_eval));
     EXPECT_NEAR(siren.direction.z, -1.0f, 0.001f);
     EXPECT_LT(siren_eval.direction.x, -0.4f);
+
+    slayer3d_light fireball{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 3, &fireball));
+    EXPECT_EQ(fireball.type, SLAYER3D_LIGHT_POINT);
+    slayer3d_light fireball_eval{};
+    slayer3d_game_data_render_eval orbit_eval{};
+    orbit_eval.time = 0.5f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 3, &orbit_eval, &fireball_eval));
+    EXPECT_NEAR(fireball.position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(fireball.position.z, 0.0f, 0.001f);
+    EXPECT_GT(SDL_fabsf(fireball_eval.position.x), 0.1f);
+    EXPECT_GT(SDL_fabsf(fireball_eval.position.z), 0.1f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

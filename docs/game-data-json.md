@@ -1999,7 +1999,9 @@ can correlate it with the original marker when needed. Light export supports
 `light_kind` (`dynamic`, `baked`, or `both`),
 `light_type` (`point`, `spot`, or `directional`), `light_color`,
 `light_intensity`, `light_range`, `light_direction`, `casts_shadow`,
-`inner_angle_degrees`, `outer_angle_degrees`, and `bake_group`.
+`inner_angle_degrees`, `outer_angle_degrees`, and `bake_group`. Generated
+playable maps bridge SlayerMap `pulse`/`flicker`, `rotate`/`sweep`, and `orbit`
+light animation metadata to runtime light effects.
 
 Placed editor actors whose properties identify them as effects are emitted as
 normalized top-level `effects` entries. Set `role` to `effect`, provide
@@ -3460,7 +3462,9 @@ Reusable components include:
   lights inherit the actor transform and may use an `offset`. `enabled` defaults
   to `true`; `enabled_key` reads a scene-state boolean at draw time so debug
   menus and data-authored profile controls can disable a light group without
-  removing actors.
+  removing actors. World and component lights may also declare `effects` such as
+  `pulse`, `color_cycle`, `flash`, `rotate_direction`, and `orbit_position` for
+  reusable data-driven light animation.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active. `render_style` defaults to
   `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards

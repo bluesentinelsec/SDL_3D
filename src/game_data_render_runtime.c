@@ -1014,6 +1014,26 @@ static slayer3d_vec3 light_effect_rotate_vec3(slayer3d_vec3 vector, slayer3d_vec
                               vector.z * c + cross.z * s + axis.z * dot * (1.0f - c));
 }
 
+static slayer3d_vec3 light_effect_perpendicular_vec3(slayer3d_vec3 axis)
+{
+    const float length = SDL_sqrtf(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    if (length <= 0.0001f)
+        axis = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    else
+        axis = slayer3d_vec3_make(axis.x / length, axis.y / length, axis.z / length);
+
+    slayer3d_vec3 basis =
+        SDL_fabsf(axis.y) < 0.9f ? slayer3d_vec3_make(0.0f, 1.0f, 0.0f) : slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    slayer3d_vec3 perpendicular = slayer3d_vec3_make(
+        axis.y * basis.z - axis.z * basis.y, axis.z * basis.x - axis.x * basis.z, axis.x * basis.y - axis.y * basis.x);
+    const float perpendicular_length = SDL_sqrtf(perpendicular.x * perpendicular.x + perpendicular.y * perpendicular.y +
+                                                 perpendicular.z * perpendicular.z);
+    if (perpendicular_length <= 0.0001f)
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    return slayer3d_vec3_make(perpendicular.x / perpendicular_length, perpendicular.y / perpendicular_length,
+                              perpendicular.z / perpendicular_length);
+}
+
 static void apply_light_effects(const slayer3d_game_data_runtime *runtime, yyjson_val *light_json,
                                 const slayer3d_game_data_render_eval *eval, slayer3d_light *light)
 {
@@ -1051,6 +1071,22 @@ static void apply_light_effects(const slayer3d_game_data_runtime *runtime, yyjso
             const float phase = json_float(effect, "phase", 0.0f);
             const slayer3d_vec3 axis = json_vec3(effect, "axis", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
             light->direction = light_effect_rotate_vec3(light->direction, axis, time * rate + phase);
+            continue;
+        }
+        else if (SDL_strcmp(type, "orbit_position") == 0)
+        {
+            const float time = eval != NULL ? eval->time : 0.0f;
+            const float rate = json_float(effect, "rate", 1.0f);
+            const float phase = json_float(effect, "phase", 0.0f);
+            const slayer3d_vec3 axis = json_vec3(effect, "axis", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+            const slayer3d_vec3 center = json_vec3(effect, "center", light->position);
+            slayer3d_vec3 offset = slayer3d_vec3_make(light->position.x - center.x, light->position.y - center.y,
+                                                      light->position.z - center.z);
+            const float radius = SDL_max(json_float(effect, "radius", 0.0f), 0.0f);
+            if (radius > 0.0f)
+                offset = slayer3d_vec3_scale(light_effect_perpendicular_vec3(axis), radius);
+            offset = light_effect_rotate_vec3(offset, axis, time * rate + phase);
+            light->position = slayer3d_vec3_make(center.x + offset.x, center.y + offset.y, center.z + offset.z);
             continue;
         }
         else if (SDL_strcmp(type, "flash") == 0)

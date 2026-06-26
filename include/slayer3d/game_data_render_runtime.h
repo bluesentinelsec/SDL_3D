@@ -101,10 +101,11 @@ extern "C"
     /**
      * @brief Read an authored world light with generic visual effects evaluated.
      *
-     * Supported light effects include `pulse`, `color_cycle`, and `flash`,
-     * allowing data to drive color blends, intensity changes, and range changes
-     * over time or from actor properties. Passing NULL for @p eval uses a zeroed
-     * evaluation context.
+     * Supported light effects include `pulse`, `color_cycle`, `flash`,
+     * `rotate_direction`, and `orbit_position`, allowing data to drive color
+     * blends, intensity changes, range changes, direction changes, and moving
+     * light positions over time or from actor properties. Passing NULL for
+     * @p eval uses a zeroed evaluation context.
      */
     bool slayer3d_game_data_get_world_light_evaluated(const slayer3d_game_data_runtime *runtime, int index,
                                                       const slayer3d_game_data_render_eval *eval,
