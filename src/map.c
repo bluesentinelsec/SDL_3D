@@ -3589,21 +3589,29 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
         return false;
 
     char *scenes_dir = map_join_path(output_dir, "scenes");
+    char *lighting_dir = map_join_path(output_dir, "lighting");
     char *game_path = map_join_path(output_dir, "playable_map.game.json");
     char *scene_path = map_join_path(output_dir, "scenes/play.scene.json");
-    if (scenes_dir == NULL || game_path == NULL || scene_path == NULL)
+    char *static_lighting_path = map_join_path(output_dir, "lighting/static.default.json");
+    if (scenes_dir == NULL || lighting_dir == NULL || game_path == NULL || scene_path == NULL ||
+        static_lighting_path == NULL)
     {
         SDL_free(scenes_dir);
+        SDL_free(lighting_dir);
         SDL_free(game_path);
         SDL_free(scene_path);
+        SDL_free(static_lighting_path);
         map_set_error(error_buffer, error_buffer_size, "failed to allocate playable game output paths");
         return false;
     }
-    if (!map_make_directory_recursive(output_dir) || !map_make_directory_recursive(scenes_dir))
+    if (!map_make_directory_recursive(output_dir) || !map_make_directory_recursive(scenes_dir) ||
+        !map_make_directory_recursive(lighting_dir))
     {
         SDL_free(scenes_dir);
+        SDL_free(lighting_dir);
         SDL_free(game_path);
         SDL_free(scene_path);
+        SDL_free(static_lighting_path);
         map_set_error(error_buffer, error_buffer_size, "failed to create playable game output directory '%s'",
                       output_dir);
         return false;
@@ -3615,14 +3623,29 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
     char *scene_json = game_json != NULL
                            ? map_build_playable_scene_json(&lighting_plan, &scene_size, error_buffer, error_buffer_size)
                            : NULL;
-    bool ok = game_json != NULL && scene_json != NULL &&
-              map_write_text_file(game_path, game_json, game_size, error_buffer, error_buffer_size) &&
-              map_write_text_file(scene_path, scene_json, scene_size, error_buffer, error_buffer_size);
+    size_t static_lighting_size = 0u;
+    char *static_lighting_json = NULL;
+    if (game_json != NULL && scene_json != NULL && lighting_plan.requires_static_bake &&
+        !slayer3d_map_build_static_lighting_artifact_json(document, NULL, &static_lighting_json, &static_lighting_size,
+                                                          error_buffer, error_buffer_size))
+    {
+        static_lighting_json = NULL;
+    }
+    bool ok =
+        game_json != NULL && scene_json != NULL &&
+        map_write_text_file(game_path, game_json, game_size, error_buffer, error_buffer_size) &&
+        map_write_text_file(scene_path, scene_json, scene_size, error_buffer, error_buffer_size) &&
+        (!lighting_plan.requires_static_bake ||
+         (static_lighting_json != NULL && map_write_text_file(static_lighting_path, static_lighting_json,
+                                                              static_lighting_size, error_buffer, error_buffer_size)));
 
     free(game_json);
     free(scene_json);
+    free(static_lighting_json);
     SDL_free(scenes_dir);
+    SDL_free(lighting_dir);
     SDL_free(game_path);
     SDL_free(scene_path);
+    SDL_free(static_lighting_path);
     return ok;
 }

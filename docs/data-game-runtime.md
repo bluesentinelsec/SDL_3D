@@ -409,9 +409,10 @@ Optional flags:
   temporary playable data-game package and runs it with the brush FPS
   controller. The generated package bridges map global lighting and authored
   directional, point, and spot lights into runtime data. Area lights currently
-  use point-light preview until baked-lighting artifacts are implemented. The
-  generated scene also includes a small lighting debug HUD with planner counts
-  and bake/budget status.
+  use point-light preview until baked-lighting artifacts are consumed by the
+  renderer. Maps that require static lighting also materialize
+  `lighting/static.default.json`, and the generated scene includes a small
+  lighting debug HUD with planner counts and bake/budget status.
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
 - `--scene <scene-id>` starts directly in a loaded scene instead of

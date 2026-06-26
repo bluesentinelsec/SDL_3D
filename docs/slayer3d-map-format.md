@@ -60,7 +60,9 @@ box brushes into a runtime brush world, and spawns the player through the
 existing `controller.fps_brush` component. Authored directional, point, and spot
 lights are bridged into runtime `world.lights`; area lights currently fall back
 to point-light preview until the baked-lighting pipeline materializes their
-soft/static contribution. `pulse` and `flicker` light animations are bridged to
+soft/static contribution. Maps that require static lighting also emit
+`lighting/static.default.json` with the current `slayer3d.lighting_static.v0`
+per-face sample artifact. `pulse` and `flicker` light animations are bridged to
 runtime light effects for immediate playable feedback, and `rotate`/`sweep`
 animations are bridged to runtime direction-rotation effects for directional and
 spot-light previews. Run the generated package with:
@@ -407,9 +409,10 @@ want a build artifact on disk instead of stdout.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,
-runtime and bake counts, class counts, and bake/budget status so
-`slayer3d_runner --map` immediately exposes whether a saved map contains the
-expected lighting work.
+runtime and bake counts, class counts, and bake/budget status, and packages with
+static/baked lights include `lighting/static.default.json` for inspection or
+future renderer consumption. This lets `slayer3d_runner --map` immediately expose
+whether a saved map contains the expected lighting work.
 
 Map validation warns when authored lighting exceeds the default planning
 budgets: 8 runtime-preview lights and 256 static/baked lights. These warnings

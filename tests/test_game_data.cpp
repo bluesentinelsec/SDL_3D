@@ -44910,6 +44910,12 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     EXPECT_NE(scene_text.find("Lights total 6 runtime 6 bake 3"), std::string::npos);
     EXPECT_NE(scene_text.find("Dynamic 3 static 3 area 2"), std::string::npos);
     EXPECT_NE(scene_text.find("Lighting requires static bake"), std::string::npos);
+    const std::filesystem::path static_lighting_path = dir / "lighting/static.default.json";
+    ASSERT_TRUE(std::filesystem::exists(static_lighting_path));
+    const std::string static_lighting_text = read_text(static_lighting_path);
+    EXPECT_NE(static_lighting_text.find("\"schema\": \"slayer3d.lighting_static.v0\""), std::string::npos);
+    EXPECT_NE(static_lighting_text.find("\"bake_lights\": 3"), std::string::npos);
+    EXPECT_NE(static_lighting_text.find("\"samples\""), std::string::npos);
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
