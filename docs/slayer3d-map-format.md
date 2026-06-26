@@ -401,7 +401,9 @@ level.slayermap.json` emits the planned static-light artifact manifest JSON.
 `slayer3d_editor lighting-plan --static-artifact --input level.slayermap.json`
 emits a concrete `slayer3d.lighting_static.v0` JSON payload containing per-face
 box-brush irradiance samples. The current static artifact is a deterministic
-preview/integration format, not a final atlas lightmap baker.
+preview/integration format, not a final atlas lightmap baker. The machine-readable
+manifest and static-artifact modes also accept `--output <file>` when callers
+want a build artifact on disk instead of stdout.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,

@@ -315,11 +315,14 @@ code all use the public SlayerMap lighting-plan API:
 build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json
 build/debug/slayer3d_editor lighting-plan --manifest --input /tmp/level.slayermap.json
 build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json --output /tmp/lighting-static.json
 ```
 
 The command accepts `--preview`, `--final`, `--max-dynamic-lights`,
 `--max-static-lights`, `--no-dynamic-preview`, `--manifest`, and
-`--static-artifact` for tool and CI workflows.
+`--static-artifact` for tool and CI workflows. `--output <file>` may be used
+with `--manifest` or `--static-artifact` to write machine-readable JSON to disk;
+without `--output`, those modes write JSON to stdout.
 Planning reports runtime-preview lights, static/baked lights, area lights,
 whether a bake is required, and whether configured budgets were exceeded.
 `--manifest` emits deterministic JSON metadata for the planned static-lighting

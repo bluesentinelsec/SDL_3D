@@ -46,6 +46,12 @@ void write_text(const std::filesystem::path &path, const char *text)
     out << text;
 }
 
+std::string read_text_file(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
 std::string read_temp_file(FILE *file)
 {
     if (file == nullptr)
@@ -762,6 +768,66 @@ TEST(ToolCli, EditorLightingPlanCanPrintStaticArtifact)
     EXPECT_NE(text.find("\"samples\": 6"), std::string::npos);
     EXPECT_NE(text.find("\"face\": \"positive_y\""), std::string::npos);
 
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(map_path);
+}
+
+TEST(ToolCli, EditorLightingPlanCanWriteStaticArtifactOutputFile)
+{
+    const std::filesystem::path map_path = unique_cli_test_path("lighting_static_artifact_file");
+    const std::filesystem::path output_dir = unique_cli_test_dir("lighting_static_artifact_output");
+    const std::filesystem::path output_path = output_dir / "nested" / "static-lighting.json";
+    write_text(map_path,
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": { "id": "map.test.lighting_static_artifact_file" },
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] } }
+  ],
+  "lights": [
+    { "id": "light.static", "kind": "baked", "type": "directional", "direction": [0, -1, 0] }
+  ]
+})json");
+    const std::string input = map_path.string();
+    const std::string output = output_path.string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "lighting-plan", "--input", input.c_str(),
+                                          "--static-artifact", "--output", output.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_STREQ(args.output_path, output.c_str());
+
+    FILE *stdout_capture = std::tmpfile();
+    ASSERT_NE(stdout_capture, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_editor_run_lighting_plan(&args, stdout_capture, error, sizeof(error))) << error;
+    EXPECT_TRUE(read_temp_file(stdout_capture).empty());
+    std::fclose(stdout_capture);
+
+    ASSERT_TRUE(std::filesystem::exists(output_path));
+    const std::string text = read_text_file(output_path);
+    EXPECT_NE(text.find("\"schema\": \"slayer3d.lighting_static.v0\""), std::string::npos);
+    EXPECT_NE(text.find("\"id\": \"map.test.lighting_static_artifact_file\""), std::string::npos);
+    EXPECT_NE(text.find("\"samples\": 6"), std::string::npos);
+
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(map_path);
+    std::filesystem::remove_all(output_dir);
+}
+
+TEST(ToolCli, EditorLightingPlanRejectsOutputForSummaryMode)
+{
+    const std::filesystem::path map_path = unique_cli_test_path("lighting_summary_output_rejected");
+    write_text(map_path,
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1
+})json");
+    const std::string input = map_path.string();
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "lighting-plan", "--input", input.c_str(), "--output", "/tmp/lighting.txt"});
+    slayer3d_editor_args args;
+    EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_editor_args_destroy(&args);
     std::filesystem::remove(map_path);
 }

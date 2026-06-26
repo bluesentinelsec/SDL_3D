@@ -6,6 +6,7 @@
 #include "slayer3d_editor_cli.h"
 
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <argtable3.h>
@@ -40,7 +41,7 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "[--model-path <dir>] "
         "[--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
-        "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact]\n"
+        "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact] [--output <file>]\n"
         "\n"
         "Commands:\n"
         "  no args  Launch the bundled editor shell project with a new untitled map.\n"
@@ -190,6 +191,85 @@ static bool directory_exists_tool(const char *path)
     SDL_PathInfo info;
     SDL_zero(info);
     return path != NULL && path[0] != '\0' && SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+}
+
+static bool make_directory_recursive_tool(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (SDL_GetPathInfo(path, &info))
+        return info.type == SDL_PATHTYPE_DIRECTORY;
+
+    char *copy = SDL_strdup(path);
+    if (copy == NULL)
+        return false;
+
+    bool ok = true;
+    for (char *p = copy; *p != '\0'; ++p)
+    {
+        if (*p != '/' && *p != '\\')
+            continue;
+        const char saved = *p;
+        *p = '\0';
+        if (copy[0] != '\0' && !(SDL_strlen(copy) == 2u && copy[1] == ':'))
+        {
+            SDL_zero(info);
+            if (!SDL_GetPathInfo(copy, &info))
+                ok = SDL_CreateDirectory(copy);
+            else
+                ok = info.type == SDL_PATHTYPE_DIRECTORY;
+        }
+        *p = saved;
+        if (!ok)
+            break;
+    }
+    if (ok)
+    {
+        SDL_zero(info);
+        if (!SDL_GetPathInfo(copy, &info))
+            ok = SDL_CreateDirectory(copy);
+        else
+            ok = info.type == SDL_PATHTYPE_DIRECTORY;
+    }
+    SDL_free(copy);
+    return ok;
+}
+
+static bool editor_write_output_bytes(const char *path, const char *bytes, size_t byte_count, char *error_buffer,
+                                      int error_buffer_size)
+{
+    if (path == NULL || path[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size, "output path is required");
+        return false;
+    }
+
+    char *parent = path_dirname_tool(path);
+    if (parent == NULL || !make_directory_recursive_tool(parent))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to create output directory for '%s'", path);
+        SDL_free(parent);
+        return false;
+    }
+    SDL_free(parent);
+
+    SDL_IOStream *stream = SDL_IOFromFile(path, "wb");
+    if (stream == NULL)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to open output '%s'", path);
+        return false;
+    }
+    const bool ok = SDL_WriteIO(stream, bytes, byte_count) == byte_count;
+    SDL_CloseIO(stream);
+    if (!ok)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to write output '%s'", path);
+        return false;
+    }
+    return true;
 }
 
 static char *editor_default_project_path(void)
@@ -659,10 +739,10 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || output->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
-            overwrite->count > 0)
+        if (project->count > 0 || texture_path->count > 0 || model_path->count > 0 || overwrite->count > 0)
         {
-            fprintf(out, "%s: 'lighting-plan' only accepts --input and lighting budget/quality options.\n", program);
+            fprintf(out, "%s: 'lighting-plan' only accepts --input, --output, and lighting budget/quality options.\n",
+                    program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -675,6 +755,18 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->lighting_manifest && args->lighting_static_artifact)
         {
             fprintf(out, "%s: 'lighting-plan' accepts only one of --manifest or --static-artifact.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->output_path != NULL && args->output_path[0] == '\0')
+        {
+            fprintf(out, "%s: --output must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->output_path != NULL && !args->lighting_manifest && !args->lighting_static_artifact)
+        {
+            fprintf(out, "%s: 'lighting-plan --output' requires --manifest or --static-artifact.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -764,6 +856,20 @@ static const char *lighting_quality_name(slayer3d_map_lighting_build_quality qua
     }
 }
 
+static bool editor_write_lighting_json_output(const slayer3d_editor_args *args, FILE *stream, const char *json,
+                                              size_t json_size, const char *failure_label, char *error_buffer,
+                                              int error_buffer_size)
+{
+    if (args != NULL && args->output_path != NULL && args->output_path[0] != '\0')
+        return editor_write_output_bytes(args->output_path, json, json_size, error_buffer, error_buffer_size);
+
+    FILE *out = stream != NULL ? stream : stdout;
+    if (fwrite(json, 1u, json_size, out) == json_size)
+        return true;
+    editor_set_error(error_buffer, error_buffer_size, failure_label != NULL ? failure_label : "failed to write output");
+    return false;
+}
+
 bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *stream, char *error_buffer,
                                        int error_buffer_size)
 {
@@ -806,13 +912,11 @@ bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *s
         slayer3d_map_destroy(document);
         if (!ok)
             return false;
-        const bool wrote = fwrite(json, 1u, json_size, out) == json_size;
+        const bool wrote = editor_write_lighting_json_output(
+            args, out, json, json_size, "failed to write lighting artifact manifest", error_buffer, error_buffer_size);
         slayer3d_map_free_string(json);
         if (!wrote)
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to write lighting artifact manifest");
             return false;
-        }
         return true;
     }
     if (args->lighting_static_artifact)
@@ -824,13 +928,11 @@ bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *s
         slayer3d_map_destroy(document);
         if (!ok)
             return false;
-        const bool wrote = fwrite(json, 1u, json_size, out) == json_size;
+        const bool wrote = editor_write_lighting_json_output(
+            args, out, json, json_size, "failed to write static lighting artifact", error_buffer, error_buffer_size);
         slayer3d_map_free_string(json);
         if (!wrote)
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to write static lighting artifact");
             return false;
-        }
         return true;
     }
 
