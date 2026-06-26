@@ -357,6 +357,11 @@ alarms, rotating sirens, projectile fireballs, muzzle flashes, and steady room
 lights. Games may ignore unknown animation properties or reinterpret them for a
 custom renderer.
 
+Map validation warns when authored lighting exceeds the default planning
+budgets: 8 runtime-preview lights and 256 static/baked lights. These warnings
+are advisory by default so editors can show the complete map state, but callers
+may opt into `treat_warnings_as_errors` for stricter CI or export pipelines.
+
 ## Connections
 
 Connections are optional generic links between authored objects:

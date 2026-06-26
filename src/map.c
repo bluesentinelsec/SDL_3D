@@ -121,6 +121,10 @@ static bool map_warning(map_validation_context *ctx, const char *json_path, cons
     return map_emit(ctx, SLAYER3D_MAP_DIAGNOSTIC_WARNING, json_path, "%s", message);
 }
 
+static bool map_light_kind_bakes(const char *kind);
+static bool map_light_kind_runs_dynamically(const char *kind);
+static bool map_light_type_is_area(const char *type);
+
 static void map_format_path(char *buffer, size_t buffer_size, const char *format, ...)
 {
     va_list args;
@@ -999,6 +1003,8 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
         return true;
     if (!yyjson_is_arr(lights))
         return map_error(ctx, "$.lights", "lights must be an array");
+    size_t runtime_light_count = 0u;
+    size_t bake_light_count = 0u;
     for (size_t i = 0, count = yyjson_arr_size(lights); i < count; ++i)
     {
         char path[MAP_PATH_MAX];
@@ -1042,6 +1048,8 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
             return map_error(ctx, path, "light entry must be an object");
         yyjson_val *casts_shadow = map_obj_get(light, "casts_shadow");
         const char *source_actor = map_json_string(light, "source_actor");
+        const char *kind = map_json_string(light, "kind");
+        const char *type = map_json_string(light, "type");
         if (!map_require_non_empty_string(ctx, light, "id", id_path, "light id") ||
             !map_add_unique(ctx, &ctx->object_ids, "object", map_json_string(light, "id"), path) ||
             !map_optional_non_empty_string(ctx, light, "source_actor", source_actor_path, "light source actor") ||
@@ -1070,6 +1078,27 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
         {
             return false;
         }
+
+        const bool static_light = map_light_kind_bakes(kind) || map_light_type_is_area(type);
+        const bool dynamic_light = map_light_kind_runs_dynamically(kind);
+        bake_light_count += static_light ? 1u : 0u;
+        runtime_light_count += dynamic_light || static_light ? 1u : 0u;
+    }
+    if (runtime_light_count > MAP_LIGHTING_DEFAULT_DYNAMIC_LIGHT_BUDGET &&
+        !map_warning(ctx, "$.lights",
+                     "map has %zu runtime-preview lights; default dynamic light budget is %u. Reduce dynamic lights, "
+                     "mark lights as baked/static where practical, or compute/bake static lighting.",
+                     runtime_light_count, MAP_LIGHTING_DEFAULT_DYNAMIC_LIGHT_BUDGET))
+    {
+        return false;
+    }
+    if (bake_light_count > MAP_LIGHTING_DEFAULT_STATIC_LIGHT_BUDGET &&
+        !map_warning(ctx, "$.lights",
+                     "map has %zu static/baked lights; default static light budget is %u. Split bake groups, reduce "
+                     "authored static lights, or raise the bake budget for offline builds.",
+                     bake_light_count, MAP_LIGHTING_DEFAULT_STATIC_LIGHT_BUDGET))
+    {
+        return false;
     }
     return true;
 }

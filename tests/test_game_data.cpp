@@ -43819,6 +43819,42 @@ TEST(GameDataRuntime, SlayerMapWarnsOnAbsoluteAssetPaths)
     EXPECT_NE(std::string(error).find("project-relative path"), std::string::npos);
 }
 
+TEST(GameDataRuntime, SlayerMapWarnsWhenRuntimeLightBudgetIsExceeded)
+{
+    std::string map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+)json";
+    for (int i = 0; i < 9; ++i)
+    {
+        if (i > 0)
+            map_json += ",\n";
+        map_json += "    { \"id\": \"light.";
+        map_json += std::to_string(i);
+        map_json += "\", \"kind\": \"dynamic\", \"type\": \"point\" }";
+    }
+    map_json += R"json(
+  ]
+})json";
+
+    MapDiagnosticCapture capture;
+    slayer3d_map_validation_options options{};
+    options.diagnostic = capture_map_diagnostic;
+    options.userdata = &capture;
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_map_validate_json(map_json.c_str(), map_json.size(), &options, error, sizeof(error))) << error;
+    ASSERT_EQ(capture.diagnostics.size(), 1u);
+    EXPECT_EQ(capture.diagnostics[0].severity, SLAYER3D_MAP_DIAGNOSTIC_WARNING);
+    EXPECT_NE(capture.diagnostics[0].message.find("runtime-preview lights"), std::string::npos);
+    EXPECT_EQ(error[0], '\0');
+
+    options.treat_warnings_as_errors = true;
+    EXPECT_FALSE(slayer3d_map_validate_json(map_json.c_str(), map_json.size(), &options, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("runtime-preview lights"), std::string::npos);
+}
+
 TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
 {
     const char *map_json = R"json({
