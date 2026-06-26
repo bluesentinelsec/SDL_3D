@@ -315,6 +315,14 @@ bool slayer3d_game_data_active_scene_allows_action(const slayer3d_game_data_runt
     if (runtime == NULL || action == NULL)
         return false;
 
+    if (runtime->scene_state != NULL &&
+        slayer3d_properties_get_bool(runtime->scene_state, "editor.console.focused", false) &&
+        (SDL_strncmp(action, "action.editor.", SDL_strlen("action.editor.")) == 0 ||
+         SDL_strncmp(action, "editor.", SDL_strlen("editor.")) == 0))
+    {
+        return false;
+    }
+
     yyjson_val *global_actions =
         obj_get(obj_get(obj_get(runtime_root(runtime), "app"), "input_policy"), "global_actions");
     if (string_array_contains(global_actions, action))

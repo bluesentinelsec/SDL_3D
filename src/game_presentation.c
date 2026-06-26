@@ -1012,17 +1012,10 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     }
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
-    ok = slayer3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
-    if (frame->image_cache != NULL)
-        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
-                                               frame->metrics, frame->render_eval) &&
-             ok;
-    if (frame->font_cache != NULL)
-    {
-        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->asset_warmup,
-                                             frame->metrics, frame->pulse_phase) &&
-             ok;
-    }
+    ok = slayer3d_game_data_draw_ui_layered(frame->runtime, frame->renderer, frame->font_cache, frame->image_cache,
+                                            frame->asset_warmup, frame->metrics, frame->render_eval,
+                                            frame->pulse_phase) &&
+         ok;
     if (frame->app_flow != NULL)
         slayer3d_game_data_app_flow_draw(frame->app_flow, frame->renderer);
     ok = run_frame_hook(frame, frame->after_ui) && ok;

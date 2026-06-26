@@ -2073,6 +2073,34 @@ bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *r
     return true;
 }
 
+bool slayer3d_game_data_translate_selected_editor_actor(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || slayer3d_vec3_length_squared(offset) <= 0.0000001f ||
+        !editor_selection_active_for_scene(runtime) || !runtime->editor_active_selection.hit ||
+        runtime->editor_active_selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR ||
+        runtime->editor_active_selection.element_name == NULL)
+    {
+        return false;
+    }
+
+    editor_actor_runtime *actor = find_editor_actor_mutable(runtime, runtime->editor_active_selection.element_name);
+    if (actor == NULL)
+        return false;
+
+    actor->position = slayer3d_vec3_add(actor->position, offset);
+    mark_editor_actors_dirty(runtime);
+
+    runtime->editor_active_selection.point = actor->position;
+    runtime->editor_active_selection.bounds = editor_actor_runtime_bounds(actor);
+    runtime->editor_active_selection.has_bounds = true;
+    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selection_properties(runtime, &runtime->editor_active_selection, SLAYER3D_EDITOR_PROPERTY_SLOT_CAP);
+    publish_editor_actor_inspector_values(runtime, actor);
+
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "moved selected thing");
+    return true;
+}
+
 static void publish_editor_prefab_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
                                           const char *message, const char *prefab, const char *actor)
 {

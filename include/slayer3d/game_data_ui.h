@@ -54,6 +54,8 @@ extern "C"
         const char *source;
         /** @brief Caller-defined visibility key. */
         const char *visible;
+        /** @brief Draw layer. Higher layers are drawn above lower layers. */
+        int layer;
         /** @brief Horizontal position. For centered text, this is a normalized y-independent coordinate. */
         float x;
         /** @brief Vertical position. */
@@ -90,6 +92,8 @@ extern "C"
         const char *image;
         /** @brief Caller-defined visibility key. */
         const char *visible;
+        /** @brief Draw layer. Higher layers are drawn above lower layers. */
+        int layer;
         /** @brief Horizontal anchor position. */
         float x;
         /** @brief Vertical anchor position. */
@@ -134,6 +138,8 @@ extern "C"
         const char *name;
         /** @brief Caller-defined visibility key. */
         const char *visible;
+        /** @brief Draw layer. Higher layers are drawn above lower layers. */
+        int layer;
         /** @brief Horizontal position. */
         float x;
         /** @brief Vertical position. */

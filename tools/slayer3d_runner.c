@@ -3,6 +3,7 @@
  * @brief Generic SLAYER3D data-game runner.
  */
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
 #if !defined(SLAYER3D_RUNNER_NO_MAIN)
@@ -12,6 +13,7 @@
 
 #include <stdio.h>
 
+#include "slayer3d/map.h"
 #include "slayer3d/slayer3d.h"
 
 #include "slayer3d_fused.h"
@@ -39,6 +41,7 @@ typedef struct runner_state
     slayer3d_game_config config;
     char title[128];
     slayer3d_data_game_runtime *runtime;
+    char *generated_map_output_dir;
 } runner_state;
 
 static bool runner_is_asset_path(const char *path)
@@ -119,6 +122,69 @@ static bool runner_set_errorf(char *error_buffer, int error_buffer_size, const c
     if (error_buffer != NULL && error_buffer_size > 0)
         SDL_snprintf(error_buffer, (size_t)error_buffer_size, fmt, value != NULL ? value : "");
     return false;
+}
+
+static char *runner_join_path(const char *directory, const char *leaf)
+{
+    if (directory == NULL || leaf == NULL)
+        return NULL;
+    const size_t dir_len = SDL_strlen(directory);
+    const size_t leaf_len = SDL_strlen(leaf);
+    const bool needs_sep = dir_len > 0u && directory[dir_len - 1u] != '/' && directory[dir_len - 1u] != '\\' &&
+                           leaf[0] != '/' && leaf[0] != '\\';
+    char *path = (char *)SDL_malloc(dir_len + leaf_len + (needs_sep ? 2u : 1u));
+    if (path == NULL)
+        return NULL;
+    SDL_snprintf(path, dir_len + leaf_len + (needs_sep ? 2u : 1u), "%s%s%s", directory, needs_sep ? "/" : "", leaf);
+    return path;
+}
+
+static bool runner_prepare_playable_map(runner_state *state, char *error_buffer, int error_buffer_size)
+{
+    if (state == NULL || state->args.map_path == NULL)
+        return true;
+
+    slayer3d_map_document *map = NULL;
+    if (!slayer3d_map_load_file(state->args.map_path, NULL, &map, error_buffer, error_buffer_size))
+        return false;
+
+    slayer3d_map_playable_scene_desc scene_desc;
+    if (!slayer3d_map_build_playable_scene_desc(map, &scene_desc, error_buffer, error_buffer_size))
+    {
+        slayer3d_map_destroy(map);
+        return false;
+    }
+
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "Slayer3DRunner");
+    char *output_dir = pref_path != NULL ? runner_join_path(pref_path, "slayermap-playable") : NULL;
+    SDL_free(pref_path);
+    if (output_dir == NULL)
+    {
+        slayer3d_map_destroy(map);
+        runner_set_error(error_buffer, error_buffer_size, "failed to allocate playable map output directory");
+        return false;
+    }
+
+    const bool ok = slayer3d_map_write_playable_game_files(map, output_dir, error_buffer, error_buffer_size);
+    slayer3d_map_destroy(map);
+    if (!ok)
+    {
+        SDL_free(output_dir);
+        return false;
+    }
+
+    state->generated_map_output_dir = output_dir;
+    state->args.mount_kind = SLAYER3D_RUNNER_MOUNT_DIRECTORY;
+    state->args.mount_path = state->generated_map_output_dir;
+    state->args.data_asset_path = "asset://playable_map.game.json";
+    state->args.scene = NULL;
+    state->args.player_start = NULL;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SLAYER3D runner materialized map '%s' to '%s' (%llu playable brushes, %llu actors, player=%s)",
+                state->args.map_path, state->generated_map_output_dir,
+                (unsigned long long)scene_desc.playable_brush_count, (unsigned long long)scene_desc.actor_count,
+                scene_desc.player_actor_id != NULL ? scene_desc.player_actor_id : "<none>");
+    return true;
 }
 
 static bool runner_read_asset_state_file(runner_state *state, const char *path, char **out_text, size_t *out_size,
@@ -380,16 +446,25 @@ int slayer3d_runner_main(int argc, char **argv)
     }
 
     char error[512] = "";
+    if (!runner_prepare_playable_map(&state, error, (int)sizeof(error)))
+    {
+        fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to prepare playable map");
+        slayer3d_runner_args_destroy(&state.args);
+        SDL_free(state.generated_map_output_dir);
+        return 1;
+    }
     if (!runner_prepare_fused_defaults(&state, error, (int)sizeof(error)))
     {
         fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to inspect fused runner");
         slayer3d_runner_args_destroy(&state.args);
+        SDL_free(state.generated_map_output_dir);
         return 1;
     }
     if (!runner_apply_test_run_manifest(&state, error, (int)sizeof(error)))
     {
         fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to apply test-run manifest");
         slayer3d_runner_args_destroy(&state.args);
+        SDL_free(state.generated_map_output_dir);
         return 1;
     }
     if ((state.args.data_asset_path == NULL || state.args.data_asset_path[0] == '\0') &&
@@ -397,12 +472,14 @@ int slayer3d_runner_main(int argc, char **argv)
     {
         fprintf(stderr, "slayer3d_runner: an asset mount and --data are required unless the executable is fused\n");
         slayer3d_runner_args_destroy(&state.args);
+        SDL_free(state.generated_map_output_dir);
         return 2;
     }
     if (!load_runner_config(&state, error, (int)sizeof(error)))
     {
         fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to load app config");
         slayer3d_runner_args_destroy(&state.args);
+        SDL_free(state.generated_map_output_dir);
         return 1;
     }
 
@@ -416,6 +493,7 @@ int slayer3d_runner_main(int argc, char **argv)
 
     const int result = slayer3d_run_game(&state.config, &callbacks, &state);
     slayer3d_runner_args_destroy(&state.args);
+    SDL_free(state.generated_map_output_dir);
     return result;
 }
 

@@ -22,12 +22,43 @@ provides the initial map I/O surface:
 - `slayer3d_map_to_json()` serializes a loaded document back to canonical
   pretty JSON.
 - `slayer3d_map_write_file()` writes a loaded document to disk.
-- Query helpers expose basic metadata and top-level object counts while keeping
-  arbitrary project-specific JSON data preserved inside the document.
+- Query helpers expose metadata, top-level object counts, typed views for
+  materials/brushes/actors, and arbitrary property JSON while keeping
+  project-specific data preserved inside the document.
 
-The initial handle is intentionally JSON-preserving rather than a full C object
-model. Later slices can layer editor/game-specific materialization on top of
-the same load/save primitive without losing unknown fields.
+The loaded handle is intentionally JSON-preserving. String pointers returned by
+typed read helpers are borrowed from the document and remain valid until
+`slayer3d_map_destroy()`. Arbitrary property values can be serialized with the
+`slayer3d_map_get_*_property_json()` helpers and must be released with
+`slayer3d_map_free_string()`.
+
+For the initial playable-map loop, `slayer3d_map_build_playable_scene_desc()`
+derives a minimal runtime-facing summary from a loaded document. It counts
+texture/model assets, materials, box brushes, and actors, then resolves the
+actor/object whose arbitrary properties include `type = "player-character"`.
+Games can use that descriptor as the first handoff point before materializing
+their own renderer, physics, and gameplay objects.
+
+`slayer3d_map_write_playable_game_files()` builds on that descriptor and writes
+a minimal data-game package under a caller-provided directory. The package
+contains `playable_map.game.json` plus `scenes/play.scene.json`, converts map
+box brushes into a runtime brush world, and spawns the player through the
+existing `controller.fps_brush` component. Run the generated package with:
+
+```sh
+slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json
+```
+
+The standard runner can also materialize a saved map to a temporary generated
+package and launch it directly:
+
+```sh
+slayer3d_runner --map path/to/level.slayermap.json
+```
+
+This bridge is intentionally conservative: it proves the first playable loop
+with brush collision and material colors, while leaving external texture/model
+asset copying and game-specific actor behavior to later project integrations.
 
 ## Example Game Data
 

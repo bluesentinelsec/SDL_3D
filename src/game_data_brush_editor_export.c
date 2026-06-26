@@ -1088,7 +1088,8 @@ static bool export_add_map_player_start_actor(yyjson_mut_doc *doc, yyjson_mut_va
     {
         return false;
     }
-    return export_add_optional_string(doc, properties, "scene", start->scene) &&
+    return yyjson_mut_obj_add_strcpy(doc, properties, "type", "player-character") &&
+           export_add_optional_string(doc, properties, "scene", start->scene) &&
            export_add_optional_string(doc, properties, "target", start->target);
 }
 

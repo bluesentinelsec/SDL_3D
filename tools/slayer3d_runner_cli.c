@@ -16,6 +16,8 @@ void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream)
     fprintf(out,
             "Usage:\n"
             "  %s\n"
+            "  %s --map <level.slayermap.json> [--media <media-dir>] [--state <key=value> ...] "
+            "[--state-json <object>] [--state-file <path-or-asset>]\n"
             "  %s --root <asset-root> (--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
@@ -24,7 +26,7 @@ void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream)
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
             "[--state-file <path-or-asset>]\n",
-            program, program, program);
+            program, program, program, program);
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
     fprintf(out,
             "  %s --embedded (--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
@@ -85,6 +87,7 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
 {
     struct arg_str *root = arg_str0(NULL, "root", "<asset-root>", "mount a directory asset root");
     struct arg_str *pack = arg_str0(NULL, "pack", "<game.slayer3dpak>", "mount an SLAYER3D asset pack");
+    struct arg_str *map = arg_str0(NULL, "map", "<level.slayermap.json>", "run a Slayer3D map as a playable FPS scene");
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
     struct arg_lit *embedded = arg_lit0(NULL, "embedded", "mount the runner's embedded asset pack");
 #endif
@@ -104,6 +107,7 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     struct arg_end *end = arg_end(20);
     void *argtable[] = {
         root,         pack,
+        map,
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
         embedded,
 #endif
@@ -163,6 +167,9 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_ERROR;
     }
 
+    if (map->count > 0)
+        args->map_path = map->sval[0];
+
     if (root->count > 0)
     {
         args->mount_kind = SLAYER3D_RUNNER_MOUNT_DIRECTORY;
@@ -199,6 +206,29 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     {
         args->player_start = player_start->sval[0];
         args->player_start_explicit = true;
+    }
+
+    if (args->map_path != NULL)
+    {
+        args->mount_kind = SLAYER3D_RUNNER_MOUNT_NONE;
+        args->mount_path = NULL;
+        args->data_asset_path = NULL;
+        if (args->map_path[0] == '\0')
+        {
+            fprintf(out, "%s: --map path must be non-empty\n", program);
+            arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (explicit_mount_count > 0 || args->data_asset_path_explicit || args->test_run_manifest_path != NULL ||
+            args->scene_explicit || args->player_start_explicit)
+        {
+            fprintf(out,
+                    "%s: --map generates its own playable asset root; do not combine it with --root, --pack, "
+                    "--embedded, --data, --test-run-manifest, --scene, or --player-start\n",
+                    program);
+            arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
     }
 
     const bool mount_path_required =

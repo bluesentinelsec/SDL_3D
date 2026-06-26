@@ -85,6 +85,30 @@ TEST(ToolCli, RunnerParsesDirectoryMount)
     EXPECT_STREQ(args.media_dir, "media");
 }
 
+TEST(ToolCli, RunnerParsesSlayerMapMode)
+{
+    std::vector<char *> argv =
+        argv_from({"slayer3d_runner", "--map", "/tmp/map.json", "--media", "media", "--state", "debug=true"});
+    slayer3d_runner_args args;
+    ASSERT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.mount_kind, SLAYER3D_RUNNER_MOUNT_NONE);
+    EXPECT_STREQ(args.map_path, "/tmp/map.json");
+    EXPECT_EQ(args.data_asset_path, nullptr);
+    EXPECT_STREQ(args.media_dir, "media");
+    ASSERT_EQ(args.state_assignment_count, 1);
+    EXPECT_STREQ(args.state_assignments[0], "debug=true");
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerRejectsSlayerMapWithExplicitGameDataMount)
+{
+    std::vector<char *> argv =
+        argv_from({"slayer3d_runner", "--map", "/tmp/map.json", "--root", "game/data", "--data", "asset://game.json"});
+    slayer3d_runner_args args;
+    EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
+    slayer3d_runner_args_destroy(&args);
+}
+
 TEST(ToolCli, RunnerRejectsMultipleMounts)
 {
     std::vector<char *> argv = argv_from(

@@ -1606,15 +1606,22 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     const SDL_Keymod modifiers = SDL_GetModState();
     const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
     const bool duplicate_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-    const bool can_start_from_hover = editor_selection_is_selectable_brush(hover_selection);
+    const bool hover_is_brush = editor_selection_is_selectable_brush(hover_selection);
+    const bool hover_is_actor = hover_selection != NULL && hover_selection->hit &&
+                                hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    const bool active_is_actor = editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
+                                 runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    const bool can_start_from_hover = hover_is_brush || hover_is_actor;
     const bool can_start_y_axis_drag =
-        y_axis_lock && editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0;
+        y_axis_lock &&
+        ((editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0) ||
+         active_is_actor);
     if (!drag->active && left_pressed && (can_start_from_hover || can_start_y_axis_drag))
     {
-        const bool hover_was_selected =
-            can_start_from_hover && editor_hover_is_selected_brush(runtime, hover_selection);
+        const bool drag_targets_actor = hover_is_actor || (!can_start_from_hover && active_is_actor);
+        const bool hover_was_selected = hover_is_brush && editor_hover_is_selected_brush(runtime, hover_selection);
         const bool additive = (modifiers & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-        if (can_start_from_hover && !hover_was_selected)
+        if (hover_is_brush && !hover_was_selected)
         {
             const slayer3d_game_data_editor_selection resolved_hover =
                 resolved_editor_selection(runtime, hover_selection);
@@ -1624,13 +1631,20 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                 return false;
             update_active_editor_selection_from_selected_brushes(runtime);
         }
-        if (duplicate_modifier && runtime->editor_selected_brush_count > 0)
+        else if (hover_is_actor)
+        {
+            clear_editor_selected_brushes(runtime);
+            runtime->editor_active_selection = resolved_editor_selection(runtime, hover_selection);
+            runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        }
+        if (duplicate_modifier && runtime->editor_selected_brush_count > 0 && !active_is_actor)
             (void)slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
                                                                        false);
         SDL_zero(*drag);
         drag->active = true;
         drag->axis_lock_y = y_axis_lock;
         drag->duplicate_drag = duplicate_modifier;
+        drag->target_actor = drag_targets_actor;
         drag->scene = slayer3d_game_data_active_scene(runtime);
         const slayer3d_game_data_editor_selection *drag_selection =
             duplicate_modifier ? &runtime->editor_active_selection
@@ -1659,11 +1673,15 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
         const slayer3d_vec3 incremental = slayer3d_vec3_sub(desired, drag->applied_offset);
         if (slayer3d_vec3_length_squared(incremental) > 0.0000001f)
         {
-            if (slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental))
+            const bool moved = drag->target_actor
+                                   ? slayer3d_game_data_translate_selected_editor_actor(runtime, incremental)
+                                   : slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental);
+            if (moved)
             {
                 drag->applied_offset = desired;
                 drag->moved = true;
-                update_active_editor_selection_from_selected_brushes(runtime);
+                if (!drag->target_actor)
+                    update_active_editor_selection_from_selected_brushes(runtime);
                 publish_editor_drag_move_feedback(runtime, drag->applied_offset);
             }
         }
@@ -1676,11 +1694,15 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
         const slayer3d_vec3 incremental = slayer3d_vec3_sub(desired, drag->applied_offset);
         if (slayer3d_vec3_length_squared(incremental) > 0.0000001f)
         {
-            if (slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental))
+            const bool moved = drag->target_actor
+                                   ? slayer3d_game_data_translate_selected_editor_actor(runtime, incremental)
+                                   : slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental);
+            if (moved)
             {
                 drag->applied_offset = desired;
                 drag->moved = true;
-                update_active_editor_selection_from_selected_brushes(runtime);
+                if (!drag->target_actor)
+                    update_active_editor_selection_from_selected_brushes(runtime);
                 publish_editor_drag_move_feedback(runtime, drag->applied_offset);
             }
         }
@@ -1690,8 +1712,12 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     {
         if (runtime->scene_state != NULL && drag->moved)
         {
-            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag moved brush");
-            editor_publish_console_message(runtime, "drag moved brush");
+            const bool moved_actor =
+                editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
+                runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                           moved_actor ? "drag moved thing" : "drag moved brush");
+            editor_publish_console_message(runtime, moved_actor ? "drag moved thing" : "drag moved brush");
         }
         clear_editor_drag_move(runtime);
     }
@@ -1797,6 +1823,11 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
         moved = editor_translate_selected_vertices(runtime, offset);
     else if (edge_mode)
         moved = editor_translate_selected_edges(runtime, offset);
+    else if (editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
+             runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+    {
+        moved = slayer3d_game_data_translate_selected_editor_actor(runtime, offset);
+    }
     else
         moved = slayer3d_game_data_translate_selected_editor_brushes(runtime, offset);
     if (out_changed != NULL)

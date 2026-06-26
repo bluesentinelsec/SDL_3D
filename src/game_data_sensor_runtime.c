@@ -1135,7 +1135,8 @@ void update_sensors(slayer3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_INPUT_PRESSED)
         {
             const int action_id = slayer3d_game_data_find_action(runtime, sensor->action);
-            if (slayer3d_input_is_pressed(runtime_input(runtime), action_id))
+            if (action_id >= 0 && slayer3d_game_data_active_scene_allows_action(runtime, action_id) &&
+                slayer3d_input_is_pressed(runtime_input(runtime), action_id))
                 emit_sensor_signal(runtime, sensor, NULL, NULL);
             continue;
         }

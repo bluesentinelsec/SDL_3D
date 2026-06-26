@@ -11,7 +11,8 @@
 #define SLAYER3D_INPUT_MAX_MOUSE_BUTTONS 16
 #define SLAYER3D_INPUT_DEMO_MAGIC "SLAYER3DEMO"
 #define SLAYER3D_INPUT_DEMO_MAGIC_SIZE 8
-#define SLAYER3D_INPUT_DEMO_VERSION 3U
+#define SLAYER3D_INPUT_DEMO_VERSION 4U
+#define SLAYER3D_INPUT_DEMO_MIN_READ_VERSION 3U
 #define SLAYER3D_INPUT_DEMO_ACTION_COUNT SLAYER3D_INPUT_MAX_ACTIONS
 #define SLAYER3D_INPUT_DEMO_FLAG_PRESSED 0x01U
 #define SLAYER3D_INPUT_DEMO_FLAG_RELEASED 0x02U
@@ -949,21 +950,24 @@ static bool slayer3d_demo_write_header(SDL_IOStream *stream, float tick_rate, Ui
 }
 
 static bool slayer3d_demo_read_header(SDL_IOStream *stream, float *out_tick_rate, Uint32 *out_tick_count,
-                                      Uint32 *out_action_count)
+                                      Uint32 *out_action_count, Uint32 *out_version)
 {
     char magic[SLAYER3D_INPUT_DEMO_MAGIC_SIZE];
     Uint32 version;
 
     if (!slayer3d_input_read_all(stream, magic, sizeof(magic)) ||
         SDL_memcmp(magic, SLAYER3D_INPUT_DEMO_MAGIC, SLAYER3D_INPUT_DEMO_MAGIC_SIZE) != 0 ||
-        !slayer3d_input_read_u32_le(stream, &version) || version != SLAYER3D_INPUT_DEMO_VERSION ||
-        !slayer3d_input_read_f32_le(stream, out_tick_rate) || !slayer3d_input_read_u32_le(stream, out_tick_count) ||
-        !slayer3d_input_read_u32_le(stream, out_action_count) || *out_action_count != SLAYER3D_INPUT_DEMO_ACTION_COUNT)
+        !slayer3d_input_read_u32_le(stream, &version) || version < SLAYER3D_INPUT_DEMO_MIN_READ_VERSION ||
+        version > SLAYER3D_INPUT_DEMO_VERSION || !slayer3d_input_read_f32_le(stream, out_tick_rate) ||
+        !slayer3d_input_read_u32_le(stream, out_tick_count) || !slayer3d_input_read_u32_le(stream, out_action_count) ||
+        *out_action_count != SLAYER3D_INPUT_DEMO_ACTION_COUNT)
     {
         SDL_SetError("Invalid SLAYER3D demo file.");
         return false;
     }
 
+    if (out_version != NULL)
+        *out_version = version;
     return true;
 }
 
@@ -977,6 +981,8 @@ static bool slayer3d_demo_write_snapshot(SDL_IOStream *stream, const slayer3d_in
     if (!slayer3d_input_write_i32_le(stream, snapshot->tick) ||
         !slayer3d_input_write_f32_le(stream, snapshot->mouse_dx) ||
         !slayer3d_input_write_f32_le(stream, snapshot->mouse_dy) ||
+        !slayer3d_input_write_f32_le(stream, snapshot->mouse_wheel_x) ||
+        !slayer3d_input_write_f32_le(stream, snapshot->mouse_wheel_y) ||
         !slayer3d_input_write_u8(stream, snapshot->any_pressed ? 1U : 0U))
     {
         return false;
@@ -994,7 +1000,7 @@ static bool slayer3d_demo_write_snapshot(SDL_IOStream *stream, const slayer3d_in
     return true;
 }
 
-static bool slayer3d_demo_read_snapshot(SDL_IOStream *stream, slayer3d_input_snapshot *snapshot)
+static bool slayer3d_demo_read_snapshot(SDL_IOStream *stream, Uint32 version, slayer3d_input_snapshot *snapshot)
 {
     if (stream == NULL || snapshot == NULL)
     {
@@ -1005,7 +1011,16 @@ static bool slayer3d_demo_read_snapshot(SDL_IOStream *stream, slayer3d_input_sna
     Uint8 any_pressed = 0U;
     if (!slayer3d_input_read_i32_le(stream, &snapshot->tick) ||
         !slayer3d_input_read_f32_le(stream, &snapshot->mouse_dx) ||
-        !slayer3d_input_read_f32_le(stream, &snapshot->mouse_dy) || !slayer3d_input_read_u8(stream, &any_pressed))
+        !slayer3d_input_read_f32_le(stream, &snapshot->mouse_dy))
+    {
+        return false;
+    }
+    if (version >= 4U && (!slayer3d_input_read_f32_le(stream, &snapshot->mouse_wheel_x) ||
+                          !slayer3d_input_read_f32_le(stream, &snapshot->mouse_wheel_y)))
+    {
+        return false;
+    }
+    if (!slayer3d_input_read_u8(stream, &any_pressed))
     {
         return false;
     }
@@ -1461,6 +1476,8 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     next.tick = tick;
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
+    next.mouse_wheel_x = input->mouse_wheel_x_accum;
+    next.mouse_wheel_y = input->mouse_wheel_y_accum;
     if (input->discard_mouse_motion_until_update && input->discarded_mouse_motion_since_request)
     {
         input->discard_next_mouse_motion = false;
@@ -1586,6 +1603,16 @@ float slayer3d_input_get_mouse_dx(const slayer3d_input_manager *input)
 float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input)
 {
     return input != NULL ? input->snapshot.mouse_dy : 0.0f;
+}
+
+float slayer3d_input_get_mouse_wheel_x(const slayer3d_input_manager *input)
+{
+    return input != NULL ? input->snapshot.mouse_wheel_x : 0.0f;
+}
+
+float slayer3d_input_get_mouse_wheel_y(const slayer3d_input_manager *input)
+{
+    return input != NULL ? input->snapshot.mouse_wheel_y : 0.0f;
 }
 
 void slayer3d_input_set_mouse_position_transform(slayer3d_input_manager *input, float scale_x, float scale_y,
@@ -1988,6 +2015,7 @@ slayer3d_demo_player *slayer3d_demo_playback_load(const char *path)
     slayer3d_demo_player *player;
     Uint32 tick_count;
     Uint32 action_count;
+    Uint32 version;
     size_t snapshot_bytes;
     float tick_rate;
 
@@ -2003,7 +2031,7 @@ slayer3d_demo_player *slayer3d_demo_playback_load(const char *path)
         return NULL;
     }
 
-    if (!slayer3d_demo_read_header(stream, &tick_rate, &tick_count, &action_count))
+    if (!slayer3d_demo_read_header(stream, &tick_rate, &tick_count, &action_count, &version))
     {
         SDL_CloseIO(stream);
         return NULL;
@@ -2044,7 +2072,7 @@ slayer3d_demo_player *slayer3d_demo_playback_load(const char *path)
 
         for (Uint32 i = 0; i < tick_count; ++i)
         {
-            if (!slayer3d_demo_read_snapshot(stream, &player->snapshots[i]))
+            if (!slayer3d_demo_read_snapshot(stream, version, &player->snapshots[i]))
             {
                 slayer3d_demo_playback_free(player);
                 SDL_CloseIO(stream);

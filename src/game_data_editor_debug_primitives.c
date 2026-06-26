@@ -747,6 +747,84 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
     return true;
 }
 
+static bool emit_editor_debug_y_ring(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius,
+                                     int segments)
+{
+    for (int i = 0; i < segments; ++i)
+    {
+        const float a0 = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+        const float a1 = ((float)(i + 1) / (float)segments) * SDL_PI_F * 2.0f;
+        const slayer3d_vec3 p0 =
+            slayer3d_vec3_make(center.x + SDL_cosf(a0) * radius, center.y, center.z + SDL_sinf(a0) * radius);
+        const slayer3d_vec3 p1 =
+            slayer3d_vec3_make(center.x + SDL_cosf(a1) * radius, center.y, center.z + SDL_sinf(a1) * radius);
+        if (!emit_editor_debug_line(context, p0, p1))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_capsule_arc(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                          slayer3d_vec3 direction, float radius, bool top, int segments)
+{
+    slayer3d_vec3 previous = center;
+    for (int i = 0; i <= segments; ++i)
+    {
+        const float t = (float)i / (float)segments;
+        const float angle = t * SDL_PI_F * 0.5f;
+        const float horizontal = SDL_cosf(angle) * radius;
+        const float vertical = SDL_sinf(angle) * radius * (top ? 1.0f : -1.0f);
+        const slayer3d_vec3 current =
+            slayer3d_vec3_add(slayer3d_vec3_add(center, slayer3d_vec3_scale(direction, horizontal)),
+                              slayer3d_vec3_make(0.0f, vertical, 0.0f));
+        if (i > 0 && !emit_editor_debug_line(context, previous, current))
+            return false;
+        previous = current;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_capsule_marker(editor_debug_iteration_context *context, const editor_actor_runtime *actor)
+{
+    if (context == NULL || actor == NULL)
+        return false;
+
+    const slayer3d_vec3 scale =
+        slayer3d_vec3_length_squared(actor->scale) > 0.000001f ? actor->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    const float radius = 0.35f * SDL_max(scale.x, scale.z);
+    const float total_height = SDL_max(1.8f * scale.y, radius * 2.0f);
+    const float cylinder_height = SDL_max(total_height - radius * 2.0f, 0.0f);
+    const slayer3d_vec3 bottom_center = slayer3d_vec3_add(actor->position, slayer3d_vec3_make(0.0f, radius, 0.0f));
+    const slayer3d_vec3 top_center = slayer3d_vec3_add(bottom_center, slayer3d_vec3_make(0.0f, cylinder_height, 0.0f));
+    const int ring_segments = 20;
+    const int arc_segments = 6;
+
+    if (!emit_editor_debug_y_ring(context, bottom_center, radius, ring_segments) ||
+        !emit_editor_debug_y_ring(context, top_center, radius, ring_segments))
+    {
+        return false;
+    }
+
+    static const slayer3d_vec3 directions[4] = {
+        {1.0f, 0.0f, 0.0f},
+        {-1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 1.0f},
+        {0.0f, 0.0f, -1.0f},
+    };
+    for (int i = 0; i < 4; ++i)
+    {
+        const slayer3d_vec3 offset = slayer3d_vec3_scale(directions[i], radius);
+        if (!emit_editor_debug_line(context, slayer3d_vec3_add(bottom_center, offset),
+                                    slayer3d_vec3_add(top_center, offset)) ||
+            !emit_editor_debug_capsule_arc(context, top_center, directions[i], radius, true, arc_segments) ||
+            !emit_editor_debug_capsule_arc(context, bottom_center, directions[i], radius, false, arc_segments))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int editor_preview_axis_index(const editor_placement_preview_state *preview)
 {
     if (preview == NULL || preview->axis == NULL)
@@ -2113,7 +2191,11 @@ static bool emit_editor_debug_actor_markers(const slayer3d_game_data_runtime *ru
             continue;
         context.element_name = actor->name;
         context.color = actor->color.a > 0 ? actor->color : (slayer3d_color){120, 200, 255, 210};
-        if (!emit_editor_debug_bounds(&context, editor_debug_actor_bounds(actor)))
+        const char *mesh = actor->mesh != NULL ? actor->mesh : "";
+        const bool emitted = SDL_strcmp(mesh, "capsule") == 0
+                                 ? emit_editor_debug_capsule_marker(&context, actor)
+                                 : emit_editor_debug_bounds(&context, editor_debug_actor_bounds(actor));
+        if (!emitted)
             return true;
     }
     return true;

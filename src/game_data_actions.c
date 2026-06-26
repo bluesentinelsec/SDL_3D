@@ -712,19 +712,6 @@ static bool editor_texture_collection_publish_row(slayer3d_game_data_runtime *ru
                                                             entry->material);
 }
 
-static unsigned int editor_texture_path_hash(const char *path)
-{
-    unsigned int hash = 2166136261U;
-    if (path == NULL)
-        return hash;
-    for (const unsigned char *p = (const unsigned char *)path; *p != '\0'; ++p)
-    {
-        hash ^= (unsigned int)(*p);
-        hash *= 16777619U;
-    }
-    return hash;
-}
-
 static bool editor_texture_collection_entry_from_row(
     const runtime_collection *collection, int row_index, editor_texture_scan_entry *entry, char *filename,
     size_t filename_size, char *path, size_t path_size, char *relative_path, size_t relative_path_size, char *directory,
@@ -784,8 +771,6 @@ static void editor_texture_clear_slots(slayer3d_properties *scene_state, int slo
         slayer3d_properties_set_string(scene_state, key, "");
         SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", i);
         slayer3d_properties_set_string(scene_state, key, "");
-        SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.image_id", i);
-        slayer3d_properties_set_string(scene_state, key, "");
         SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", i);
         slayer3d_properties_set_bool(scene_state, key, false);
         SDL_snprintf(key, sizeof(key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending", i);
@@ -807,11 +792,6 @@ static void editor_texture_publish_slot(slayer3d_properties *scene_state, int sl
     slayer3d_properties_set_string(scene_state, key, entry->material);
     SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.path", slot_index);
     slayer3d_properties_set_string(scene_state, key, entry->path);
-    char image_id[256];
-    SDL_snprintf(image_id, sizeof(image_id), "image.editor_shell.texture.slot_%d.%08x", slot_index,
-                 editor_texture_path_hash(entry->path));
-    SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.image_id", slot_index);
-    slayer3d_properties_set_string(scene_state, key, image_id);
     SDL_snprintf(key, sizeof(key), "editor.texture.slot.%d.available", slot_index);
     slayer3d_properties_set_bool(scene_state, key, true);
     SDL_snprintf(key, sizeof(key), "asset_warmup.ui_image.image.editor_shell.texture.slot_%d.pending", slot_index);
@@ -1614,7 +1594,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "object_capsule", "Capsule", "capsule", "", "object.editor_shell.capsule",
                    "object.editor_shell.capsule", "Objects", "actor_object", "object_capsule", "object", "capsule",
-                   (slayer3d_color){120, 210, 180, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
+                   (slayer3d_color){80, 235, 130, 255}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1001);
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "object_sphere", "Sphere", "sphere", "", "object.editor_shell.sphere",
                    "object.editor_shell.sphere", "Objects", "actor_object", "object_sphere", "object", "sphere",
@@ -2074,11 +2054,18 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     if (message[0] == '\0')
         return false;
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
-
     const char *line_key_prefix = json_string(action, "line_key_prefix", "editor.console.line");
-    int line_count = json_int(action, "line_count", 16);
+    const char *count_key = json_string(action, "count_key", "editor.console.count");
+    int line_count = json_int(action, "line_count", 64);
     line_count = SDL_clamp(line_count, 1, 64);
+    if (SDL_strcmp(line_key_prefix, "editor.console.line") == 0 &&
+        (count_key == NULL || SDL_strcmp(count_key, "editor.console.count") == 0) && line_count == 64)
+    {
+        editor_publish_console_message(runtime, message);
+        return true;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
 
     char previous[64][512];
     SDL_zeroa(previous);
@@ -2099,7 +2086,6 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     char key[128];
     SDL_snprintf(key, sizeof(key), "%s0", line_key_prefix);
     slayer3d_properties_set_string(runtime->scene_state, key, message);
-    const char *count_key = json_string(action, "count_key", "editor.console.count");
     if (count_key != NULL && count_key[0] != '\0')
     {
         slayer3d_properties_set_int(
@@ -2107,6 +2093,112 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
             SDL_min(line_count, slayer3d_properties_get_int(runtime->scene_state, count_key, 0) + 1));
     }
     return true;
+}
+
+static bool action_value_to_string(const slayer3d_value *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (value == NULL)
+        return true;
+
+    switch (value->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
+        return true;
+    case SLAYER3D_VALUE_FLOAT:
+        SDL_snprintf(buffer, buffer_size, "%.3f", value->as_float);
+        return true;
+    case SLAYER3D_VALUE_BOOL:
+        SDL_strlcpy(buffer, value->as_bool ? "true" : "false", buffer_size);
+        return true;
+    case SLAYER3D_VALUE_VEC3:
+        SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value->as_vec3.x, value->as_vec3.y, value->as_vec3.z);
+        return true;
+    case SLAYER3D_VALUE_STRING:
+        SDL_strlcpy(buffer, value->as_string != NULL ? value->as_string : "", buffer_size);
+        return true;
+    case SLAYER3D_VALUE_COLOR:
+        SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned)value->as_color.r, (unsigned)value->as_color.g,
+                     (unsigned)value->as_color.b, (unsigned)value->as_color.a);
+        return true;
+    }
+
+    return false;
+}
+
+static bool format_scene_state_string(const slayer3d_properties *scene_state, const slayer3d_properties *payload,
+                                      const char *format, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (format == NULL)
+        return true;
+    if (SDL_strchr(format, '{') == NULL)
+    {
+        SDL_strlcpy(buffer, format, buffer_size);
+        return SDL_strlen(format) < buffer_size;
+    }
+
+    size_t offset = 0U;
+    const char *cursor = format;
+    while (*cursor != '\0' && offset + 1U < buffer_size)
+    {
+        const char *open = SDL_strchr(cursor, '{');
+        if (open == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, cursor, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor += copied;
+            break;
+        }
+
+        const size_t literal_len = (size_t)(open - cursor);
+        const size_t literal_copy = SDL_min(literal_len, buffer_size - offset - 1U);
+        SDL_memcpy(buffer + offset, cursor, literal_copy);
+        offset += literal_copy;
+        buffer[offset] = '\0';
+        if (literal_copy < literal_len)
+            break;
+
+        const char *close = SDL_strchr(open + 1, '}');
+        if (close == NULL)
+        {
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, open, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+            if (copied < remaining)
+                cursor = open + copied;
+            break;
+        }
+
+        char key[128];
+        const size_t key_len = (size_t)(close - open - 1);
+        if (key_len > 0U && key_len < sizeof(key))
+        {
+            SDL_memcpy(key, open + 1, key_len);
+            key[key_len] = '\0';
+
+            const slayer3d_value *replacement = payload != NULL ? slayer3d_properties_get_value(payload, key) : NULL;
+            if (replacement == NULL && scene_state != NULL)
+                replacement = slayer3d_properties_get_value(scene_state, key);
+
+            char replacement_text[256];
+            if (!action_value_to_string(replacement, replacement_text, sizeof(replacement_text)))
+                return false;
+            const size_t remaining = buffer_size - offset;
+            const size_t copied = SDL_strlcpy(buffer + offset, replacement_text, remaining);
+            offset += SDL_min(copied, remaining > 0U ? remaining - 1U : 0U);
+        }
+        cursor = close + 1;
+    }
+    buffer[buffer_size - 1U] = '\0';
+    return cursor[0] == '\0';
 }
 
 static void publish_editor_brush_color_draft(slayer3d_properties *scene_state, const char *color_key,
@@ -2757,9 +2849,52 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "scene_state.set") == 0)
     {
         const char *key = json_string(action, "key", NULL);
+        const char *value_from_state = json_string(action, "value_from_state", NULL);
         yyjson_val *value = obj_get(action, "value");
-        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || value == NULL)
+        if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
             return false;
+        if (value_from_state != NULL && value_from_state[0] != '\0')
+        {
+            const slayer3d_value *source = slayer3d_properties_get_value(runtime->scene_state, value_from_state);
+            if (source == NULL)
+                return false;
+            switch (source->type)
+            {
+            case SLAYER3D_VALUE_INT:
+                slayer3d_properties_set_int(runtime->scene_state, key, source->as_int);
+                return true;
+            case SLAYER3D_VALUE_FLOAT:
+                slayer3d_properties_set_float(runtime->scene_state, key, source->as_float);
+                return true;
+            case SLAYER3D_VALUE_BOOL:
+                slayer3d_properties_set_bool(runtime->scene_state, key, source->as_bool);
+                return true;
+            case SLAYER3D_VALUE_VEC3:
+                slayer3d_properties_set_vec3(runtime->scene_state, key, source->as_vec3);
+                return true;
+            case SLAYER3D_VALUE_STRING:
+                slayer3d_properties_set_string(runtime->scene_state, key,
+                                               source->as_string != NULL ? source->as_string : "");
+                return true;
+            case SLAYER3D_VALUE_COLOR:
+                slayer3d_properties_set_color(runtime->scene_state, key, source->as_color);
+                return true;
+            }
+            return false;
+        }
+        if (value == NULL)
+            return false;
+        if (yyjson_is_str(value))
+        {
+            char formatted[512];
+            if (!format_scene_state_string(runtime->scene_state, payload, yyjson_get_str(value), formatted,
+                                           sizeof(formatted)))
+            {
+                return false;
+            }
+            slayer3d_properties_set_string(runtime->scene_state, key, formatted);
+            return true;
+        }
         return set_property_from_json_with_payload(runtime->scene_state, key, value, payload);
     }
 
@@ -3054,11 +3189,17 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.map.export") == 0)
         return slayer3d_game_data_export_editor_map_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.map.new") == 0)
+        return slayer3d_game_data_new_editor_map_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.map.save") == 0)
         return slayer3d_game_data_save_editor_map_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.map.load") == 0)
         return slayer3d_game_data_load_editor_map_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.map.validate") == 0)
+        return slayer3d_game_data_validate_editor_map_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.test_run.prepare") == 0)
         return slayer3d_game_data_prepare_editor_test_run_action(runtime, action);

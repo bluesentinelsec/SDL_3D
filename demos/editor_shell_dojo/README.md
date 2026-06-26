@@ -8,13 +8,13 @@ scene.
 Run a new editing session:
 
 ```sh
-./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.fragment.json --overwrite
+./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.slayermap.json --overwrite
 ```
 
 Reopen that saved level:
 
 ```sh
-./build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/slayer3d-editor-level.fragment.json
+./build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/slayer3d-editor-level.slayermap.json
 ```
 
 Use custom texture and actor-model directories for a session:
@@ -27,7 +27,7 @@ The explicit `new` command supports the same override when you also want to
 choose the output map path:
 
 ```sh
-./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.fragment.json --texture-path /path/to/textures --model-path /path/to/models --overwrite
+./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-editor-level.slayermap.json --texture-path /path/to/textures --model-path /path/to/models --overwrite
 ```
 
 `--project` points at a directory containing `slayer3d.project.json`; the
@@ -36,7 +36,7 @@ optional test-run manifest path. It can also define `asset_sources` for
 textures, models, sprites, skyboxes, and effects. Each source is resolved
 relative to the project manifest unless it is already absolute; the editor
 publishes both the resolved path and the project-relative path to scene state so
-future browsers and saved maps can prefer project-relative references.
+asset browsers and saved maps can prefer project-relative references.
 `--texture-path` overrides only the texture source for the current session and
 becomes the one authoritative texture directory. The directory may contain image
 files directly or in nested subdirectories. `--model-path` does the same for
@@ -45,14 +45,19 @@ actor model files used by the Things browser. `new` requires `--output`.
 supplied. Pass `--overwrite` only when replacing an existing output file is
 intentional.
 
-Press `Ctrl+S` or `Command+S` in the editor to atomically save an editable
-fragment containing `brush_worlds` and `editor_player_starts`. Press `F5` to
-enter the in-runtime playable test scene from the current in-memory level.
+Use `File > Save Document`, `Ctrl+S`, or `Command+S` in the editor to
+atomically save a `.slayermap.json` document. Press `F5` to enter the
+in-runtime playable test scene from the current in-memory level, or run a saved
+map through the generic runner:
+
+```sh
+./build/debug/slayer3d_runner --map /tmp/slayer3d-editor-level.slayermap.json
+```
 
 The equivalent raw runner command remains useful for data/runtime debugging:
 
 ```sh
-./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-editor-level.fragment.json --state editor.save.path=/tmp/slayer3d-editor-level.fragment.json
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-editor-level.slayermap.json --state editor.save.path=/tmp/slayer3d-editor-level.slayermap.json
 ```
 
 ## Clip Tool Fixture

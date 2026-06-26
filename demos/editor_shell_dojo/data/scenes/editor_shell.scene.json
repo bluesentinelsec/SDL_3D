@@ -525,7 +525,16 @@
         "gap": 4,
         "layer": 100,
         "children": [
-          { "id": "ui.editor_shell.toolbar.file.button", "type": "button", "w": 62, "h": 28, "text": "File", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.file.button",
+            "type": "button",
+            "w": 62,
+            "h": 28,
+            "text": "File",
+            "interactive": true,
+            "action": "editor.file.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false }
+          },
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
@@ -733,6 +742,133 @@
               "Grid 256"
             ],
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+          }
+        ]
+      },
+      {
+        "id": "ui.editor_shell.file_menu.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 4,
+        "y": 38,
+        "w": 308,
+        "h": 228,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 500,
+        "fill_color": [8, 13, 22, 255],
+        "border_color": [82, 112, 154, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false },
+        "children": [
+          { "id": "ui.editor_shell.file_menu.title", "type": "label", "x": 12, "y": 8, "w": 120, "h": 20, "text": "File", "text_scale": 0.46, "layer": 501 },
+          {
+            "id": "ui.editor_shell.file_menu.close.button",
+            "type": "button",
+            "x": 254,
+            "y": 6,
+            "w": 44,
+            "h": 24,
+            "text": "hide",
+            "text_scale": 0.38,
+            "interactive": true,
+            "action": "editor.file.close",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.new.button",
+            "type": "button",
+            "x": 12,
+            "y": 38,
+            "w": 284,
+            "h": 26,
+            "text": "New Document",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.new",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.open_path.field",
+            "type": "button",
+            "x": 12,
+            "y": 106,
+            "w": 206,
+            "h": 26,
+            "format": "Open: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.file.open.path.display", "default": "" }],
+            "text_scale": 0.30,
+            "interactive": true,
+            "action": "editor.file.focus.open",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "open", "default": "" },
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.open.button",
+            "type": "button",
+            "x": 226,
+            "y": 106,
+            "w": 70,
+            "h": 26,
+            "text": "Open",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.open",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save.button",
+            "type": "button",
+            "x": 12,
+            "y": 140,
+            "w": 284,
+            "h": 26,
+            "text": "Save Document",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.save",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save_as_path.field",
+            "type": "button",
+            "x": 12,
+            "y": 174,
+            "w": 206,
+            "h": 26,
+            "format": "Save As: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.file.save_as.path.display", "default": "" }],
+            "text_scale": 0.30,
+            "interactive": true,
+            "action": "editor.file.focus.save_as",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "save_as", "default": "" },
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.save_as.button",
+            "type": "button",
+            "x": 226,
+            "y": 174,
+            "w": 70,
+            "h": 26,
+            "text": "Save As",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.file.save_as",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.validate.button",
+            "type": "button",
+            "x": 12,
+            "y": 72,
+            "w": 284,
+            "h": 26,
+            "text": "Validate Document",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.validate",
+            "layer": 501
           }
         ]
       },
@@ -5834,7 +5970,7 @@
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "object_capsule" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.object_capsule.preview", "type": "panel", "x": 139, "y": 64, "w": 20, "h": 50, "color": [120, 210, 180, 190], "border_color": [188, 255, 230, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.object_capsule.preview", "type": "panel", "x": 139, "y": 64, "w": 20, "h": 50, "color": [80, 235, 130, 255], "border_color": [170, 255, 200, 255], "border_thickness": 1, "layer": 123 },
               { "id": "ui.editor_shell.actor_viewer.object_capsule.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.6.label", "default": "Capsule" }], "text_scale": 0.38, "align": "center", "layer": 122 },
               {
                 "id": "ui.editor_shell.actor_viewer.object_sphere.button",
@@ -6213,6 +6349,7 @@
         "w": 1280,
         "h": 120,
         "clip_children": true,
+        "interactive": true,
         "layer": 120,
         "children": [
           {
@@ -6227,48 +6364,89 @@
             "children": [{ "id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console" }]
           },
           {
-            "id": "ui.editor_shell.console.issues.tab",
+            "id": "ui.editor_shell.console.scroll.up",
             "type": "button",
-            "x": 124,
-            "y": 8,
-            "w": 96,
-            "h": 28,
-            "layer": 121,
-            "children": [{ "id": "ui.editor_shell.console.issues.label", "type": "label", "w": "fill", "h": "fill", "text": "Issues" }]
+            "x": 1264,
+            "y": 42,
+            "w": 10,
+            "h": 14,
+            "text": "^",
+            "text_scale": 0.28,
+            "interactive": true,
+            "action": "editor.console.scroll.up",
+            "layer": 121
           },
           {
-            "id": "ui.editor_shell.console.issues.placeholder",
-            "type": "label",
-            "x": 930,
-            "y": 8,
-            "w": 330,
-            "h": 20,
-            "text": "Issues tab will list map leaks and validation findings.",
-            "bindings": [
-              {
-                "type": "scene_state",
-                "key": "editor.issues.line0",
-                "default": "Issues tab will list map leaks and validation findings."
-              }
-            ]
+            "id": "ui.editor_shell.console.scroll.track",
+            "type": "button",
+            "x": 1264,
+            "y": 58,
+            "w": 10,
+            "h": 48,
+            "text": "",
+            "interactive": true,
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.console.scroll.thumb",
+            "type": "button",
+            "x": 1266,
+            "y": 60,
+            "w": 6,
+            "h": 24,
+            "text": "",
+            "interactive": true,
+            "scroll_y_key": "editor.console.scroll.y",
+            "layer": 122
+          },
+          {
+            "id": "ui.editor_shell.console.scroll.down",
+            "type": "button",
+            "x": 1264,
+            "y": 108,
+            "w": 10,
+            "h": 14,
+            "text": "v",
+            "text_scale": 0.28,
+            "interactive": true,
+            "action": "editor.console.scroll.down",
+            "layer": 121
           },
           {
             "id": "ui.editor_shell.console.line0.row",
             "type": "panel",
             "x": 18,
-            "y": 44,
-            "w": 1244,
-            "h": 18,
+            "y": 42,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line0.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line0.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line0",
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "> %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line0", "default": "Editor ready" }]
               }
             ]
@@ -6277,19 +6455,37 @@
             "id": "ui.editor_shell.console.line1.row",
             "type": "panel",
             "x": 18,
-            "y": 64,
-            "w": 1244,
-            "h": 18,
+            "y": 58,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line1.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line1.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line1",
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line1", "default": "" }]
               }
             ]
@@ -6298,19 +6494,37 @@
             "id": "ui.editor_shell.console.line2.row",
             "type": "panel",
             "x": 18,
-            "y": 84,
-            "w": 1244,
-            "h": 18,
+            "y": 74,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line2.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line2.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line2",
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line2", "default": "" }]
               }
             ]
@@ -6319,19 +6533,37 @@
             "id": "ui.editor_shell.console.line3.row",
             "type": "panel",
             "x": 18,
-            "y": 104,
-            "w": 1244,
-            "h": 18,
+            "y": 90,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line3.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line3.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line3",
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line3", "default": "" }]
               }
             ]
@@ -6340,19 +6572,37 @@
             "id": "ui.editor_shell.console.line4.row",
             "type": "panel",
             "x": 18,
-            "y": 124,
-            "w": 1244,
-            "h": 18,
+            "y": 106,
+            "w": 1238,
+            "h": 14,
             "layer": 121,
             "children": [
+              {
+                "id": "ui.editor_shell.console.line4.selection",
+                "type": "panel",
+                "x": 0,
+                "y": 0,
+                "w": "fill",
+                "h": "fill",
+                "color": [70, 120, 220, 90],
+                "visible_if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.console.line4.selected",
+                  "op": "==",
+                  "value": true,
+                  "default": false
+                }
+              },
               {
                 "id": "ui.editor_shell.console.line4",
                 "type": "label",
                 "x": 12,
                 "y": 0,
-                "w": 1220,
+                "w": 1214,
                 "h": "fill",
                 "format": "  %s",
+                "text_scale": 0.40,
+                "align": "left",
                 "bindings": [{ "type": "scene_state", "key": "editor.console.line4", "default": "" }]
               }
             ]
@@ -7458,6 +7708,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.wall_metal.thumbnail",
         "image": "image.editor_shell.texture.slot_0",
+        "layer": 123,
         "x": 1058,
         "y": 266,
         "w": 62,
@@ -7476,6 +7727,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.rock_floor.thumbnail",
         "image": "image.editor_shell.texture.slot_1",
+        "layer": 123,
         "x": 1154,
         "y": 266,
         "w": 62,
@@ -7494,6 +7746,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.ceiling_metal.thumbnail",
         "image": "image.editor_shell.texture.slot_2",
+        "layer": 123,
         "x": 1058,
         "y": 376,
         "w": 62,
@@ -7512,6 +7765,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.door_hatch.thumbnail",
         "image": "image.editor_shell.texture.slot_3",
+        "layer": 123,
         "x": 1154,
         "y": 376,
         "w": 62,
@@ -7530,6 +7784,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.lava.thumbnail",
         "image": "image.editor_shell.texture.slot_4",
+        "layer": 123,
         "x": 1058,
         "y": 486,
         "w": 62,
@@ -7548,6 +7803,7 @@
       {
         "name": "ui.editor_shell.texture_viewer.radioactive_crate.thumbnail",
         "image": "image.editor_shell.texture.slot_5",
+        "layer": 123,
         "x": 1154,
         "y": 486,
         "w": 62,
