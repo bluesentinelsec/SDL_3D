@@ -44312,6 +44312,60 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
+{
+    const std::filesystem::path map_path =
+        std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "slayermap_example" / "maps" / "lighting_showcase.slayermap.json";
+    ASSERT_TRUE(std::filesystem::exists(map_path)) << map_path;
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &document, error, sizeof(error))) << error;
+    slayer3d_map_playable_scene_desc scene_desc{};
+    ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error))) << error;
+    EXPECT_TRUE(scene_desc.has_player_character);
+    EXPECT_EQ(scene_desc.light_count, 5u);
+
+    const std::filesystem::path dir = unique_test_dir("lighting_showcase_playable");
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
+    slayer3d_map_destroy(document);
+
+    const std::string game_text = read_text(dir / "playable_map.game.json");
+    EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"pulse\""), std::string::npos);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "playable_map.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 5);
+
+    slayer3d_light torch{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &torch));
+    EXPECT_EQ(torch.type, SLAYER3D_LIGHT_POINT);
+    slayer3d_light torch_eval{};
+    slayer3d_game_data_render_eval light_eval{};
+    light_eval.time = 0.03125f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &light_eval, &torch_eval));
+    EXPECT_GT(torch_eval.intensity, torch.intensity);
+
+    slayer3d_light siren{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 2, &siren));
+    EXPECT_EQ(siren.type, SLAYER3D_LIGHT_SPOT);
+    slayer3d_light siren_eval{};
+    slayer3d_game_data_render_eval rotate_eval{};
+    rotate_eval.time = 1.0f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &rotate_eval, &siren_eval));
+    EXPECT_NEAR(siren.direction.z, -1.0f, 0.001f);
+    EXPECT_LT(siren_eval.direction.x, -0.4f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
 {
     const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");
