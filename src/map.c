@@ -2128,6 +2128,7 @@ bool slayer3d_map_build_playable_scene_desc(const slayer3d_map_document *documen
     out_desc->texture_asset_count = slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_TEXTURE);
     out_desc->model_asset_count = slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_MODEL);
     out_desc->material_count = slayer3d_map_get_material_count(document);
+    out_desc->light_count = slayer3d_map_get_light_count(document);
     out_desc->actor_count = slayer3d_map_get_actor_count(document);
     out_desc->player_actor_index = (size_t)-1;
 
@@ -2296,6 +2297,12 @@ static bool map_game_add_rgb_color(yyjson_mut_doc *doc, yyjson_mut_val *object, 
            yyjson_mut_arr_add_real(doc, array, (double)color.g / 255.0) &&
            yyjson_mut_arr_add_real(doc, array, (double)color.b / 255.0) &&
            yyjson_mut_obj_add_val(doc, object, key, array);
+}
+
+static float map_game_degrees_to_spot_cutoff(float degrees)
+{
+    const float clamped = SDL_clamp(degrees, 0.0f, 179.0f);
+    return SDL_cosf(clamped * 0.01745329251994329577f);
 }
 
 static bool map_game_add_string_array_entry(yyjson_mut_doc *doc, yyjson_mut_val *array, const char *value)
@@ -2545,6 +2552,69 @@ static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, 
     return emitted > 0;
 }
 
+static const char *map_game_runtime_light_type(const char *type)
+{
+    if (type != NULL && SDL_strcmp(type, "directional") == 0)
+        return "directional";
+    if (type != NULL && SDL_strcmp(type, "spot") == 0)
+        return "spot";
+    return "point";
+}
+
+static bool map_game_add_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, const slayer3d_map_light *map_light)
+{
+    yyjson_mut_val *light = yyjson_mut_obj(doc);
+    const slayer3d_vec3 position =
+        map_light != NULL ? map_light->transform.position : (slayer3d_vec3){0.0f, 0.0f, 0.0f};
+    const slayer3d_vec3 direction =
+        map_light != NULL && map_light->has_direction ? map_light->direction : (slayer3d_vec3){0.0f, -1.0f, 0.0f};
+    const slayer3d_color color =
+        map_light != NULL && map_light->has_color ? map_light->color : (slayer3d_color){255, 255, 255, 255};
+    const float intensity = map_light != NULL && map_light->has_intensity ? map_light->intensity : 1.0f;
+    const float range = map_light != NULL && map_light->has_range ? map_light->range : 10.0f;
+    if (light == NULL || !yyjson_mut_arr_add_val(lights, light) ||
+        !yyjson_mut_obj_add_strcpy(doc, light, "type",
+                                   map_game_runtime_light_type(map_light != NULL ? map_light->type : NULL)) ||
+        !map_game_add_vec3(doc, light, "position", position) ||
+        !map_game_add_vec3(doc, light, "direction", direction) || !map_game_add_rgb_color(doc, light, "color", color) ||
+        !yyjson_mut_obj_add_real(doc, light, "intensity", intensity) ||
+        !yyjson_mut_obj_add_real(doc, light, "range", range))
+    {
+        return false;
+    }
+    if (map_light != NULL && map_light->has_inner_angle_degrees &&
+        !yyjson_mut_obj_add_real(doc, light, "inner_cutoff",
+                                 map_game_degrees_to_spot_cutoff(map_light->inner_angle_degrees)))
+    {
+        return false;
+    }
+    if (map_light != NULL && map_light->has_outer_angle_degrees &&
+        !yyjson_mut_obj_add_real(doc, light, "outer_cutoff",
+                                 map_game_degrees_to_spot_cutoff(map_light->outer_angle_degrees)))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool map_game_add_lights(yyjson_mut_doc *doc, yyjson_mut_val *world, const slayer3d_map_document *document)
+{
+    yyjson_mut_val *lights = yyjson_mut_arr(doc);
+    if (lights == NULL || !yyjson_mut_obj_add_val(doc, world, "lights", lights))
+        return false;
+
+    const size_t count = slayer3d_map_get_light_count(document);
+    for (size_t i = 0; i < count; ++i)
+    {
+        slayer3d_map_light map_light;
+        if (!slayer3d_map_get_light(document, i, &map_light))
+            return false;
+        if (!map_game_add_light(doc, lights, &map_light))
+            return false;
+    }
+    return true;
+}
+
 static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
 {
     yyjson_mut_val *input = yyjson_mut_obj(doc);
@@ -2567,7 +2637,8 @@ static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
            map_game_add_keyboard_action(doc, actions, "action.exit", "ESCAPE");
 }
 
-static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_global_state *global)
+static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_document *document,
+                               const slayer3d_map_global_state *global)
 {
     yyjson_mut_val *world = yyjson_mut_obj(doc);
     yyjson_mut_val *cameras = yyjson_mut_arr(doc);
@@ -2585,7 +2656,7 @@ static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const 
     {
         return false;
     }
-    return true;
+    return map_game_add_lights(doc, world, document);
 }
 
 static bool map_game_add_render(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_global_state *global)
@@ -2705,7 +2776,7 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.game.v0") &&
               yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
               yyjson_mut_obj_add_strcpy(doc, metadata, "name", "SlayerMap Playable") && map_game_add_app(doc, root) &&
-              map_game_add_world(doc, root, &global) && map_game_add_render(doc, root, &global) &&
+              map_game_add_world(doc, root, document, &global) && map_game_add_render(doc, root, &global) &&
               map_game_add_input(doc, root) && map_game_add_player_entity(doc, root, scene) &&
               map_game_add_brush_world(doc, root, document) && map_game_add_scenes_section(doc, root);
     size_t size = 0u;

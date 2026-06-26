@@ -250,6 +250,7 @@ extern "C"
         size_t material_count;
         size_t playable_brush_count;
         size_t box_brush_count;
+        size_t light_count;
         size_t actor_count;
         bool has_player_character;
         size_t player_actor_index;

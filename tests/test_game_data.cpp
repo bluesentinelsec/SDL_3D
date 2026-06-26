@@ -44316,6 +44316,29 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
       "transform": { "position": [0, 0.25, 1.5] },
       "properties": { "type": "player-character" }
     }
+  ],
+  "lights": [
+    {
+      "id": "light.warm_point",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [1.0, 2.0, 0.5] },
+      "color": [255, 128, 64, 255],
+      "intensity": 2.0,
+      "range": 6.0
+    },
+    {
+      "id": "light.cool_spot",
+      "kind": "dynamic",
+      "type": "spot",
+      "transform": { "position": [-1.0, 2.5, 1.0] },
+      "direction": [0.0, -1.0, 0.0],
+      "color": [96, 128, 255, 255],
+      "intensity": 1.5,
+      "range": 8.0,
+      "inner_angle_degrees": 25.0,
+      "outer_angle_degrees": 40.0
+    }
   ]
 })json";
 
@@ -44323,6 +44346,9 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     slayer3d_map_document *document = nullptr;
     ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &document, error, sizeof(error)))
         << error;
+    slayer3d_map_playable_scene_desc scene_desc{};
+    ASSERT_TRUE(slayer3d_map_build_playable_scene_desc(document, &scene_desc, error, sizeof(error))) << error;
+    EXPECT_EQ(scene_desc.light_count, 2u);
 
     const std::filesystem::path dir = unique_test_dir("slayermap_playable_game");
     ASSERT_TRUE(slayer3d_map_write_playable_game_files(document, dir.string().c_str(), error, sizeof(error))) << error;
@@ -44338,6 +44364,8 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
     EXPECT_NE(game_text.find("0.12549019607843137"), std::string::npos);
     EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"lights\": ["), std::string::npos);
+    EXPECT_NE(game_text.find("\"type\": \"spot\""), std::string::npos);
     EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
     slayer3d_map_destroy(document);
 
@@ -44354,6 +44382,22 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     ASSERT_EQ(world.material_count, 2);
     EXPECT_STREQ(world.materials[0].name, "mat.floor");
     EXPECT_FLOAT_EQ(world.materials[0].albedo.x, 128.0f / 255.0f);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
+    slayer3d_light warm_point{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &warm_point));
+    EXPECT_EQ(warm_point.type, SLAYER3D_LIGHT_POINT);
+    EXPECT_NEAR(warm_point.position.x, 1.0f, 0.001f);
+    EXPECT_NEAR(warm_point.position.y, 2.0f, 0.001f);
+    EXPECT_NEAR(warm_point.color[0], 1.0f, 0.001f);
+    EXPECT_NEAR(warm_point.color[1], 128.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(warm_point.intensity, 2.0f, 0.001f);
+    EXPECT_NEAR(warm_point.range, 6.0f, 0.001f);
+    slayer3d_light cool_spot{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &cool_spot));
+    EXPECT_EQ(cool_spot.type, SLAYER3D_LIGHT_SPOT);
+    EXPECT_NEAR(cool_spot.direction.y, -1.0f, 0.001f);
+    EXPECT_LT(cool_spot.inner_cutoff, 1.0f);
+    EXPECT_GT(cool_spot.inner_cutoff, cool_spot.outer_cutoff);
 
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);

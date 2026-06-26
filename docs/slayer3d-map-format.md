@@ -43,7 +43,10 @@ their own renderer, physics, and gameplay objects.
 a minimal data-game package under a caller-provided directory. The package
 contains `playable_map.game.json` plus `scenes/play.scene.json`, converts map
 box brushes into a runtime brush world, and spawns the player through the
-existing `controller.fps_brush` component. Run the generated package with:
+existing `controller.fps_brush` component. Authored directional, point, and spot
+lights are bridged into runtime `world.lights`; area lights currently fall back
+to point-light preview until the baked-lighting pipeline materializes their
+soft/static contribution. Run the generated package with:
 
 ```sh
 slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json
@@ -57,8 +60,9 @@ slayer3d_runner --map path/to/level.slayermap.json
 ```
 
 This bridge is intentionally conservative: it proves the first playable loop
-with brush collision and material colors, while leaving external texture/model
-asset copying and game-specific actor behavior to later project integrations.
+with brush collision, material colors, authored global lighting, and live
+runtime lights, while leaving external texture/model asset copying, baked light
+artifacts, and game-specific actor behavior to later project integrations.
 
 ## Example Game Data
 
