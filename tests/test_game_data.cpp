@@ -44982,6 +44982,17 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     EXPECT_STREQ(lighting_artifact.bake_group, "default");
     EXPECT_TRUE(lighting_artifact.self_contained);
     EXPECT_FALSE(slayer3d_game_data_get_lighting_artifact(runtime, 1, &lighting_artifact));
+    char *runtime_artifact_json = nullptr;
+    size_t runtime_artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_read_lighting_artifact_json(runtime, 0, &runtime_artifact_json,
+                                                               &runtime_artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime_artifact_json, nullptr);
+    EXPECT_EQ(runtime_artifact_size, static_lighting_text.size());
+    EXPECT_NE(
+        std::string(runtime_artifact_json, runtime_artifact_size).find("\"schema\": \"slayer3d.lighting_static.v0\""),
+        std::string::npos);
+    SDL_free(runtime_artifact_json);
 
     slayer3d_light torch{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &torch));

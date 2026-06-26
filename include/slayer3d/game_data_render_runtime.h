@@ -7,6 +7,7 @@
 #define SLAYER3D_GAME_DATA_RENDER_RUNTIME_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "slayer3d/camera.h"
 #include "slayer3d/effects.h"
@@ -109,6 +110,18 @@ extern "C"
      */
     bool slayer3d_game_data_get_lighting_artifact(const slayer3d_game_data_runtime *runtime, int index,
                                                   slayer3d_game_data_lighting_artifact *out_artifact);
+
+    /**
+     * @brief Read and validate one declared lighting artifact JSON file.
+     *
+     * The artifact path is resolved relative to the loaded game JSON file. The
+     * returned buffer is NUL-terminated for convenience, but @p out_size reports
+     * the exact file byte count. The caller owns the returned buffer and must
+     * release it with SDL_free().
+     */
+    bool slayer3d_game_data_read_lighting_artifact_json(const slayer3d_game_data_runtime *runtime, int index,
+                                                        char **out_json, size_t *out_size, char *error_buffer,
+                                                        int error_buffer_size);
 
     /**
      * @brief Return the number of active world lights.

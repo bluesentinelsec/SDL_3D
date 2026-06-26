@@ -743,6 +743,82 @@ bool slayer3d_game_data_get_lighting_artifact(const slayer3d_game_data_runtime *
     return out_artifact->id != NULL && out_artifact->path != NULL && out_artifact->format != NULL;
 }
 
+bool slayer3d_game_data_read_lighting_artifact_json(const slayer3d_game_data_runtime *runtime, int index,
+                                                    char **out_json, size_t *out_size, char *error_buffer,
+                                                    int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || out_json == NULL || out_size == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "lighting artifact read requires runtime and output pointers");
+        return false;
+    }
+
+    slayer3d_game_data_lighting_artifact artifact;
+    if (!slayer3d_game_data_get_lighting_artifact(runtime, index, &artifact))
+    {
+        set_errorf(error_buffer, error_buffer_size, "lighting artifact index %d is not declared", index);
+        return false;
+    }
+    if (SDL_strcmp(artifact.format, "slayer3d.lighting_static.v0") != 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "lighting artifact '%s' uses unsupported format '%s'",
+                   artifact.id != NULL ? artifact.id : "(unnamed)", artifact.format != NULL ? artifact.format : "");
+        return false;
+    }
+
+    const char *base_dir = runtime->file_base_dir != NULL ? runtime->file_base_dir : runtime->base_dir;
+    char *resolved_path = path_join(base_dir, artifact.path);
+    if (resolved_path == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to resolve lighting artifact '%s'",
+                   artifact.id != NULL ? artifact.id : "(unnamed)");
+        return false;
+    }
+
+    size_t size = 0u;
+    char *bytes = (char *)SDL_LoadFile(resolved_path, &size);
+    if (bytes == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to read lighting artifact '%s' at '%s': %s",
+                   artifact.id != NULL ? artifact.id : "(unnamed)", resolved_path, SDL_GetError());
+        SDL_free(resolved_path);
+        return false;
+    }
+
+    char validation_error[256];
+    validation_error[0] = '\0';
+    if (!slayer3d_map_validate_static_lighting_artifact_json(bytes, size, validation_error, sizeof(validation_error)))
+    {
+        set_errorf(error_buffer, error_buffer_size, "lighting artifact '%s' is invalid: %s",
+                   artifact.id != NULL ? artifact.id : "(unnamed)", validation_error);
+        SDL_free(bytes);
+        SDL_free(resolved_path);
+        return false;
+    }
+
+    char *json = (char *)SDL_malloc(size + 1u);
+    if (json == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to allocate lighting artifact '%s' JSON",
+                   artifact.id != NULL ? artifact.id : "(unnamed)");
+        SDL_free(bytes);
+        SDL_free(resolved_path);
+        return false;
+    }
+    SDL_memcpy(json, bytes, size);
+    json[size] = '\0';
+    SDL_free(bytes);
+    SDL_free(resolved_path);
+
+    *out_json = json;
+    *out_size = size;
+    return true;
+}
+
 static bool editor_light_preview_enabled(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL || runtime->editor_actor_count <= 0)

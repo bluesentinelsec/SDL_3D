@@ -340,7 +340,10 @@ Generated playable packages declare static-lighting payloads under
 `world.lighting_artifacts`. Runtime callers can enumerate those declarations
 with `slayer3d_game_data_lighting_artifact_count()` and
 `slayer3d_game_data_get_lighting_artifact()` to discover artifact paths and
-formats without hard-coding the generated package layout.
+formats without hard-coding the generated package layout. Callers that want the
+JSON payload can use `slayer3d_game_data_read_lighting_artifact_json()`, which
+resolves the artifact relative to the loaded game file, validates the current
+`slayer3d.lighting_static.v0` format, and returns a caller-owned buffer.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
