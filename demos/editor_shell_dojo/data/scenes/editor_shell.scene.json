@@ -6464,7 +6464,7 @@
         "x": 930,
         "y": 92,
         "w": 338,
-        "h": 332,
+        "h": 430,
         "clip_children": true,
         "interactive": true,
         "layer": 120,
@@ -6630,7 +6630,64 @@
             "align": "right",
             "layer": 121
           },
-          { "id": "ui.editor_shell.global_panel.fog.next.button", "type": "button", "x": 268, "y": 290, "w": 50, "h": 26, "text": "cycle", "text_scale": 0.34, "interactive": true, "action": "editor.global.fog.next", "layer": 121 }
+          { "id": "ui.editor_shell.global_panel.fog.next.button", "type": "button", "x": 268, "y": 290, "w": 50, "h": 26, "text": "cycle", "text_scale": 0.34, "interactive": true, "action": "editor.global.fog.next", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.plan.button",
+            "type": "button",
+            "x": 18,
+            "y": 326,
+            "w": 300,
+            "h": 26,
+            "text": "Plan Lighting",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.plan_lighting",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.plan.label", "type": "label", "x": 18, "y": 362, "w": 124, "h": 18, "text": "Last Plan", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.plan.message",
+            "type": "label",
+            "x": 150,
+            "y": 362,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.lighting.plan.message", "default": "not planned" }],
+            "text_scale": 0.34,
+            "align": "right",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.plan.counts",
+            "type": "label",
+            "x": 18,
+            "y": 386,
+            "w": 300,
+            "h": 18,
+            "format": "Runtime %s  Bake %s  Area %s",
+            "bindings": [
+              { "type": "scene_state", "key": "editor.lighting.plan.runtime_count", "default": 0 },
+              { "type": "scene_state", "key": "editor.lighting.plan.bake_count", "default": 0 },
+              { "type": "scene_state", "key": "editor.lighting.plan.area_count", "default": 0 }
+            ],
+            "text_scale": 0.36,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.plan.status",
+            "type": "label",
+            "x": 18,
+            "y": 408,
+            "w": 300,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.lighting.plan.line3", "default": "No lighting plan computed" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121
+          }
         ]
       },
       {

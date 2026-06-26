@@ -22264,6 +22264,9 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     EXPECT_TRUE(contains_text("54, 56, 64, 255"));
     EXPECT_TRUE(contains_text("12, 14, 18, 255"));
     EXPECT_TRUE(contains_text("balanced"));
+    EXPECT_TRUE(contains_text("Plan Lighting"));
+    EXPECT_TRUE(contains_text("not planned"));
+    EXPECT_TRUE(contains_text("No lighting plan computed"));
 
     slayer3d_ui_layout_model *layout = nullptr;
     ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
@@ -22273,6 +22276,18 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     ASSERT_NE(hit->id, nullptr);
     EXPECT_NE(std::string(hit->id).find("ui.editor_shell.global_panel."), std::string::npos);
     slayer3d_ui_layout_destroy(layout);
+
+    const int plan_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.file.plan_lighting");
+    ASSERT_GE(plan_signal, 0);
+    slayer3d_signal_emit(bus, plan_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.message", ""),
+                 "lighting plan: 0 lights, 0 runtime, 0 bake");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.line3", ""),
+                 "lighting plan runtime only");
 
     const int close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.close");
     ASSERT_GE(close_signal, 0);
