@@ -680,6 +680,49 @@ TEST(ToolCli, EditorLightingPlanPrintsSharedMapLightingSummary)
     std::filesystem::remove(map_path);
 }
 
+TEST(ToolCli, EditorLightingPlanCanPrintArtifactManifest)
+{
+    const std::filesystem::path map_path = unique_cli_test_path("lighting_manifest");
+    write_text(map_path,
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": { "id": "map.test.lighting_manifest", "name": "Lighting Manifest Test" },
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [4, 0.25, 4] } }
+  ],
+  "lights": [
+    { "id": "light.static", "kind": "baked", "type": "directional" },
+    { "id": "light.area", "kind": "baked", "type": "area_rect", "width": 2.0, "height": 1.0 }
+  ]
+})json");
+    const std::string input = map_path.string();
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "lighting-plan", "--input", input.c_str(), "--manifest", "--final"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_TRUE(args.lighting_manifest);
+    EXPECT_TRUE(args.lighting_final_quality);
+
+    FILE *output = std::tmpfile();
+    ASSERT_NE(output, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_editor_run_lighting_plan(&args, output, error, sizeof(error))) << error;
+    const std::string text = read_temp_file(output);
+    std::fclose(output);
+
+    EXPECT_NE(text.find("\"schema\": \"slayer3d.lighting_artifact_manifest.v0\""), std::string::npos);
+    EXPECT_NE(text.find("\"quality\": \"final\""), std::string::npos);
+    EXPECT_NE(text.find("\"id\": \"map.test.lighting_manifest\""), std::string::npos);
+    EXPECT_NE(text.find("\"id\": \"lighting.static.default\""), std::string::npos);
+    EXPECT_NE(text.find("\"storage\": \"embedded_json\""), std::string::npos);
+    EXPECT_NE(text.find("\"status\": \"planned\""), std::string::npos);
+    EXPECT_NE(text.find("\"light_count\": 2"), std::string::npos);
+
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(map_path);
+}
+
 TEST(ToolCli, EditorRejectsUnknownSubcommand)
 {
     std::vector<char *> argv = argv_from({"slayer3d_editor", "bogus"});

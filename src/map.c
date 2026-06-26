@@ -2161,6 +2161,20 @@ static bool map_light_type_is_area(const char *type)
     return type != NULL && (SDL_strcmp(type, "area_rect") == 0 || SDL_strcmp(type, "area_sphere") == 0);
 }
 
+static const char *map_lighting_quality_name(slayer3d_map_lighting_build_quality quality)
+{
+    switch (quality)
+    {
+    case SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW:
+        return "preview";
+    case SLAYER3D_MAP_LIGHTING_BUILD_FINAL:
+        return "final";
+    case SLAYER3D_MAP_LIGHTING_BUILD_BALANCED:
+    default:
+        return "balanced";
+    }
+}
+
 bool slayer3d_map_build_lighting_plan(const slayer3d_map_document *document,
                                       const slayer3d_map_lighting_build_options *options,
                                       slayer3d_map_lighting_build_plan *out_plan, char *error_buffer,
@@ -2215,6 +2229,113 @@ bool slayer3d_map_build_lighting_plan(const slayer3d_map_document *document,
     out_plan->requires_static_bake = out_plan->bake_light_count > 0u;
     out_plan->dynamic_light_budget_exceeded = out_plan->runtime_light_count > out_plan->max_dynamic_lights;
     out_plan->static_light_budget_exceeded = out_plan->bake_light_count > out_plan->max_static_lights;
+    return true;
+}
+
+static bool map_lighting_manifest_add_counts(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                             const slayer3d_map_lighting_build_plan *plan)
+{
+    yyjson_mut_val *counts = yyjson_mut_obj(doc);
+    return counts != NULL && yyjson_mut_obj_add_val(doc, root, "counts", counts) &&
+           yyjson_mut_obj_add_uint(doc, counts, "total_lights", plan->total_light_count) &&
+           yyjson_mut_obj_add_uint(doc, counts, "dynamic_lights", plan->dynamic_light_count) &&
+           yyjson_mut_obj_add_uint(doc, counts, "static_lights", plan->static_light_count) &&
+           yyjson_mut_obj_add_uint(doc, counts, "area_lights", plan->area_light_count) &&
+           yyjson_mut_obj_add_uint(doc, counts, "runtime_preview_lights", plan->runtime_light_count) &&
+           yyjson_mut_obj_add_uint(doc, counts, "bake_lights", plan->bake_light_count);
+}
+
+static bool map_lighting_manifest_add_budgets(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                              const slayer3d_map_lighting_build_plan *plan)
+{
+    yyjson_mut_val *budgets = yyjson_mut_obj(doc);
+    return budgets != NULL && yyjson_mut_obj_add_val(doc, root, "budgets", budgets) &&
+           yyjson_mut_obj_add_uint(doc, budgets, "max_dynamic_lights", plan->max_dynamic_lights) &&
+           yyjson_mut_obj_add_uint(doc, budgets, "max_static_lights", plan->max_static_lights) &&
+           yyjson_mut_obj_add_bool(doc, budgets, "dynamic_light_budget_exceeded",
+                                   plan->dynamic_light_budget_exceeded) &&
+           yyjson_mut_obj_add_bool(doc, budgets, "static_light_budget_exceeded", plan->static_light_budget_exceeded);
+}
+
+static bool map_lighting_manifest_add_artifacts(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                                const slayer3d_map_document *document,
+                                                const slayer3d_map_lighting_build_plan *plan)
+{
+    yyjson_mut_val *artifacts = yyjson_mut_arr(doc);
+    if (artifacts == NULL || !yyjson_mut_obj_add_val(doc, root, "artifacts", artifacts))
+        return false;
+    if (plan->bake_light_count == 0u)
+        return true;
+
+    yyjson_mut_val *artifact = yyjson_mut_obj(doc);
+    return artifact != NULL && yyjson_mut_arr_add_val(artifacts, artifact) &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "id", "lighting.static.default") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "type", "static_light_contribution") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "format", "slayer3d.lighting_static.v0") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "storage", "embedded_json") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "status", "planned") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "bake_group", "default") &&
+           yyjson_mut_obj_add_uint(doc, artifact, "light_count", plan->bake_light_count) &&
+           yyjson_mut_obj_add_uint(doc, artifact, "area_light_count", plan->area_light_count) &&
+           yyjson_mut_obj_add_uint(doc, artifact, "brush_count", slayer3d_map_get_brush_count(document)) &&
+           yyjson_mut_obj_add_bool(doc, artifact, "self_contained", true);
+}
+
+bool slayer3d_map_build_lighting_artifact_manifest_json(const slayer3d_map_document *document,
+                                                        const slayer3d_map_lighting_build_options *options,
+                                                        char **out_json, size_t *out_json_size, char *error_buffer,
+                                                        int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output lighting artifact manifest JSON pointer is required");
+        return false;
+    }
+    *out_json = NULL;
+    if (out_json_size != NULL)
+        *out_json_size = 0u;
+
+    slayer3d_map_lighting_build_plan plan;
+    if (!slayer3d_map_build_lighting_plan(document, options, &plan, error_buffer, error_buffer_size))
+        return false;
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *map = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    const char *metadata_id = slayer3d_map_get_metadata_id(document);
+    const char *metadata_name = slayer3d_map_get_metadata_name(document);
+    const char *source_path = slayer3d_map_get_source_path(document);
+    bool ok = doc != NULL && root != NULL && map != NULL;
+    if (ok)
+    {
+        yyjson_mut_doc_set_root(doc, root);
+        ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.lighting_artifact_manifest.v0") &&
+             yyjson_mut_obj_add_strcpy(doc, root, "quality", map_lighting_quality_name(plan.quality)) &&
+             yyjson_mut_obj_add_bool(doc, root, "requires_static_bake", plan.requires_static_bake) &&
+             yyjson_mut_obj_add_bool(doc, root, "dynamic_preview", plan.has_dynamic_preview) &&
+             yyjson_mut_obj_add_val(doc, root, "map", map) &&
+             yyjson_mut_obj_add_strcpy(doc, map, "id", metadata_id != NULL ? metadata_id : "") &&
+             yyjson_mut_obj_add_strcpy(doc, map, "name", metadata_name != NULL ? metadata_name : "") &&
+             yyjson_mut_obj_add_strcpy(doc, map, "source_path", source_path != NULL ? source_path : "") &&
+             map_lighting_manifest_add_counts(doc, root, &plan) &&
+             map_lighting_manifest_add_budgets(doc, root, &plan) &&
+             map_lighting_manifest_add_artifacts(doc, root, document, &plan);
+    }
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (!ok || json == NULL)
+    {
+        free(json);
+        map_set_error(error_buffer, error_buffer_size, "$: failed to build lighting artifact manifest JSON");
+        return false;
+    }
+
+    *out_json = json;
+    if (out_json_size != NULL)
+        *out_json_size = size;
     return true;
 }
 

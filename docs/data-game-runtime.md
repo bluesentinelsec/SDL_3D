@@ -293,12 +293,17 @@ code all use the public SlayerMap lighting-plan API:
 
 ```sh
 build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor lighting-plan --manifest --input /tmp/level.slayermap.json
 ```
 
 The command accepts `--preview`, `--final`, `--max-dynamic-lights`,
-`--max-static-lights`, and `--no-dynamic-preview` for tool and CI workflows.
+`--max-static-lights`, `--no-dynamic-preview`, and `--manifest` for tool and CI workflows.
 Planning reports runtime-preview lights, static/baked lights, area lights,
 whether a bake is required, and whether configured budgets were exceeded.
+`--manifest` emits deterministic JSON metadata for the planned static-lighting
+artifact contract. The current manifest reserves self-contained JSON artifact
+metadata; actual baked lightmap or vertex-light payload generation is a later
+lighting slice.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite

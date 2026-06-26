@@ -44647,6 +44647,56 @@ TEST(GameDataRuntime, SlayerMapBuildsLightingPlanForEditorCliAndCallerCode)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapBuildsLightingArtifactManifestJson)
+{
+    const std::filesystem::path map_path =
+        std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "slayermap_example" / "maps" / "training_room.slayermap.json";
+    ASSERT_TRUE(std::filesystem::exists(map_path)) << map_path;
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &document, error, sizeof(error))) << error;
+
+    slayer3d_map_lighting_build_options options{};
+    slayer3d_map_init_lighting_build_options(&options);
+    options.quality = SLAYER3D_MAP_LIGHTING_BUILD_FINAL;
+    char *json = nullptr;
+    size_t json_size = 0u;
+    ASSERT_TRUE(
+        slayer3d_map_build_lighting_artifact_manifest_json(document, &options, &json, &json_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(json, nullptr);
+    ASSERT_GT(json_size, 0u);
+
+    yyjson_doc *manifest = yyjson_read(json, json_size, 0);
+    ASSERT_NE(manifest, nullptr) << json;
+    yyjson_val *root = yyjson_doc_get_root(manifest);
+    ASSERT_TRUE(yyjson_is_obj(root));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(root, "schema")), "slayer3d.lighting_artifact_manifest.v0");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(root, "quality")), "final");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(root, "requires_static_bake")));
+
+    yyjson_val *counts = yyjson_obj_get(root, "counts");
+    ASSERT_TRUE(yyjson_is_obj(counts));
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(counts, "bake_lights")), 2u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(counts, "area_lights")), 1u);
+
+    yyjson_val *artifacts = yyjson_obj_get(root, "artifacts");
+    ASSERT_TRUE(yyjson_is_arr(artifacts));
+    ASSERT_EQ(yyjson_arr_size(artifacts), 1u);
+    yyjson_val *artifact = yyjson_arr_get(artifacts, 0);
+    ASSERT_TRUE(yyjson_is_obj(artifact));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact, "id")), "lighting.static.default");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact, "storage")), "embedded_json");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact, "status")), "planned");
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(artifact, "self_contained")));
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact, "light_count")), 2u);
+
+    yyjson_doc_free(manifest);
+    slayer3d_map_free_string(json);
+    slayer3d_map_destroy(document);
+}
+
 TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
 {
     const std::filesystem::path map_path =

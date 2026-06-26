@@ -39,6 +39,7 @@ extern "C"
         bool lighting_preview_quality;
         bool lighting_final_quality;
         bool lighting_no_dynamic_preview;
+        bool lighting_manifest;
         int max_dynamic_lights;
         int max_static_lights;
     } slayer3d_editor_args;

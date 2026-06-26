@@ -548,6 +548,20 @@ extern "C"
                                           int error_buffer_size);
 
     /**
+     * @brief Build a JSON manifest describing planned static-lighting artifacts.
+     *
+     * This uses the same map-oriented options as
+     * slayer3d_map_build_lighting_plan(). The returned manifest is metadata
+     * only: it reserves a stable contract for editor GUI commands, editor CLI
+     * commands, and caller code before concrete lightmap/vertex-bake payloads
+     * are generated. Free @p out_json with slayer3d_map_free_string().
+     */
+    bool slayer3d_map_build_lighting_artifact_manifest_json(const slayer3d_map_document *document,
+                                                            const slayer3d_map_lighting_build_options *options,
+                                                            char **out_json, size_t *out_json_size, char *error_buffer,
+                                                            int error_buffer_size);
+
+    /**
      * @brief Build a minimal playable scene descriptor from a loaded map.
      *
      * The descriptor identifies playable brush geometry and placed actors, then

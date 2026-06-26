@@ -27,10 +27,13 @@ provides the initial map I/O surface:
   project-specific data preserved inside the document.
 - `slayer3d_map_init_lighting_build_options()` and
   `slayer3d_map_build_lighting_plan()` provide a shared lighting build/bake
-  planning surface for editor GUI commands, future CLI bake commands, and caller
-  code. The initial plan reports dynamic/static/area light counts, runtime
-  preview counts, bake counts, and configured budget overages; later bake
-  implementations should hang off this same map-oriented contract.
+  planning surface for editor GUI commands, CLI commands, and caller code. The
+  initial plan reports dynamic/static/area light counts, runtime preview counts,
+  bake counts, and configured budget overages.
+- `slayer3d_map_build_lighting_artifact_manifest_json()` emits deterministic
+  JSON metadata for planned static-light artifacts. It does not bake texels yet;
+  it reserves the shared artifact contract that later GUI, CLI, and caller bake
+  paths will fill with concrete lightmap or vertex-light payloads.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
 typed read helpers are borrowed from the document and remain valid until
@@ -387,8 +390,10 @@ use `slayer3d_map_build_lighting_plan()`. This is the same public API intended
 for editor GUI commands, editor CLI commands such as
 `slayer3d_editor lighting-plan --input level.slayermap.json`, and caller code.
 The planner reports total, dynamic, static, area, runtime-preview, and bake-light
-counts, plus budget status. It does not bake lighting by itself; it is the
-shared front door for later bake/compute implementations.
+counts, plus budget status. `slayer3d_editor lighting-plan --manifest --input
+level.slayermap.json` emits the planned static-light artifact manifest JSON. It
+does not bake lighting by itself; it is the shared front door for later
+bake/compute implementations.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,
