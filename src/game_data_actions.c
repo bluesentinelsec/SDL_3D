@@ -1859,6 +1859,7 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
         }
         if (SDL_strcmp(light_type, "spot") == 0)
         {
+            slayer3d_properties_set_vec3(properties, "light_direction", slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
             slayer3d_properties_set_float(properties, "inner_angle_degrees", 25.0f);
             slayer3d_properties_set_float(properties, "outer_angle_degrees", 40.0f);
         }

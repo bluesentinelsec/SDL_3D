@@ -125,6 +125,22 @@ the warmup queue to populate the generated mesh cache ahead of first draw; if a
 matching mesh warmup request is still pending, solid mesh drawing waits for the
 budgeted warmup service instead of building the mesh on the draw path.
 
+## Runtime Lighting
+
+Authored `world.lights` and entity `light.*` components are exposed through
+`slayer3d_game_data_world_light_count()`,
+`slayer3d_game_data_get_world_light()`, and
+`slayer3d_game_data_get_world_light_evaluated()`. The evaluated path applies
+generic light effects such as pulse, flicker, rotating direction, orbiting
+position, and property-driven flashes before the presentation layer uploads
+lights to the renderer.
+
+The editor shell uses the same API for WYSIWYG preview: when
+`editor.global.lighting_preview_quality` is set to `performance`, `balanced`, or
+`quality`, placed light Things are appended to the runtime light list after
+authored world/entity lights. Setting that state to `off` disables editor light
+preview without changing saved map output.
+
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text
 and editor debug labels skip matching pending/failed font requests instead of

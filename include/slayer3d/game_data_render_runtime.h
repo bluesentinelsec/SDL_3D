@@ -77,7 +77,13 @@ extern "C"
     bool slayer3d_game_data_get_world_units(const slayer3d_game_data_runtime *runtime, const char **out_units,
                                             float *out_meters_per_unit);
 
-    /** @brief Return the number of authored world lights. */
+    /**
+     * @brief Return the number of active world lights.
+     *
+     * In normal game runtimes this counts authored world/entity lights. Editor
+     * runtimes may append preview lights from placed light Things when editor
+     * lighting preview is enabled.
+     */
     int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runtime);
 
     /**
@@ -89,11 +95,12 @@ extern "C"
     bool slayer3d_game_data_get_world_ambient_light(const slayer3d_game_data_runtime *runtime, float out_rgb[3]);
 
     /**
-     * @brief Read an authored world light by zero-based index.
+     * @brief Read an active world light by zero-based index.
      *
      * The returned light is suitable for passing to slayer3d_add_light(). Lights
      * may target one entity with `target_entity`, or the first active-scene
-     * entity in an ordered `target_entities` fallback list.
+     * entity in an ordered `target_entities` fallback list. Editor preview
+     * lights are returned after authored lights.
      */
     bool slayer3d_game_data_get_world_light(const slayer3d_game_data_runtime *runtime, int index,
                                             slayer3d_light *out_light);

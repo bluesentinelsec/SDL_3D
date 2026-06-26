@@ -710,6 +710,111 @@ bool slayer3d_game_data_get_world_units(const slayer3d_game_data_runtime *runtim
     return *out_units != NULL && (*out_units)[0] != '\0' && *out_meters_per_unit > 0.0f;
 }
 
+static bool editor_light_preview_enabled(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || runtime->editor_actor_count <= 0)
+        return false;
+
+    const char *quality =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.global.lighting_preview_quality", "");
+    return quality != NULL && quality[0] != '\0' && SDL_strcmp(quality, "off") != 0;
+}
+
+static bool editor_actor_is_preview_light(const editor_actor_runtime *actor)
+{
+    if (actor == NULL || actor->properties == NULL)
+        return false;
+    const char *role = slayer3d_properties_get_string(actor->properties, "role", "");
+    const char *light_type = slayer3d_properties_get_string(actor->properties, "light_type", "");
+    return (role != NULL && SDL_strcmp(role, "light") == 0) || (light_type != NULL && light_type[0] != '\0');
+}
+
+static bool editor_actor_in_active_scene(const slayer3d_game_data_runtime *runtime, const editor_actor_runtime *actor)
+{
+    if (runtime == NULL || actor == NULL)
+        return false;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    return actor->scene == NULL || actor->scene[0] == '\0' || active_scene == NULL ||
+           SDL_strcmp(actor->scene, active_scene) == 0;
+}
+
+static int editor_preview_light_count(const slayer3d_game_data_runtime *runtime)
+{
+    if (!editor_light_preview_enabled(runtime))
+        return 0;
+
+    int count = 0;
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        const editor_actor_runtime *actor = &runtime->editor_actors[i];
+        if (editor_actor_in_active_scene(runtime, actor) && editor_actor_is_preview_light(actor))
+            ++count;
+    }
+    return count;
+}
+
+static bool editor_light_animation_is_active(const editor_actor_runtime *actor)
+{
+    if (actor == NULL || actor->properties == NULL)
+        return false;
+    const char *type = slayer3d_properties_get_string(actor->properties, "light_animation_type", "");
+    return slayer3d_properties_get_bool(actor->properties, "light_animation_enabled", false) ||
+           (type != NULL && type[0] != '\0' && SDL_strcmp(type, "none") != 0);
+}
+
+static bool editor_light_animation_uses_pulse(const editor_actor_runtime *actor)
+{
+    const char *type = actor != NULL && actor->properties != NULL
+                           ? slayer3d_properties_get_string(actor->properties, "light_animation_type", "")
+                           : "";
+    return editor_light_animation_is_active(actor) &&
+           (SDL_strcmp(type, "pulse") == 0 || SDL_strcmp(type, "flicker") == 0);
+}
+
+static float light_degrees_to_spot_cutoff(float degrees)
+{
+    const float clamped = SDL_clamp(degrees, 0.0f, 179.0f);
+    return SDL_cosf(clamped * 0.01745329251994329577f);
+}
+
+static bool read_editor_preview_light(const editor_actor_runtime *actor, slayer3d_light *out_light)
+{
+    if (out_light != NULL)
+        SDL_zero(*out_light);
+    if (actor == NULL || actor->properties == NULL || out_light == NULL)
+        return false;
+
+    const char *type = slayer3d_properties_get_string(actor->properties, "light_type", "point");
+    if (SDL_strcmp(type, "directional") == 0)
+        out_light->type = SLAYER3D_LIGHT_DIRECTIONAL;
+    else if (SDL_strcmp(type, "spot") == 0)
+        out_light->type = SLAYER3D_LIGHT_SPOT;
+    else
+        out_light->type = SLAYER3D_LIGHT_POINT;
+
+    out_light->position = actor->position;
+    out_light->direction =
+        slayer3d_properties_get_vec3(actor->properties, "light_direction", slayer3d_vec3_make(0.0f, -1.0f, 0.0f));
+    const slayer3d_color color = slayer3d_properties_get_color(
+        actor->properties, "light_color", actor->color.a > 0 ? actor->color : (slayer3d_color){255, 255, 255, 255});
+    out_light->color[0] = (float)color.r / 255.0f;
+    out_light->color[1] = (float)color.g / 255.0f;
+    out_light->color[2] = (float)color.b / 255.0f;
+    out_light->intensity = slayer3d_properties_get_float(actor->properties, "light_intensity", 1.0f);
+    if (editor_light_animation_uses_pulse(actor) &&
+        slayer3d_properties_has(actor->properties, "light_animation_min_intensity"))
+    {
+        out_light->intensity =
+            slayer3d_properties_get_float(actor->properties, "light_animation_min_intensity", out_light->intensity);
+    }
+    out_light->range = slayer3d_properties_get_float(actor->properties, "light_range", 10.0f);
+    out_light->inner_cutoff =
+        light_degrees_to_spot_cutoff(slayer3d_properties_get_float(actor->properties, "inner_angle_degrees", 0.0f));
+    out_light->outer_cutoff =
+        light_degrees_to_spot_cutoff(slayer3d_properties_get_float(actor->properties, "outer_angle_degrees", 0.0f));
+    return true;
+}
+
 int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runtime)
 {
     yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
@@ -768,7 +873,7 @@ int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runti
                 count += light_components;
         }
     }
-    return count;
+    return count + editor_preview_light_count(runtime);
 }
 
 bool slayer3d_game_data_get_world_ambient_light(const slayer3d_game_data_runtime *runtime, float out_rgb[3])
@@ -857,11 +962,14 @@ static bool read_light_json(const slayer3d_game_data_runtime *runtime, yyjson_va
 }
 
 static bool slayer3d_game_data_get_world_light_internal(const slayer3d_game_data_runtime *runtime, int index,
-                                                        slayer3d_light *out_light, yyjson_val **out_light_json)
+                                                        slayer3d_light *out_light, yyjson_val **out_light_json,
+                                                        const editor_actor_runtime **out_editor_actor)
 {
     yyjson_val *lights = obj_get(obj_get(runtime_root(runtime), "world"), "lights");
     if (out_light_json != NULL)
         *out_light_json = NULL;
+    if (out_editor_actor != NULL)
+        *out_editor_actor = NULL;
     if (runtime == NULL || index < 0 || out_light == NULL)
         return false;
 
@@ -938,12 +1046,27 @@ static bool slayer3d_game_data_get_world_light_internal(const slayer3d_game_data
             }
         }
     }
+    if (editor_light_preview_enabled(runtime))
+    {
+        for (int i = 0; i < runtime->editor_actor_count; ++i)
+        {
+            const editor_actor_runtime *actor = &runtime->editor_actors[i];
+            if (!editor_actor_in_active_scene(runtime, actor) || !editor_actor_is_preview_light(actor))
+                continue;
+            if (remaining-- == 0)
+            {
+                if (out_editor_actor != NULL)
+                    *out_editor_actor = actor;
+                return read_editor_preview_light(actor, out_light);
+            }
+        }
+    }
     return false;
 }
 
 bool slayer3d_game_data_get_world_light(const slayer3d_game_data_runtime *runtime, int index, slayer3d_light *out_light)
 {
-    return slayer3d_game_data_get_world_light_internal(runtime, index, out_light, NULL);
+    return slayer3d_game_data_get_world_light_internal(runtime, index, out_light, NULL, NULL);
 }
 
 static float game_data_clampf(float value, float lo, float hi);
@@ -1115,14 +1238,58 @@ static void apply_light_effects(const slayer3d_game_data_runtime *runtime, yyjso
     }
 }
 
+static void apply_editor_preview_light_effects(const editor_actor_runtime *actor,
+                                               const slayer3d_game_data_render_eval *eval, slayer3d_light *light)
+{
+    if (actor == NULL || actor->properties == NULL || light == NULL || !editor_light_animation_is_active(actor))
+        return;
+
+    const char *type = slayer3d_properties_get_string(actor->properties, "light_animation_type", "");
+    const float time = eval != NULL ? eval->time : 0.0f;
+    const float rate_hz = slayer3d_properties_get_float(actor->properties, "light_animation_rate_hz", 1.0f);
+    const float rate = rate_hz * 6.28318530717958647692f;
+    const float phase = slayer3d_properties_get_float(actor->properties, "light_animation_phase", 0.0f);
+
+    if (SDL_strcmp(type, "pulse") == 0 || SDL_strcmp(type, "flicker") == 0)
+    {
+        const float min_intensity =
+            slayer3d_properties_get_float(actor->properties, "light_animation_min_intensity", light->intensity);
+        const float max_intensity =
+            slayer3d_properties_get_float(actor->properties, "light_animation_max_intensity", light->intensity);
+        const float value = 0.5f + 0.5f * SDL_sinf(time * rate + phase);
+        light->intensity = min_intensity + SDL_max(0.0f, max_intensity - min_intensity) * value;
+    }
+    else if (SDL_strcmp(type, "rotate") == 0 || SDL_strcmp(type, "sweep") == 0)
+    {
+        const slayer3d_vec3 axis = slayer3d_properties_get_vec3(actor->properties, "light_animation_axis",
+                                                                slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+        light->direction = light_effect_rotate_vec3(light->direction, axis, time * rate + phase);
+    }
+    else if (SDL_strcmp(type, "orbit") == 0)
+    {
+        const slayer3d_vec3 axis = slayer3d_properties_get_vec3(actor->properties, "light_animation_axis",
+                                                                slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+        const float radius =
+            SDL_max(slayer3d_properties_get_float(actor->properties, "light_animation_radius", 1.0f), 0.0f);
+        slayer3d_vec3 offset = slayer3d_vec3_scale(light_effect_perpendicular_vec3(axis), radius);
+        offset = light_effect_rotate_vec3(offset, axis, time * rate + phase);
+        light->position = slayer3d_vec3_make(actor->position.x + offset.x, actor->position.y + offset.y,
+                                             actor->position.z + offset.z);
+    }
+}
+
 bool slayer3d_game_data_get_world_light_evaluated(const slayer3d_game_data_runtime *runtime, int index,
                                                   const slayer3d_game_data_render_eval *eval, slayer3d_light *out_light)
 {
     yyjson_val *light_json = NULL;
-    if (!slayer3d_game_data_get_world_light_internal(runtime, index, out_light, &light_json))
+    const editor_actor_runtime *editor_actor = NULL;
+    if (!slayer3d_game_data_get_world_light_internal(runtime, index, out_light, &light_json, &editor_actor))
         return false;
 
-    apply_light_effects(runtime, light_json, eval, out_light);
+    if (light_json != NULL)
+        apply_light_effects(runtime, light_json, eval, out_light);
+    else
+        apply_editor_preview_light_effects(editor_actor, eval, out_light);
     return true;
 }
 

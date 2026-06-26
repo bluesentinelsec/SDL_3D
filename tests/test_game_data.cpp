@@ -18935,6 +18935,22 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
                  "dynamic / linear");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "torch_fire");
 
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    slayer3d_light point_preview{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &point_preview));
+    EXPECT_EQ(point_preview.type, SLAYER3D_LIGHT_POINT);
+    EXPECT_NEAR(point_preview.position.x, -1.0f, 0.001f);
+    EXPECT_NEAR(point_preview.position.z, -2.0f, 0.001f);
+    EXPECT_NEAR(point_preview.color[0], 120.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(point_preview.color[1], 170.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(point_preview.color[2], 255.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(point_preview.intensity, 1.1f, 0.001f);
+    slayer3d_light point_preview_eval{};
+    slayer3d_game_data_render_eval point_light_eval{};
+    point_light_eval.time = 0.03125f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 0, &point_light_eval, &point_preview_eval));
+    EXPECT_GT(point_preview_eval.intensity, point_preview.intensity);
+
     char *map_json = nullptr;
     size_t map_size = 0u;
     ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
@@ -19014,6 +19030,28 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "4.00 x 2.00");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""),
                  "projectile_fireball");
+
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 3);
+    slayer3d_light spot_preview{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &spot_preview));
+    EXPECT_EQ(spot_preview.type, SLAYER3D_LIGHT_SPOT);
+    EXPECT_GT(spot_preview.inner_cutoff, spot_preview.outer_cutoff);
+    slayer3d_light spot_preview_eval{};
+    slayer3d_game_data_render_eval spot_light_eval{};
+    spot_light_eval.time = 1.0f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &spot_light_eval, &spot_preview_eval));
+    EXPECT_NEAR(spot_preview.direction.x, 0.0f, 0.001f);
+    EXPECT_LT(spot_preview_eval.direction.x, -0.4f);
+
+    slayer3d_light area_preview{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 2, &area_preview));
+    EXPECT_EQ(area_preview.type, SLAYER3D_LIGHT_POINT);
+    EXPECT_NEAR(area_preview.position.x, 3.0f, 0.001f);
+    slayer3d_light area_preview_eval{};
+    slayer3d_game_data_render_eval area_light_eval{};
+    area_light_eval.time = 0.5f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &area_light_eval, &area_preview_eval));
+    EXPECT_GT(SDL_fabsf(area_preview_eval.position.x - area_preview.position.x), 0.1f);
 
     map_json = nullptr;
     map_size = 0u;
