@@ -21,7 +21,8 @@ extern "C"
         SLAYER3D_EDITOR_COMMAND_NONE = 0,
         SLAYER3D_EDITOR_COMMAND_NEW,
         SLAYER3D_EDITOR_COMMAND_OPEN,
-        SLAYER3D_EDITOR_COMMAND_CHECK
+        SLAYER3D_EDITOR_COMMAND_CHECK,
+        SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN
     } slayer3d_editor_command;
 
     typedef struct slayer3d_editor_args
@@ -35,6 +36,11 @@ extern "C"
         char *owned_project;
         char *owned_output_path;
         bool overwrite;
+        bool lighting_preview_quality;
+        bool lighting_final_quality;
+        bool lighting_no_dynamic_preview;
+        int max_dynamic_lights;
+        int max_static_lights;
     } slayer3d_editor_args;
 
     typedef struct slayer3d_editor_asset_source
@@ -107,6 +113,8 @@ extern "C"
     bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launch, const char *program,
                                                  slayer3d_editor_runner_invocation *out_invocation);
     void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation *invocation);
+    bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *stream, char *error_buffer,
+                                           int error_buffer_size);
     void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream);
 
 #ifdef __cplusplus

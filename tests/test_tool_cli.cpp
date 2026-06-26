@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +44,19 @@ void write_text(const std::filesystem::path &path, const char *text)
 {
     std::ofstream out(path, std::ios::binary);
     out << text;
+}
+
+std::string read_temp_file(FILE *file)
+{
+    if (file == nullptr)
+        return {};
+    std::fflush(file);
+    std::fseek(file, 0, SEEK_SET);
+    std::string text;
+    char buffer[256];
+    while (const size_t read = std::fread(buffer, 1, sizeof(buffer), file))
+        text.append(buffer, read);
+    return text;
 }
 
 std::filesystem::path unique_cli_test_dir(const char *name)
@@ -623,6 +637,47 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     slayer3d_editor_launch_destroy(&launch);
     slayer3d_editor_project_destroy(&loaded_project);
     slayer3d_editor_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorLightingPlanPrintsSharedMapLightingSummary)
+{
+    const std::filesystem::path map_path = unique_cli_test_path("lighting_plan");
+    write_text(map_path,
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    { "id": "light.dynamic", "kind": "dynamic", "type": "point" },
+    { "id": "light.static", "kind": "baked", "type": "directional" },
+    { "id": "light.area", "kind": "baked", "type": "area_rect", "width": 2.0, "height": 1.0 }
+  ]
+})json");
+    const std::string input = map_path.string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "lighting-plan", "--input", input.c_str(), "--final",
+                                          "--max-dynamic-lights", "1", "--max-static-lights", "1"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN);
+    EXPECT_STREQ(args.input_path, input.c_str());
+    EXPECT_TRUE(args.lighting_final_quality);
+    EXPECT_EQ(args.max_dynamic_lights, 1);
+    EXPECT_EQ(args.max_static_lights, 1);
+
+    FILE *output = std::tmpfile();
+    ASSERT_NE(output, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_editor_run_lighting_plan(&args, output, error, sizeof(error))) << error;
+    const std::string text = read_temp_file(output);
+    std::fclose(output);
+
+    EXPECT_NE(text.find("quality: final"), std::string::npos);
+    EXPECT_NE(text.find("lights: total=3 dynamic=1 static=2 area=1"), std::string::npos);
+    EXPECT_NE(text.find("runtime_preview_lights: 3 / 1 (exceeded)"), std::string::npos);
+    EXPECT_NE(text.find("bake_lights: 2 / 1 (exceeded)"), std::string::npos);
+    EXPECT_NE(text.find("requires_static_bake: yes"), std::string::npos);
+
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(map_path);
 }
 
 TEST(ToolCli, EditorRejectsUnknownSubcommand)

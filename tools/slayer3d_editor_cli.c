@@ -10,6 +10,8 @@
 
 #include <argtable3.h>
 
+#include "slayer3d/map.h"
+
 #include "../vendor/yyjson/yyjson.h"
 
 static void editor_set_error(char *buffer, int buffer_size, const char *message)
@@ -37,14 +39,17 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--texture-path <dir>] "
         "[--model-path <dir>] "
         "[--overwrite]\n"
+        "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
+        "[--max-static-lights <n>] [--no-dynamic-preview]\n"
         "\n"
         "Commands:\n"
         "  no args  Launch the bundled editor shell project with a new untitled map.\n"
         "  new    Start from the project's empty editor level and save to --output.\n"
         "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
+        "  lighting-plan  Print the shared map lighting build/bake plan without launching the editor.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
-        program, program, program);
+        program, program, program, program);
 }
 
 static bool path_is_absolute_tool(const char *path)
@@ -468,10 +473,30 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         arg_str0(NULL, "texture-path", "<dir>", "authoritative texture directory for this editor session");
     struct arg_str *model_path =
         arg_str0(NULL, "model-path", "<dir>", "authoritative actor model directory for this editor session");
+    struct arg_int *max_dynamic_lights =
+        arg_int0(NULL, "max-dynamic-lights", "<n>", "dynamic/runtime light budget for lighting-plan");
+    struct arg_int *max_static_lights =
+        arg_int0(NULL, "max-static-lights", "<n>", "static/baked light budget for lighting-plan");
+    struct arg_lit *preview_quality = arg_lit0(NULL, "preview", "use preview quality for lighting-plan");
+    struct arg_lit *final_quality = arg_lit0(NULL, "final", "use final quality for lighting-plan");
+    struct arg_lit *no_dynamic_preview =
+        arg_lit0(NULL, "no-dynamic-preview", "do not count static lights as runtime previews in lighting-plan");
     struct arg_lit *overwrite = arg_lit0(NULL, "overwrite", "allow new/open to replace an existing output path");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
-    void *argtable[] = {project, input, output, texture_path, model_path, overwrite, help, end};
+    void *argtable[] = {project,
+                        input,
+                        output,
+                        texture_path,
+                        model_path,
+                        max_dynamic_lights,
+                        max_static_lights,
+                        preview_quality,
+                        final_quality,
+                        no_dynamic_preview,
+                        overwrite,
+                        help,
+                        end};
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_editor";
     FILE *out = stream != NULL ? stream : stderr;
 
@@ -525,6 +550,10 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     {
         args->command = SLAYER3D_EDITOR_COMMAND_CHECK;
     }
+    else if (SDL_strcmp(argv[1], "lighting-plan") == 0)
+    {
+        args->command = SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN;
+    }
     else if (argv[1][0] == '-')
     {
         default_launch_with_options = true;
@@ -569,6 +598,11 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
     args->model_path = model_path->count > 0 ? model_path->sval[0] : NULL;
     args->overwrite = overwrite->count > 0;
+    args->lighting_preview_quality = preview_quality->count > 0;
+    args->lighting_final_quality = final_quality->count > 0;
+    args->lighting_no_dynamic_preview = no_dynamic_preview->count > 0;
+    args->max_dynamic_lights = max_dynamic_lights->count > 0 ? max_dynamic_lights->ival[0] : 0;
+    args->max_static_lights = max_static_lights->count > 0 ? max_static_lights->ival[0] : 0;
 
     if (default_launch_with_options)
     {
@@ -606,6 +640,37 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
                 fprintf(out, "%s: failed to resolve default editor project or output path.\n", program);
             return SLAYER3D_TOOL_CLI_ERROR;
         }
+        return SLAYER3D_TOOL_CLI_OK;
+    }
+
+    if (args->command == SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN)
+    {
+        if (args->input_path == NULL || args->input_path[0] == '\0')
+        {
+            fprintf(out, "%s: 'lighting-plan' requires --input <map.slayermap.json>.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (project->count > 0 || output->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
+            overwrite->count > 0)
+        {
+            fprintf(out, "%s: 'lighting-plan' only accepts --input and lighting budget/quality options.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->lighting_preview_quality && args->lighting_final_quality)
+        {
+            fprintf(out, "%s: 'lighting-plan' accepts only one of --preview or --final.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->max_dynamic_lights < 0 || args->max_static_lights < 0)
+        {
+            fprintf(out, "%s: lighting budgets must be non-negative.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_OK;
     }
 
@@ -669,6 +734,72 @@ void slayer3d_editor_args_destroy(slayer3d_editor_args *args)
     SDL_free(args->owned_project);
     SDL_free(args->owned_output_path);
     SDL_zero(*args);
+}
+
+static const char *lighting_quality_name(slayer3d_map_lighting_build_quality quality)
+{
+    switch (quality)
+    {
+    case SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW:
+        return "preview";
+    case SLAYER3D_MAP_LIGHTING_BUILD_FINAL:
+        return "final";
+    case SLAYER3D_MAP_LIGHTING_BUILD_BALANCED:
+    default:
+        return "balanced";
+    }
+}
+
+bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *stream, char *error_buffer,
+                                       int error_buffer_size)
+{
+    FILE *out = stream != NULL ? stream : stdout;
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+    if (args == NULL || args->command != SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "lighting-plan command arguments are required");
+        return false;
+    }
+    if (args->input_path == NULL || args->input_path[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size, "lighting-plan requires --input");
+        return false;
+    }
+
+    slayer3d_map_document *document = NULL;
+    if (!slayer3d_map_load_file(args->input_path, NULL, &document, error_buffer, error_buffer_size))
+        return false;
+
+    slayer3d_map_lighting_build_options options;
+    slayer3d_map_init_lighting_build_options(&options);
+    if (args->lighting_preview_quality)
+        options.quality = SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW;
+    if (args->lighting_final_quality)
+        options.quality = SLAYER3D_MAP_LIGHTING_BUILD_FINAL;
+    if (args->max_dynamic_lights > 0)
+        options.max_dynamic_lights = (size_t)args->max_dynamic_lights;
+    if (args->max_static_lights > 0)
+        options.max_static_lights = (size_t)args->max_static_lights;
+    options.include_dynamic_preview = !args->lighting_no_dynamic_preview;
+
+    slayer3d_map_lighting_build_plan plan;
+    const bool ok = slayer3d_map_build_lighting_plan(document, &options, &plan, error_buffer, error_buffer_size);
+    slayer3d_map_destroy(document);
+    if (!ok)
+        return false;
+
+    fprintf(out, "Slayer3D lighting plan: %s\n", args->input_path);
+    fprintf(out, "  quality: %s\n", lighting_quality_name(plan.quality));
+    fprintf(out, "  lights: total=%zu dynamic=%zu static=%zu area=%zu\n", plan.total_light_count,
+            plan.dynamic_light_count, plan.static_light_count, plan.area_light_count);
+    fprintf(out, "  runtime_preview_lights: %zu / %zu%s\n", plan.runtime_light_count, plan.max_dynamic_lights,
+            plan.dynamic_light_budget_exceeded ? " (exceeded)" : "");
+    fprintf(out, "  bake_lights: %zu / %zu%s\n", plan.bake_light_count, plan.max_static_lights,
+            plan.static_light_budget_exceeded ? " (exceeded)" : "");
+    fprintf(out, "  requires_static_bake: %s\n", plan.requires_static_bake ? "yes" : "no");
+    fprintf(out, "  dynamic_preview: %s\n", plan.has_dynamic_preview ? "yes" : "no");
+    return true;
 }
 
 bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_project *out_project, char *error_buffer,
