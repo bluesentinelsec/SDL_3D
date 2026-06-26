@@ -46,7 +46,9 @@ box brushes into a runtime brush world, and spawns the player through the
 existing `controller.fps_brush` component. Authored directional, point, and spot
 lights are bridged into runtime `world.lights`; area lights currently fall back
 to point-light preview until the baked-lighting pipeline materializes their
-soft/static contribution. Run the generated package with:
+soft/static contribution. `pulse` and `flicker` light animations are bridged to
+runtime light effects for immediate playable feedback. Run the generated package
+with:
 
 ```sh
 slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json

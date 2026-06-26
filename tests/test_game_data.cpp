@@ -44325,7 +44325,14 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
       "transform": { "position": [1.0, 2.0, 0.5] },
       "color": [255, 128, 64, 255],
       "intensity": 2.0,
-      "range": 6.0
+      "range": 6.0,
+      "animation": {
+        "enabled": true,
+        "type": "flicker",
+        "rate_hz": 2.0,
+        "min_intensity": 1.2,
+        "max_intensity": 2.4
+      }
     },
     {
       "id": "light.cool_spot",
@@ -44366,6 +44373,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
     EXPECT_NE(game_text.find("\"lights\": ["), std::string::npos);
     EXPECT_NE(game_text.find("\"type\": \"spot\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"effects\": ["), std::string::npos);
     EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
     slayer3d_map_destroy(document);
 
@@ -44390,8 +44398,13 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NEAR(warm_point.position.y, 2.0f, 0.001f);
     EXPECT_NEAR(warm_point.color[0], 1.0f, 0.001f);
     EXPECT_NEAR(warm_point.color[1], 128.0f / 255.0f, 0.001f);
-    EXPECT_NEAR(warm_point.intensity, 2.0f, 0.001f);
+    EXPECT_NEAR(warm_point.intensity, 1.2f, 0.001f);
     EXPECT_NEAR(warm_point.range, 6.0f, 0.001f);
+    slayer3d_light warm_point_eval{};
+    slayer3d_game_data_render_eval light_eval{};
+    light_eval.time = 0.0625f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 0, &light_eval, &warm_point_eval));
+    EXPECT_GT(warm_point_eval.intensity, warm_point.intensity);
     slayer3d_light cool_spot{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &cool_spot));
     EXPECT_EQ(cool_spot.type, SLAYER3D_LIGHT_SPOT);

@@ -2561,6 +2561,60 @@ static const char *map_game_runtime_light_type(const char *type)
     return "point";
 }
 
+static bool map_game_light_animation_active(const slayer3d_map_light_animation *animation)
+{
+    if (animation == NULL || animation->type == NULL || SDL_strcmp(animation->type, "none") == 0)
+        return false;
+    return animation->enabled || animation->type[0] != '\0';
+}
+
+static bool map_game_light_animation_uses_pulse(const slayer3d_map_light_animation *animation)
+{
+    return map_game_light_animation_active(animation) &&
+           (SDL_strcmp(animation->type, "pulse") == 0 || SDL_strcmp(animation->type, "flicker") == 0);
+}
+
+static float map_game_light_base_intensity(const slayer3d_map_light *map_light, float fallback)
+{
+    if (map_light != NULL && map_game_light_animation_uses_pulse(&map_light->animation) &&
+        map_light->animation.has_min_intensity)
+    {
+        return map_light->animation.min_intensity;
+    }
+    return fallback;
+}
+
+static float map_game_light_pulse_intensity_add(const slayer3d_map_light *map_light, float base_intensity)
+{
+    if (map_light == NULL || !map_game_light_animation_uses_pulse(&map_light->animation))
+        return 0.0f;
+    if (map_light->animation.has_min_intensity && map_light->animation.has_max_intensity)
+        return SDL_max(0.0f, map_light->animation.max_intensity - map_light->animation.min_intensity);
+    const float amplitude = map_light->animation.has_amplitude ? map_light->animation.amplitude : 0.25f;
+    return SDL_max(0.0f, base_intensity * amplitude);
+}
+
+static bool map_game_add_light_animation(yyjson_mut_doc *doc, yyjson_mut_val *light,
+                                         const slayer3d_map_light *map_light, float base_intensity)
+{
+    if (map_light == NULL || !map_game_light_animation_uses_pulse(&map_light->animation))
+        return true;
+
+    const float intensity_add = map_game_light_pulse_intensity_add(map_light, base_intensity);
+    if (intensity_add <= 0.0f)
+        return true;
+
+    yyjson_mut_val *effects = yyjson_mut_arr(doc);
+    yyjson_mut_val *effect = yyjson_mut_obj(doc);
+    const float rate_hz = map_light->animation.has_rate_hz ? map_light->animation.rate_hz : 1.0f;
+    const float phase = map_light->animation.has_phase ? map_light->animation.phase : 0.0f;
+    return effects != NULL && effect != NULL && yyjson_mut_obj_add_val(doc, light, "effects", effects) &&
+           yyjson_mut_arr_add_val(effects, effect) && yyjson_mut_obj_add_strcpy(doc, effect, "type", "pulse") &&
+           yyjson_mut_obj_add_real(doc, effect, "rate", rate_hz * 6.28318530717958647692f) &&
+           yyjson_mut_obj_add_real(doc, effect, "phase", phase) &&
+           yyjson_mut_obj_add_real(doc, effect, "intensity_add", intensity_add);
+}
+
 static bool map_game_add_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, const slayer3d_map_light *map_light)
 {
     yyjson_mut_val *light = yyjson_mut_obj(doc);
@@ -2570,7 +2624,8 @@ static bool map_game_add_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, cons
         map_light != NULL && map_light->has_direction ? map_light->direction : (slayer3d_vec3){0.0f, -1.0f, 0.0f};
     const slayer3d_color color =
         map_light != NULL && map_light->has_color ? map_light->color : (slayer3d_color){255, 255, 255, 255};
-    const float intensity = map_light != NULL && map_light->has_intensity ? map_light->intensity : 1.0f;
+    const float authored_intensity = map_light != NULL && map_light->has_intensity ? map_light->intensity : 1.0f;
+    const float intensity = map_game_light_base_intensity(map_light, authored_intensity);
     const float range = map_light != NULL && map_light->has_range ? map_light->range : 10.0f;
     if (light == NULL || !yyjson_mut_arr_add_val(lights, light) ||
         !yyjson_mut_obj_add_strcpy(doc, light, "type",
@@ -2594,7 +2649,7 @@ static bool map_game_add_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, cons
     {
         return false;
     }
-    return true;
+    return map_game_add_light_animation(doc, light, map_light, intensity);
 }
 
 static bool map_game_add_lights(yyjson_mut_doc *doc, yyjson_mut_val *world, const slayer3d_map_document *document)
