@@ -994,6 +994,26 @@ static bool light_effect_sample_color_cycle(yyjson_val *effect, float time, slay
     return true;
 }
 
+static slayer3d_vec3 light_effect_rotate_vec3(slayer3d_vec3 vector, slayer3d_vec3 axis, float angle)
+{
+    const float length = SDL_sqrtf(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    if (length <= 0.0001f)
+        return vector;
+    axis.x /= length;
+    axis.y /= length;
+    axis.z /= length;
+
+    const float c = SDL_cosf(angle);
+    const float s = SDL_sinf(angle);
+    const float dot = vector.x * axis.x + vector.y * axis.y + vector.z * axis.z;
+    const slayer3d_vec3 cross =
+        slayer3d_vec3_make(axis.y * vector.z - axis.z * vector.y, axis.z * vector.x - axis.x * vector.z,
+                           axis.x * vector.y - axis.y * vector.x);
+    return slayer3d_vec3_make(vector.x * c + cross.x * s + axis.x * dot * (1.0f - c),
+                              vector.y * c + cross.y * s + axis.y * dot * (1.0f - c),
+                              vector.z * c + cross.z * s + axis.z * dot * (1.0f - c));
+}
+
 static void apply_light_effects(const slayer3d_game_data_runtime *runtime, yyjson_val *light_json,
                                 const slayer3d_game_data_render_eval *eval, slayer3d_light *light)
 {
@@ -1022,6 +1042,15 @@ static void apply_light_effects(const slayer3d_game_data_runtime *runtime, yyjso
             {
                 light_color_lerp(light->color, target, json_float(effect, "color_blend", 1.0f));
             }
+            continue;
+        }
+        else if (SDL_strcmp(type, "rotate_direction") == 0)
+        {
+            const float time = eval != NULL ? eval->time : 0.0f;
+            const float rate = json_float(effect, "rate", 1.0f);
+            const float phase = json_float(effect, "phase", 0.0f);
+            const slayer3d_vec3 axis = json_vec3(effect, "axis", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+            light->direction = light_effect_rotate_vec3(light->direction, axis, time * rate + phase);
             continue;
         }
         else if (SDL_strcmp(type, "flash") == 0)

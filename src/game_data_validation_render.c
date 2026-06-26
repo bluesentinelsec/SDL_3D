@@ -120,6 +120,12 @@ bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names
                         return validation_error(ctx, effect_path, "light color_cycle colors must be vec3 arrays");
                 }
             }
+            else if (SDL_strcmp(type != NULL ? type : "", "rotate_direction") == 0)
+            {
+                yyjson_val *axis = obj_get(effect, "axis");
+                if (axis != NULL && !is_vec_array(axis, 3))
+                    return validation_error(ctx, effect_path, "light rotate_direction axis must be a vec3 array");
+            }
             else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0)
             {
                 return validation_error(ctx, effect_path, "unsupported light effect type '%s'",

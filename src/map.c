@@ -2574,6 +2574,12 @@ static bool map_game_light_animation_uses_pulse(const slayer3d_map_light_animati
            (SDL_strcmp(animation->type, "pulse") == 0 || SDL_strcmp(animation->type, "flicker") == 0);
 }
 
+static bool map_game_light_animation_rotates_direction(const slayer3d_map_light_animation *animation)
+{
+    return map_game_light_animation_active(animation) &&
+           (SDL_strcmp(animation->type, "rotate") == 0 || SDL_strcmp(animation->type, "sweep") == 0);
+}
+
 static float map_game_light_base_intensity(const slayer3d_map_light *map_light, float fallback)
 {
     if (map_light != NULL && map_game_light_animation_uses_pulse(&map_light->animation) &&
@@ -2594,25 +2600,64 @@ static float map_game_light_pulse_intensity_add(const slayer3d_map_light *map_li
     return SDL_max(0.0f, base_intensity * amplitude);
 }
 
+static yyjson_mut_val *map_game_ensure_light_effects(yyjson_mut_doc *doc, yyjson_mut_val *light,
+                                                     yyjson_mut_val **effects)
+{
+    if (effects == NULL)
+        return NULL;
+    if (*effects != NULL)
+        return *effects;
+    *effects = yyjson_mut_arr(doc);
+    if (*effects == NULL || !yyjson_mut_obj_add_val(doc, light, "effects", *effects))
+        return NULL;
+    return *effects;
+}
+
 static bool map_game_add_light_animation(yyjson_mut_doc *doc, yyjson_mut_val *light,
                                          const slayer3d_map_light *map_light, float base_intensity)
 {
-    if (map_light == NULL || !map_game_light_animation_uses_pulse(&map_light->animation))
+    if (map_light == NULL || !map_game_light_animation_active(&map_light->animation))
         return true;
 
-    const float intensity_add = map_game_light_pulse_intensity_add(map_light, base_intensity);
-    if (intensity_add <= 0.0f)
-        return true;
-
-    yyjson_mut_val *effects = yyjson_mut_arr(doc);
-    yyjson_mut_val *effect = yyjson_mut_obj(doc);
     const float rate_hz = map_light->animation.has_rate_hz ? map_light->animation.rate_hz : 1.0f;
     const float phase = map_light->animation.has_phase ? map_light->animation.phase : 0.0f;
-    return effects != NULL && effect != NULL && yyjson_mut_obj_add_val(doc, light, "effects", effects) &&
-           yyjson_mut_arr_add_val(effects, effect) && yyjson_mut_obj_add_strcpy(doc, effect, "type", "pulse") &&
-           yyjson_mut_obj_add_real(doc, effect, "rate", rate_hz * 6.28318530717958647692f) &&
-           yyjson_mut_obj_add_real(doc, effect, "phase", phase) &&
-           yyjson_mut_obj_add_real(doc, effect, "intensity_add", intensity_add);
+    const float rate = rate_hz * 6.28318530717958647692f;
+    yyjson_mut_val *effects = NULL;
+
+    if (map_game_light_animation_uses_pulse(&map_light->animation))
+    {
+        const float intensity_add = map_game_light_pulse_intensity_add(map_light, base_intensity);
+        if (intensity_add > 0.0f)
+        {
+            yyjson_mut_val *effect = yyjson_mut_obj(doc);
+            yyjson_mut_val *effect_list = map_game_ensure_light_effects(doc, light, &effects);
+            if (effect == NULL || effect_list == NULL || !yyjson_mut_arr_add_val(effects, effect) ||
+                !yyjson_mut_obj_add_strcpy(doc, effect, "type", "pulse") ||
+                !yyjson_mut_obj_add_real(doc, effect, "rate", rate) ||
+                !yyjson_mut_obj_add_real(doc, effect, "phase", phase) ||
+                !yyjson_mut_obj_add_real(doc, effect, "intensity_add", intensity_add))
+            {
+                return false;
+            }
+        }
+    }
+
+    if (map_game_light_animation_rotates_direction(&map_light->animation))
+    {
+        yyjson_mut_val *effect = yyjson_mut_obj(doc);
+        yyjson_mut_val *effect_list = map_game_ensure_light_effects(doc, light, &effects);
+        const slayer3d_vec3 axis =
+            map_light->animation.has_axis ? map_light->animation.axis : (slayer3d_vec3){0.0f, 1.0f, 0.0f};
+        if (effect == NULL || effect_list == NULL || !yyjson_mut_arr_add_val(effects, effect) ||
+            !yyjson_mut_obj_add_strcpy(doc, effect, "type", "rotate_direction") ||
+            !yyjson_mut_obj_add_real(doc, effect, "rate", rate) ||
+            !yyjson_mut_obj_add_real(doc, effect, "phase", phase) || !map_game_add_vec3(doc, effect, "axis", axis))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static bool map_game_add_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, const slayer3d_map_light *map_light)

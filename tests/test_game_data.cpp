@@ -44339,12 +44339,18 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
       "kind": "dynamic",
       "type": "spot",
       "transform": { "position": [-1.0, 2.5, 1.0] },
-      "direction": [0.0, -1.0, 0.0],
+      "direction": [0.0, 0.0, -1.0],
       "color": [96, 128, 255, 255],
       "intensity": 1.5,
       "range": 8.0,
       "inner_angle_degrees": 25.0,
-      "outer_angle_degrees": 40.0
+      "outer_angle_degrees": 40.0,
+      "animation": {
+        "enabled": true,
+        "type": "rotate",
+        "rate_hz": 0.25,
+        "axis": [0.0, 1.0, 0.0]
+      }
     }
   ]
 })json";
@@ -44374,6 +44380,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"lights\": ["), std::string::npos);
     EXPECT_NE(game_text.find("\"type\": \"spot\""), std::string::npos);
     EXPECT_NE(game_text.find("\"effects\": ["), std::string::npos);
+    EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
     EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
     slayer3d_map_destroy(document);
 
@@ -44408,9 +44415,15 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     slayer3d_light cool_spot{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &cool_spot));
     EXPECT_EQ(cool_spot.type, SLAYER3D_LIGHT_SPOT);
-    EXPECT_NEAR(cool_spot.direction.y, -1.0f, 0.001f);
+    EXPECT_NEAR(cool_spot.direction.z, -1.0f, 0.001f);
     EXPECT_LT(cool_spot.inner_cutoff, 1.0f);
     EXPECT_GT(cool_spot.inner_cutoff, cool_spot.outer_cutoff);
+    slayer3d_light cool_spot_eval{};
+    slayer3d_game_data_render_eval rotate_eval{};
+    rotate_eval.time = 1.0f;
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &rotate_eval, &cool_spot_eval));
+    EXPECT_LT(cool_spot_eval.direction.x, -0.5f);
+    EXPECT_NEAR(cool_spot_eval.direction.z, 0.0f, 0.01f);
 
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
