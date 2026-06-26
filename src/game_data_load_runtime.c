@@ -219,6 +219,20 @@ static bool apply_app_config_from_root(yyjson_val *root, slayer3d_game_config *o
     out_config->tick_rate = json_float(app, "tick_rate", out_config->tick_rate);
     out_config->max_ticks_per_frame = json_int(app, "max_ticks_per_frame", out_config->max_ticks_per_frame);
     out_config->enable_audio = json_bool(app, "enable_audio", out_config->enable_audio);
+
+    yyjson_val *render = obj_get(root, "render");
+    if (yyjson_is_obj(render))
+    {
+        yyjson_val *dynamic_world_render_scale = obj_get(render, "dynamic_world_render_scale");
+        if (yyjson_is_bool(dynamic_world_render_scale))
+            out_config->dynamic_world_render_scale = yyjson_get_bool(dynamic_world_render_scale);
+        out_config->dynamic_world_render_min_scale =
+            json_float(render, "dynamic_world_render_min_scale", out_config->dynamic_world_render_min_scale);
+        out_config->dynamic_world_render_max_scale =
+            json_float(render, "dynamic_world_render_max_scale", out_config->dynamic_world_render_max_scale);
+        out_config->dynamic_world_render_target_fps =
+            json_float(render, "dynamic_world_render_target_fps", out_config->dynamic_world_render_target_fps);
+    }
     return true;
 }
 

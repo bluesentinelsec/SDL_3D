@@ -382,6 +382,11 @@ static int slayer3d_game_max_ticks_per_frame(const slayer3d_game_config *config)
                                                                : SLAYER3D_GAME_DEFAULT_MAX_TICKS;
 }
 
+static float slayer3d_game_dynamic_scale_value(float value, float fallback)
+{
+    return value > 0.0f ? value : fallback;
+}
+
 static bool slayer3d_game_create_context(const slayer3d_game_config *config, slayer3d_game_context *ctx)
 {
     slayer3d_window_config window_config;
@@ -415,6 +420,20 @@ static bool slayer3d_game_create_context(const slayer3d_game_config *config, sla
     if (!slayer3d_create_window(&window_config, &ctx->window, &ctx->renderer))
     {
         return false;
+    }
+    if (config != NULL && config->dynamic_world_render_scale)
+    {
+        const float min_scale = slayer3d_game_dynamic_scale_value(config->dynamic_world_render_min_scale, 0.5f);
+        const float max_scale = slayer3d_game_dynamic_scale_value(config->dynamic_world_render_max_scale, 1.0f);
+        const float target_fps = slayer3d_game_dynamic_scale_value(config->dynamic_world_render_target_fps, 60.0f);
+        if (!slayer3d_configure_dynamic_world_render_scale(ctx->renderer, true, min_scale, max_scale, target_fps))
+        {
+            slayer3d_destroy_render_context(ctx->renderer);
+            SDL_DestroyWindow(ctx->window);
+            ctx->renderer = NULL;
+            ctx->window = NULL;
+            return false;
+        }
     }
 
     slayer3d_game_session_desc_init(&session_desc);
@@ -652,6 +671,14 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
             ctx.quit_requested = true;
         }
         present_end_counter = SDL_GetPerformanceCounter();
+        const float frame_ms = (float)((double)(present_end_counter - frame_start_counter) * 1000.0 /
+                                       (double)SDL_GetPerformanceFrequency());
+        if (!slayer3d_update_dynamic_world_render_scale(ctx.renderer, frame_ms))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D dynamic render scale update failed: %s",
+                        SDL_GetError());
+            SDL_ClearError();
+        }
 
         if (profile_frames)
         {

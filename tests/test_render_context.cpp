@@ -330,6 +330,34 @@ TEST_F(SDLVideoFixture, SoftwareBackendVtableIsFullyPopulated)
     slayer3d_destroy_render_context(context);
 }
 
+TEST_F(SDLVideoFixture, DynamicWorldRenderScaleAdjustsConservatively)
+{
+    SDLWindowRendererPair pair;
+    ASSERT_TRUE(pair.is_valid());
+
+    SLAYER3DBackendOverrideGuard guard("software");
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(pair.window(), pair.renderer(), nullptr, &context)) << SDL_GetError();
+    ASSERT_NE(nullptr, context);
+
+    ASSERT_TRUE(slayer3d_set_world_render_scale(context, 1.0f)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_configure_dynamic_world_render_scale(context, true, 0.5f, 1.0f, 60.0f)) << SDL_GetError();
+    for (int i = 0; i < 8; ++i)
+    {
+        ASSERT_TRUE(slayer3d_update_dynamic_world_render_scale(context, 25.0f)) << SDL_GetError();
+    }
+    EXPECT_LT(slayer3d_get_world_render_scale(context), 1.0f);
+    const float reduced_scale = slayer3d_get_world_render_scale(context);
+
+    for (int i = 0; i < 120; ++i)
+    {
+        ASSERT_TRUE(slayer3d_update_dynamic_world_render_scale(context, 10.0f)) << SDL_GetError();
+    }
+    EXPECT_GT(slayer3d_get_world_render_scale(context), reduced_scale);
+
+    slayer3d_destroy_render_context(context);
+}
+
 TEST_F(SDLVideoFixture, OpenGLBackendClearAndPresentSucceedWhenAvailable)
 {
     SDLWindowRendererPair pair;

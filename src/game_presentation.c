@@ -73,6 +73,10 @@ static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, sla
     ok = slayer3d_set_per_object_light_limit(renderer, settings.per_object_light_limit) && ok;
     ok = slayer3d_set_render_sample_queries_enabled(renderer, settings.performance_queries_enabled) && ok;
     ok = slayer3d_set_world_render_scale(renderer, settings.world_render_scale) && ok;
+    ok = slayer3d_configure_dynamic_world_render_scale(
+             renderer, settings.dynamic_world_render_scale_enabled, settings.dynamic_world_render_min_scale,
+             settings.dynamic_world_render_max_scale, settings.dynamic_world_render_target_fps) &&
+         ok;
     ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
     ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;

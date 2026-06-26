@@ -311,6 +311,14 @@ extern "C"
         bool performance_queries_enabled;
         /** @brief Internal 3D/world render scale; UI and logical presentation remain full resolution. */
         float world_render_scale;
+        /** @brief Whether the managed loop may adjust world render scale to hold frame rate. */
+        bool dynamic_world_render_scale_enabled;
+        /** @brief Lower bound for adaptive world render scale. */
+        float dynamic_world_render_min_scale;
+        /** @brief Upper bound for adaptive world render scale. */
+        float dynamic_world_render_max_scale;
+        /** @brief Frame-rate target used by adaptive world render scaling. */
+        float dynamic_world_render_target_fps;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;

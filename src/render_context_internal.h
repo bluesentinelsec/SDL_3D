@@ -34,8 +34,16 @@ struct slayer3d_render_context
     int width;
     int height;
     float world_render_scale;
+    float world_render_target_scale;
     int world_render_width;
     int world_render_height;
+    bool dynamic_world_render_scale_enabled;
+    float dynamic_world_render_min_scale;
+    float dynamic_world_render_max_scale;
+    float dynamic_world_render_target_fps;
+    float dynamic_world_render_frame_ms_ema;
+    int dynamic_world_render_slow_frames;
+    int dynamic_world_render_fast_frames;
     slayer3d_render_stats stats;
 
     float near_plane;

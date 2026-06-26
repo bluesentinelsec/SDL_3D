@@ -118,8 +118,8 @@ extern "C"
      *
      * Use slayer3d_init_window_config() for sensible defaults, then override what
      * the game needs. Windowed mode is resizable by default. Games should
-     * prefer logical_width/logical_height for authored layout and world scale;
-     * width/height only describe the initial desktop window size.
+     * prefer logical_width/logical_height for authored layout and input
+     * mapping; width/height describe the initial desktop window size.
      */
     typedef struct slayer3d_window_config
     {
@@ -181,9 +181,10 @@ extern "C"
      *
      * Handles backend-specific setup, SDL_Renderer creation for the software
      * path, window flags, optional title/icon metadata, presentation mode, and
-     * logical resolution. High-level windows present the logical resolution
-     * with letterboxing so resizable windows preserve the authored aspect
-     * ratio. The caller receives an SDL_Window* for event polling and an
+     * logical resolution. High-level windows preserve the authored aspect
+     * ratio with letterboxing. Capable 3D backends render the world layer
+     * against the native pixel viewport, while overlays use logical
+     * coordinates. The caller receives an SDL_Window* for event polling and an
      * slayer3d_render_context* for rendering.
      *
      * @param config Optional window configuration. NULL selects defaults.
@@ -249,12 +250,25 @@ extern "C"
      *
      * The logical presentation size, UI coordinates, input mapping, and camera
      * aspect ratio are unchanged. Capable backends render the world layer to a
-     * smaller framebuffer and upscale it before drawing the UI overlay at full
-     * logical resolution. Valid scales are 0.25 through 1.0.
+     * smaller framebuffer and upscale it into the native presentation
+     * viewport before drawing the UI overlay. Valid scales are 0.25 through
+     * 1.0.
      */
     bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale);
     /** @brief Return the requested 3D/world render scale. */
     float slayer3d_get_world_render_scale(const slayer3d_render_context *context);
+    /**
+     * @brief Configure automatic 3D/world render scaling.
+     *
+     * When enabled, SLAYER3D may lower or raise only the world render target
+     * between @p min_scale and @p max_scale based on frame times supplied to
+     * slayer3d_update_dynamic_world_render_scale(). Overlay/UI rendering stays
+     * at the native presentation resolution.
+     */
+    bool slayer3d_configure_dynamic_world_render_scale(slayer3d_render_context *context, bool enabled, float min_scale,
+                                                       float max_scale, float target_fps);
+    /** @brief Feed a completed frame time to the dynamic world scaler. */
+    bool slayer3d_update_dynamic_world_render_scale(slayer3d_render_context *context, float frame_ms);
     /** @brief Return the active 3D/world framebuffer size. */
     bool slayer3d_get_world_render_size(const slayer3d_render_context *context, int *out_width, int *out_height);
     bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats);

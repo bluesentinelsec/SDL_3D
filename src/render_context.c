@@ -14,6 +14,12 @@ static const char *const SLAYER3D_BACKEND_ENV = "SLAYER3D_BACKEND";
 static const char *const SLAYER3D_DISABLE_PARALLEL_RASTERIZER_ENV = "SLAYER3D_DISABLE_PARALLEL_RASTERIZER";
 static const float SLAYER3D_DEFAULT_NEAR_PLANE = 0.01f;
 static const float SLAYER3D_DEFAULT_FAR_PLANE = 1000.0f;
+static const float SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_RATIO = 1.10f;
+static const float SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_RATIO = 0.82f;
+static const float SLAYER3D_DYNAMIC_SCALE_DOWN_STEP = 0.05f;
+static const float SLAYER3D_DYNAMIC_SCALE_UP_STEP = 0.025f;
+static const int SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_COUNT = 8;
+static const int SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_COUNT = 60;
 
 static bool slayer3d_parallel_rasterizer_disabled_by_environment(void)
 {
@@ -308,8 +314,16 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     context->width = render_width;
     context->height = render_height;
     context->world_render_scale = 1.0f;
+    context->world_render_target_scale = 1.0f;
     context->world_render_width = render_width;
     context->world_render_height = render_height;
+    context->dynamic_world_render_scale_enabled = false;
+    context->dynamic_world_render_min_scale = 0.5f;
+    context->dynamic_world_render_max_scale = 1.0f;
+    context->dynamic_world_render_target_fps = 60.0f;
+    context->dynamic_world_render_frame_ms_ema = 0.0f;
+    context->dynamic_world_render_slow_frames = 0;
+    context->dynamic_world_render_fast_frames = 0;
     context->near_plane = SLAYER3D_DEFAULT_NEAR_PLANE;
     context->far_plane = SLAYER3D_DEFAULT_FAR_PLANE;
     context->in_mode_3d = false;
@@ -419,7 +433,7 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     return context->height;
 }
 
-bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale)
+static bool apply_world_render_scale(slayer3d_render_context *context, float scale)
 {
     if (context == NULL)
     {
@@ -447,9 +461,134 @@ bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float sca
     return true;
 }
 
+bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (!(scale >= 0.25f && scale <= 1.0f))
+    {
+        return SDL_SetError("World render scale must be between 0.25 and 1.0.");
+    }
+
+    context->world_render_target_scale = scale;
+    if (context->dynamic_world_render_scale_enabled)
+    {
+        float dynamic_scale = SDL_clamp(context->world_render_scale, context->dynamic_world_render_min_scale, scale);
+        if (!(dynamic_scale >= context->dynamic_world_render_min_scale))
+            dynamic_scale = scale;
+        return apply_world_render_scale(context, dynamic_scale);
+    }
+    return apply_world_render_scale(context, scale);
+}
+
 float slayer3d_get_world_render_scale(const slayer3d_render_context *context)
 {
     return context != NULL ? context->world_render_scale : 1.0f;
+}
+
+bool slayer3d_configure_dynamic_world_render_scale(slayer3d_render_context *context, bool enabled, float min_scale,
+                                                   float max_scale, float target_fps)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (!(min_scale >= 0.25f && min_scale <= 1.0f && max_scale >= 0.25f && max_scale <= 1.0f && min_scale <= max_scale))
+    {
+        return SDL_SetError("Dynamic world render scale bounds must be between 0.25 and 1.0.");
+    }
+    if (!(target_fps >= 15.0f && target_fps <= 500.0f))
+    {
+        return SDL_SetError("Dynamic world render scale target FPS must be between 15 and 500.");
+    }
+
+    const bool settings_changed = context->dynamic_world_render_scale_enabled != enabled ||
+                                  context->dynamic_world_render_min_scale != min_scale ||
+                                  context->dynamic_world_render_max_scale != max_scale ||
+                                  context->dynamic_world_render_target_fps != target_fps;
+    context->dynamic_world_render_scale_enabled = enabled;
+    context->dynamic_world_render_min_scale = min_scale;
+    context->dynamic_world_render_max_scale = max_scale;
+    context->dynamic_world_render_target_fps = target_fps;
+    context->world_render_target_scale = SDL_clamp(context->world_render_target_scale, min_scale, max_scale);
+    if (settings_changed)
+    {
+        context->dynamic_world_render_slow_frames = 0;
+        context->dynamic_world_render_fast_frames = 0;
+        context->dynamic_world_render_frame_ms_ema = 0.0f;
+    }
+    if (!enabled)
+    {
+        return apply_world_render_scale(context, context->world_render_target_scale);
+    }
+    if (context->world_render_scale > context->world_render_target_scale ||
+        context->world_render_scale < context->dynamic_world_render_min_scale)
+    {
+        return apply_world_render_scale(context,
+                                        SDL_clamp(context->world_render_scale, context->dynamic_world_render_min_scale,
+                                                  context->world_render_target_scale));
+    }
+    return true;
+}
+
+bool slayer3d_update_dynamic_world_render_scale(slayer3d_render_context *context, float frame_ms)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (!context->dynamic_world_render_scale_enabled)
+    {
+        return true;
+    }
+    if (!(frame_ms > 0.0f))
+    {
+        return SDL_SetError("Dynamic world render scale frame time must be positive.");
+    }
+
+    if (context->dynamic_world_render_frame_ms_ema <= 0.0f)
+        context->dynamic_world_render_frame_ms_ema = frame_ms;
+    else
+        context->dynamic_world_render_frame_ms_ema =
+            context->dynamic_world_render_frame_ms_ema * 0.9f + frame_ms * 0.1f;
+
+    const float target_ms = 1000.0f / context->dynamic_world_render_target_fps;
+    float next_scale = context->world_render_scale;
+    if (context->dynamic_world_render_frame_ms_ema > target_ms * SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_RATIO)
+    {
+        context->dynamic_world_render_slow_frames++;
+        context->dynamic_world_render_fast_frames = 0;
+        if (context->dynamic_world_render_slow_frames >= SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_COUNT)
+        {
+            next_scale = SDL_max(context->dynamic_world_render_min_scale,
+                                 context->world_render_scale - SLAYER3D_DYNAMIC_SCALE_DOWN_STEP);
+            context->dynamic_world_render_slow_frames = 0;
+        }
+    }
+    else if (context->dynamic_world_render_frame_ms_ema < target_ms * SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_RATIO)
+    {
+        context->dynamic_world_render_fast_frames++;
+        context->dynamic_world_render_slow_frames = 0;
+        if (context->dynamic_world_render_fast_frames >= SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_COUNT)
+        {
+            next_scale = SDL_min(context->world_render_target_scale,
+                                 context->world_render_scale + SLAYER3D_DYNAMIC_SCALE_UP_STEP);
+            context->dynamic_world_render_fast_frames = 0;
+        }
+    }
+    else
+    {
+        context->dynamic_world_render_slow_frames = 0;
+        context->dynamic_world_render_fast_frames = 0;
+    }
+
+    if (next_scale != context->world_render_scale)
+    {
+        return apply_world_render_scale(context, next_scale);
+    }
+    return true;
 }
 
 bool slayer3d_get_world_render_size(const slayer3d_render_context *context, int *out_width, int *out_height)
