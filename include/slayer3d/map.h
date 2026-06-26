@@ -577,6 +577,18 @@ extern "C"
                                                           int error_buffer_size);
 
     /**
+     * @brief Validate a static-lighting artifact JSON payload.
+     *
+     * This validates the `slayer3d.lighting_static.v0` artifact emitted by
+     * slayer3d_map_build_static_lighting_artifact_json(), the editor CLI, and
+     * playable-map package export. It is intentionally independent from loaded
+     * map documents so callers can reject malformed build artifacts before
+     * consuming them at runtime.
+     */
+    bool slayer3d_map_validate_static_lighting_artifact_json(const char *json, size_t json_size, char *error_buffer,
+                                                             int error_buffer_size);
+
+    /**
      * @brief Build a minimal playable scene descriptor from a loaded map.
      *
      * The descriptor identifies playable brush geometry and placed actors, then

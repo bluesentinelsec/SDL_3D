@@ -329,8 +329,10 @@ whether a bake is required, and whether configured budgets were exceeded.
 artifact contract. The current manifest reserves self-contained JSON artifact
 metadata. `--static-artifact` emits the first concrete static-light payload:
 self-contained per-face irradiance samples for box brushes. It is suitable for
-caller/editor integration and regression tests, while final atlas lightmap or
-vertex-light bake payloads remain later lighting slices.
+caller/editor integration and regression tests, and callers can validate the
+payload with `slayer3d_map_validate_static_lighting_artifact_json()` before
+consuming a generated artifact. Final atlas lightmap or vertex-light bake
+payloads remain later lighting slices.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite

@@ -44782,6 +44782,7 @@ TEST(GameDataRuntime, SlayerMapBuildsStaticLightingArtifactJson)
         << error;
     ASSERT_NE(json, nullptr);
     ASSERT_GT(json_size, 0u);
+    ASSERT_TRUE(slayer3d_map_validate_static_lighting_artifact_json(json, json_size, error, sizeof(error))) << error;
 
     yyjson_doc *artifact = yyjson_read(json, json_size, 0);
     ASSERT_NE(artifact, nullptr) << json;
@@ -44822,6 +44823,48 @@ TEST(GameDataRuntime, SlayerMapBuildsStaticLightingArtifactJson)
     yyjson_doc_free(artifact);
     slayer3d_map_free_string(json);
     slayer3d_map_destroy(document);
+}
+
+TEST(GameDataRuntime, SlayerMapRejectsInvalidStaticLightingArtifactJson)
+{
+    const char *bad_count_json = R"json({
+  "schema": "slayer3d.lighting_static.v0",
+  "counts": { "samples": 2 },
+  "samples": [
+    {
+      "brush": "brush.floor",
+      "face": "positive_y",
+      "position": [0, 1, 0],
+      "normal": [0, 1, 0],
+      "color": [1, 1, 1],
+      "intensity": 1
+    }
+  ]
+})json";
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_map_validate_static_lighting_artifact_json(bad_count_json, SDL_strlen(bad_count_json), error,
+                                                                     sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.counts.samples"), std::string::npos) << error;
+
+    const char *bad_color_json = R"json({
+  "schema": "slayer3d.lighting_static.v0",
+  "counts": { "samples": 1 },
+  "samples": [
+    {
+      "brush": "brush.floor",
+      "face": "positive_y",
+      "position": [0, 1, 0],
+      "normal": [0, 1, 0],
+      "color": [2, 0, 0],
+      "intensity": 1
+    }
+  ]
+})json";
+
+    EXPECT_FALSE(slayer3d_map_validate_static_lighting_artifact_json(bad_color_json, SDL_strlen(bad_color_json), error,
+                                                                     sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.samples[0].color"), std::string::npos) << error;
 }
 
 TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
@@ -44916,6 +44959,9 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     EXPECT_NE(static_lighting_text.find("\"schema\": \"slayer3d.lighting_static.v0\""), std::string::npos);
     EXPECT_NE(static_lighting_text.find("\"bake_lights\": 3"), std::string::npos);
     EXPECT_NE(static_lighting_text.find("\"samples\""), std::string::npos);
+    EXPECT_TRUE(slayer3d_map_validate_static_lighting_artifact_json(static_lighting_text.c_str(),
+                                                                    static_lighting_text.size(), error, sizeof(error)))
+        << error;
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));

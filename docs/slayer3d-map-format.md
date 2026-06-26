@@ -39,6 +39,10 @@ provides the initial map I/O surface:
   brushes using baked/static lights and global ambient state. This payload is
   intentionally simple and self-contained so callers can integrate against a
   real artifact while later slices add atlas/lightmap bake backends.
+- `slayer3d_map_validate_static_lighting_artifact_json()` validates generated
+  `slayer3d.lighting_static.v0` payloads without requiring the source map to be
+  loaded, so tools and games can reject malformed lighting build artifacts before
+  consuming them.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
 typed read helpers are borrowed from the document and remain valid until
@@ -405,7 +409,9 @@ emits a concrete `slayer3d.lighting_static.v0` JSON payload containing per-face
 box-brush irradiance samples. The current static artifact is a deterministic
 preview/integration format, not a final atlas lightmap baker. The machine-readable
 manifest and static-artifact modes also accept `--output <file>` when callers
-want a build artifact on disk instead of stdout.
+want a build artifact on disk instead of stdout. Engine callers can validate the
+static artifact with `slayer3d_map_validate_static_lighting_artifact_json()`
+before loading or caching it.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,

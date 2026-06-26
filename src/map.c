@@ -2629,6 +2629,194 @@ bool slayer3d_map_build_static_lighting_artifact_json(const slayer3d_map_documen
     return true;
 }
 
+static bool map_static_artifact_fail(char *error_buffer, int error_buffer_size, const char *json_path,
+                                     const char *format, ...)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+    {
+        char message[384];
+        va_list args;
+        va_start(args, format);
+        SDL_vsnprintf(message, sizeof(message), format, args);
+        va_end(args);
+        SDL_snprintf(error_buffer, (size_t)error_buffer_size, "%s: %s", json_path != NULL ? json_path : "$", message);
+    }
+    return false;
+}
+
+static bool map_static_artifact_validate_vec3(yyjson_val *value, const char *json_path, const char *description,
+                                              char *error_buffer, int error_buffer_size)
+{
+    if (!map_is_vec3(value))
+    {
+        return map_static_artifact_fail(error_buffer, error_buffer_size, json_path, "%s must be a vec3 array [x, y, z]",
+                                        description);
+    }
+    return true;
+}
+
+static bool map_static_artifact_validate_rgb01(yyjson_val *value, const char *json_path, const char *description,
+                                               char *error_buffer, int error_buffer_size)
+{
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) != 3u)
+    {
+        return map_static_artifact_fail(error_buffer, error_buffer_size, json_path,
+                                        "%s must be an RGB array with 3 numeric channels", description);
+    }
+    for (size_t i = 0; i < 3u; ++i)
+    {
+        yyjson_val *channel = yyjson_arr_get(value, i);
+        if (!yyjson_is_num(channel) || yyjson_get_num(channel) < 0.0 || yyjson_get_num(channel) > 1.0)
+        {
+            return map_static_artifact_fail(error_buffer, error_buffer_size, json_path,
+                                            "%s channels must be numbers in the 0..1 range", description);
+        }
+    }
+    return true;
+}
+
+static bool map_static_artifact_face_name_is_valid(const char *face)
+{
+    static const char *const faces[] = {
+        "positive_x", "negative_x", "positive_y", "negative_y", "positive_z", "negative_z",
+    };
+    if (face == NULL)
+        return false;
+    for (size_t i = 0; i < SDL_arraysize(faces); ++i)
+    {
+        if (SDL_strcmp(face, faces[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+bool slayer3d_map_validate_static_lighting_artifact_json(const char *json, size_t json_size, char *error_buffer,
+                                                         int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (json == NULL || json_size == 0u)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: static lighting artifact JSON is empty");
+        return false;
+    }
+
+    yyjson_read_err read_error;
+    yyjson_doc *doc = yyjson_read_opts((char *)json, json_size, 0, NULL, &read_error);
+    if (doc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size,
+                      "$: failed to parse static lighting artifact JSON at byte %zu: %s", read_error.pos,
+                      read_error.msg != NULL ? read_error.msg : "unknown parse error");
+        return false;
+    }
+
+    bool ok = true;
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    if (!yyjson_is_obj(root))
+    {
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$",
+                                      "static lighting artifact root must be an object");
+    }
+
+    yyjson_val *schema = ok ? map_obj_get(root, "schema") : NULL;
+    if (ok && (!yyjson_is_str(schema) || SDL_strcmp(yyjson_get_str(schema), "slayer3d.lighting_static.v0") != 0))
+    {
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$.schema",
+                                      "schema must be 'slayer3d.lighting_static.v0'");
+    }
+
+    yyjson_val *counts = ok ? map_obj_get(root, "counts") : NULL;
+    if (ok && !yyjson_is_obj(counts))
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$.counts", "counts must be an object");
+
+    yyjson_val *samples = ok ? map_obj_get(root, "samples") : NULL;
+    if (ok && !yyjson_is_arr(samples))
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$.samples", "samples must be an array");
+
+    yyjson_val *sample_count_value = ok ? map_obj_get(counts, "samples") : NULL;
+    if (ok && !yyjson_is_uint(sample_count_value))
+    {
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$.counts.samples",
+                                      "sample count must be an unsigned integer");
+    }
+    if (ok && (size_t)yyjson_get_uint(sample_count_value) != yyjson_arr_size(samples))
+    {
+        ok = map_static_artifact_fail(error_buffer, error_buffer_size, "$.counts.samples",
+                                      "sample count must match the samples array length");
+    }
+
+    size_t idx = 0u;
+    size_t max = 0u;
+    yyjson_val *sample = NULL;
+    if (ok)
+    {
+        yyjson_arr_foreach(samples, idx, max, sample)
+        {
+            char sample_path[MAP_PATH_MAX];
+            char field_path[MAP_PATH_MAX];
+            map_format_path(sample_path, sizeof(sample_path), "$.samples[%zu]", idx);
+            if (!yyjson_is_obj(sample))
+            {
+                ok = map_static_artifact_fail(error_buffer, error_buffer_size, sample_path, "sample must be an object");
+                break;
+            }
+
+            yyjson_val *brush = map_obj_get(sample, "brush");
+            map_format_path(field_path, sizeof(field_path), "%s.brush", sample_path);
+            if (!yyjson_is_str(brush))
+            {
+                ok = map_static_artifact_fail(error_buffer, error_buffer_size, field_path, "brush must be a string");
+                break;
+            }
+
+            yyjson_val *face = map_obj_get(sample, "face");
+            map_format_path(field_path, sizeof(field_path), "%s.face", sample_path);
+            if (!yyjson_is_str(face) || !map_static_artifact_face_name_is_valid(yyjson_get_str(face)))
+            {
+                ok = map_static_artifact_fail(error_buffer, error_buffer_size, field_path,
+                                              "face must be a known box face name");
+                break;
+            }
+
+            map_format_path(field_path, sizeof(field_path), "%s.position", sample_path);
+            if (!map_static_artifact_validate_vec3(map_obj_get(sample, "position"), field_path, "sample position",
+                                                   error_buffer, error_buffer_size))
+            {
+                ok = false;
+                break;
+            }
+
+            map_format_path(field_path, sizeof(field_path), "%s.normal", sample_path);
+            if (!map_static_artifact_validate_vec3(map_obj_get(sample, "normal"), field_path, "sample normal",
+                                                   error_buffer, error_buffer_size))
+            {
+                ok = false;
+                break;
+            }
+
+            map_format_path(field_path, sizeof(field_path), "%s.color", sample_path);
+            if (!map_static_artifact_validate_rgb01(map_obj_get(sample, "color"), field_path, "sample color",
+                                                    error_buffer, error_buffer_size))
+            {
+                ok = false;
+                break;
+            }
+
+            yyjson_val *intensity = map_obj_get(sample, "intensity");
+            map_format_path(field_path, sizeof(field_path), "%s.intensity", sample_path);
+            if (!yyjson_is_num(intensity) || yyjson_get_num(intensity) < 0.0)
+            {
+                ok = map_static_artifact_fail(error_buffer, error_buffer_size, field_path,
+                                              "sample intensity must be a non-negative number");
+                break;
+            }
+        }
+    }
+
+    yyjson_doc_free(doc);
+    return ok;
+}
+
 static bool map_actor_is_player_character(yyjson_val *actor)
 {
     yyjson_val *properties = map_properties_object(actor);
