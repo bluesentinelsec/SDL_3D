@@ -18955,6 +18955,78 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     slayer3d_map_destroy(map_document);
     SDL_free(map_json);
 
+    emit_signal("signal.editor.actor.select_slot.11");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_spot");
+    hover.point = slayer3d_vec3_make(1.0f, 0.0f, -1.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "light.editor_shell.spot.1");
+    emit_signal("signal.editor.inspector.light.cone.wide");
+    slayer3d_game_data_editor_actor spot_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.spot.1", &spot_light));
+    ASSERT_NE(spot_light.properties, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(spot_light.properties, "inner_angle_degrees", 0.0f), 38.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(spot_light.properties, "outer_angle_degrees", 0.0f), 70.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "38.0 / 70.0");
+
+    emit_signal("signal.editor.actor.select_slot.12");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_area_rect");
+    hover.point = slayer3d_vec3_make(3.0f, 0.0f, -1.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""),
+                 "light.editor_shell.area_rect.1");
+    emit_signal("signal.editor.inspector.light.geometry.large");
+    slayer3d_game_data_editor_actor area_rect_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.area_rect.1", &area_rect_light));
+    ASSERT_NE(area_rect_light.properties, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "width", 0.0f), 4.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "height", 0.0f), 2.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "radius", 0.0f), 2.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "4.00 x 2.00");
+
+    map_json = nullptr;
+    map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    map_document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
+    ASSERT_NE(map_document, nullptr);
+    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 3u);
+    bool found_spot = false;
+    bool found_area_rect = false;
+    for (size_t i = 0; i < slayer3d_map_get_light_count(map_document); ++i)
+    {
+        slayer3d_map_light light{};
+        ASSERT_TRUE(slayer3d_map_get_light(map_document, i, &light));
+        if (std::string(light.source_actor != nullptr ? light.source_actor : "") == "light.editor_shell.spot.1")
+        {
+            found_spot = true;
+            EXPECT_STREQ(light.type, "spot");
+            ASSERT_TRUE(light.has_inner_angle_degrees);
+            ASSERT_TRUE(light.has_outer_angle_degrees);
+            EXPECT_NEAR(light.inner_angle_degrees, 38.0f, 0.001f);
+            EXPECT_NEAR(light.outer_angle_degrees, 70.0f, 0.001f);
+        }
+        if (std::string(light.source_actor != nullptr ? light.source_actor : "") == "light.editor_shell.area_rect.1")
+        {
+            found_area_rect = true;
+            EXPECT_STREQ(light.type, "area_rect");
+            ASSERT_TRUE(light.has_width);
+            ASSERT_TRUE(light.has_height);
+            ASSERT_TRUE(light.has_radius);
+            EXPECT_NEAR(light.width, 4.0f, 0.001f);
+            EXPECT_NEAR(light.height, 2.0f, 0.001f);
+            EXPECT_NEAR(light.radius, 2.0f, 0.001f);
+        }
+    }
+    EXPECT_TRUE(found_spot);
+    EXPECT_TRUE(found_area_rect);
+    slayer3d_map_destroy(map_document);
+    SDL_free(map_json);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }

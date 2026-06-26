@@ -334,6 +334,12 @@
     "signal.editor.inspector.light.shadow.dynamic",
     "signal.editor.inspector.light.falloff.inverse_square",
     "signal.editor.inspector.light.falloff.linear",
+    "signal.editor.inspector.light.cone.tight",
+    "signal.editor.inspector.light.cone.medium",
+    "signal.editor.inspector.light.cone.wide",
+    "signal.editor.inspector.light.geometry.small",
+    "signal.editor.inspector.light.geometry.medium",
+    "signal.editor.inspector.light.geometry.large",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -2388,6 +2394,102 @@
             "target_type": "selection",
             "properties": { "falloff": "linear" },
             "message": "light falloff linear",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.tight",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 12.0, "outer_angle_degrees": 24.0 },
+            "message": "light cone tight",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 25.0, "outer_angle_degrees": 45.0 },
+            "message": "light cone medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.wide",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 38.0, "outer_angle_degrees": 70.0 },
+            "message": "light cone wide",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.small",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 1.0, "height": 1.0, "radius": 0.5 },
+            "message": "light geometry small",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 2.0, "height": 1.5, "radius": 1.0 },
+            "message": "light geometry medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.large",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 4.0, "height": 2.0, "radius": 2.0 },
+            "message": "light geometry large",
             "outputs": {
               "valid_key": "editor.inspector.actor.update.valid",
               "message_key": "editor.tool.last_action"

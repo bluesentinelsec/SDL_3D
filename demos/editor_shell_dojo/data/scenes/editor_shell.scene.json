@@ -5537,8 +5537,11 @@
               ]
             },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.light.geometry.label", "type": "label", "w": 96, "h": "fill", "text": "Geometry" },
-              { "id": "ui.editor_shell.left_inspector.light.geometry.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.geometry", "default": "" }] }
+              { "id": "ui.editor_shell.left_inspector.light.geometry.label", "type": "label", "w": 52, "h": "fill", "text": "Geometry" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.value", "type": "label", "w": 52, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.geometry", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.small", "type": "button", "w": 54, "h": "fill", "text": "Small", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.small" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.medium" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.large", "type": "button", "w": "fill", "h": "fill", "text": "Large", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.large" }
             ]
           },
           {
@@ -5560,8 +5563,11 @@
               ]
             },
             "children": [
-              { "id": "ui.editor_shell.left_inspector.light.cone.label", "type": "label", "w": 96, "h": "fill", "text": "Cone" },
-              { "id": "ui.editor_shell.left_inspector.light.cone.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.cone", "default": "" }] }
+              { "id": "ui.editor_shell.left_inspector.light.cone.label", "type": "label", "w": 42, "h": "fill", "text": "Cone" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.value", "type": "label", "w": 58, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.cone", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.cone.tight", "type": "button", "w": 54, "h": "fill", "text": "Tight", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.tight" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.medium" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.wide", "type": "button", "w": "fill", "h": "fill", "text": "Wide", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.wide" }
             ]
           }
         ]
