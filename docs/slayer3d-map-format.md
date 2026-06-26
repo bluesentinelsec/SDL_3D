@@ -81,6 +81,12 @@ game-facing data surface: textured graybox brushes, placed actors, reusable
 prefabs, authored lights/effects, a skybox reference, and generic event/action
 connections that a game runtime can interpret.
 
+The same demo directory also includes `maps/lighting_showcase.slayermap.json`,
+a compact fixture for the lighting milestone. It authors directional, point,
+spot, rectangular area, and spherical area lights, plus flicker and rotating
+light animation metadata, so editor, CLI, and runner work can be tested against
+one map as lighting support matures.
+
 Build it with `SLAYER3D_BUILD_DEMOS=ON`, then run
 `slayer3d_slayermap_example` to load the bundled map through the public
 `slayer3d_map_*` API and print the authored object counts.

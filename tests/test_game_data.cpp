@@ -44256,6 +44256,62 @@ TEST(GameDataRuntime, SlayerMapBuildsLightingPlanForEditorCliAndCallerCode)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
+{
+    const std::filesystem::path map_path =
+        std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "slayermap_example" / "maps" / "lighting_showcase.slayermap.json";
+    ASSERT_TRUE(std::filesystem::exists(map_path)) << map_path;
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &document, error, sizeof(error))) << error;
+    EXPECT_STREQ(slayer3d_map_get_metadata_id(document), "map.example.lighting_showcase");
+    EXPECT_EQ(slayer3d_map_get_brush_count(document), 4u);
+    EXPECT_EQ(slayer3d_map_get_actor_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_light_count(document), 5u);
+
+    bool saw_directional = false;
+    bool saw_point = false;
+    bool saw_spot = false;
+    bool saw_area_rect = false;
+    bool saw_area_sphere = false;
+    bool saw_flicker = false;
+    bool saw_rotate = false;
+    for (size_t i = 0; i < slayer3d_map_get_light_count(document); ++i)
+    {
+        slayer3d_map_light light{};
+        ASSERT_TRUE(slayer3d_map_get_light(document, i, &light));
+        saw_directional = saw_directional || SDL_strcmp(light.type, "directional") == 0;
+        saw_point = saw_point || SDL_strcmp(light.type, "point") == 0;
+        saw_spot = saw_spot || SDL_strcmp(light.type, "spot") == 0;
+        saw_area_rect = saw_area_rect || SDL_strcmp(light.type, "area_rect") == 0;
+        saw_area_sphere = saw_area_sphere || SDL_strcmp(light.type, "area_sphere") == 0;
+        saw_flicker = saw_flicker || SDL_strcmp(light.animation.type, "flicker") == 0;
+        saw_rotate = saw_rotate || SDL_strcmp(light.animation.type, "rotate") == 0;
+    }
+    EXPECT_TRUE(saw_directional);
+    EXPECT_TRUE(saw_point);
+    EXPECT_TRUE(saw_spot);
+    EXPECT_TRUE(saw_area_rect);
+    EXPECT_TRUE(saw_area_sphere);
+    EXPECT_TRUE(saw_flicker);
+    EXPECT_TRUE(saw_rotate);
+
+    slayer3d_map_lighting_build_plan plan{};
+    ASSERT_TRUE(slayer3d_map_build_lighting_plan(document, nullptr, &plan, error, sizeof(error))) << error;
+    EXPECT_EQ(plan.total_light_count, 5u);
+    EXPECT_EQ(plan.dynamic_light_count, 2u);
+    EXPECT_EQ(plan.static_light_count, 3u);
+    EXPECT_EQ(plan.area_light_count, 2u);
+    EXPECT_EQ(plan.runtime_light_count, 5u);
+    EXPECT_EQ(plan.bake_light_count, 3u);
+    EXPECT_TRUE(plan.requires_static_bake);
+    EXPECT_FALSE(plan.dynamic_light_budget_exceeded);
+    EXPECT_FALSE(plan.static_light_budget_exceeded);
+
+    slayer3d_map_destroy(document);
+}
+
 TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
 {
     const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");
