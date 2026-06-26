@@ -44948,6 +44948,9 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
     EXPECT_NE(game_text.find("\"orbit_position\""), std::string::npos);
     EXPECT_NE(game_text.find("\"pulse\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"lighting_artifacts\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"path\": \"lighting/static.default.json\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"format\": \"slayer3d.lighting_static.v0\""), std::string::npos);
     const std::string scene_text = read_text(dir / "scenes/play.scene.json");
     EXPECT_NE(scene_text.find("SlayerMap Lighting"), std::string::npos);
     EXPECT_NE(scene_text.find("Lights total 6 runtime 6 bake 3"), std::string::npos);
@@ -45001,6 +45004,47 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     EXPECT_NEAR(fireball.position.z, 0.0f, 0.001f);
     EXPECT_GT(SDL_fabsf(fireball_eval.position.x), 0.1f);
     EXPECT_GT(SDL_fabsf(fireball_eval.position.z), 0.1f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidWorldLightingArtifactDeclarations)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_lighting_artifact_declaration");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play"
+})json");
+    write_text(dir / "bad_lighting_artifact.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Lighting Artifact" },
+  "world": {
+    "name": "world.bad_lighting_artifact",
+    "kind": "brush",
+    "lighting_artifacts": [
+      {
+        "id": "lighting.static.default",
+        "path": "lighting/static.default.json",
+        "format": "bad.format"
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_lighting_artifact.game.json").string().c_str(), session,
+                                              &runtime, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("lighting artifact format must be slayer3d.lighting_static.v0"),
+              std::string::npos)
+        << error;
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

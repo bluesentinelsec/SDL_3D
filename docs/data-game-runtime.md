@@ -415,8 +415,9 @@ Optional flags:
   directional, point, and spot lights into runtime data. Area lights currently
   use point-light preview until baked-lighting artifacts are consumed by the
   renderer. Maps that require static lighting also materialize
-  `lighting/static.default.json`, and the generated scene includes a small
-  lighting debug HUD with planner counts and bake/budget status.
+  `lighting/static.default.json`, declare it under `world.lighting_artifacts`,
+  and include a small lighting debug HUD with planner counts and bake/budget
+  status.
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
 - `--scene <scene-id>` starts directly in a loaded scene instead of

@@ -3473,6 +3473,24 @@ static bool map_game_add_lights(yyjson_mut_doc *doc, yyjson_mut_val *world, cons
     return true;
 }
 
+static bool map_game_add_lighting_artifacts(yyjson_mut_doc *doc, yyjson_mut_val *world,
+                                            const slayer3d_map_lighting_build_plan *lighting_plan)
+{
+    if (lighting_plan == NULL || !lighting_plan->requires_static_bake)
+        return true;
+
+    yyjson_mut_val *artifacts = yyjson_mut_arr(doc);
+    yyjson_mut_val *artifact = yyjson_mut_obj(doc);
+    return artifacts != NULL && artifact != NULL &&
+           yyjson_mut_obj_add_val(doc, world, "lighting_artifacts", artifacts) &&
+           yyjson_mut_arr_add_val(artifacts, artifact) &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "id", "lighting.static.default") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "path", "lighting/static.default.json") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "format", "slayer3d.lighting_static.v0") &&
+           yyjson_mut_obj_add_strcpy(doc, artifact, "bake_group", "default") &&
+           yyjson_mut_obj_add_bool(doc, artifact, "self_contained", true);
+}
+
 static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
 {
     yyjson_mut_val *input = yyjson_mut_obj(doc);
@@ -3496,7 +3514,8 @@ static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
 }
 
 static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_document *document,
-                               const slayer3d_map_global_state *global)
+                               const slayer3d_map_global_state *global,
+                               const slayer3d_map_lighting_build_plan *lighting_plan)
 {
     yyjson_mut_val *world = yyjson_mut_obj(doc);
     yyjson_mut_val *cameras = yyjson_mut_arr(doc);
@@ -3514,7 +3533,7 @@ static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const 
     {
         return false;
     }
-    return map_game_add_lights(doc, world, document);
+    return map_game_add_lights(doc, world, document) && map_game_add_lighting_artifacts(doc, world, lighting_plan);
 }
 
 static bool map_game_add_render(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_global_state *global)
@@ -3655,7 +3674,8 @@ static bool map_game_add_app(yyjson_mut_doc *doc, yyjson_mut_val *root)
 }
 
 static char *map_build_playable_game_json(const slayer3d_map_document *document,
-                                          const slayer3d_map_playable_scene_desc *scene, size_t *out_size,
+                                          const slayer3d_map_playable_scene_desc *scene,
+                                          const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
                                           char *error_buffer, int error_buffer_size)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
@@ -3680,9 +3700,10 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.game.v0") &&
               yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
               yyjson_mut_obj_add_strcpy(doc, metadata, "name", "SlayerMap Playable") && map_game_add_app(doc, root) &&
-              map_game_add_world(doc, root, document, &global) && map_game_add_render(doc, root, &global) &&
-              map_game_add_input(doc, root) && map_game_add_player_entity(doc, root, scene) &&
-              map_game_add_brush_world(doc, root, document) && map_game_add_scenes_section(doc, root);
+              map_game_add_world(doc, root, document, &global, lighting_plan) &&
+              map_game_add_render(doc, root, &global) && map_game_add_input(doc, root) &&
+              map_game_add_player_entity(doc, root, scene) && map_game_add_brush_world(doc, root, document) &&
+              map_game_add_scenes_section(doc, root);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);
@@ -3807,7 +3828,8 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
 
     size_t game_size = 0u;
     size_t scene_size = 0u;
-    char *game_json = map_build_playable_game_json(document, &scene, &game_size, error_buffer, error_buffer_size);
+    char *game_json =
+        map_build_playable_game_json(document, &scene, &lighting_plan, &game_size, error_buffer, error_buffer_size);
     char *scene_json = game_json != NULL
                            ? map_build_playable_scene_json(&lighting_plan, &scene_size, error_buffer, error_buffer_size)
                            : NULL;

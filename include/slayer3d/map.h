@@ -608,10 +608,11 @@ extern "C"
      *
      * This emits `playable_map.game.json` and `scenes/play.scene.json` under
      * @p output_dir. Maps that require static lighting also emit
-     * `lighting/static.default.json`. The generated game uses the existing
-     * data-game `controller.fps_brush` component, converts map box and plane
-     * brushes into runtime brush-world planes, and spawns the player at the first
-     * actor/object marked with `properties.type`, `properties.actor-type`, or
+     * `lighting/static.default.json` and declare it under
+     * `world.lighting_artifacts`. The generated game uses the existing data-game
+     * `controller.fps_brush` component, converts map box and plane brushes into
+     * runtime brush-world planes, and spawns the player at the first actor/object
+     * marked with `properties.type`, `properties.actor-type`, or
      * `properties.actor_type` equal to `"player-character"`.
      *
      * The generated package is a first playable bridge. It preserves geometry,

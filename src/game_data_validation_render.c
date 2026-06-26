@@ -62,6 +62,33 @@ bool validate_render_effects(validation_context *ctx, yyjson_val *root, validati
 
 bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
+    yyjson_val *lighting_artifacts = obj_get(obj_get(root, "world"), "lighting_artifacts");
+    if (lighting_artifacts != NULL && !yyjson_is_arr(lighting_artifacts))
+        return validation_error(ctx, "$.world.lighting_artifacts", "world lighting_artifacts must be an array");
+    for (size_t i = 0; yyjson_is_arr(lighting_artifacts) && i < yyjson_arr_size(lighting_artifacts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.world.lighting_artifacts[%zu]", i);
+        yyjson_val *artifact = yyjson_arr_get(lighting_artifacts, i);
+        if (!yyjson_is_obj(artifact))
+            return validation_error(ctx, path, "lighting artifact entries must be objects");
+        if (!is_non_empty_string(artifact, "id"))
+            return validation_error(ctx, path, "lighting artifact id must be non-empty");
+        if (!is_non_empty_string(artifact, "path"))
+            return validation_error(ctx, path, "lighting artifact path must be non-empty");
+        const char *format = json_string(artifact, "format");
+        if (SDL_strcmp(format != NULL ? format : "", "slayer3d.lighting_static.v0") != 0)
+        {
+            return validation_error(ctx, path, "lighting artifact format must be slayer3d.lighting_static.v0");
+        }
+        yyjson_val *bake_group = obj_get(artifact, "bake_group");
+        if (bake_group != NULL && !is_non_empty_string(artifact, "bake_group"))
+            return validation_error(ctx, path, "lighting artifact bake_group must be non-empty");
+        yyjson_val *self_contained = obj_get(artifact, "self_contained");
+        if (self_contained != NULL && !yyjson_is_bool(self_contained))
+            return validation_error(ctx, path, "lighting artifact self_contained must be a boolean");
+    }
+
     yyjson_val *lights = obj_get(obj_get(root, "world"), "lights");
     if (lights == NULL)
         return true;
