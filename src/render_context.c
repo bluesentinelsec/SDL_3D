@@ -14,6 +14,12 @@ static const char *const SLAYER3D_BACKEND_ENV = "SLAYER3D_BACKEND";
 static const char *const SLAYER3D_DISABLE_PARALLEL_RASTERIZER_ENV = "SLAYER3D_DISABLE_PARALLEL_RASTERIZER";
 static const float SLAYER3D_DEFAULT_NEAR_PLANE = 0.01f;
 static const float SLAYER3D_DEFAULT_FAR_PLANE = 1000.0f;
+static const float SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_RATIO = 1.10f;
+static const float SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_RATIO = 0.82f;
+static const float SLAYER3D_DYNAMIC_SCALE_DOWN_STEP = 0.05f;
+static const float SLAYER3D_DYNAMIC_SCALE_UP_STEP = 0.025f;
+static const int SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_COUNT = 8;
+static const int SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_COUNT = 60;
 
 static bool slayer3d_parallel_rasterizer_disabled_by_environment(void)
 {
@@ -550,23 +556,25 @@ bool slayer3d_update_dynamic_world_render_scale(slayer3d_render_context *context
 
     const float target_ms = 1000.0f / context->dynamic_world_render_target_fps;
     float next_scale = context->world_render_scale;
-    if (context->dynamic_world_render_frame_ms_ema > target_ms * 1.10f)
+    if (context->dynamic_world_render_frame_ms_ema > target_ms * SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_RATIO)
     {
         context->dynamic_world_render_slow_frames++;
         context->dynamic_world_render_fast_frames = 0;
-        if (context->dynamic_world_render_slow_frames >= 8)
+        if (context->dynamic_world_render_slow_frames >= SLAYER3D_DYNAMIC_SCALE_SLOW_FRAME_COUNT)
         {
-            next_scale = SDL_max(context->dynamic_world_render_min_scale, context->world_render_scale - 0.05f);
+            next_scale = SDL_max(context->dynamic_world_render_min_scale,
+                                 context->world_render_scale - SLAYER3D_DYNAMIC_SCALE_DOWN_STEP);
             context->dynamic_world_render_slow_frames = 0;
         }
     }
-    else if (context->dynamic_world_render_frame_ms_ema < target_ms * 0.82f)
+    else if (context->dynamic_world_render_frame_ms_ema < target_ms * SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_RATIO)
     {
         context->dynamic_world_render_fast_frames++;
         context->dynamic_world_render_slow_frames = 0;
-        if (context->dynamic_world_render_fast_frames >= 60)
+        if (context->dynamic_world_render_fast_frames >= SLAYER3D_DYNAMIC_SCALE_FAST_FRAME_COUNT)
         {
-            next_scale = SDL_min(context->world_render_target_scale, context->world_render_scale + 0.025f);
+            next_scale = SDL_min(context->world_render_target_scale,
+                                 context->world_render_scale + SLAYER3D_DYNAMIC_SCALE_UP_STEP);
             context->dynamic_world_render_fast_frames = 0;
         }
     }
