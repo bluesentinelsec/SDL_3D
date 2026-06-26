@@ -1078,6 +1078,21 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
         {
             return false;
         }
+        yyjson_val *inner_angle = map_obj_get(light, "inner_angle_degrees");
+        yyjson_val *outer_angle = map_obj_get(light, "outer_angle_degrees");
+        yyjson_val *width = map_obj_get(light, "width");
+        yyjson_val *height = map_obj_get(light, "height");
+        yyjson_val *radius = map_obj_get(light, "radius");
+        if (SDL_strcmp(type, "spot") == 0 && yyjson_is_num(inner_angle) && yyjson_is_num(outer_angle) &&
+            yyjson_get_num(outer_angle) < yyjson_get_num(inner_angle))
+        {
+            return map_error(ctx, outer_path,
+                             "spot light outer_angle_degrees must be greater than or equal to inner_angle_degrees");
+        }
+        if (SDL_strcmp(type, "area_rect") == 0 && (!yyjson_is_num(width) || !yyjson_is_num(height)))
+            return map_error(ctx, path, "area_rect light requires positive width and height");
+        if (SDL_strcmp(type, "area_sphere") == 0 && !yyjson_is_num(radius))
+            return map_error(ctx, radius_path, "area_sphere light requires a positive radius");
 
         const bool static_light = map_light_kind_bakes(kind) || map_light_type_is_area(type);
         const bool dynamic_light = map_light_kind_runs_dynamically(kind);

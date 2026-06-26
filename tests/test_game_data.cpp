@@ -44064,11 +44064,38 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidDocuments)
                            R"json({
   "format": "slayer3d.map",
   "version": 1,
-  "lights": [
-    { "id": "light.bad", "type": "volumetric" }
-  ]
+                          "lights": [
+                            { "id": "light.bad", "type": "volumetric" }
+                          ]
 })json",
                            "light type must be directional, point, spot, area_rect, or area_sphere"},
+                          {"bad_spot_cone_order",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    { "id": "light.bad", "type": "spot", "inner_angle_degrees": 50, "outer_angle_degrees": 25 }
+  ]
+})json",
+                           "spot light outer_angle_degrees must be greater than or equal to inner_angle_degrees"},
+                          {"bad_area_rect_shape",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    { "id": "light.bad", "type": "area_rect", "width": 2.0 }
+  ]
+})json",
+                           "area_rect light requires positive width and height"},
+                          {"bad_area_sphere_shape",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    { "id": "light.bad", "type": "area_sphere" }
+  ]
+})json",
+                           "area_sphere light requires a positive radius"},
                           {"bad_light_animation",
                            R"json({
   "format": "slayer3d.map",
