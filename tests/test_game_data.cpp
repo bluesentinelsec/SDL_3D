@@ -18577,6 +18577,17 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.player_capsule.button"));
     EXPECT_FALSE(visible_actor_rect("ui.editor_shell.actor_viewer.object_box.button"));
 
+    emit_signal("signal.editor.things.category.lights");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Directional"));
+    EXPECT_TRUE(contains_text(labels, "Point"));
+    EXPECT_TRUE(contains_text(labels, "Spot"));
+    EXPECT_TRUE(contains_text(labels, "Area Rect"));
+    EXPECT_TRUE(contains_text(labels, "Area Sphere"));
+    EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.light_area_sphere.button"));
+    EXPECT_FALSE(contains_text(labels, "Ambient"));
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -18619,7 +18630,8 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.5.available", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.label", ""), "Box");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.9.label", ""), "Ambient");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.9.label", ""), "Directional");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.13.label", ""), "Area Sphere");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.14.label", ""), "Particle Emitter");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.18.available", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.18.label", ""), "Alpha Guard");
@@ -18636,8 +18648,8 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_box");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_object");
 
-    emit_signal("signal.editor.actor.select_slot.11");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 11);
+    emit_signal("signal.editor.actor.select_slot.10");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 10);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_light");
 
@@ -19145,6 +19157,8 @@ TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
     slayer3d_properties_set_vec3(light_properties, "light_direction", slayer3d_vec3_make(0.0f, -1.0f, 0.25f));
     slayer3d_properties_set_color(light_properties, "light_color", slayer3d_color{255, 200, 128, 255});
     slayer3d_properties_set_bool(light_properties, "casts_shadow", true);
+    slayer3d_properties_set_string(light_properties, "shadow_mode", "dynamic");
+    slayer3d_properties_set_string(light_properties, "falloff", "inverse_square");
     slayer3d_properties_set_float(light_properties, "inner_angle_degrees", 25.0f);
     slayer3d_properties_set_float(light_properties, "outer_angle_degrees", 40.0f);
     slayer3d_properties_set_string(light_properties, "bake_group", "room_a");
@@ -19186,6 +19200,8 @@ TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
     EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(light, "intensity")), 2.5, 0.001);
     EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(light, "range")), 12.0, 0.001);
     EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(light, "casts_shadow")));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "shadow_mode")), "dynamic");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "falloff")), "inverse_square");
     yyjson_val *light_color = yyjson_obj_get(light, "color");
     ASSERT_TRUE(yyjson_is_arr(light_color));
     EXPECT_EQ(yyjson_get_uint(yyjson_arr_get(light_color, 0)), 255u);

@@ -1242,6 +1242,10 @@ static bool export_add_map_editor_light(yyjson_mut_doc *doc, yyjson_mut_val *lig
     const char *type = editor_actor_property_string(actor, "light_type", "point");
     if (type == NULL || type[0] == '\0')
         type = "point";
+    else if (SDL_strcmp(type, "area") == 0)
+        type = "area_rect";
+    else if (SDL_strcmp(type, "ambient") == 0)
+        type = "directional";
 
     slayer3d_color color = actor->color;
     const slayer3d_value *color_value = editor_actor_property(actor, "light_color");
@@ -1261,11 +1265,23 @@ static bool export_add_map_editor_light(yyjson_mut_doc *doc, yyjson_mut_val *lig
     }
     const float inner_angle = editor_actor_property_float(actor, "inner_angle_degrees", -1.0f);
     const float outer_angle = editor_actor_property_float(actor, "outer_angle_degrees", -1.0f);
+    const float width = editor_actor_property_float(actor, "width", -1.0f);
+    const float height = editor_actor_property_float(actor, "height", -1.0f);
+    const float radius = editor_actor_property_float(actor, "radius", -1.0f);
     if (inner_angle >= 0.0f && !yyjson_mut_obj_add_real(doc, obj, "inner_angle_degrees", inner_angle))
         return false;
     if (outer_angle >= 0.0f && !yyjson_mut_obj_add_real(doc, obj, "outer_angle_degrees", outer_angle))
         return false;
-    if (!export_add_optional_string(doc, obj, "bake_group", editor_actor_property_string(actor, "bake_group", NULL)) ||
+    if (width > 0.0f && !yyjson_mut_obj_add_real(doc, obj, "width", width))
+        return false;
+    if (height > 0.0f && !yyjson_mut_obj_add_real(doc, obj, "height", height))
+        return false;
+    if (radius > 0.0f && !yyjson_mut_obj_add_real(doc, obj, "radius", radius))
+        return false;
+    if (!export_add_optional_string(doc, obj, "shadow_mode",
+                                    editor_actor_property_string(actor, "shadow_mode", NULL)) ||
+        !export_add_optional_string(doc, obj, "falloff", editor_actor_property_string(actor, "falloff", NULL)) ||
+        !export_add_optional_string(doc, obj, "bake_group", editor_actor_property_string(actor, "bake_group", NULL)) ||
         !export_add_properties(doc, obj, "properties", actor->properties))
     {
         return false;

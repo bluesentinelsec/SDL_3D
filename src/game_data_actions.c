@@ -1604,25 +1604,25 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    "object.editor_shell.rectangle", "Objects", "actor_object", "object_rectangle", "object",
                    "rectangle", (slayer3d_color){230, 166, 108, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1003);
     ok = ok && editor_actor_scan_list_append_builtin(
-                   &list, "light_ambient", "Ambient", "sphere", "", "light.editor_shell.ambient",
-                   "light.editor_shell.ambient", "Lights", "actor_light", "ambient_light", "light", "ambient",
-                   (slayer3d_color){190, 205, 255, 165}, slayer3d_vec3_make(0.7f, 0.7f, 0.7f), 1500);
-    ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "light_directional", "Directional", "rectangle", "", "light.editor_shell.directional",
                    "light.editor_shell.directional", "Lights", "actor_light", "directional_light", "light",
-                   "directional", (slayer3d_color){255, 238, 160, 205}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 1501);
+                   "directional", (slayer3d_color){255, 238, 160, 205}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 1500);
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "light_point", "Point", "sphere", "", "light.editor_shell.point", "light.editor_shell.point",
                    "Lights", "actor_light", "point_light", "light", "point", (slayer3d_color){255, 230, 112, 220},
-                   slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 1502);
+                   slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 1501);
     ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "light_spot", "Spot", "sphere", "", "light.editor_shell.spot", "light.editor_shell.spot",
                    "Lights", "actor_light", "spot_light", "light", "spot", (slayer3d_color){255, 208, 130, 210},
-                   slayer3d_vec3_make(0.75f, 0.75f, 0.75f), 1503);
+                   slayer3d_vec3_make(0.75f, 0.75f, 0.75f), 1502);
     ok = ok && editor_actor_scan_list_append_builtin(
-                   &list, "light_area", "Area", "rectangle", "", "light.editor_shell.area", "light.editor_shell.area",
-                   "Lights", "actor_light", "area_light", "light", "area", (slayer3d_color){255, 222, 178, 195},
-                   slayer3d_vec3_make(1.5f, 0.2f, 1.5f), 1504);
+                   &list, "light_area_rect", "Area Rect", "rectangle", "", "light.editor_shell.area_rect",
+                   "light.editor_shell.area_rect", "Lights", "actor_light", "area_rect_light", "light", "area_rect",
+                   (slayer3d_color){255, 222, 178, 195}, slayer3d_vec3_make(1.5f, 0.2f, 1.5f), 1503);
+    ok = ok && editor_actor_scan_list_append_builtin(
+                   &list, "light_area_sphere", "Area Sphere", "sphere", "", "light.editor_shell.area_sphere",
+                   "light.editor_shell.area_sphere", "Lights", "actor_light", "area_sphere_light", "light",
+                   "area_sphere", (slayer3d_color){210, 228, 255, 185}, slayer3d_vec3_make(0.9f, 0.9f, 0.9f), 1504);
     ok = ok &&
          editor_actor_scan_list_append_builtin(
              &list, "particle_emitter", "Particle Emitter", "sphere", "", "actor.editor_shell.effect.particles",
@@ -1841,10 +1841,36 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
         slayer3d_properties_set_string(properties, "sensor_profile", sensor_profile);
     if (SDL_strcmp(role, "light") == 0)
     {
-        slayer3d_properties_set_string(properties, "light_type", sensor_profile[0] != '\0' ? sensor_profile : "point");
-        slayer3d_properties_set_string(properties, "light_kind", "dynamic");
+        const char *light_type = sensor_profile[0] != '\0' ? sensor_profile : "point";
+        slayer3d_properties_set_string(properties, "light_type", light_type);
+        slayer3d_properties_set_string(properties, "light_kind",
+                                       SDL_strcmp(light_type, "area_rect") == 0 ? "baked" : "dynamic");
         slayer3d_properties_set_float(properties, "light_intensity", 1.0f);
-        slayer3d_properties_set_float(properties, "light_range", 8.0f);
+        slayer3d_properties_set_string(properties, "shadow_mode", "none");
+        if (SDL_strcmp(light_type, "directional") == 0)
+        {
+            slayer3d_properties_set_string(properties, "falloff", "none");
+            slayer3d_properties_set_vec3(properties, "light_direction", slayer3d_vec3_make(0.0f, -1.0f, 0.0f));
+        }
+        else
+        {
+            slayer3d_properties_set_float(properties, "light_range", 8.0f);
+            slayer3d_properties_set_string(properties, "falloff", "inverse_square");
+        }
+        if (SDL_strcmp(light_type, "spot") == 0)
+        {
+            slayer3d_properties_set_float(properties, "inner_angle_degrees", 25.0f);
+            slayer3d_properties_set_float(properties, "outer_angle_degrees", 40.0f);
+        }
+        else if (SDL_strcmp(light_type, "area_rect") == 0)
+        {
+            slayer3d_properties_set_float(properties, "width", 2.0f);
+            slayer3d_properties_set_float(properties, "height", 1.0f);
+        }
+        else if (SDL_strcmp(light_type, "area_sphere") == 0)
+        {
+            slayer3d_properties_set_float(properties, "radius", 1.0f);
+        }
     }
     else if (SDL_strcmp(role, "effect") == 0)
     {
