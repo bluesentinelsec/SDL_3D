@@ -40,7 +40,7 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "[--model-path <dir>] "
         "[--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
-        "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest]\n"
+        "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact]\n"
         "\n"
         "Commands:\n"
         "  no args  Launch the bundled editor shell project with a new untitled map.\n"
@@ -483,6 +483,8 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         arg_lit0(NULL, "no-dynamic-preview", "do not count static lights as runtime previews in lighting-plan");
     struct arg_lit *manifest =
         arg_lit0(NULL, "manifest", "print planned static-light artifact manifest JSON for lighting-plan");
+    struct arg_lit *static_artifact =
+        arg_lit0(NULL, "static-artifact", "print deterministic static-light artifact JSON for lighting-plan");
     struct arg_lit *overwrite = arg_lit0(NULL, "overwrite", "allow new/open to replace an existing output path");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
@@ -497,6 +499,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
                         final_quality,
                         no_dynamic_preview,
                         manifest,
+                        static_artifact,
                         overwrite,
                         help,
                         end};
@@ -605,6 +608,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->lighting_final_quality = final_quality->count > 0;
     args->lighting_no_dynamic_preview = no_dynamic_preview->count > 0;
     args->lighting_manifest = manifest->count > 0;
+    args->lighting_static_artifact = static_artifact->count > 0;
     args->max_dynamic_lights = max_dynamic_lights->count > 0 ? max_dynamic_lights->ival[0] : 0;
     args->max_static_lights = max_static_lights->count > 0 ? max_static_lights->ival[0] : 0;
 
@@ -665,6 +669,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->lighting_preview_quality && args->lighting_final_quality)
         {
             fprintf(out, "%s: 'lighting-plan' accepts only one of --preview or --final.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->lighting_manifest && args->lighting_static_artifact)
+        {
+            fprintf(out, "%s: 'lighting-plan' accepts only one of --manifest or --static-artifact.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -801,6 +811,24 @@ bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *s
         if (!wrote)
         {
             editor_set_error(error_buffer, error_buffer_size, "failed to write lighting artifact manifest");
+            return false;
+        }
+        return true;
+    }
+    if (args->lighting_static_artifact)
+    {
+        char *json = NULL;
+        size_t json_size = 0u;
+        const bool ok = slayer3d_map_build_static_lighting_artifact_json(document, &options, &json, &json_size,
+                                                                         error_buffer, error_buffer_size);
+        slayer3d_map_destroy(document);
+        if (!ok)
+            return false;
+        const bool wrote = fwrite(json, 1u, json_size, out) == json_size;
+        slayer3d_map_free_string(json);
+        if (!wrote)
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to write static lighting artifact");
             return false;
         }
         return true;

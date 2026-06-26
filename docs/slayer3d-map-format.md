@@ -34,6 +34,11 @@ provides the initial map I/O surface:
   JSON metadata for planned static-light artifacts. It does not bake texels yet;
   it reserves the shared artifact contract that later GUI, CLI, and caller bake
   paths will fill with concrete lightmap or vertex-light payloads.
+- `slayer3d_map_build_static_lighting_artifact_json()` emits the first concrete
+  static-light payload: deterministic per-face irradiance samples for box
+  brushes using baked/static lights and global ambient state. This payload is
+  intentionally simple and self-contained so callers can integrate against a
+  real artifact while later slices add atlas/lightmap bake backends.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
 typed read helpers are borrowed from the document and remain valid until
@@ -392,9 +397,11 @@ for editor GUI commands, editor CLI commands such as
 `slayer3d_editor lighting-plan --input level.slayermap.json`, and caller code.
 The planner reports total, dynamic, static, area, runtime-preview, and bake-light
 counts, plus budget status. `slayer3d_editor lighting-plan --manifest --input
-level.slayermap.json` emits the planned static-light artifact manifest JSON. It
-does not bake lighting by itself; it is the shared front door for later
-bake/compute implementations.
+level.slayermap.json` emits the planned static-light artifact manifest JSON.
+`slayer3d_editor lighting-plan --static-artifact --input level.slayermap.json`
+emits a concrete `slayer3d.lighting_static.v0` JSON payload containing per-face
+box-brush irradiance samples. The current static artifact is a deterministic
+preview/integration format, not a final atlas lightmap baker.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,

@@ -2339,6 +2339,296 @@ bool slayer3d_map_build_lighting_artifact_manifest_json(const slayer3d_map_docum
     return true;
 }
 
+static slayer3d_vec3 map_lighting_vec3_sub(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    return (slayer3d_vec3){a.x - b.x, a.y - b.y, a.z - b.z};
+}
+
+static slayer3d_vec3 map_lighting_vec3_negate(slayer3d_vec3 value)
+{
+    return (slayer3d_vec3){-value.x, -value.y, -value.z};
+}
+
+static float map_lighting_vec3_dot(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+static float map_lighting_vec3_length(slayer3d_vec3 value)
+{
+    return SDL_sqrtf(map_lighting_vec3_dot(value, value));
+}
+
+static slayer3d_vec3 map_lighting_vec3_normalize_or(slayer3d_vec3 value, slayer3d_vec3 fallback)
+{
+    const float length = map_lighting_vec3_length(value);
+    if (length <= 0.00001f)
+        return fallback;
+    const float inv_length = 1.0f / length;
+    return (slayer3d_vec3){value.x * inv_length, value.y * inv_length, value.z * inv_length};
+}
+
+static double map_lighting_clamp01(double value)
+{
+    if (value < 0.0)
+        return 0.0;
+    if (value > 1.0)
+        return 1.0;
+    return value;
+}
+
+static bool map_lighting_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key, slayer3d_vec3 value)
+{
+    yyjson_mut_val *array = yyjson_mut_arr(doc);
+    return array != NULL && yyjson_mut_arr_add_real(doc, array, value.x) &&
+           yyjson_mut_arr_add_real(doc, array, value.y) && yyjson_mut_arr_add_real(doc, array, value.z) &&
+           yyjson_mut_obj_add_val(doc, object, key, array);
+}
+
+static bool map_lighting_add_rgb(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key, double r, double g,
+                                 double b)
+{
+    yyjson_mut_val *array = yyjson_mut_arr(doc);
+    return array != NULL && yyjson_mut_arr_add_real(doc, array, map_lighting_clamp01(r)) &&
+           yyjson_mut_arr_add_real(doc, array, map_lighting_clamp01(g)) &&
+           yyjson_mut_arr_add_real(doc, array, map_lighting_clamp01(b)) &&
+           yyjson_mut_obj_add_val(doc, object, key, array);
+}
+
+static slayer3d_vec3 map_lighting_box_center(const slayer3d_map_box_geometry *box)
+{
+    return (slayer3d_vec3){(box->min.x + box->max.x) * 0.5f, (box->min.y + box->max.y) * 0.5f,
+                           (box->min.z + box->max.z) * 0.5f};
+}
+
+static slayer3d_vec3 map_lighting_box_face_position(const slayer3d_map_box_geometry *box, int face_index)
+{
+    slayer3d_vec3 position = map_lighting_box_center(box);
+    switch (face_index)
+    {
+    case 0:
+        position.x = box->max.x;
+        break;
+    case 1:
+        position.x = box->min.x;
+        break;
+    case 2:
+        position.y = box->max.y;
+        break;
+    case 3:
+        position.y = box->min.y;
+        break;
+    case 4:
+        position.z = box->max.z;
+        break;
+    case 5:
+        position.z = box->min.z;
+        break;
+    default:
+        break;
+    }
+    return position;
+}
+
+static float map_lighting_spot_factor(const slayer3d_map_light *light, slayer3d_vec3 light_to_sample)
+{
+    if (light == NULL || light->type == NULL || SDL_strcmp(light->type, "spot") != 0)
+        return 1.0f;
+
+    const slayer3d_vec3 direction =
+        map_lighting_vec3_normalize_or(light->has_direction ? light->direction : (slayer3d_vec3){0.0f, -1.0f, 0.0f},
+                                       (slayer3d_vec3){0.0f, -1.0f, 0.0f});
+    const float outer_degrees = light->has_outer_angle_degrees ? light->outer_angle_degrees : 35.0f;
+    const float inner_degrees = light->has_inner_angle_degrees ? light->inner_angle_degrees : outer_degrees * 0.5f;
+    const float outer_cos = SDL_cosf(SDL_clamp(outer_degrees, 0.0f, 179.0f) * 0.01745329251994329577f);
+    const float inner_cos = SDL_cosf(SDL_clamp(inner_degrees, 0.0f, 179.0f) * 0.01745329251994329577f);
+    const float cone = map_lighting_vec3_dot(direction, map_lighting_vec3_normalize_or(light_to_sample, direction));
+    if (cone <= outer_cos)
+        return 0.0f;
+    if (cone >= inner_cos || SDL_fabsf(inner_cos - outer_cos) <= 0.00001f)
+        return 1.0f;
+    return SDL_clamp((cone - outer_cos) / (inner_cos - outer_cos), 0.0f, 1.0f);
+}
+
+static void map_lighting_accumulate_light(const slayer3d_map_light *light, slayer3d_vec3 sample_position,
+                                          slayer3d_vec3 sample_normal, double *out_r, double *out_g, double *out_b)
+{
+    if (light == NULL || out_r == NULL || out_g == NULL || out_b == NULL)
+        return;
+    if (!(map_light_kind_bakes(light->kind) || map_light_type_is_area(light->type)))
+        return;
+
+    const slayer3d_color color = light->has_color ? light->color : (slayer3d_color){255, 255, 255, 255};
+    const float intensity = light->has_intensity ? SDL_max(light->intensity, 0.0f) : 1.0f;
+    float contribution = 0.0f;
+
+    if (light->type != NULL && SDL_strcmp(light->type, "directional") == 0)
+    {
+        const slayer3d_vec3 direction =
+            map_lighting_vec3_normalize_or(light->has_direction ? light->direction : (slayer3d_vec3){0.0f, -1.0f, 0.0f},
+                                           (slayer3d_vec3){0.0f, -1.0f, 0.0f});
+        contribution = SDL_max(0.0f, map_lighting_vec3_dot(sample_normal, map_lighting_vec3_negate(direction)));
+    }
+    else
+    {
+        const slayer3d_vec3 light_position =
+            light->transform.has_position ? light->transform.position : (slayer3d_vec3){0.0f, 4.0f, 0.0f};
+        const slayer3d_vec3 sample_to_light = map_lighting_vec3_sub(light_position, sample_position);
+        const float distance = map_lighting_vec3_length(sample_to_light);
+        const slayer3d_vec3 to_light =
+            map_lighting_vec3_normalize_or(sample_to_light, (slayer3d_vec3){0.0f, 1.0f, 0.0f});
+        const float lambert = SDL_max(0.0f, map_lighting_vec3_dot(sample_normal, to_light));
+        const float range = light->has_range ? SDL_max(light->range, 0.001f) : 8.0f;
+        const float normalized_distance = distance / range;
+        const float attenuation = 1.0f / (1.0f + normalized_distance * normalized_distance);
+        const float spot = map_lighting_spot_factor(light, map_lighting_vec3_sub(sample_position, light_position));
+        contribution = lambert * attenuation * spot;
+    }
+
+    const double scaled = (double)(contribution * intensity);
+    *out_r += ((double)color.r / 255.0) * scaled;
+    *out_g += ((double)color.g / 255.0) * scaled;
+    *out_b += ((double)color.b / 255.0) * scaled;
+}
+
+static bool map_lighting_add_static_sample(yyjson_mut_doc *doc, yyjson_mut_val *samples,
+                                           const slayer3d_map_document *document, const slayer3d_map_brush *brush,
+                                           int face_index, const char *face_name, slayer3d_vec3 normal,
+                                           const slayer3d_map_global_state *global)
+{
+    yyjson_mut_val *sample = yyjson_mut_obj(doc);
+    if (sample == NULL || !yyjson_mut_arr_add_val(samples, sample))
+        return false;
+
+    const slayer3d_vec3 position = map_lighting_box_face_position(&brush->box, face_index);
+    const slayer3d_color ambient = global != NULL ? global->ambient_light : (slayer3d_color){54, 56, 64, 255};
+    double r = (double)ambient.r / 255.0;
+    double g = (double)ambient.g / 255.0;
+    double b = (double)ambient.b / 255.0;
+
+    const size_t light_count = slayer3d_map_get_light_count(document);
+    for (size_t i = 0; i < light_count; ++i)
+    {
+        slayer3d_map_light light;
+        if (slayer3d_map_get_light(document, i, &light))
+            map_lighting_accumulate_light(&light, position, normal, &r, &g, &b);
+    }
+
+    const double peak = SDL_max(SDL_max(r, g), b);
+    return yyjson_mut_obj_add_strcpy(doc, sample, "brush", brush->id != NULL ? brush->id : "") &&
+           yyjson_mut_obj_add_strcpy(doc, sample, "face", face_name) &&
+           map_lighting_add_vec3(doc, sample, "position", position) &&
+           map_lighting_add_vec3(doc, sample, "normal", normal) &&
+           map_lighting_add_rgb(doc, sample, "color", r, g, b) &&
+           yyjson_mut_obj_add_real(doc, sample, "intensity", peak);
+}
+
+static bool map_lighting_add_static_samples(yyjson_mut_doc *doc, yyjson_mut_val *samples,
+                                            const slayer3d_map_document *document,
+                                            const slayer3d_map_global_state *global, size_t *out_sample_count)
+{
+    static const struct
+    {
+        const char *name;
+        slayer3d_vec3 normal;
+    } faces[] = {
+        {"positive_x", {1.0f, 0.0f, 0.0f}},  {"negative_x", {-1.0f, 0.0f, 0.0f}}, {"positive_y", {0.0f, 1.0f, 0.0f}},
+        {"negative_y", {0.0f, -1.0f, 0.0f}}, {"positive_z", {0.0f, 0.0f, 1.0f}},  {"negative_z", {0.0f, 0.0f, -1.0f}},
+    };
+
+    size_t sample_count = 0u;
+    const size_t brush_count = slayer3d_map_get_brush_count(document);
+    for (size_t brush_index = 0; brush_index < brush_count; ++brush_index)
+    {
+        slayer3d_map_brush brush;
+        if (!slayer3d_map_get_brush(document, brush_index, &brush) || !brush.box.valid)
+            continue;
+        for (size_t face_index = 0; face_index < SDL_arraysize(faces); ++face_index)
+        {
+            if (!map_lighting_add_static_sample(doc, samples, document, &brush, (int)face_index, faces[face_index].name,
+                                                faces[face_index].normal, global))
+            {
+                return false;
+            }
+            sample_count += 1u;
+        }
+    }
+    if (out_sample_count != NULL)
+        *out_sample_count = sample_count;
+    return true;
+}
+
+bool slayer3d_map_build_static_lighting_artifact_json(const slayer3d_map_document *document,
+                                                      const slayer3d_map_lighting_build_options *options,
+                                                      char **out_json, size_t *out_json_size, char *error_buffer,
+                                                      int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output static lighting artifact JSON pointer is required");
+        return false;
+    }
+    *out_json = NULL;
+    if (out_json_size != NULL)
+        *out_json_size = 0u;
+
+    slayer3d_map_lighting_build_plan plan;
+    if (!slayer3d_map_build_lighting_plan(document, options, &plan, error_buffer, error_buffer_size))
+        return false;
+
+    slayer3d_map_global_state global;
+    if (!slayer3d_map_get_global_state(document, &global))
+        SDL_zero(global);
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *map = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *counts = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *samples = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    const char *metadata_id = slayer3d_map_get_metadata_id(document);
+    const char *metadata_name = slayer3d_map_get_metadata_name(document);
+    const char *source_path = slayer3d_map_get_source_path(document);
+    size_t sample_count = 0u;
+
+    bool ok = doc != NULL && root != NULL && map != NULL && counts != NULL && samples != NULL;
+    if (ok)
+    {
+        yyjson_mut_doc_set_root(doc, root);
+        ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.lighting_static.v0") &&
+             yyjson_mut_obj_add_strcpy(doc, root, "quality", map_lighting_quality_name(plan.quality)) &&
+             yyjson_mut_obj_add_strcpy(doc, root, "bake_group", "default") &&
+             yyjson_mut_obj_add_bool(doc, root, "self_contained", true) &&
+             yyjson_mut_obj_add_strcpy(doc, root, "sample_model", "box_face_irradiance_preview") &&
+             yyjson_mut_obj_add_val(doc, root, "map", map) &&
+             yyjson_mut_obj_add_strcpy(doc, map, "id", metadata_id != NULL ? metadata_id : "") &&
+             yyjson_mut_obj_add_strcpy(doc, map, "name", metadata_name != NULL ? metadata_name : "") &&
+             yyjson_mut_obj_add_strcpy(doc, map, "source_path", source_path != NULL ? source_path : "") &&
+             yyjson_mut_obj_add_val(doc, root, "counts", counts) &&
+             yyjson_mut_obj_add_val(doc, root, "samples", samples) &&
+             map_lighting_add_static_samples(doc, samples, document, &global, &sample_count) &&
+             yyjson_mut_obj_add_uint(doc, counts, "bake_lights", plan.bake_light_count) &&
+             yyjson_mut_obj_add_uint(doc, counts, "brushes", slayer3d_map_get_brush_count(document)) &&
+             yyjson_mut_obj_add_uint(doc, counts, "box_brushes", sample_count / 6u) &&
+             yyjson_mut_obj_add_uint(doc, counts, "samples", sample_count);
+    }
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (!ok || json == NULL)
+    {
+        free(json);
+        map_set_error(error_buffer, error_buffer_size, "$: failed to build static lighting artifact JSON");
+        return false;
+    }
+
+    *out_json = json;
+    if (out_json_size != NULL)
+        *out_json_size = size;
+    return true;
+}
+
 static bool map_actor_is_player_character(yyjson_val *actor)
 {
     yyjson_val *properties = map_properties_object(actor);

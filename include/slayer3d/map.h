@@ -562,6 +562,21 @@ extern "C"
                                                             int error_buffer_size);
 
     /**
+     * @brief Build a deterministic static-lighting artifact JSON payload.
+     *
+     * This is the first concrete static-light output shared by the editor GUI,
+     * editor CLI, and caller code. It emits per-face irradiance samples for box
+     * brushes using baked/static map lights plus global ambient light. The
+     * payload is intentionally simple and self-contained; future bake backends
+     * may replace or augment it with atlas/lightmap textures while preserving
+     * this API shape. Free @p out_json with slayer3d_map_free_string().
+     */
+    bool slayer3d_map_build_static_lighting_artifact_json(const slayer3d_map_document *document,
+                                                          const slayer3d_map_lighting_build_options *options,
+                                                          char **out_json, size_t *out_json_size, char *error_buffer,
+                                                          int error_buffer_size);
+
+    /**
      * @brief Build a minimal playable scene descriptor from a loaded map.
      *
      * The descriptor identifies playable brush geometry and placed actors, then

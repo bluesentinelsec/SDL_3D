@@ -44745,6 +44745,85 @@ TEST(GameDataRuntime, SlayerMapBuildsLightingArtifactManifestJson)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapBuildsStaticLightingArtifactJson)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": { "id": "map.test.static_lighting", "name": "Static Lighting Test" },
+  "global": { "ambient_light": [0, 0, 0, 255] },
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [0, 0, 0], "max": [4, 0.25, 4] } }
+  ],
+  "lights": [
+    {
+      "id": "light.sun",
+      "kind": "baked",
+      "type": "directional",
+      "direction": [0, -1, 0],
+      "color": [255, 128, 64, 255],
+      "intensity": 1.0
+    }
+  ]
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &document, error, sizeof(error)))
+        << error;
+
+    slayer3d_map_lighting_build_options options{};
+    slayer3d_map_init_lighting_build_options(&options);
+    options.quality = SLAYER3D_MAP_LIGHTING_BUILD_FINAL;
+    char *json = nullptr;
+    size_t json_size = 0u;
+    ASSERT_TRUE(
+        slayer3d_map_build_static_lighting_artifact_json(document, &options, &json, &json_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(json, nullptr);
+    ASSERT_GT(json_size, 0u);
+
+    yyjson_doc *artifact = yyjson_read(json, json_size, 0);
+    ASSERT_NE(artifact, nullptr) << json;
+    yyjson_val *root = yyjson_doc_get_root(artifact);
+    ASSERT_TRUE(yyjson_is_obj(root));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(root, "schema")), "slayer3d.lighting_static.v0");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(root, "quality")), "final");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(root, "sample_model")), "box_face_irradiance_preview");
+
+    yyjson_val *counts = yyjson_obj_get(root, "counts");
+    ASSERT_TRUE(yyjson_is_obj(counts));
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(counts, "bake_lights")), 1u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(counts, "box_brushes")), 1u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(counts, "samples")), 6u);
+
+    yyjson_val *samples = yyjson_obj_get(root, "samples");
+    ASSERT_TRUE(yyjson_is_arr(samples));
+    ASSERT_EQ(yyjson_arr_size(samples), 6u);
+
+    bool saw_lit_top = false;
+    size_t idx = 0u;
+    size_t max = 0u;
+    yyjson_val *sample = nullptr;
+    yyjson_arr_foreach(samples, idx, max, sample)
+    {
+        if (SDL_strcmp(yyjson_get_str(yyjson_obj_get(sample, "face")), "positive_y") != 0)
+            continue;
+        yyjson_val *color = yyjson_obj_get(sample, "color");
+        ASSERT_TRUE(yyjson_is_arr(color));
+        EXPECT_GT(yyjson_get_real(yyjson_arr_get(color, 0)), 0.95);
+        EXPECT_GT(yyjson_get_real(yyjson_arr_get(color, 1)), 0.45);
+        EXPECT_GT(yyjson_get_real(yyjson_arr_get(color, 2)), 0.20);
+        EXPECT_GT(yyjson_get_real(yyjson_obj_get(sample, "intensity")), 0.95);
+        saw_lit_top = true;
+    }
+    EXPECT_TRUE(saw_lit_top);
+
+    yyjson_doc_free(artifact);
+    slayer3d_map_free_string(json);
+    slayer3d_map_destroy(document);
+}
+
 TEST(GameDataRuntime, SlayerMapLightingShowcaseLoadsAndPlansAllLightTypes)
 {
     const std::filesystem::path map_path =
