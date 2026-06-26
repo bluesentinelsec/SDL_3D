@@ -283,9 +283,9 @@ Global lighting defaults export under the map `global` object. The editor Global
 Lighting panel currently edits ambient light, clear color, exposure, tonemap,
 preview quality, and fog presets. Things > Lights places Directional, Point,
 Spot, Area Rect, and Area Sphere light markers; the selected-light inspector
-offers common intensity, range, color, shadow, falloff, spot-cone, and area-size
-presets while the Data inspector remains available for game-specific key/value
-pairs.
+offers common intensity, range, color, shadow, falloff, spot-cone, area-size,
+and dynamic animation presets while the Data inspector remains available for
+game-specific key/value pairs.
 
 Lighting planning is deliberately API-centered. File > Plan Lighting, the Global
 Lighting panel's Plan Lighting button, the editor CLI command below, and caller

@@ -1251,6 +1251,54 @@ static bool editor_actor_light_exportable(const editor_actor_runtime *actor)
                              (light_type != NULL && light_type[0] != '\0'));
 }
 
+static bool export_add_map_editor_light_animation(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                                  const editor_actor_runtime *actor)
+{
+    const bool enabled = editor_actor_property_bool(actor, "light_animation_enabled", false);
+    const char *type = editor_actor_property_string(actor, "light_animation_type", "");
+    if (!enabled && (type == NULL || type[0] == '\0' || SDL_strcmp(type, "none") == 0))
+        return true;
+
+    yyjson_mut_val *animation = yyjson_mut_obj(doc);
+    if (animation == NULL || !yyjson_mut_obj_add_val(doc, obj, "animation", animation) ||
+        !yyjson_mut_obj_add_bool(doc, animation, "enabled", enabled) ||
+        !yyjson_mut_obj_add_strcpy(doc, animation, "type", type != NULL && type[0] != '\0' ? type : "none"))
+    {
+        return false;
+    }
+
+    const char *preset = editor_actor_property_string(actor, "light_animation_preset", NULL);
+    if (!export_add_optional_string(doc, animation, "preset", preset))
+        return false;
+
+    const float rate_hz = editor_actor_property_float(actor, "light_animation_rate_hz", -1.0f);
+    const float amplitude = editor_actor_property_float(actor, "light_animation_amplitude", -1.0f);
+    const float phase = editor_actor_property_float(actor, "light_animation_phase", -1.0f);
+    const float min_intensity = editor_actor_property_float(actor, "light_animation_min_intensity", -1.0f);
+    const float max_intensity = editor_actor_property_float(actor, "light_animation_max_intensity", -1.0f);
+    const float radius = editor_actor_property_float(actor, "light_animation_radius", -1.0f);
+    if (rate_hz >= 0.0f && !yyjson_mut_obj_add_real(doc, animation, "rate_hz", rate_hz))
+        return false;
+    if (amplitude >= 0.0f && !yyjson_mut_obj_add_real(doc, animation, "amplitude", amplitude))
+        return false;
+    if (phase >= 0.0f && !yyjson_mut_obj_add_real(doc, animation, "phase", phase))
+        return false;
+    if (min_intensity >= 0.0f && !yyjson_mut_obj_add_real(doc, animation, "min_intensity", min_intensity))
+        return false;
+    if (max_intensity >= 0.0f && !yyjson_mut_obj_add_real(doc, animation, "max_intensity", max_intensity))
+        return false;
+    if (radius > 0.0f && !yyjson_mut_obj_add_real(doc, animation, "radius", radius))
+        return false;
+
+    const slayer3d_value *axis_value = editor_actor_property(actor, "light_animation_axis");
+    if (axis_value != NULL && axis_value->type == SLAYER3D_VALUE_VEC3 &&
+        !export_add_vec3(doc, animation, "axis", axis_value->as_vec3))
+    {
+        return false;
+    }
+    return true;
+}
+
 static bool export_add_map_editor_light(yyjson_mut_doc *doc, yyjson_mut_val *lights, const editor_actor_runtime *actor)
 {
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
@@ -1319,6 +1367,7 @@ static bool export_add_map_editor_light(yyjson_mut_doc *doc, yyjson_mut_val *lig
                                     editor_actor_property_string(actor, "shadow_mode", NULL)) ||
         !export_add_optional_string(doc, obj, "falloff", editor_actor_property_string(actor, "falloff", NULL)) ||
         !export_add_optional_string(doc, obj, "bake_group", editor_actor_property_string(actor, "bake_group", NULL)) ||
+        !export_add_map_editor_light_animation(doc, obj, actor) ||
         !export_add_properties(doc, obj, "properties", actor->properties))
     {
         return false;

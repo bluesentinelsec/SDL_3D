@@ -377,8 +377,10 @@ The bundled editor exposes light placement through Things > Lights. Current
 entries match the canonical schema: Directional, Point, Spot, Area Rect, and
 Area Sphere. Selecting a placed light shows a light-specific inspector with
 kind, intensity, range, shadow mode, falloff, color presets, spot cone presets,
-and area-size presets. The generic Data inspector remains available for
-arbitrary key/value gameplay properties.
+area-size presets, and animation presets for steady, torch flicker, rotating
+siren, and orbiting fireball behavior. The animation presets write the same
+canonical `animation` object that hand-authored SlayerMap files use. The generic
+Data inspector remains available for arbitrary key/value gameplay properties.
 
 File > Plan Lighting and the Global Lighting panel's Plan Lighting button both
 use `slayer3d_map_build_lighting_plan()`. This is the same public API intended

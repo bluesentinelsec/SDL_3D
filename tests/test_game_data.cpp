@@ -18894,6 +18894,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
                  "none / inverse_square");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "n/a");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "n/a");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "steady");
 
     emit_signal("signal.editor.inspector.light.intensity.bright");
     emit_signal("signal.editor.inspector.light.range.long");
@@ -18901,11 +18902,20 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     emit_signal("signal.editor.inspector.light.kind.baked");
     emit_signal("signal.editor.inspector.light.shadow.dynamic");
     emit_signal("signal.editor.inspector.light.falloff.linear");
+    emit_signal("signal.editor.inspector.light.animation.torch");
     ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.point.1", &point_light));
     ASSERT_NE(point_light.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_kind", ""), "baked");
     EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "shadow_mode", ""), "dynamic");
     EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "falloff", ""), "linear");
+    EXPECT_TRUE(slayer3d_properties_get_bool(point_light.properties, "light_animation_enabled", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_animation_type", ""), "flicker");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_animation_preset", ""), "torch_fire");
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_animation_rate_hz", 0.0f), 8.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_animation_min_intensity", 0.0f), 1.1f,
+                0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_animation_max_intensity", 0.0f), 1.8f,
+                0.001f);
     EXPECT_TRUE(slayer3d_properties_get_bool(point_light.properties, "casts_shadow", false));
     EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_intensity", 0.0f), 1.8f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_range", 0.0f), 20.0f, 0.001f);
@@ -18923,6 +18933,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
                  "1.80 / 20.00");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.shadow_falloff", ""),
                  "dynamic / linear");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "torch_fire");
 
     char *map_json = nullptr;
     size_t map_size = 0u;
@@ -18952,6 +18963,15 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_TRUE(exported_light.casts_shadow);
     EXPECT_STREQ(exported_light.shadow_mode, "dynamic");
     EXPECT_STREQ(exported_light.falloff, "linear");
+    EXPECT_TRUE(exported_light.animation.enabled);
+    EXPECT_STREQ(exported_light.animation.type, "flicker");
+    EXPECT_STREQ(exported_light.animation.preset, "torch_fire");
+    ASSERT_TRUE(exported_light.animation.has_rate_hz);
+    EXPECT_NEAR(exported_light.animation.rate_hz, 8.0f, 0.001f);
+    ASSERT_TRUE(exported_light.animation.has_min_intensity);
+    ASSERT_TRUE(exported_light.animation.has_max_intensity);
+    EXPECT_NEAR(exported_light.animation.min_intensity, 1.1f, 0.001f);
+    EXPECT_NEAR(exported_light.animation.max_intensity, 1.8f, 0.001f);
     slayer3d_map_destroy(map_document);
     SDL_free(map_json);
 
@@ -18962,12 +18982,16 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     emit_signal("signal.editor.command.commit");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "light.editor_shell.spot.1");
     emit_signal("signal.editor.inspector.light.cone.wide");
+    emit_signal("signal.editor.inspector.light.animation.siren");
     slayer3d_game_data_editor_actor spot_light{};
     ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.spot.1", &spot_light));
     ASSERT_NE(spot_light.properties, nullptr);
     EXPECT_NEAR(slayer3d_properties_get_float(spot_light.properties, "inner_angle_degrees", 0.0f), 38.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(spot_light.properties, "outer_angle_degrees", 0.0f), 70.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(spot_light.properties, "light_animation_type", ""), "rotate");
+    EXPECT_STREQ(slayer3d_properties_get_string(spot_light.properties, "light_animation_preset", ""), "rotating_siren");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "38.0 / 70.0");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "rotating_siren");
 
     emit_signal("signal.editor.actor.select_slot.12");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_area_rect");
@@ -18977,13 +19001,19 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""),
                  "light.editor_shell.area_rect.1");
     emit_signal("signal.editor.inspector.light.geometry.large");
+    emit_signal("signal.editor.inspector.light.animation.orbit");
     slayer3d_game_data_editor_actor area_rect_light{};
     ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.area_rect.1", &area_rect_light));
     ASSERT_NE(area_rect_light.properties, nullptr);
     EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "width", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "height", 0.0f), 2.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(area_rect_light.properties, "radius", 0.0f), 2.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(area_rect_light.properties, "light_animation_type", ""), "orbit");
+    EXPECT_STREQ(slayer3d_properties_get_string(area_rect_light.properties, "light_animation_preset", ""),
+                 "projectile_fireball");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "4.00 x 2.00");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""),
+                 "projectile_fireball");
 
     map_json = nullptr;
     map_size = 0u;
@@ -19009,6 +19039,11 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
             ASSERT_TRUE(light.has_outer_angle_degrees);
             EXPECT_NEAR(light.inner_angle_degrees, 38.0f, 0.001f);
             EXPECT_NEAR(light.outer_angle_degrees, 70.0f, 0.001f);
+            EXPECT_TRUE(light.animation.enabled);
+            EXPECT_STREQ(light.animation.type, "rotate");
+            EXPECT_STREQ(light.animation.preset, "rotating_siren");
+            ASSERT_TRUE(light.animation.has_axis);
+            EXPECT_NEAR(light.animation.axis.y, 1.0f, 0.001f);
         }
         if (std::string(light.source_actor != nullptr ? light.source_actor : "") == "light.editor_shell.area_rect.1")
         {
@@ -19020,6 +19055,11 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
             EXPECT_NEAR(light.width, 4.0f, 0.001f);
             EXPECT_NEAR(light.height, 2.0f, 0.001f);
             EXPECT_NEAR(light.radius, 2.0f, 0.001f);
+            EXPECT_TRUE(light.animation.enabled);
+            EXPECT_STREQ(light.animation.type, "orbit");
+            EXPECT_STREQ(light.animation.preset, "projectile_fireball");
+            ASSERT_TRUE(light.animation.has_radius);
+            EXPECT_NEAR(light.animation.radius, 2.25f, 0.001f);
         }
     }
     EXPECT_TRUE(found_spot);

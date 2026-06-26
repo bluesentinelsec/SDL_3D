@@ -340,6 +340,10 @@
     "signal.editor.inspector.light.geometry.small",
     "signal.editor.inspector.light.geometry.medium",
     "signal.editor.inspector.light.geometry.large",
+    "signal.editor.inspector.light.animation.steady",
+    "signal.editor.inspector.light.animation.torch",
+    "signal.editor.inspector.light.animation.siren",
+    "signal.editor.inspector.light.animation.orbit",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -2491,6 +2495,114 @@
             "target_type": "selection",
             "properties": { "width": 4.0, "height": 2.0, "radius": 2.0 },
             "message": "light geometry large",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.steady",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": false,
+              "light_animation_type": "none",
+              "light_animation_preset": "steady_room",
+              "light_animation_rate_hz": 0.0,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation steady",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.torch",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "flicker",
+              "light_animation_preset": "torch_fire",
+              "light_animation_rate_hz": 8.0,
+              "light_animation_amplitude": 0.25,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 1.1,
+              "light_animation_max_intensity": 1.8,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation torch",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.siren",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "rotate",
+              "light_animation_preset": "rotating_siren",
+              "light_animation_rate_hz": 0.35,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation siren",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.orbit",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "orbit",
+              "light_animation_preset": "projectile_fireball",
+              "light_animation_rate_hz": 0.45,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 2.25,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation orbit",
             "outputs": {
               "valid_key": "editor.inspector.actor.update.valid",
               "message_key": "editor.tool.last_action"

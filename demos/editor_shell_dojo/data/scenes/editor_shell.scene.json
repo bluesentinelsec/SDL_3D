@@ -5582,6 +5582,33 @@
               { "id": "ui.editor_shell.left_inspector.light.cone.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.medium" },
               { "id": "ui.editor_shell.left_inspector.light.cone.wide", "type": "button", "w": "fill", "h": "fill", "text": "Wide", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.wide" }
             ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.animation",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 964,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.animation.label", "type": "label", "w": 36, "h": "fill", "text": "Anim" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.value", "type": "label", "w": 62, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.animation", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.animation.steady", "type": "button", "w": 42, "h": "fill", "text": "Steady", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.steady" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.torch", "type": "button", "w": 40, "h": "fill", "text": "Torch", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.torch" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.siren", "type": "button", "w": 40, "h": "fill", "text": "Siren", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.siren" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.orbit", "type": "button", "w": "fill", "h": "fill", "text": "Orbit", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.orbit" }
+            ]
           }
         ]
       },

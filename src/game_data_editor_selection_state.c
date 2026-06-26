@@ -50,6 +50,19 @@ static bool inspector_actor_is_light(const editor_actor_runtime *actor)
     return (role != NULL && SDL_strcmp(role, "light") == 0) || (light_type != NULL && light_type[0] != '\0');
 }
 
+static const char *inspector_light_animation_summary(const slayer3d_properties *properties)
+{
+    const bool enabled =
+        properties != NULL ? slayer3d_properties_get_bool(properties, "light_animation_enabled", false) : false;
+    const char *type = inspector_properties_string(properties, "light_animation_type", "");
+    const char *preset = inspector_properties_string(properties, "light_animation_preset", "");
+    if (!enabled && (type == NULL || type[0] == '\0' || SDL_strcmp(type, "none") == 0))
+        return "steady";
+    if (preset != NULL && preset[0] != '\0')
+        return preset;
+    return type != NULL && type[0] != '\0' ? type : "custom";
+}
+
 static void inspector_publish_light_state(slayer3d_properties *scene_state, const editor_actor_runtime *actor)
 {
     if (scene_state == NULL)
@@ -64,6 +77,7 @@ static void inspector_publish_light_state(slayer3d_properties *scene_state, cons
         slayer3d_properties_set_string(scene_state, "editor.inspector.light.shadow_falloff", "");
         slayer3d_properties_set_string(scene_state, "editor.inspector.light.geometry", "");
         slayer3d_properties_set_string(scene_state, "editor.inspector.light.cone", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.animation", "");
         return;
     }
 
@@ -99,6 +113,8 @@ static void inspector_publish_light_state(slayer3d_properties *scene_state, cons
     else
         SDL_strlcpy(value, "n/a", sizeof(value));
     slayer3d_properties_set_string(scene_state, "editor.inspector.light.cone", value);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.animation",
+                                   inspector_light_animation_summary(properties));
 }
 
 static bool inspector_color_equal(slayer3d_color lhs, slayer3d_color rhs)
