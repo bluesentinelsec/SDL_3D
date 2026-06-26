@@ -819,6 +819,62 @@ bool slayer3d_game_data_read_lighting_artifact_json(const slayer3d_game_data_run
     return true;
 }
 
+bool slayer3d_game_data_get_static_lighting_summary(const slayer3d_game_data_runtime *runtime, int index,
+                                                    slayer3d_game_data_static_lighting_summary *out_summary,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    if (out_summary != NULL)
+        SDL_zero(*out_summary);
+    if (runtime == NULL || out_summary == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "static lighting summary requires runtime and output pointer");
+        return false;
+    }
+
+    char *json = NULL;
+    size_t json_size = 0u;
+    if (!slayer3d_game_data_read_lighting_artifact_json(runtime, index, &json, &json_size, error_buffer,
+                                                        error_buffer_size))
+    {
+        return false;
+    }
+
+    yyjson_doc *doc = yyjson_read(json, json_size, 0);
+    if (doc == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "static lighting artifact %d could not be parsed", index);
+        SDL_free(json);
+        return false;
+    }
+
+    yyjson_val *samples = obj_get(yyjson_doc_get_root(doc), "samples");
+    double rgb[3] = {0.0, 0.0, 0.0};
+    double intensity = 0.0;
+    const size_t sample_count = yyjson_is_arr(samples) ? yyjson_arr_size(samples) : 0u;
+    for (size_t i = 0; i < sample_count; ++i)
+    {
+        yyjson_val *sample = yyjson_arr_get(samples, i);
+        yyjson_val *color = obj_get(sample, "color");
+        for (size_t c = 0; c < 3u; ++c)
+            rgb[c] += yyjson_get_num(yyjson_arr_get(color, c));
+        intensity += yyjson_get_num(obj_get(sample, "intensity"));
+    }
+
+    out_summary->sample_count = sample_count;
+    if (sample_count > 0u)
+    {
+        const double denom = (double)sample_count;
+        out_summary->average_rgb[0] = (float)(rgb[0] / denom);
+        out_summary->average_rgb[1] = (float)(rgb[1] / denom);
+        out_summary->average_rgb[2] = (float)(rgb[2] / denom);
+        out_summary->average_intensity = (float)(intensity / denom);
+    }
+
+    yyjson_doc_free(doc);
+    SDL_free(json);
+    return true;
+}
+
 static bool editor_light_preview_enabled(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL || runtime->editor_actor_count <= 0)

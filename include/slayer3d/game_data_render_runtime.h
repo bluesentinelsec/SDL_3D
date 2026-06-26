@@ -93,6 +93,17 @@ extern "C"
         bool self_contained;
     } slayer3d_game_data_lighting_artifact;
 
+    /** @brief Lightweight parsed summary of one static-lighting artifact. */
+    typedef struct slayer3d_game_data_static_lighting_summary
+    {
+        /** @brief Number of per-face irradiance samples in the artifact. */
+        size_t sample_count;
+        /** @brief Average RGB irradiance across all samples. */
+        float average_rgb[3];
+        /** @brief Average scalar intensity across all samples. */
+        float average_intensity;
+    } slayer3d_game_data_static_lighting_summary;
+
     /**
      * @brief Return the number of declared world lighting artifacts.
      *
@@ -122,6 +133,18 @@ extern "C"
     bool slayer3d_game_data_read_lighting_artifact_json(const slayer3d_game_data_runtime *runtime, int index,
                                                         char **out_json, size_t *out_size, char *error_buffer,
                                                         int error_buffer_size);
+
+    /**
+     * @brief Read and summarize one declared static-lighting artifact.
+     *
+     * This is a renderer/tooling bridge for the current
+     * `slayer3d.lighting_static.v0` payload. It validates and parses the
+     * artifact, then reports the sample count and average irradiance without
+     * exposing callers to the raw JSON representation.
+     */
+    bool slayer3d_game_data_get_static_lighting_summary(const slayer3d_game_data_runtime *runtime, int index,
+                                                        slayer3d_game_data_static_lighting_summary *out_summary,
+                                                        char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Return the number of active world lights.

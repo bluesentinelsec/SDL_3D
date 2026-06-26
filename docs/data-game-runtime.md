@@ -343,7 +343,10 @@ with `slayer3d_game_data_lighting_artifact_count()` and
 formats without hard-coding the generated package layout. Callers that want the
 JSON payload can use `slayer3d_game_data_read_lighting_artifact_json()`, which
 resolves the artifact relative to the loaded game file, validates the current
-`slayer3d.lighting_static.v0` format, and returns a caller-owned buffer.
+`slayer3d.lighting_static.v0` format, and returns a caller-owned buffer. Code
+that only needs typed renderer/tooling metadata can call
+`slayer3d_game_data_get_static_lighting_summary()` to read sample counts and
+average irradiance without parsing JSON directly.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite

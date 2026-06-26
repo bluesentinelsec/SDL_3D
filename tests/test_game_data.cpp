@@ -44993,6 +44993,15 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
         std::string(runtime_artifact_json, runtime_artifact_size).find("\"schema\": \"slayer3d.lighting_static.v0\""),
         std::string::npos);
     SDL_free(runtime_artifact_json);
+    slayer3d_game_data_static_lighting_summary static_lighting_summary{};
+    ASSERT_TRUE(
+        slayer3d_game_data_get_static_lighting_summary(runtime, 0, &static_lighting_summary, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(static_lighting_summary.sample_count, 24u);
+    EXPECT_GT(static_lighting_summary.average_rgb[0], 0.0f);
+    EXPECT_GT(static_lighting_summary.average_rgb[1], 0.0f);
+    EXPECT_GT(static_lighting_summary.average_rgb[2], 0.0f);
+    EXPECT_GT(static_lighting_summary.average_intensity, 0.0f);
 
     slayer3d_light torch{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &torch));
