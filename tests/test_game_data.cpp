@@ -44173,6 +44173,53 @@ TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
     slayer3d_map_destroy(document);
 }
 
+TEST(GameDataRuntime, SlayerMapBuildsLightingPlanForEditorCliAndCallerCode)
+{
+    const std::filesystem::path map_path =
+        std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "slayermap_example" / "maps" / "training_room.slayermap.json";
+    ASSERT_TRUE(std::filesystem::exists(map_path)) << map_path;
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &document, error, sizeof(error))) << error;
+
+    slayer3d_map_lighting_build_options options{};
+    slayer3d_map_init_lighting_build_options(&options);
+    EXPECT_EQ(options.quality, SLAYER3D_MAP_LIGHTING_BUILD_BALANCED);
+    EXPECT_GT(options.max_dynamic_lights, 0u);
+    EXPECT_GT(options.max_static_lights, 0u);
+    EXPECT_TRUE(options.include_dynamic_preview);
+
+    slayer3d_map_lighting_build_plan plan{};
+    ASSERT_TRUE(slayer3d_map_build_lighting_plan(document, &options, &plan, error, sizeof(error))) << error;
+    EXPECT_EQ(plan.quality, SLAYER3D_MAP_LIGHTING_BUILD_BALANCED);
+    EXPECT_EQ(plan.total_light_count, 3u);
+    EXPECT_EQ(plan.dynamic_light_count, 1u);
+    EXPECT_EQ(plan.static_light_count, 2u);
+    EXPECT_EQ(plan.area_light_count, 1u);
+    EXPECT_EQ(plan.bake_light_count, 2u);
+    EXPECT_EQ(plan.runtime_light_count, 3u);
+    EXPECT_TRUE(plan.requires_static_bake);
+    EXPECT_TRUE(plan.has_dynamic_preview);
+    EXPECT_FALSE(plan.dynamic_light_budget_exceeded);
+    EXPECT_FALSE(plan.static_light_budget_exceeded);
+
+    options.quality = SLAYER3D_MAP_LIGHTING_BUILD_FINAL;
+    options.max_dynamic_lights = 1u;
+    options.max_static_lights = 1u;
+    ASSERT_TRUE(slayer3d_map_build_lighting_plan(document, &options, &plan, error, sizeof(error))) << error;
+    EXPECT_EQ(plan.quality, SLAYER3D_MAP_LIGHTING_BUILD_FINAL);
+    EXPECT_TRUE(plan.dynamic_light_budget_exceeded);
+    EXPECT_TRUE(plan.static_light_budget_exceeded);
+
+    options.include_dynamic_preview = false;
+    ASSERT_TRUE(slayer3d_map_build_lighting_plan(document, &options, &plan, error, sizeof(error))) << error;
+    EXPECT_EQ(plan.runtime_light_count, 1u);
+    EXPECT_FALSE(plan.dynamic_light_budget_exceeded);
+
+    slayer3d_map_destroy(document);
+}
+
 TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
 {
     const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");

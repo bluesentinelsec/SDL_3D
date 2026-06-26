@@ -25,6 +25,12 @@ provides the initial map I/O surface:
 - Query helpers expose metadata, global map state, top-level object counts,
   typed views for materials/brushes/actors, and arbitrary property JSON while keeping
   project-specific data preserved inside the document.
+- `slayer3d_map_init_lighting_build_options()` and
+  `slayer3d_map_build_lighting_plan()` provide a shared lighting build/bake
+  planning surface for editor GUI commands, future CLI bake commands, and caller
+  code. The initial plan reports dynamic/static/area light counts, runtime
+  preview counts, bake counts, and configured budget overages; later bake
+  implementations should hang off this same map-oriented contract.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
 typed read helpers are borrowed from the document and remain valid until

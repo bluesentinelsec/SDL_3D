@@ -234,6 +234,58 @@ extern "C"
         size_t property_count;
     } slayer3d_map_light;
 
+    /** @brief Quality target for map-oriented lighting build/bake jobs. */
+    typedef enum slayer3d_map_lighting_build_quality
+    {
+        /** @brief Fast interactive preview suitable for editor iteration. */
+        SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW = 0,
+        /** @brief Default quality/performance balance for editor and CLI use. */
+        SLAYER3D_MAP_LIGHTING_BUILD_BALANCED = 1,
+        /** @brief Slower final-quality build target for shipping/export. */
+        SLAYER3D_MAP_LIGHTING_BUILD_FINAL = 2,
+    } slayer3d_map_lighting_build_quality;
+
+    /**
+     * @brief Options for planning map lighting work.
+     *
+     * This structure is intentionally map-oriented rather than editor-specific
+     * so the same contract can be used by the editor GUI, editor/asset CLI
+     * commands, and caller code.
+     */
+    typedef struct slayer3d_map_lighting_build_options
+    {
+        slayer3d_map_lighting_build_quality quality;
+        /** @brief Maximum dynamic/runtime lights expected by the target renderer; 0 uses the engine default. */
+        size_t max_dynamic_lights;
+        /** @brief Maximum static/baked lights accepted by the build pipeline; 0 uses the engine default. */
+        size_t max_static_lights;
+        /** @brief When true, baked/static lights may also produce editor/runtime preview lights. */
+        bool include_dynamic_preview;
+    } slayer3d_map_lighting_build_options;
+
+    /**
+     * @brief Summary of lighting work required by an authored map.
+     *
+     * A plan is a non-owning summary. It does not bake lighting by itself; it is
+     * the shared front door for later bake/compute commands and UI status.
+     */
+    typedef struct slayer3d_map_lighting_build_plan
+    {
+        slayer3d_map_lighting_build_quality quality;
+        size_t total_light_count;
+        size_t dynamic_light_count;
+        size_t static_light_count;
+        size_t area_light_count;
+        size_t runtime_light_count;
+        size_t bake_light_count;
+        size_t max_dynamic_lights;
+        size_t max_static_lights;
+        bool requires_static_bake;
+        bool has_dynamic_preview;
+        bool dynamic_light_budget_exceeded;
+        bool static_light_budget_exceeded;
+    } slayer3d_map_lighting_build_plan;
+
     /**
      * @brief Minimal playable scene descriptor derived from a loaded map.
      *
@@ -475,6 +527,25 @@ extern "C"
     /** @brief Serialize a global-state property value to JSON. Free with slayer3d_map_free_string(). */
     bool slayer3d_map_get_global_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
                                                size_t *out_json_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief Fill map lighting build options with engine/editor default values. */
+    void slayer3d_map_init_lighting_build_options(slayer3d_map_lighting_build_options *options);
+
+    /**
+     * @brief Build a lighting work plan from a loaded map document.
+     *
+     * This generalized API is intended to be the common entry point for editor
+     * GUI bake buttons, future CLI bake commands, and caller code. Budget
+     * overages are reported in @p out_plan instead of causing failure so tools
+     * can show actionable diagnostics and still display the complete plan.
+     *
+     * @return true when the plan was built. Returns false only for invalid
+     * arguments or unreadable map data.
+     */
+    bool slayer3d_map_build_lighting_plan(const slayer3d_map_document *document,
+                                          const slayer3d_map_lighting_build_options *options,
+                                          slayer3d_map_lighting_build_plan *out_plan, char *error_buffer,
+                                          int error_buffer_size);
 
     /**
      * @brief Build a minimal playable scene descriptor from a loaded map.

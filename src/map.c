@@ -15,6 +15,8 @@
 #include "yyjson.h"
 
 #define MAP_PATH_MAX 256
+#define MAP_LIGHTING_DEFAULT_DYNAMIC_LIGHT_BUDGET 8u
+#define MAP_LIGHTING_DEFAULT_STATIC_LIGHT_BUDGET 256u
 
 struct slayer3d_map_document
 {
@@ -2086,6 +2088,90 @@ bool slayer3d_map_get_global_property_json(const slayer3d_map_document *document
 {
     return map_get_property_json_from_object(map_global_object(document), key, out_json, out_json_size, error_buffer,
                                              error_buffer_size);
+}
+
+void slayer3d_map_init_lighting_build_options(slayer3d_map_lighting_build_options *options)
+{
+    if (options == NULL)
+        return;
+    SDL_zero(*options);
+    options->quality = SLAYER3D_MAP_LIGHTING_BUILD_BALANCED;
+    options->max_dynamic_lights = MAP_LIGHTING_DEFAULT_DYNAMIC_LIGHT_BUDGET;
+    options->max_static_lights = MAP_LIGHTING_DEFAULT_STATIC_LIGHT_BUDGET;
+    options->include_dynamic_preview = true;
+}
+
+static bool map_light_kind_bakes(const char *kind)
+{
+    return kind != NULL &&
+           (SDL_strcmp(kind, "baked") == 0 || SDL_strcmp(kind, "static") == 0 || SDL_strcmp(kind, "both") == 0);
+}
+
+static bool map_light_kind_runs_dynamically(const char *kind)
+{
+    return kind == NULL || kind[0] == '\0' || SDL_strcmp(kind, "dynamic") == 0 || SDL_strcmp(kind, "both") == 0;
+}
+
+static bool map_light_type_is_area(const char *type)
+{
+    return type != NULL && (SDL_strcmp(type, "area_rect") == 0 || SDL_strcmp(type, "area_sphere") == 0);
+}
+
+bool slayer3d_map_build_lighting_plan(const slayer3d_map_document *document,
+                                      const slayer3d_map_lighting_build_options *options,
+                                      slayer3d_map_lighting_build_plan *out_plan, char *error_buffer,
+                                      int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_plan == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output lighting build plan is required");
+        return false;
+    }
+    SDL_zero(*out_plan);
+    if (document == NULL || document->doc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map document is required");
+        return false;
+    }
+
+    slayer3d_map_lighting_build_options defaults;
+    slayer3d_map_init_lighting_build_options(&defaults);
+    const slayer3d_map_lighting_build_options *effective = options != NULL ? options : &defaults;
+    out_plan->quality = effective->quality;
+    out_plan->max_dynamic_lights =
+        effective->max_dynamic_lights > 0u ? effective->max_dynamic_lights : MAP_LIGHTING_DEFAULT_DYNAMIC_LIGHT_BUDGET;
+    out_plan->max_static_lights =
+        effective->max_static_lights > 0u ? effective->max_static_lights : MAP_LIGHTING_DEFAULT_STATIC_LIGHT_BUDGET;
+    out_plan->has_dynamic_preview = effective->include_dynamic_preview;
+
+    const size_t light_count = slayer3d_map_get_light_count(document);
+    out_plan->total_light_count = light_count;
+    for (size_t i = 0; i < light_count; ++i)
+    {
+        slayer3d_map_light light;
+        if (!slayer3d_map_get_light(document, i, &light))
+        {
+            map_set_error(error_buffer, error_buffer_size, "$.lights[%zu]: failed to read map light", i);
+            return false;
+        }
+
+        const bool area = map_light_type_is_area(light.type);
+        const bool static_light = map_light_kind_bakes(light.kind) || area;
+        const bool dynamic_light = map_light_kind_runs_dynamically(light.kind);
+
+        out_plan->area_light_count += area ? 1u : 0u;
+        out_plan->static_light_count += static_light ? 1u : 0u;
+        out_plan->dynamic_light_count += dynamic_light ? 1u : 0u;
+        out_plan->bake_light_count += static_light ? 1u : 0u;
+        out_plan->runtime_light_count +=
+            dynamic_light || (static_light && effective->include_dynamic_preview) ? 1u : 0u;
+    }
+
+    out_plan->requires_static_bake = out_plan->bake_light_count > 0u;
+    out_plan->dynamic_light_budget_exceeded = out_plan->runtime_light_count > out_plan->max_dynamic_lights;
+    out_plan->static_light_budget_exceeded = out_plan->bake_light_count > out_plan->max_static_lights;
+    return true;
 }
 
 static bool map_actor_is_player_character(yyjson_val *actor)
