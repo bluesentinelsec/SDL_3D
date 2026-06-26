@@ -675,6 +675,8 @@
     "signal.editor.file.validate",
     "signal.editor.file.focus.open",
     "signal.editor.file.focus.save_as",
+    "signal.editor.global.toggle",
+    "signal.editor.global.close",
     "signal.editor.open",
     "signal.editor.export",
     "signal.editor.save_as",
@@ -941,6 +943,13 @@
           },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": "54, 56, 64, 255" },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": "12, 14, 18, 255" },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": "1.0" },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Object" },
@@ -1121,6 +1130,7 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
@@ -1137,6 +1147,7 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
@@ -4480,6 +4491,7 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.file.menu.open", "default": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
@@ -4494,9 +4506,29 @@
         ]
       },
       {
+        "signal": "signal.editor.global.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.global.panel.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global lighting" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global panel closed" }
+        ]
+      },
+      {
         "signal": "signal.editor.file.focus.open",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "open" },
           { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing open path" }
@@ -4506,6 +4538,7 @@
         "signal": "signal.editor.file.focus.save_as",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "save_as" },
           { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing save as path" }
@@ -4543,6 +4576,13 @@
           },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": "54, 56, 64, 255" },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": "12, 14, 18, 255" },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": "1.0" },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]
       },

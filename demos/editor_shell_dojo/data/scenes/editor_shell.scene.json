@@ -539,6 +539,17 @@
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
           {
+            "id": "ui.editor_shell.toolbar.global.button",
+            "type": "button",
+            "w": 76,
+            "h": 28,
+            "text": "Global",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.global.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false }
+          },
+          {
             "id": "ui.editor_shell.toolbar.actors.button",
             "type": "button",
             "w": 86,
@@ -6343,6 +6354,134 @@
             { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": true, "default": false }
           ]
         }
+      },
+      {
+        "id": "ui.editor_shell.global_panel.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 930,
+        "y": 92,
+        "w": 338,
+        "h": 276,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 120,
+        "fill_color": [8, 13, 22, 238],
+        "border_color": [82, 112, 154, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false },
+        "children": [
+          {
+            "id": "ui.editor_shell.global_panel.header",
+            "type": "panel",
+            "x": 8,
+            "y": 8,
+            "w": 322,
+            "h": 34,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.global_panel.title", "type": "label", "x": 10, "y": 6, "w": 180, "h": 20, "text": "Global Lighting", "text_scale": 0.46, "layer": 122 },
+              {
+                "id": "ui.editor_shell.global_panel.close.button",
+                "type": "button",
+                "x": 268,
+                "y": 5,
+                "w": 46,
+                "h": 24,
+                "text": "hide",
+                "text_scale": 0.38,
+                "interactive": true,
+                "action": "editor.global.close",
+                "layer": 122
+              }
+            ]
+          },
+          { "id": "ui.editor_shell.global_panel.summary.label", "type": "label", "x": 18, "y": 54, "w": 300, "h": 18, "text": "Map defaults used by preview, bake, and runner export", "text_scale": 0.34, "align": "left", "layer": 121 },
+          { "id": "ui.editor_shell.global_panel.ambient.label", "type": "label", "x": 18, "y": 86, "w": 124, "h": 18, "text": "Ambient", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.ambient.value",
+            "type": "label",
+            "x": 150,
+            "y": 86,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.ambient_light", "default": "54, 56, 64, 255" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.clear.label", "type": "label", "x": 18, "y": 116, "w": 124, "h": 18, "text": "Clear Color", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.clear.value",
+            "type": "label",
+            "x": 150,
+            "y": 116,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.clear_color", "default": "12, 14, 18, 255" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.exposure.label", "type": "label", "x": 18, "y": 146, "w": 124, "h": 18, "text": "Exposure", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.exposure.value",
+            "type": "label",
+            "x": 150,
+            "y": 146,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.exposure", "default": "1.0" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.tonemap.label", "type": "label", "x": 18, "y": 176, "w": 124, "h": 18, "text": "Tonemap", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.tonemap.value",
+            "type": "label",
+            "x": 150,
+            "y": 176,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.tonemap", "default": "aces" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.preview.label", "type": "label", "x": 18, "y": 206, "w": 124, "h": 18, "text": "Preview Quality", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.preview.value",
+            "type": "label",
+            "x": 150,
+            "y": 206,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.lighting_preview_quality", "default": "balanced" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.fog.label", "type": "label", "x": 18, "y": 236, "w": 124, "h": 18, "text": "Fog", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.fog.value",
+            "type": "label",
+            "x": 150,
+            "y": 236,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.fog", "default": "none" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          }
+        ]
       },
       {
         "id": "ui.editor_shell.asset_warmup.panel",

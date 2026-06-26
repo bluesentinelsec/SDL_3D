@@ -73,6 +73,11 @@ static bool editor_hit_is_file_menu(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.file_menu.");
 }
 
+static bool editor_hit_is_global_panel(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.global_panel.");
+}
+
 static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
@@ -966,6 +971,7 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
     slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
@@ -1001,7 +1007,7 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
          SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.things.", 14) == 0 ||
          SDL_strncmp(action, "editor.file.", 12) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
-         SDL_strncmp(action, "editor.property.", 16) == 0))
+         SDL_strncmp(action, "editor.property.", 16) == 0 || SDL_strncmp(action, "editor.global.", 14) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
@@ -1183,8 +1189,8 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
     if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
-        editor_hit_is_file_menu(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
-        console_event_active)
+        editor_hit_is_file_menu(hit) || editor_hit_is_global_panel(hit) || editor_hit_is_actor_viewer(hit) ||
+        editor_hit_is_left_inspector(hit) || console_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

@@ -3031,6 +3031,12 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "palette closed");
             return true;
         }
+        if (slayer3d_properties_get_bool(runtime->scene_state, "editor.global.panel.open", false))
+        {
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "global panel closed");
+            return true;
+        }
         if (slayer3d_properties_get_int(runtime->scene_state, "editor.vertex.selection.count", 0) > 0)
         {
             if (!slayer3d_game_data_clear_editor_vertex_selection(runtime))

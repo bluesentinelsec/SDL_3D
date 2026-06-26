@@ -21991,6 +21991,7 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
     const slayer3d_game_data_ui_rect menu_toolbar = largest_ui_rect("ui.editor_shell.toolbar");
     for (const char *name : {"ui.editor_shell.toolbar.file.button", "ui.editor_shell.toolbar.edit.button",
                              "ui.editor_shell.toolbar.selection.button", "ui.editor_shell.toolbar.groups.button",
+                             "ui.editor_shell.toolbar.global.button", "ui.editor_shell.toolbar.actors.button",
                              "ui.editor_shell.toolbar.tools.button", "ui.editor_shell.toolbar.view.button",
                              "ui.editor_shell.toolbar.run.button", "ui.editor_shell.toolbar.debug.button",
                              "ui.editor_shell.toolbar.help.button"})
@@ -22038,6 +22039,73 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
     EXPECT_TRUE(contains_text(labels, "Vertex (v)"));
     EXPECT_TRUE(contains_text(labels, "Duplicate (d)"));
     EXPECT_TRUE(contains_text(labels, "Texture (m)"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDefaults)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int global_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.toggle");
+    ASSERT_GE(global_signal, 0);
+    slayer3d_signal_emit(bus, global_signal, nullptr);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", false));
+
+    struct TextCapture
+    {
+        slayer3d_game_data_runtime *runtime = nullptr;
+        std::vector<std::string> values;
+    } text_capture{runtime, {}};
+    auto collect_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<TextCapture *>(userdata);
+        if (text == nullptr || text->name == nullptr)
+            return true;
+        slayer3d_game_data_ui_text resolved{};
+        bool visible = false;
+        if (slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) && visible &&
+            resolved.text != nullptr && std::string(resolved.name).rfind("ui.editor_shell.global_panel.", 0) == 0)
+        {
+            capture->values.emplace_back(resolved.text);
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect_text, &text_capture));
+    auto contains_text = [&](const char *expected) {
+        return std::find(text_capture.values.begin(), text_capture.values.end(), expected) != text_capture.values.end();
+    };
+    EXPECT_TRUE(contains_text("Global Lighting"));
+    EXPECT_TRUE(contains_text("54, 56, 64, 255"));
+    EXPECT_TRUE(contains_text("12, 14, 18, 255"));
+    EXPECT_TRUE(contains_text("balanced"));
+
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, 948.0f, 178.0f);
+    ASSERT_NE(hit, nullptr);
+    ASSERT_NE(hit->id, nullptr);
+    EXPECT_NE(std::string(hit->id).find("ui.editor_shell.global_panel."), std::string::npos);
+    slayer3d_ui_layout_destroy(layout);
+
+    const int close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.close");
+    ASSERT_GE(close_signal, 0);
+    slayer3d_signal_emit(bus, close_signal, nullptr);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", true));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
