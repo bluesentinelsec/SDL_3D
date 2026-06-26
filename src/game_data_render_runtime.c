@@ -710,6 +710,39 @@ bool slayer3d_game_data_get_world_units(const slayer3d_game_data_runtime *runtim
     return *out_units != NULL && (*out_units)[0] != '\0' && *out_meters_per_unit > 0.0f;
 }
 
+int slayer3d_game_data_lighting_artifact_count(const slayer3d_game_data_runtime *runtime)
+{
+    yyjson_val *artifacts = obj_get(obj_get(runtime_root(runtime), "world"), "lighting_artifacts");
+    return yyjson_is_arr(artifacts) ? (int)yyjson_arr_size(artifacts) : 0;
+}
+
+bool slayer3d_game_data_get_lighting_artifact(const slayer3d_game_data_runtime *runtime, int index,
+                                              slayer3d_game_data_lighting_artifact *out_artifact)
+{
+    if (out_artifact != NULL)
+    {
+        SDL_zero(*out_artifact);
+        out_artifact->self_contained = false;
+    }
+    if (runtime == NULL || index < 0 || out_artifact == NULL)
+        return false;
+
+    yyjson_val *artifacts = obj_get(obj_get(runtime_root(runtime), "world"), "lighting_artifacts");
+    if (!yyjson_is_arr(artifacts) || index >= (int)yyjson_arr_size(artifacts))
+        return false;
+
+    yyjson_val *artifact = yyjson_arr_get(artifacts, (size_t)index);
+    if (!yyjson_is_obj(artifact))
+        return false;
+
+    out_artifact->id = json_string(artifact, "id", NULL);
+    out_artifact->path = json_string(artifact, "path", NULL);
+    out_artifact->format = json_string(artifact, "format", NULL);
+    out_artifact->bake_group = json_string(artifact, "bake_group", NULL);
+    out_artifact->self_contained = json_bool(artifact, "self_contained", false);
+    return out_artifact->id != NULL && out_artifact->path != NULL && out_artifact->format != NULL;
+}
+
 static bool editor_light_preview_enabled(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL || runtime->editor_actor_count <= 0)

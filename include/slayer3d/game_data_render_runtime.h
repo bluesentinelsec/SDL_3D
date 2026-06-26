@@ -77,6 +77,39 @@ extern "C"
     bool slayer3d_game_data_get_world_units(const slayer3d_game_data_runtime *runtime, const char **out_units,
                                             float *out_meters_per_unit);
 
+    /** @brief Runtime descriptor for one generated or authored world lighting artifact. */
+    typedef struct slayer3d_game_data_lighting_artifact
+    {
+        /** @brief Stable artifact identifier, such as `lighting.static.default`. */
+        const char *id;
+        /** @brief Path to the artifact relative to the loaded game JSON file. */
+        const char *path;
+        /** @brief Artifact schema/format string, such as `slayer3d.lighting_static.v0`. */
+        const char *format;
+        /** @brief Optional bake group name used by editor/build tooling. */
+        const char *bake_group;
+        /** @brief True when the artifact is self-contained and does not require the source map. */
+        bool self_contained;
+    } slayer3d_game_data_lighting_artifact;
+
+    /**
+     * @brief Return the number of declared world lighting artifacts.
+     *
+     * Generated playable SlayerMap packages use `world.lighting_artifacts` to
+     * point callers at static lighting payloads such as
+     * `lighting/static.default.json`.
+     */
+    int slayer3d_game_data_lighting_artifact_count(const slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read one declared world lighting artifact by zero-based index.
+     *
+     * Returned string pointers are owned by the loaded game data document and
+     * remain valid until the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_lighting_artifact(const slayer3d_game_data_runtime *runtime, int index,
+                                                  slayer3d_game_data_lighting_artifact *out_artifact);
+
     /**
      * @brief Return the number of active world lights.
      *

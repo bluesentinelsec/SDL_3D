@@ -44973,6 +44973,15 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
                                              error, sizeof(error)))
         << error;
     ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 6);
+    ASSERT_EQ(slayer3d_game_data_lighting_artifact_count(runtime), 1);
+    slayer3d_game_data_lighting_artifact lighting_artifact{};
+    ASSERT_TRUE(slayer3d_game_data_get_lighting_artifact(runtime, 0, &lighting_artifact));
+    EXPECT_STREQ(lighting_artifact.id, "lighting.static.default");
+    EXPECT_STREQ(lighting_artifact.path, "lighting/static.default.json");
+    EXPECT_STREQ(lighting_artifact.format, "slayer3d.lighting_static.v0");
+    EXPECT_STREQ(lighting_artifact.bake_group, "default");
+    EXPECT_TRUE(lighting_artifact.self_contained);
+    EXPECT_FALSE(slayer3d_game_data_get_lighting_artifact(runtime, 1, &lighting_artifact));
 
     slayer3d_light torch{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &torch));

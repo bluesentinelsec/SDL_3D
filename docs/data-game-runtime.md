@@ -336,6 +336,12 @@ consuming a generated artifact. The `lighting-artifact-validate` command exposes
 the same validation path for build scripts and CI. Final atlas lightmap or
 vertex-light bake payloads remain later lighting slices.
 
+Generated playable packages declare static-lighting payloads under
+`world.lighting_artifacts`. Runtime callers can enumerate those declarations
+with `slayer3d_game_data_lighting_artifact_count()` and
+`slayer3d_game_data_get_lighting_artifact()` to discover artifact paths and
+formats without hard-coding the generated package layout.
+
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
 ```
