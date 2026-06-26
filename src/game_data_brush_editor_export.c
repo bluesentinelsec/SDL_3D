@@ -565,6 +565,43 @@ static bool export_add_color(yyjson_mut_doc *doc, yyjson_mut_val *obj, const cha
            yyjson_mut_obj_add_val(doc, obj, key, arr);
 }
 
+static bool export_add_map_global_state(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                        const slayer3d_game_data_runtime *runtime)
+{
+    yyjson_mut_val *global = yyjson_mut_obj(doc);
+    yyjson_mut_val *fog = yyjson_mut_obj(doc);
+    yyjson_mut_val *properties = yyjson_mut_obj(doc);
+    if (global == NULL || fog == NULL || properties == NULL || !yyjson_mut_obj_add_val(doc, root, "global", global))
+        return false;
+
+    const slayer3d_properties *scene_state = runtime != NULL ? runtime->scene_state : NULL;
+    const slayer3d_color ambient =
+        slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", (slayer3d_color){54, 56, 64, 255});
+    const slayer3d_color clear =
+        slayer3d_properties_get_color(scene_state, "editor.global.clear_color", (slayer3d_color){12, 14, 18, 255});
+    const float exposure = slayer3d_properties_get_float(scene_state, "editor.global.exposure", 1.0f);
+    const char *tonemap = slayer3d_properties_get_string(scene_state, "editor.global.tonemap", "aces");
+    const char *quality =
+        slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", "balanced");
+    const char *fog_mode = slayer3d_properties_get_string(scene_state, "editor.global.fog", "none");
+    if (fog_mode == NULL || fog_mode[0] == '\0')
+        fog_mode = "none";
+
+    if (!export_add_color(doc, global, "ambient_light", ambient) ||
+        !export_add_color(doc, global, "clear_color", clear) ||
+        !yyjson_mut_obj_add_real(doc, global, "exposure", exposure) ||
+        !yyjson_mut_obj_add_strcpy(doc, global, "tonemap", tonemap != NULL ? tonemap : "aces") ||
+        !yyjson_mut_obj_add_strcpy(doc, global, "lighting_preview_quality", quality != NULL ? quality : "balanced") ||
+        !yyjson_mut_obj_add_val(doc, global, "fog", fog) ||
+        !yyjson_mut_obj_add_bool(doc, fog, "enabled", SDL_strcmp(fog_mode, "none") != 0) ||
+        !yyjson_mut_obj_add_strcpy(doc, fog, "mode", fog_mode) ||
+        !yyjson_mut_obj_add_val(doc, fog, "properties", properties))
+    {
+        return false;
+    }
+    return true;
+}
+
 static bool export_add_editor_actor(yyjson_mut_doc *doc, yyjson_mut_val *actors, const editor_actor_runtime *actor)
 {
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
@@ -1538,28 +1575,28 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
     }
 
     yyjson_mut_doc_set_root(doc, root);
-    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "format", SLAYER3D_MAP_FORMAT_ID) &&
-              yyjson_mut_obj_add_int(doc, root, "version", SLAYER3D_MAP_FORMAT_VERSION) &&
-              yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
-              yyjson_mut_obj_add_strcpy(doc, metadata, "id", world_name != NULL ? world_name : "") &&
-              yyjson_mut_obj_add_strcpy(doc, metadata, "name", world_name != NULL ? world_name : "Untitled Map") &&
-              yyjson_mut_obj_add_strcpy(doc, root, "coordinate_system", "y_up") &&
-              yyjson_mut_obj_add_val(doc, root, "materials", materials) &&
-              export_add_map_materials(doc, materials, &world_runtime->desc) &&
-              yyjson_mut_obj_add_val(doc, root, "brushes", brushes) &&
-              export_add_map_brushes(doc, brushes, &world_runtime->desc) &&
-              yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
-              export_add_map_player_start_actors(doc, actors, runtime) &&
-              export_add_map_editor_actors(doc, actors, runtime) &&
-              yyjson_mut_obj_add_val(doc, root, "lights", lights) && export_add_map_lights(doc, lights, runtime) &&
-              export_add_map_skybox(doc, root, runtime) && yyjson_mut_obj_add_val(doc, root, "effects", effects) &&
-              export_add_map_effects(doc, effects, runtime) &&
-              yyjson_mut_obj_add_val(doc, root, "connections", connections) &&
-              export_add_map_connections(doc, connections, runtime) &&
-              yyjson_mut_obj_add_val(doc, root, "prefabs", prefabs) && export_add_map_prefabs(doc, prefabs, runtime) &&
-              yyjson_mut_obj_add_val(doc, root, "editor", editor) &&
-              yyjson_mut_obj_add_strcpy(doc, editor, "source_format", "slayer3d.fragment.v0") &&
-              yyjson_mut_obj_add_val(doc, editor, "editable_level_fragment", fragment_copy);
+    bool ok =
+        yyjson_mut_obj_add_strcpy(doc, root, "format", SLAYER3D_MAP_FORMAT_ID) &&
+        yyjson_mut_obj_add_int(doc, root, "version", SLAYER3D_MAP_FORMAT_VERSION) &&
+        yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
+        yyjson_mut_obj_add_strcpy(doc, metadata, "id", world_name != NULL ? world_name : "") &&
+        yyjson_mut_obj_add_strcpy(doc, metadata, "name", world_name != NULL ? world_name : "Untitled Map") &&
+        yyjson_mut_obj_add_strcpy(doc, root, "coordinate_system", "y_up") &&
+        export_add_map_global_state(doc, root, runtime) && yyjson_mut_obj_add_val(doc, root, "materials", materials) &&
+        export_add_map_materials(doc, materials, &world_runtime->desc) &&
+        yyjson_mut_obj_add_val(doc, root, "brushes", brushes) &&
+        export_add_map_brushes(doc, brushes, &world_runtime->desc) &&
+        yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
+        export_add_map_player_start_actors(doc, actors, runtime) &&
+        export_add_map_editor_actors(doc, actors, runtime) && yyjson_mut_obj_add_val(doc, root, "lights", lights) &&
+        export_add_map_lights(doc, lights, runtime) && export_add_map_skybox(doc, root, runtime) &&
+        yyjson_mut_obj_add_val(doc, root, "effects", effects) && export_add_map_effects(doc, effects, runtime) &&
+        yyjson_mut_obj_add_val(doc, root, "connections", connections) &&
+        export_add_map_connections(doc, connections, runtime) &&
+        yyjson_mut_obj_add_val(doc, root, "prefabs", prefabs) && export_add_map_prefabs(doc, prefabs, runtime) &&
+        yyjson_mut_obj_add_val(doc, root, "editor", editor) &&
+        yyjson_mut_obj_add_strcpy(doc, editor, "source_format", "slayer3d.fragment.v0") &&
+        yyjson_mut_obj_add_val(doc, editor, "editable_level_fragment", fragment_copy);
 
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;

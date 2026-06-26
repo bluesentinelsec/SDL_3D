@@ -677,6 +677,14 @@
     "signal.editor.file.focus.save_as",
     "signal.editor.global.toggle",
     "signal.editor.global.close",
+    "signal.editor.global.preset.afternoon",
+    "signal.editor.global.preset.night",
+    "signal.editor.global.preset.interior",
+    "signal.editor.global.exposure.down",
+    "signal.editor.global.exposure.up",
+    "signal.editor.global.tonemap.next",
+    "signal.editor.global.quality.next",
+    "signal.editor.global.fog.next",
     "signal.editor.open",
     "signal.editor.export",
     "signal.editor.save_as",
@@ -944,9 +952,10 @@
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": "54, 56, 64, 255" },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": "12, 14, 18, 255" },
-          { "type": "scene_state.set", "key": "editor.global.exposure", "value": "1.0" },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
           { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
           { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
@@ -4525,6 +4534,85 @@
         ]
       },
       {
+        "signal": "signal.editor.global.preset.afternoon",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset afternoon" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.night",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "night" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [20, 24, 42, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [4, 6, 12, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 0.75 },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset night" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.interior",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "interior" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [36, 38, 44, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [10, 10, 12, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.15 },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "reinhard" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset interior" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.exposure.down",
+        "actions": [
+          { "type": "scene_state.add", "key": "editor.global.exposure", "value": -0.05, "default": 1.0, "min": 0.1, "max": 4.0 },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global exposure changed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.exposure.up",
+        "actions": [
+          { "type": "scene_state.add", "key": "editor.global.exposure", "value": 0.05, "default": 1.0, "min": 0.1, "max": 4.0 },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global exposure changed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.tonemap.next",
+        "actions": [
+          { "type": "scene_state.cycle", "key": "editor.global.tonemap", "values": ["aces", "reinhard", "none"], "default": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global tonemap changed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.quality.next",
+        "actions": [
+          { "type": "scene_state.cycle", "key": "editor.global.lighting_preview_quality", "values": ["performance", "balanced", "quality"], "default": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preview quality changed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.fog.next",
+        "actions": [
+          { "type": "scene_state.cycle", "key": "editor.global.fog", "values": ["none", "linear", "exp", "exp2"], "default": "none" },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global fog changed" }
+        ]
+      },
+      {
         "signal": "signal.editor.file.focus.open",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
@@ -4577,9 +4665,10 @@
           { "type": "console.write", "message_from_state": "editor.tool.last_action" },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": "54, 56, 64, 255" },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": "12, 14, 18, 255" },
-          { "type": "scene_state.set", "key": "editor.global.exposure", "value": "1.0" },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
           { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
           { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },

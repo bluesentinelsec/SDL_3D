@@ -183,6 +183,12 @@ speed against fidelity. `global.properties` is reserved for project-specific
 state such as weather, biome, audio zones, or game rules that the generic editor
 does not understand.
 
+The bundled editor exposes these defaults through the top-toolbar Global panel.
+Current controls provide afternoon/night/interior presets plus exposure,
+tonemap, preview-quality, and fog cycling. Saving a map writes those values into
+the same `global` object consumed by the public map API and playable runner
+export path.
+
 ## Asset References
 
 Asset entries use stable ids and project-relative paths:

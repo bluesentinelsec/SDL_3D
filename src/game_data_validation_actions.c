@@ -1718,10 +1718,10 @@ static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val 
             return validation_error(ctx, json_path, "scene_state.set value_from_state must be a non-empty string");
         return true;
     }
-    if (value == NULL ||
-        !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
+    if (value == NULL || !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) ||
+                           is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4)))
     {
-        return validation_error(ctx, json_path, "scene_state.set requires a scalar, vec3, or value_from_state");
+        return validation_error(ctx, json_path, "scene_state.set requires a scalar, vec3, color, or value_from_state");
     }
     return true;
 }

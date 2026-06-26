@@ -22111,6 +22111,75 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    emit_signal("signal.editor.global.toggle");
+    emit_signal("signal.editor.global.preset.night");
+    emit_signal("signal.editor.global.exposure.up");
+    emit_signal("signal.editor.global.tonemap.next");
+    emit_signal("signal.editor.global.quality.next");
+    emit_signal("signal.editor.global.fog.next");
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const slayer3d_color ambient =
+        slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", slayer3d_color{0, 0, 0, 0});
+    EXPECT_EQ(ambient.r, 20);
+    EXPECT_EQ(ambient.g, 24);
+    EXPECT_EQ(ambient.b, 42);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.exposure", 0.0f), 0.8f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""),
+                 "performance");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.fog", ""), "exp");
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &document, error, sizeof(error))) << error;
+    ASSERT_NE(document, nullptr);
+
+    slayer3d_map_global_state global{};
+    ASSERT_TRUE(slayer3d_map_get_global_state(document, &global));
+    EXPECT_TRUE(global.has_ambient_light);
+    EXPECT_EQ(global.ambient_light.r, 20);
+    EXPECT_EQ(global.ambient_light.b, 42);
+    EXPECT_TRUE(global.has_clear_color);
+    EXPECT_EQ(global.clear_color.b, 12);
+    EXPECT_TRUE(global.has_exposure);
+    EXPECT_FLOAT_EQ(global.exposure, 0.8f);
+    EXPECT_STREQ(global.tonemap, "reinhard");
+    EXPECT_STREQ(global.lighting_preview_quality, "performance");
+    EXPECT_TRUE(global.fog.enabled);
+    EXPECT_STREQ(global.fog.mode, "exp");
+
+    slayer3d_map_destroy(document);
+    SDL_free(map_json);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
