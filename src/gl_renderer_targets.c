@@ -123,8 +123,30 @@ int slayer3d_gl_scaled_world_dimension(int logical_dimension, float scale)
     return SDL_max(1, (int)SDL_floorf((float)logical_dimension * scale + 0.5f));
 }
 
-bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_width, int logical_height, float scale,
-                                        int *out_width, int *out_height)
+static bool gl_presentation_viewport_size(slayer3d_gl_context *ctx, int logical_width, int logical_height,
+                                          int *out_width, int *out_height)
+{
+    int output_width = 0;
+    int output_height = 0;
+    if (!SDL_GetWindowSizeInPixels(ctx->window, &output_width, &output_height))
+    {
+        return false;
+    }
+    if (output_width <= 0 || output_height <= 0)
+    {
+        return SDL_SetError("The GL window does not currently expose a valid pixel size.");
+    }
+
+    const float scale_x = (float)output_width / (float)logical_width;
+    const float scale_y = (float)output_height / (float)logical_height;
+    const float scale = (scale_x < scale_y) ? scale_x : scale_y;
+    *out_width = SDL_max(1, (int)SDL_floorf((float)logical_width * scale + 0.5f));
+    *out_height = SDL_max(1, (int)SDL_floorf((float)logical_height * scale + 0.5f));
+    return true;
+}
+
+bool slayer3d_gl_sync_world_render_target(slayer3d_gl_context *ctx, int logical_width, int logical_height, float scale,
+                                          int *out_width, int *out_height)
 {
     if (ctx == NULL)
     {
@@ -139,8 +161,15 @@ bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_wi
         return SDL_SetError("World render scale must be between 0.25 and 1.0.");
     }
 
-    const int new_width = slayer3d_gl_scaled_world_dimension(logical_width, scale);
-    const int new_height = slayer3d_gl_scaled_world_dimension(logical_height, scale);
+    int presentation_width = logical_width;
+    int presentation_height = logical_height;
+    if (!gl_presentation_viewport_size(ctx, logical_width, logical_height, &presentation_width, &presentation_height))
+    {
+        return false;
+    }
+
+    const int new_width = slayer3d_gl_scaled_world_dimension(presentation_width, scale);
+    const int new_height = slayer3d_gl_scaled_world_dimension(presentation_height, scale);
     if (ctx->logical_w == logical_width && ctx->logical_h == logical_height && ctx->world_w == new_width &&
         ctx->world_h == new_height)
     {
@@ -152,10 +181,11 @@ bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_wi
         return true;
     }
 
-    const int old_width = ctx->world_w > 0 ? ctx->world_w : logical_width;
-    const int old_height = ctx->world_h > 0 ? ctx->world_h : logical_height;
+    const int old_width = ctx->world_w > 0 ? ctx->world_w : presentation_width;
+    const int old_height = ctx->world_h > 0 ? ctx->world_h : presentation_height;
     const float old_scale = ctx->world_render_scale > 0.0f ? ctx->world_render_scale : 1.0f;
 
+    SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
     slayer3d_gl_destroy_world_targets(ctx);
     if (!slayer3d_gl_create_world_targets(ctx, new_width, new_height))
     {
@@ -175,6 +205,25 @@ bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_wi
     if (out_height != NULL)
         *out_height = ctx->world_h;
     return true;
+}
+
+bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_width, int logical_height, float scale,
+                                        int *out_width, int *out_height)
+{
+    if (ctx == NULL)
+    {
+        return SDL_InvalidParamError("ctx");
+    }
+    if (logical_width <= 0 || logical_height <= 0)
+    {
+        return SDL_InvalidParamError("logical dimensions");
+    }
+    if (!(scale >= 0.25f && scale <= 1.0f))
+    {
+        return SDL_SetError("World render scale must be between 0.25 and 1.0.");
+    }
+
+    return slayer3d_gl_sync_world_render_target(ctx, logical_width, logical_height, scale, out_width, out_height);
 }
 
 float slayer3d_gl_world_render_scale(const slayer3d_gl_context *ctx)

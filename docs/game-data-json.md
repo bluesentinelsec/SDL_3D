@@ -180,16 +180,22 @@ for the depth pre-pass and main geometry pass through UI metrics. These queries
 can block while reading GPU results, so use them for profiling and do not leave
 them enabled in production scenes by default.
 `world_render_scale` renders only the 3D/world layer at a lower internal
-resolution on capable backends, then upscales it into the normal logical
+resolution on capable backends, then upscales it into the native pixel
 viewport before drawing UI. Valid values are `0.25` through `1.0`; `1.0`
-preserves full logical resolution. UI overlays, menu text, mouse/input mapping,
-and camera aspect ratio remain tied to the authored logical resolution, so HUDs
-stay sharp even when the world layer is scaled down. Use
+preserves the current drawable viewport resolution instead of a fixed 720p
+target. UI overlays, menu text, mouse/input mapping, and camera aspect ratio
+remain tied to the authored logical resolution, so HUDs stay sharp even when
+the world layer is scaled down. Use
 `world_render_scale_key` for options menus or profiling scenes that need a
 runtime quality slider without host C. The UI metrics namespace exposes
 `render.window_pixel_width`, `render.window_pixel_height`, and
 `render.window_pixel_density` so profiling screens can verify the actual
 platform backing size independently from the authored logical size.
+`dynamic_world_render_scale` lets the managed loop automatically adjust the
+world render scale using recent frame times. Pair it with
+`dynamic_world_render_min_scale`, `dynamic_world_render_max_scale`, and
+`dynamic_world_render_target_fps` when a game should prefer crisp native output
+but gracefully lower only the 3D layer under sustained frame pressure.
 `quality_presets` are named render-setting bundles selected by `quality` or the
 scene-state value at `quality_key`. Presets may author the same performance
 knobs as the root `render` object, including world scale, depth pre-pass,

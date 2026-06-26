@@ -2021,6 +2021,10 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->model_lod_cull_pixels = 4.0f;
         out_settings->performance_queries_enabled = false;
         out_settings->world_render_scale = 1.0f;
+        out_settings->dynamic_world_render_scale_enabled = false;
+        out_settings->dynamic_world_render_min_scale = 0.5f;
+        out_settings->dynamic_world_render_max_scale = 1.0f;
+        out_settings->dynamic_world_render_target_fps = 60.0f;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
     if (runtime == NULL || out_settings == NULL)
@@ -2076,6 +2080,25 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
     out_settings->world_render_scale = render_float_setting(runtime, render, quality_preset, "world_render_scale",
                                                             "world_render_scale_key", out_settings->world_render_scale);
     out_settings->world_render_scale = SDL_clamp(out_settings->world_render_scale, 0.25f, 1.0f);
+    out_settings->dynamic_world_render_scale_enabled =
+        render_bool_setting(runtime, render, quality_preset, "dynamic_world_render_scale",
+                            "dynamic_world_render_scale_key", out_settings->dynamic_world_render_scale_enabled);
+    out_settings->dynamic_world_render_min_scale =
+        render_float_setting(runtime, render, quality_preset, "dynamic_world_render_min_scale",
+                             "dynamic_world_render_min_scale_key", out_settings->dynamic_world_render_min_scale);
+    out_settings->dynamic_world_render_max_scale =
+        render_float_setting(runtime, render, quality_preset, "dynamic_world_render_max_scale",
+                             "dynamic_world_render_max_scale_key", out_settings->dynamic_world_render_max_scale);
+    out_settings->dynamic_world_render_target_fps =
+        render_float_setting(runtime, render, quality_preset, "dynamic_world_render_target_fps",
+                             "dynamic_world_render_target_fps_key", out_settings->dynamic_world_render_target_fps);
+    out_settings->dynamic_world_render_min_scale =
+        SDL_clamp(out_settings->dynamic_world_render_min_scale, 0.25f, out_settings->world_render_scale);
+    out_settings->dynamic_world_render_max_scale =
+        SDL_clamp(out_settings->dynamic_world_render_max_scale, out_settings->dynamic_world_render_min_scale,
+                  out_settings->world_render_scale);
+    out_settings->dynamic_world_render_target_fps =
+        SDL_clamp(out_settings->dynamic_world_render_target_fps, 15.0f, 500.0f);
     const char *tonemap_name =
         scene_state_string(runtime, json_string(render, "tonemap_key", NULL), json_string(render, "tonemap", NULL));
     out_settings->tonemap = parse_tonemap(tonemap_name, out_settings->tonemap);

@@ -180,16 +180,19 @@ static bool validate_render_tunable_values(validation_context *ctx, yyjson_val *
     yyjson_val *procedural_lod = obj_get(object, "procedural_lod");
     yyjson_val *model_lod_culling = obj_get(object, "model_lod_culling");
     yyjson_val *performance_queries = obj_get(object, "performance_queries");
+    yyjson_val *dynamic_world_render_scale = obj_get(object, "dynamic_world_render_scale");
     if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
         (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
         (per_object_light_selection != NULL && !yyjson_is_bool(per_object_light_selection)) ||
         (procedural_lod != NULL && !yyjson_is_bool(procedural_lod)) ||
         (model_lod_culling != NULL && !yyjson_is_bool(model_lod_culling)) ||
-        (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
+        (performance_queries != NULL && !yyjson_is_bool(performance_queries)) ||
+        (dynamic_world_render_scale != NULL && !yyjson_is_bool(dynamic_world_render_scale)))
     {
         return validation_error(ctx, path,
                                 "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, "
-                                "procedural_lod, model_lod_culling, and performance_queries must be booleans");
+                                "procedural_lod, model_lod_culling, performance_queries, and "
+                                "dynamic_world_render_scale must be booleans");
     }
     yyjson_val *per_object_light_limit = obj_get(object, "per_object_light_limit");
     if (per_object_light_limit != NULL &&
@@ -205,6 +208,33 @@ static bool validate_render_tunable_values(validation_context *ctx, yyjson_val *
          yyjson_get_num(world_render_scale) > 1.0))
     {
         return validation_error(ctx, path, "render world_render_scale must be a number from 0.25 to 1.0");
+    }
+    yyjson_val *dynamic_world_render_min_scale = obj_get(object, "dynamic_world_render_min_scale");
+    yyjson_val *dynamic_world_render_max_scale = obj_get(object, "dynamic_world_render_max_scale");
+    yyjson_val *dynamic_world_render_target_fps = obj_get(object, "dynamic_world_render_target_fps");
+    if ((dynamic_world_render_min_scale != NULL &&
+         (!yyjson_is_num(dynamic_world_render_min_scale) || yyjson_get_num(dynamic_world_render_min_scale) < 0.25 ||
+          yyjson_get_num(dynamic_world_render_min_scale) > 1.0)) ||
+        (dynamic_world_render_max_scale != NULL &&
+         (!yyjson_is_num(dynamic_world_render_max_scale) || yyjson_get_num(dynamic_world_render_max_scale) < 0.25 ||
+          yyjson_get_num(dynamic_world_render_max_scale) > 1.0)))
+    {
+        return validation_error(ctx, path,
+                                "render dynamic_world_render_min_scale and dynamic_world_render_max_scale must be "
+                                "numbers from 0.25 to 1.0");
+    }
+    if (dynamic_world_render_min_scale != NULL && dynamic_world_render_max_scale != NULL &&
+        yyjson_get_num(dynamic_world_render_min_scale) > yyjson_get_num(dynamic_world_render_max_scale))
+    {
+        return validation_error(ctx, path,
+                                "render dynamic_world_render_min_scale must be less than or equal to "
+                                "dynamic_world_render_max_scale");
+    }
+    if (dynamic_world_render_target_fps != NULL &&
+        (!yyjson_is_num(dynamic_world_render_target_fps) || yyjson_get_num(dynamic_world_render_target_fps) < 15.0 ||
+         yyjson_get_num(dynamic_world_render_target_fps) > 500.0))
+    {
+        return validation_error(ctx, path, "render dynamic_world_render_target_fps must be a number from 15 to 500");
     }
     yyjson_val *procedural_lod_near_pixels = obj_get(object, "procedural_lod_near_pixels");
     yyjson_val *procedural_lod_far_pixels = obj_get(object, "procedural_lod_far_pixels");

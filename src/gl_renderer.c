@@ -2839,6 +2839,12 @@ static bool gl_clear(slayer3d_render_context *context, slayer3d_color color)
     }
 
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
+    if (!slayer3d_gl_sync_world_render_target(ctx, context->width, context->height, context->world_render_scale,
+                                              &context->world_render_width, &context->world_render_height))
+    {
+        return false;
+    }
+    context->world_render_scale = slayer3d_gl_world_render_scale(ctx);
 
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     gl->Viewport(0, 0, ctx->world_w, ctx->world_h);
@@ -3127,6 +3133,13 @@ static bool gl_present(slayer3d_render_context *context)
 {
     slayer3d_gl_context *ctx = context->gl;
     slayer3d_gl_funcs *gl = &ctx->gl;
+
+    if (!slayer3d_gl_sync_world_render_target(ctx, context->width, context->height, context->world_render_scale,
+                                              &context->world_render_width, &context->world_render_height))
+    {
+        return false;
+    }
+    context->world_render_scale = slayer3d_gl_world_render_scale(ctx);
 
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);

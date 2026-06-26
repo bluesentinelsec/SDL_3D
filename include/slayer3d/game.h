@@ -342,20 +342,24 @@ extern "C"
      */
     typedef struct slayer3d_game_config
     {
-        const char *title;                 /**< Window title, or "SLAYER3D" when NULL. */
-        int width;                         /**< Initial window width in pixels, or logical width when <= 0. */
-        int height;                        /**< Initial window height in pixels, or logical height when <= 0. */
-        int logical_width;                 /**< Virtual render width, or 1280 when <= 0. */
-        int logical_height;                /**< Virtual render height, or 720 when <= 0. */
-        const char *icon_path;             /**< Optional filesystem path to a window icon image. */
-        slayer3d_backend backend;          /**< Requested backend, or SLAYER3D_BACKEND_AUTO when zero. */
-        slayer3d_window_mode display_mode; /**< Window presentation mode, or SLAYER3D default when zero. */
-        int vsync;                         /**< >0 enables vsync, <0 disables vsync, 0 uses the SLAYER3D default. */
-        int maximized;                     /**< >0 maximizes, <0 keeps window normal, 0 uses the SLAYER3D default. */
-        int high_pixel_density;            /**< >0 requests high-DPI backing, <0 disables it, 0 uses default. */
-        float tick_rate;                   /**< Fixed timestep in seconds, or 1/60 when <= 0. */
-        int max_ticks_per_frame;           /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
-        bool enable_audio;                 /**< When true, create session audio before init when available. */
+        const char *title;                    /**< Window title, or "SLAYER3D" when NULL. */
+        int width;                            /**< Initial window width in pixels, or logical width when <= 0. */
+        int height;                           /**< Initial window height in pixels, or logical height when <= 0. */
+        int logical_width;                    /**< Virtual render width, or 1280 when <= 0. */
+        int logical_height;                   /**< Virtual render height, or 720 when <= 0. */
+        const char *icon_path;                /**< Optional filesystem path to a window icon image. */
+        slayer3d_backend backend;             /**< Requested backend, or SLAYER3D_BACKEND_AUTO when zero. */
+        slayer3d_window_mode display_mode;    /**< Window presentation mode, or SLAYER3D default when zero. */
+        int vsync;                            /**< >0 enables vsync, <0 disables vsync, 0 uses the SLAYER3D default. */
+        int maximized;                        /**< >0 maximizes, <0 keeps window normal, 0 uses the SLAYER3D default. */
+        int high_pixel_density;               /**< >0 requests high-DPI backing, <0 disables it, 0 uses default. */
+        float tick_rate;                      /**< Fixed timestep in seconds, or 1/60 when <= 0. */
+        int max_ticks_per_frame;              /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
+        bool dynamic_world_render_scale;      /**< Enable adaptive 3D render resolution when true. */
+        float dynamic_world_render_min_scale; /**< Minimum adaptive 3D render scale, or 0.5 when <= 0. */
+        float dynamic_world_render_max_scale; /**< Maximum adaptive 3D render scale, or 1.0 when <= 0. */
+        float dynamic_world_render_target_fps; /**< Adaptive render target FPS, or 60 when <= 0. */
+        bool enable_audio;                     /**< When true, create session audio before init when available. */
     } slayer3d_game_config;
 
     /**
