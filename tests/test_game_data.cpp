@@ -22414,6 +22414,16 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""),
                  "performance");
+    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 4);
+    emit_signal("signal.editor.global.quality.next");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "balanced");
+    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 8);
+    emit_signal("signal.editor.global.quality.next");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "quality");
+    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 16);
+    slayer3d_properties_set_string(scene_state, "editor.global.lighting_preview_quality", "off");
+    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), SLAYER3D_MAX_LIGHTS);
+    slayer3d_properties_set_string(scene_state, "editor.global.lighting_preview_quality", "performance");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.fog", ""), "exp");
 
     char *map_json = nullptr;

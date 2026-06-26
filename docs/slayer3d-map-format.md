@@ -180,11 +180,12 @@ The initial fields are intentionally small:
 
 Colors use the same 0-255 RGBA convention as materials and actor colors. Runtime
 bridges may convert these values into normalized renderer inputs. `tonemap` may
-be `none`, `reinhard`, or `aces`. `lighting_preview_quality` may be
+be `none`, `reinhard`, or `aces`. `lighting_preview_quality` may be `off`,
 `performance`, `balanced`, or `quality`; editors can use it to trade preview
-speed against fidelity. `global.properties` is reserved for project-specific
-state such as weather, biome, audio zones, or game rules that the generic editor
-does not understand.
+speed against fidelity. The bundled editor maps those modes to disabled preview,
+4, 8, and 16 uploaded preview lights respectively. `global.properties` is
+reserved for project-specific state such as weather, biome, audio zones, or game
+rules that the generic editor does not understand.
 
 The bundled editor exposes these defaults through the top-toolbar Global panel.
 Current controls provide afternoon/night/interior presets plus exposure,

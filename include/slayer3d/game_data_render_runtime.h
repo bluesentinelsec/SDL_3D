@@ -87,6 +87,15 @@ extern "C"
     int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runtime);
 
     /**
+     * @brief Return the light upload budget for active world-light rendering.
+     *
+     * Most game runtimes return `SLAYER3D_MAX_LIGHTS`. Editor runtimes may
+     * lower this based on lighting preview quality so WYSIWYG editing remains
+     * responsive with many placed lights.
+     */
+    int slayer3d_game_data_world_light_upload_limit(const slayer3d_game_data_runtime *runtime);
+
+    /**
      * @brief Read the authored world ambient light color.
      *
      * Values are linear RGB in the same range expected by

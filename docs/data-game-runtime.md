@@ -139,7 +139,11 @@ The editor shell uses the same API for WYSIWYG preview: when
 `editor.global.lighting_preview_quality` is set to `performance`, `balanced`, or
 `quality`, placed light Things are appended to the runtime light list after
 authored world/entity lights. Setting that state to `off` disables editor light
-preview without changing saved map output.
+preview without changing saved map output. The presentation layer also uses
+`slayer3d_game_data_world_light_upload_limit()` to cap uploaded lights for
+editor responsiveness: performance uploads 4 lights, balanced uploads 8, and
+quality uploads 16. Normal game runtimes keep the full engine light cap unless
+they opt into the same editor scene-state key.
 
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text

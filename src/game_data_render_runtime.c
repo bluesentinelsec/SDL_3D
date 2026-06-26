@@ -753,6 +753,24 @@ static int editor_preview_light_count(const slayer3d_game_data_runtime *runtime)
     return count;
 }
 
+int slayer3d_game_data_world_light_upload_limit(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return SLAYER3D_MAX_LIGHTS;
+
+    const char *quality =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.global.lighting_preview_quality", "");
+    if (quality == NULL || quality[0] == '\0' || SDL_strcmp(quality, "off") == 0)
+        return SLAYER3D_MAX_LIGHTS;
+    if (SDL_strcmp(quality, "performance") == 0)
+        return 4;
+    if (SDL_strcmp(quality, "balanced") == 0)
+        return 8;
+    if (SDL_strcmp(quality, "quality") == 0)
+        return 16;
+    return SLAYER3D_MAX_LIGHTS;
+}
+
 static bool editor_light_animation_is_active(const editor_actor_runtime *actor)
 {
     if (actor == NULL || actor->properties == NULL)
