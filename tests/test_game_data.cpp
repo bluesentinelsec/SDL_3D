@@ -43652,7 +43652,25 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidDocuments)
     { "id": "actor.bad", "primitive": "box", "display_mode": "ghost" }
   ]
 })json",
-                           "actor display_mode must be solid or wireframe"}};
+                           "actor display_mode must be solid or wireframe"},
+                          {"bad_global_tonemap",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "global": {
+    "tonemap": "cinematic"
+  }
+})json",
+                           "global tonemap must be none, reinhard, or aces"},
+                          {"bad_global_fog_range",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "global": {
+    "fog": { "mode": "linear", "start": 8, "end": 4 }
+  }
+})json",
+                           "global fog end must be greater than start"}};
 
     for (const Case &test_case : cases)
     {
@@ -43722,6 +43740,23 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
   "metadata": {
     "id": "map.roundtrip",
     "name": "Round Trip"
+  },
+  "global": {
+    "ambient_light": [64, 72, 96, 255],
+    "clear_color": [8, 10, 14, 255],
+    "exposure": 1.25,
+    "tonemap": "reinhard",
+    "lighting_preview_quality": "quality",
+    "fog": {
+      "enabled": true,
+      "mode": "linear",
+      "color": [32, 36, 44, 255],
+      "start": 12,
+      "end": 80
+    },
+    "properties": {
+      "weather": "rain"
+    }
   },
   "assets": {
     "textures": [
@@ -43800,6 +43835,27 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     EXPECT_EQ(slayer3d_map_get_connection_count(document), 1u);
     EXPECT_EQ(slayer3d_map_get_source_path(document), nullptr);
 
+    slayer3d_map_global_state global{};
+    ASSERT_TRUE(slayer3d_map_get_global_state(document, &global));
+    EXPECT_TRUE(global.has_ambient_light);
+    EXPECT_EQ(global.ambient_light.r, 64);
+    EXPECT_TRUE(global.has_clear_color);
+    EXPECT_EQ(global.clear_color.b, 14);
+    EXPECT_TRUE(global.has_exposure);
+    EXPECT_FLOAT_EQ(global.exposure, 1.25f);
+    EXPECT_STREQ(global.tonemap, "reinhard");
+    EXPECT_STREQ(global.lighting_preview_quality, "quality");
+    EXPECT_TRUE(global.fog.enabled);
+    EXPECT_STREQ(global.fog.mode, "linear");
+    EXPECT_TRUE(global.fog.has_color);
+    EXPECT_EQ(global.fog.color.g, 36);
+    EXPECT_TRUE(global.fog.has_start);
+    EXPECT_FLOAT_EQ(global.fog.start, 12.0f);
+    EXPECT_TRUE(global.fog.has_end);
+    EXPECT_FLOAT_EQ(global.fog.end, 80.0f);
+    ASSERT_EQ(global.property_count, 1u);
+    EXPECT_STREQ(slayer3d_map_get_global_property_key(document, 0), "weather");
+
     EXPECT_EQ(slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_TEXTURE), 1u);
     EXPECT_EQ(slayer3d_map_get_asset_count(document, SLAYER3D_MAP_ASSET_MODEL), 1u);
     slayer3d_map_asset texture_asset{};
@@ -43853,6 +43909,15 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     ASSERT_NE(property_json, nullptr);
     EXPECT_GT(property_json_size, 0u);
     EXPECT_NE(std::string(property_json, property_json_size).find("\"cue\":\"ambush\""), std::string::npos);
+    slayer3d_map_free_string(property_json);
+
+    property_json = nullptr;
+    property_json_size = 0;
+    ASSERT_TRUE(slayer3d_map_get_global_property_json(document, "weather", &property_json, &property_json_size, error,
+                                                      sizeof(error)))
+        << error;
+    ASSERT_NE(property_json, nullptr);
+    EXPECT_EQ(std::string(property_json, property_json_size), "\"rain\"");
     slayer3d_map_free_string(property_json);
 
     char *serialized = nullptr;
@@ -43948,6 +44013,12 @@ TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
     EXPECT_EQ(slayer3d_map_get_effect_count(document), 1u);
     EXPECT_TRUE(slayer3d_map_has_skybox(document));
     EXPECT_EQ(slayer3d_map_get_connection_count(document), 4u);
+    slayer3d_map_global_state global{};
+    ASSERT_TRUE(slayer3d_map_get_global_state(document, &global));
+    EXPECT_TRUE(global.has_ambient_light);
+    EXPECT_EQ(global.ambient_light.r, 54);
+    EXPECT_STREQ(global.tonemap, "aces");
+    EXPECT_EQ(global.property_count, 2u);
 
     slayer3d_map_asset model_asset{};
     ASSERT_TRUE(slayer3d_map_get_asset(document, SLAYER3D_MAP_ASSET_MODEL, 0, &model_asset));
@@ -44095,6 +44166,11 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     const char *map_json = R"json({
   "format": "slayer3d.map",
   "version": 1,
+  "global": {
+    "ambient_light": [32, 48, 64, 255],
+    "clear_color": [4, 6, 8, 255],
+    "tonemap": "none"
+  },
   "materials": [
     { "id": "mat.floor", "color": [128, 128, 128, 255] },
     { "id": "mat.wall", "color": [64, 72, 88, 255] }
@@ -44137,7 +44213,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"key\": \"D\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"ESCAPE\""), std::string::npos);
-    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
+    EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
+    EXPECT_NE(game_text.find("0.12549019607843137"), std::string::npos);
+    EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
+    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;
@@ -44270,7 +44349,9 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableGameFromEditorPlaneBrushes)
     const std::string game_text = read_text(dir / "playable_map.game.json");
     EXPECT_NE(game_text.find("\"key\": \"W\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
-    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": false"), std::string::npos);
+    EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
+    EXPECT_NE(game_text.find("\"tonemap\": \"aces\""), std::string::npos);
+    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;

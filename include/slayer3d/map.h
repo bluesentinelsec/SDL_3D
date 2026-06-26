@@ -139,6 +139,43 @@ extern "C"
         size_t property_count;
     } slayer3d_map_actor;
 
+    /** @brief Optional map-level fog state. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_fog
+    {
+        bool enabled;
+        const char *mode;
+        bool has_color;
+        slayer3d_color color;
+        bool has_start;
+        float start;
+        bool has_end;
+        float end;
+        bool has_density;
+        float density;
+    } slayer3d_map_fog;
+
+    /**
+     * @brief Map-level lighting and presentation state.
+     *
+     * Missing fields are expanded to engine defaults so callers can query this
+     * structure for both newly authored maps and older maps without a `global`
+     * object. Arbitrary map-global key/value data lives under
+     * `global.properties`.
+     */
+    typedef struct slayer3d_map_global_state
+    {
+        bool has_ambient_light;
+        slayer3d_color ambient_light;
+        bool has_clear_color;
+        slayer3d_color clear_color;
+        bool has_exposure;
+        float exposure;
+        const char *tonemap;
+        const char *lighting_preview_quality;
+        slayer3d_map_fog fog;
+        size_t property_count;
+    } slayer3d_map_global_state;
+
     /**
      * @brief Minimal playable scene descriptor derived from a loaded map.
      *
@@ -312,6 +349,9 @@ extern "C"
     /** @brief Read an actor by index. Returned string pointers are borrowed from @p document. */
     bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index, slayer3d_map_actor *out_actor);
 
+    /** @brief Read map-level global lighting and presentation state. */
+    bool slayer3d_map_get_global_state(const slayer3d_map_document *document, slayer3d_map_global_state *out_global);
+
     /** @brief Return the number of root-level arbitrary map properties. */
     size_t slayer3d_map_get_property_count(const slayer3d_map_document *document);
 
@@ -357,6 +397,13 @@ extern "C"
     bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document, size_t actor_index,
                                               const char *key, char **out_json, size_t *out_json_size,
                                               char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the global-state property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_global_property_key(const slayer3d_map_document *document, size_t property_index);
+
+    /** @brief Serialize a global-state property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_global_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
+                                               size_t *out_json_size, char *error_buffer, int error_buffer_size);
 
     /**
      * @brief Build a minimal playable scene descriptor from a loaded map.

@@ -22,8 +22,8 @@ provides the initial map I/O surface:
 - `slayer3d_map_to_json()` serializes a loaded document back to canonical
   pretty JSON.
 - `slayer3d_map_write_file()` writes a loaded document to disk.
-- Query helpers expose metadata, top-level object counts, typed views for
-  materials/brushes/actors, and arbitrary property JSON while keeping
+- Query helpers expose metadata, global map state, top-level object counts,
+  typed views for materials/brushes/actors, and arbitrary property JSON while keeping
   project-specific data preserved inside the document.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
@@ -91,7 +91,7 @@ namespaced fields such as `x_my_game`.
 ## Runtime Data vs Editor Data
 
 Runtime map data lives in the root document under fields such as `assets`,
-`materials`, `brushes`, `actors`, `connections`, and `properties`.
+`materials`, `brushes`, `actors`, `connections`, `global`, and `properties`.
 
 Editor-only state must live under `editor`. Runtime consumers may ignore this
 field. Examples include viewport layout, selected tool, collapsed inspector
@@ -110,6 +110,8 @@ lossless path used by the editor's open/save workflow today.
 - `metadata`: Optional object with `id`, `name`, `author`, and `description`.
 - `units`: Optional string, either `meters` or `source_units`.
 - `coordinate_system`: Optional string. The initial format uses `y_up`.
+- `global`: Optional map-level lighting and presentation defaults. Missing
+  fields expand to engine defaults through `slayer3d_map_get_global_state()`.
 - `assets`: Optional asset catalogs for textures, models, sprites, skyboxes, and
   effect definitions.
 - `materials`: Optional material definitions used by brushes and faces.
@@ -124,6 +126,43 @@ lossless path used by the editor's open/save workflow today.
   effect primitives.
 - `skybox`: Optional map-level skybox selection.
 - `editor`: Optional editor-only metadata.
+
+## Global Map State
+
+`global` stores caller-agnostic defaults that affect the whole map. It is the
+shared contract used by the editor, command-line baking tools, and game callers.
+The initial fields are intentionally small:
+
+```json
+{
+  "global": {
+    "ambient_light": [54, 56, 64, 255],
+    "clear_color": [12, 14, 18, 255],
+    "exposure": 1.0,
+    "tonemap": "aces",
+    "lighting_preview_quality": "balanced",
+    "fog": {
+      "enabled": false,
+      "mode": "none",
+      "color": [22, 24, 30, 255],
+      "start": 8.0,
+      "end": 64.0,
+      "density": 0.0
+    },
+    "properties": {
+      "time_of_day": "afternoon"
+    }
+  }
+}
+```
+
+Colors use the same 0-255 RGBA convention as materials and actor colors. Runtime
+bridges may convert these values into normalized renderer inputs. `tonemap` may
+be `none`, `reinhard`, or `aces`. `lighting_preview_quality` may be
+`performance`, `balanced`, or `quality`; editors can use it to trade preview
+speed against fidelity. `global.properties` is reserved for project-specific
+state such as weather, biome, audio zones, or game rules that the generic editor
+does not understand.
 
 ## Asset References
 

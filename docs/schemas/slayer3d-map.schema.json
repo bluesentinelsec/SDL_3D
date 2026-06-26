@@ -29,6 +29,10 @@
     "coordinate_system": {
       "const": "y_up"
     },
+    "global": {
+      "description": "Map-level lighting and presentation defaults shared by editor, bake, and runtime callers.",
+      "$ref": "#/$defs/globalState"
+    },
     "assets": {
       "$ref": "#/$defs/assets"
     },
@@ -118,6 +122,32 @@
         "minLength": 1
       },
       "additionalProperties": true
+    },
+    "globalFog": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": { "enum": ["none", "linear", "exp", "exp2"] },
+        "color": { "$ref": "#/$defs/rgba" },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "minimum": 0 },
+        "density": { "type": "number", "minimum": 0 },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "globalState": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ambient_light": { "$ref": "#/$defs/rgba" },
+        "clear_color": { "$ref": "#/$defs/rgba" },
+        "exposure": { "type": "number", "minimum": 0 },
+        "tonemap": { "enum": ["none", "reinhard", "aces"] },
+        "lighting_preview_quality": { "enum": ["performance", "balanced", "quality"] },
+        "fog": { "$ref": "#/$defs/globalFog" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
     },
     "assetEntry": {
       "type": "object",

@@ -8,6 +8,17 @@
   },
   "units": "meters",
   "coordinate_system": "y_up",
+  "global": {
+    "ambient_light": [54, 56, 64, 255],
+    "clear_color": [12, 14, 18, 255],
+    "exposure": 1.0,
+    "tonemap": "aces",
+    "lighting_preview_quality": "balanced",
+    "properties": {
+      "time_of_day": "afternoon",
+      "lighting_profile": "training_showcase"
+    }
+  },
   "assets": {
     "textures": [
       { "id": "tex.floor.rock", "path": "textures/rock_floor.jpg" },

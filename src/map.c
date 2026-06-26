@@ -786,6 +786,89 @@ static bool map_validate_optional_bool(map_validation_context *ctx, yyjson_val *
     return true;
 }
 
+static bool map_validate_tonemap(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                 const char *json_path)
+{
+    const char *value = map_json_string(object, key);
+    if (value == NULL)
+        return map_obj_get(object, key) == NULL || map_error(ctx, json_path, "global tonemap must be a string");
+    if (SDL_strcmp(value, "none") == 0 || SDL_strcmp(value, "reinhard") == 0 || SDL_strcmp(value, "aces") == 0)
+        return true;
+    return map_error(ctx, json_path, "global tonemap must be none, reinhard, or aces");
+}
+
+static bool map_validate_lighting_preview_quality(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                  const char *json_path)
+{
+    const char *value = map_json_string(object, key);
+    if (value == NULL)
+        return map_obj_get(object, key) == NULL ||
+               map_error(ctx, json_path, "global lighting_preview_quality must be a string");
+    if (SDL_strcmp(value, "performance") == 0 || SDL_strcmp(value, "balanced") == 0 ||
+        SDL_strcmp(value, "quality") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, json_path, "global lighting_preview_quality must be performance, balanced, or quality");
+}
+
+static bool map_validate_fog_mode(map_validation_context *ctx, yyjson_val *fog, const char *path)
+{
+    const char *value = map_json_string(fog, "mode");
+    if (value == NULL)
+        return map_obj_get(fog, "mode") == NULL || map_error(ctx, path, "global fog mode must be a string");
+    if (SDL_strcmp(value, "none") == 0 || SDL_strcmp(value, "linear") == 0 || SDL_strcmp(value, "exp") == 0 ||
+        SDL_strcmp(value, "exp2") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, path, "global fog mode must be none, linear, exp, or exp2");
+}
+
+static bool map_validate_global_fog(map_validation_context *ctx, yyjson_val *fog)
+{
+    if (fog == NULL)
+        return true;
+    if (!yyjson_is_obj(fog))
+        return map_error(ctx, "$.global.fog", "global fog must be an object");
+    yyjson_val *start = map_obj_get(fog, "start");
+    yyjson_val *end = map_obj_get(fog, "end");
+    if (!map_validate_optional_bool(ctx, fog, "enabled", "$.global.fog.enabled", "global fog enabled") ||
+        !map_validate_fog_mode(ctx, fog, "$.global.fog.mode") ||
+        !map_validate_optional_color(ctx, fog, "color", "$.global.fog.color", "global fog color") ||
+        !map_validate_optional_non_negative_number(ctx, fog, "start", "$.global.fog.start", "global fog start") ||
+        !map_validate_optional_non_negative_number(ctx, fog, "end", "$.global.fog.end", "global fog end") ||
+        !map_validate_optional_non_negative_number(ctx, fog, "density", "$.global.fog.density", "global fog density") ||
+        !map_validate_properties(ctx, map_obj_get(fog, "properties"), "$.global.fog.properties"))
+    {
+        return false;
+    }
+    if (start != NULL && end != NULL && yyjson_is_num(start) && yyjson_is_num(end) &&
+        yyjson_get_num(end) <= yyjson_get_num(start))
+    {
+        return map_error(ctx, "$.global.fog.end", "global fog end must be greater than start");
+    }
+    return true;
+}
+
+static bool map_validate_global_state(map_validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *global = map_obj_get(root, "global");
+    if (global == NULL)
+        return true;
+    if (!yyjson_is_obj(global))
+        return map_error(ctx, "$.global", "global map state must be an object");
+    return map_validate_optional_color(ctx, global, "ambient_light", "$.global.ambient_light",
+                                       "global ambient light") &&
+           map_validate_optional_color(ctx, global, "clear_color", "$.global.clear_color", "global clear color") &&
+           map_validate_optional_non_negative_number(ctx, global, "exposure", "$.global.exposure", "global exposure") &&
+           map_validate_tonemap(ctx, global, "tonemap", "$.global.tonemap") &&
+           map_validate_lighting_preview_quality(ctx, global, "lighting_preview_quality",
+                                                 "$.global.lighting_preview_quality") &&
+           map_validate_global_fog(ctx, map_obj_get(global, "fog")) &&
+           map_validate_properties(ctx, map_obj_get(global, "properties"), "$.global.properties");
+}
+
 static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *lights = map_obj_get(root, "lights");
@@ -1051,10 +1134,10 @@ static bool map_validate_root(map_validation_context *ctx, yyjson_val *root)
     if (coordinate_system != NULL && SDL_strcmp(coordinate_system, "y_up") != 0)
         return map_error(ctx, "$.coordinate_system", "coordinate_system must be 'y_up'");
 
-    return map_validate_metadata(ctx, root) && map_validate_assets(ctx, root) && map_validate_materials(ctx, root) &&
-           map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) && map_validate_prefabs(ctx, root) &&
-           map_validate_lights(ctx, root) && map_validate_effects(ctx, root) && map_validate_skybox(ctx, root) &&
-           map_validate_connections(ctx, root) &&
+    return map_validate_metadata(ctx, root) && map_validate_global_state(ctx, root) && map_validate_assets(ctx, root) &&
+           map_validate_materials(ctx, root) && map_validate_brushes(ctx, root) && map_validate_actors(ctx, root) &&
+           map_validate_prefabs(ctx, root) && map_validate_lights(ctx, root) && map_validate_effects(ctx, root) &&
+           map_validate_skybox(ctx, root) && map_validate_connections(ctx, root) &&
            map_validate_properties(ctx, map_obj_get(root, "properties"), "$.properties");
 }
 
@@ -1533,6 +1616,15 @@ static bool map_read_optional_color(yyjson_val *object, const char *key, slayer3
     return value != NULL && map_read_color_value(value, out_color);
 }
 
+static bool map_read_optional_float(yyjson_val *object, const char *key, float *out_value)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (!yyjson_is_num(value) || out_value == NULL)
+        return false;
+    *out_value = (float)yyjson_get_num(value);
+    return true;
+}
+
 size_t slayer3d_map_get_asset_count(const slayer3d_map_document *document, slayer3d_map_asset_kind kind)
 {
     if (document == NULL || document->doc == NULL)
@@ -1629,6 +1721,56 @@ bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index,
     return true;
 }
 
+bool slayer3d_map_get_global_state(const slayer3d_map_document *document, slayer3d_map_global_state *out_global)
+{
+    if (out_global == NULL)
+        return false;
+    SDL_zero(*out_global);
+
+    out_global->ambient_light = (slayer3d_color){54, 56, 64, 255};
+    out_global->clear_color = (slayer3d_color){12, 14, 18, 255};
+    out_global->exposure = 1.0f;
+    out_global->tonemap = "aces";
+    out_global->lighting_preview_quality = "balanced";
+    out_global->fog.mode = "none";
+
+    if (document == NULL || document->doc == NULL)
+        return false;
+
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    yyjson_val *global = map_obj_get(root, "global");
+    if (!yyjson_is_obj(global))
+        return true;
+
+    out_global->has_ambient_light = map_read_optional_color(global, "ambient_light", &out_global->ambient_light);
+    out_global->has_clear_color = map_read_optional_color(global, "clear_color", &out_global->clear_color);
+    out_global->has_exposure = map_read_optional_float(global, "exposure", &out_global->exposure);
+
+    const char *tonemap = map_json_string(global, "tonemap");
+    if (tonemap != NULL)
+        out_global->tonemap = tonemap;
+    const char *quality = map_json_string(global, "lighting_preview_quality");
+    if (quality != NULL)
+        out_global->lighting_preview_quality = quality;
+
+    yyjson_val *fog = map_obj_get(global, "fog");
+    if (yyjson_is_obj(fog))
+    {
+        yyjson_val *enabled = map_obj_get(fog, "enabled");
+        out_global->fog.enabled = yyjson_is_bool(enabled) && yyjson_get_bool(enabled);
+        const char *mode = map_json_string(fog, "mode");
+        if (mode != NULL)
+            out_global->fog.mode = mode;
+        out_global->fog.has_color = map_read_optional_color(fog, "color", &out_global->fog.color);
+        out_global->fog.has_start = map_read_optional_float(fog, "start", &out_global->fog.start);
+        out_global->fog.has_end = map_read_optional_float(fog, "end", &out_global->fog.end);
+        out_global->fog.has_density = map_read_optional_float(fog, "density", &out_global->fog.density);
+    }
+
+    out_global->property_count = map_properties_count(global);
+    return true;
+}
+
 size_t slayer3d_map_get_property_count(const slayer3d_map_document *document)
 {
     if (document == NULL || document->doc == NULL)
@@ -1704,6 +1846,25 @@ bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document,
 {
     return map_get_property_json_from_object(map_root_array_item(document, "actors", actor_index), key, out_json,
                                              out_json_size, error_buffer, error_buffer_size);
+}
+
+static yyjson_val *map_global_object(const slayer3d_map_document *document)
+{
+    yyjson_val *root = document != NULL && document->doc != NULL ? yyjson_doc_get_root(document->doc) : NULL;
+    yyjson_val *global = map_obj_get(root, "global");
+    return yyjson_is_obj(global) ? global : NULL;
+}
+
+const char *slayer3d_map_get_global_property_key(const slayer3d_map_document *document, size_t property_index)
+{
+    return map_property_key_at(map_global_object(document), property_index);
+}
+
+bool slayer3d_map_get_global_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
+                                           size_t *out_json_size, char *error_buffer, int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_global_object(document), key, out_json, out_json_size, error_buffer,
+                                             error_buffer_size);
 }
 
 static bool map_actor_is_player_character(yyjson_val *actor)
@@ -1904,6 +2065,15 @@ static bool map_game_add_color(yyjson_mut_doc *doc, yyjson_mut_val *object, cons
            yyjson_mut_arr_add_real(doc, array, (double)color.g / 255.0) &&
            yyjson_mut_arr_add_real(doc, array, (double)color.b / 255.0) &&
            yyjson_mut_arr_add_real(doc, array, (double)color.a / 255.0) &&
+           yyjson_mut_obj_add_val(doc, object, key, array);
+}
+
+static bool map_game_add_rgb_color(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key, slayer3d_color color)
+{
+    yyjson_mut_val *array = yyjson_mut_arr(doc);
+    return array != NULL && yyjson_mut_arr_add_real(doc, array, (double)color.r / 255.0) &&
+           yyjson_mut_arr_add_real(doc, array, (double)color.g / 255.0) &&
+           yyjson_mut_arr_add_real(doc, array, (double)color.b / 255.0) &&
            yyjson_mut_obj_add_val(doc, object, key, array);
 }
 
@@ -2176,7 +2346,7 @@ static bool map_game_add_input(yyjson_mut_doc *doc, yyjson_mut_val *root)
            map_game_add_keyboard_action(doc, actions, "action.exit", "ESCAPE");
 }
 
-static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root)
+static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_global_state *global)
 {
     yyjson_mut_val *world = yyjson_mut_obj(doc);
     yyjson_mut_val *cameras = yyjson_mut_arr(doc);
@@ -2184,6 +2354,8 @@ static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root)
     if (world == NULL || cameras == NULL || camera == NULL || !yyjson_mut_obj_add_val(doc, root, "world", world) ||
         !yyjson_mut_obj_add_strcpy(doc, world, "name", "world.slayermap") ||
         !yyjson_mut_obj_add_strcpy(doc, world, "kind", "brush") ||
+        !map_game_add_rgb_color(doc, world, "ambient_light",
+                                global != NULL ? global->ambient_light : (slayer3d_color){54, 56, 64, 255}) ||
         !yyjson_mut_obj_add_val(doc, world, "cameras", cameras) || !yyjson_mut_arr_add_val(cameras, camera) ||
         !yyjson_mut_obj_add_strcpy(doc, camera, "name", "camera.player") ||
         !yyjson_mut_obj_add_strcpy(doc, camera, "type", "fps") ||
@@ -2193,6 +2365,17 @@ static bool map_game_add_world(yyjson_mut_doc *doc, yyjson_mut_val *root)
         return false;
     }
     return true;
+}
+
+static bool map_game_add_render(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_global_state *global)
+{
+    yyjson_mut_val *render = yyjson_mut_obj(doc);
+    const slayer3d_color clear_color = global != NULL ? global->clear_color : (slayer3d_color){12, 14, 18, 255};
+    const char *tonemap = global != NULL && global->tonemap != NULL ? global->tonemap : "aces";
+    return render != NULL && yyjson_mut_obj_add_val(doc, root, "render", render) &&
+           yyjson_mut_obj_add_bool(doc, render, "lighting", true) &&
+           map_game_add_rgb_color(doc, render, "clear_color", clear_color) &&
+           yyjson_mut_obj_add_strcpy(doc, render, "tonemap", tonemap);
 }
 
 static bool map_game_add_player_entity(yyjson_mut_doc *doc, yyjson_mut_val *root,
@@ -2290,12 +2473,20 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     }
 
     yyjson_mut_doc_set_root(doc, root);
+    slayer3d_map_global_state global;
+    SDL_zero(global);
+    if (!slayer3d_map_get_global_state(document, &global))
+    {
+        map_set_error(error_buffer, error_buffer_size, "failed to read playable map global state");
+        yyjson_mut_doc_free(doc);
+        return NULL;
+    }
     bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.game.v0") &&
               yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
               yyjson_mut_obj_add_strcpy(doc, metadata, "name", "SlayerMap Playable") && map_game_add_app(doc, root) &&
-              map_game_add_world(doc, root) && map_game_add_input(doc, root) &&
-              map_game_add_player_entity(doc, root, scene) && map_game_add_brush_world(doc, root, document) &&
-              map_game_add_scenes_section(doc, root);
+              map_game_add_world(doc, root, &global) && map_game_add_render(doc, root, &global) &&
+              map_game_add_input(doc, root) && map_game_add_player_entity(doc, root, scene) &&
+              map_game_add_brush_world(doc, root, document) && map_game_add_scenes_section(doc, root);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);
@@ -2349,7 +2540,7 @@ static char *map_build_playable_scene_json(size_t *out_size, char *error_buffer,
               yyjson_mut_obj_add_strcpy(doc, brush_world, "world", "brush.slayermap") &&
               map_game_add_vec3(doc, brush_world, "position", (slayer3d_vec3){0.0f, 0.0f, 0.0f}) &&
               yyjson_mut_obj_add_bool(doc, brush_world, "acceleration", true) &&
-              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", false);
+              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", true);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);
