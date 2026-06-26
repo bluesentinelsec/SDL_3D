@@ -585,6 +585,27 @@ static bool editor_property_ensure_properties(slayer3d_properties **properties)
     return *properties != NULL;
 }
 
+static bool editor_actor_merge_properties_from_json(editor_actor_runtime *actor, yyjson_val *properties)
+{
+    if (properties == NULL)
+        return true;
+    if (actor == NULL || !yyjson_is_obj(properties) || !editor_property_ensure_properties(&actor->properties))
+        return false;
+
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(properties, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        value = yyjson_obj_iter_get_val(key);
+        if (name == NULL || name[0] == '\0' || !set_property_from_json(actor->properties, name, value))
+            return false;
+    }
+    return true;
+}
+
 static bool editor_property_prepare_key(slayer3d_properties *properties, const char *key, const char *original_key,
                                         char *error, size_t error_size)
 {
@@ -2120,6 +2141,17 @@ bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *r
             return true;
         }
         slayer3d_properties_set_string(actor->properties, "display_mode", display_mode);
+        changed = true;
+    }
+    yyjson_val *properties = obj_get(action, "properties");
+    if (properties != NULL)
+    {
+        if (!editor_actor_merge_properties_from_json(actor, properties))
+        {
+            publish_editor_actor_outputs(runtime, outputs, false, "actor update properties must be supported values",
+                                         target);
+            return true;
+        }
         changed = true;
     }
     if (!changed)

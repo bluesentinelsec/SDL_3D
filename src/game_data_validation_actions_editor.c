@@ -1578,6 +1578,7 @@ bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *ac
     yyjson_val *rotation = obj_get(action, "rotation");
     yyjson_val *scale = obj_get(action, "scale");
     yyjson_val *color = obj_get(action, "color");
+    yyjson_val *properties = obj_get(action, "properties");
     const char *color_key = json_string(action, "color_key");
     if (position != NULL && !is_exact_vec_array(position, 3))
         return validation_error(ctx, json_path, "%s position must be a vec3", type);
@@ -1591,6 +1592,8 @@ bool validate_editor_actor_update_action(validation_context *ctx, yyjson_val *ac
         return validation_error(ctx, json_path, "%s color must be a color array", type);
     if (color != NULL && color_key != NULL)
         return validation_error(ctx, json_path, "%s requires color or color_key, not both", type);
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
     const char *display_mode = json_string(action, "display_mode");
     if (display_mode != NULL && SDL_strcmp(display_mode, "solid") != 0 && SDL_strcmp(display_mode, "wireframe") != 0)
         return validation_error(ctx, json_path, "%s display_mode must be solid or wireframe", type);

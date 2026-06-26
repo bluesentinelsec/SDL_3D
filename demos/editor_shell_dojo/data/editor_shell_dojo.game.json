@@ -317,6 +317,18 @@
     "signal.editor.inspector.actor.color.reset",
     "signal.editor.inspector.actor.display.solid",
     "signal.editor.inspector.actor.display.wireframe",
+    "signal.editor.inspector.light.intensity.dim",
+    "signal.editor.inspector.light.intensity.normal",
+    "signal.editor.inspector.light.intensity.bright",
+    "signal.editor.inspector.light.range.short",
+    "signal.editor.inspector.light.range.medium",
+    "signal.editor.inspector.light.range.long",
+    "signal.editor.inspector.light.kind.dynamic",
+    "signal.editor.inspector.light.kind.baked",
+    "signal.editor.inspector.light.shadow.none",
+    "signal.editor.inspector.light.shadow.dynamic",
+    "signal.editor.inspector.light.falloff.inverse_square",
+    "signal.editor.inspector.light.falloff.linear",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -2100,6 +2112,198 @@
               "message_key": "editor.tool.last_action"
             }
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.dim",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 0.6 },
+            "message": "light intensity dim",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.normal",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 1.0 },
+            "message": "light intensity normal",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.bright",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 1.8 },
+            "message": "light intensity bright",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.short",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 5.0 },
+            "message": "light range short",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 10.0 },
+            "message": "light range medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.long",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 20.0 },
+            "message": "light range long",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.kind.dynamic",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_kind": "dynamic" },
+            "message": "light kind dynamic",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.kind.baked",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_kind": "baked" },
+            "message": "light kind baked",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.shadow.none",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "casts_shadow": false, "shadow_mode": "none" },
+            "message": "light shadows disabled",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.shadow.dynamic",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "casts_shadow": true, "shadow_mode": "dynamic" },
+            "message": "light shadows dynamic",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.falloff.inverse_square",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "falloff": "inverse_square" },
+            "message": "light falloff inverse square",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.falloff.linear",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "falloff": "linear" },
+            "message": "light falloff linear",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {

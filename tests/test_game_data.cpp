@@ -18895,6 +18895,51 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "n/a");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "n/a");
 
+    emit_signal("signal.editor.inspector.light.intensity.bright");
+    emit_signal("signal.editor.inspector.light.range.long");
+    emit_signal("signal.editor.inspector.light.kind.baked");
+    emit_signal("signal.editor.inspector.light.shadow.dynamic");
+    emit_signal("signal.editor.inspector.light.falloff.linear");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.point.1", &point_light));
+    ASSERT_NE(point_light.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_kind", ""), "baked");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "shadow_mode", ""), "dynamic");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "falloff", ""), "linear");
+    EXPECT_TRUE(slayer3d_properties_get_bool(point_light.properties, "casts_shadow", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_intensity", 0.0f), 1.8f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_range", 0.0f), 20.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.kind", ""), "baked");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.intensity_range", ""),
+                 "1.80 / 20.00");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.shadow_falloff", ""),
+                 "dynamic / linear");
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    slayer3d_map_document *map_document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
+    ASSERT_NE(map_document, nullptr);
+    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 1u);
+    slayer3d_map_light exported_light{};
+    ASSERT_TRUE(slayer3d_map_get_light(map_document, 0, &exported_light));
+    EXPECT_STREQ(exported_light.source_actor, "light.editor_shell.point.1");
+    EXPECT_STREQ(exported_light.kind, "baked");
+    EXPECT_STREQ(exported_light.type, "point");
+    ASSERT_TRUE(exported_light.has_intensity);
+    EXPECT_NEAR(exported_light.intensity, 1.8f, 0.001f);
+    ASSERT_TRUE(exported_light.has_range);
+    EXPECT_NEAR(exported_light.range, 20.0f, 0.001f);
+    ASSERT_TRUE(exported_light.has_casts_shadow);
+    EXPECT_TRUE(exported_light.casts_shadow);
+    EXPECT_STREQ(exported_light.shadow_mode, "dynamic");
+    EXPECT_STREQ(exported_light.falloff, "linear");
+    slayer3d_map_destroy(map_document);
+    SDL_free(map_json);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
