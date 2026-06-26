@@ -18846,6 +18846,55 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     ASSERT_NE(placed.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(placed.properties, "display_mode", ""), "solid");
 
+    const int things_lights_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.things.category.lights");
+    ASSERT_GE(things_lights_signal, 0);
+    slayer3d_signal_emit(bus, things_lights_signal, nullptr);
+    emit_signal("signal.editor.actor.select_slot.10");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_light");
+
+    hover.point = slayer3d_vec3_make(-1.0f, 0.0f, -2.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    emit_signal("signal.editor.command.commit");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.message", ""), "Point light placed");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.name", ""), "light.editor_shell.point.1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 2);
+
+    slayer3d_game_data_editor_actor point_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.point.1", &point_light));
+    EXPECT_STREQ(point_light.display_name, "Point");
+    EXPECT_STREQ(point_light.archetype, "light.editor_shell.point");
+    EXPECT_STREQ(point_light.mesh, "sphere");
+    EXPECT_STREQ(point_light.group, "Lights");
+    ASSERT_NE(point_light.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "role", ""), "light");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_type", ""), "point");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "light_kind", ""), "dynamic");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "shadow_mode", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "falloff", ""), "inverse_square");
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_intensity", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_range", 0.0f), 8.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_TRUE(active_selection.hit);
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(active_selection.world_name, "editor_actors");
+    EXPECT_STREQ(active_selection.element_name, "light.editor_shell.point.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.kind", ""), "Light");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.selection.title", ""), "Point");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.light.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.type", ""), "point");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.kind", ""), "dynamic");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.intensity_range", ""),
+                 "1.00 / 8.00");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.shadow_falloff", ""),
+                 "none / inverse_square");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.geometry", ""), "n/a");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "n/a");
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }

@@ -32,6 +32,75 @@ static void inspector_format_color(slayer3d_color color, char *buffer, size_t bu
     SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", color.r, color.g, color.b, color.a);
 }
 
+static const char *inspector_properties_string(const slayer3d_properties *properties, const char *key,
+                                               const char *fallback)
+{
+    return properties != NULL ? slayer3d_properties_get_string(properties, key, fallback) : fallback;
+}
+
+static float inspector_properties_float(const slayer3d_properties *properties, const char *key, float fallback)
+{
+    return properties != NULL ? slayer3d_properties_get_float(properties, key, fallback) : fallback;
+}
+
+static bool inspector_actor_is_light(const editor_actor_runtime *actor)
+{
+    const char *role = actor != NULL ? inspector_properties_string(actor->properties, "role", "") : "";
+    const char *light_type = actor != NULL ? inspector_properties_string(actor->properties, "light_type", "") : "";
+    return (role != NULL && SDL_strcmp(role, "light") == 0) || (light_type != NULL && light_type[0] != '\0');
+}
+
+static void inspector_publish_light_state(slayer3d_properties *scene_state, const editor_actor_runtime *actor)
+{
+    if (scene_state == NULL)
+        return;
+    const bool visible = inspector_actor_is_light(actor);
+    slayer3d_properties_set_bool(scene_state, "editor.inspector.light.visible", visible);
+    if (!visible)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.type", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.kind", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.intensity_range", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.shadow_falloff", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.geometry", "");
+        slayer3d_properties_set_string(scene_state, "editor.inspector.light.cone", "");
+        return;
+    }
+
+    const slayer3d_properties *properties = actor->properties;
+    char value[128];
+    const char *type = inspector_properties_string(properties, "light_type", "point");
+    const char *kind = inspector_properties_string(properties, "light_kind", "dynamic");
+    const char *shadow = inspector_properties_string(properties, "shadow_mode", "none");
+    const char *falloff = inspector_properties_string(properties, "falloff", "inverse_square");
+    const float intensity = inspector_properties_float(properties, "light_intensity", 1.0f);
+    const float range = inspector_properties_float(properties, "light_range", 0.0f);
+    const float width = inspector_properties_float(properties, "width", 0.0f);
+    const float height = inspector_properties_float(properties, "height", 0.0f);
+    const float radius = inspector_properties_float(properties, "radius", 0.0f);
+    const float inner = inspector_properties_float(properties, "inner_angle_degrees", 0.0f);
+    const float outer = inspector_properties_float(properties, "outer_angle_degrees", 0.0f);
+
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.type", type);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.kind", kind);
+    SDL_snprintf(value, sizeof(value), "%.2f / %.2f", intensity, range);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.intensity_range", value);
+    SDL_snprintf(value, sizeof(value), "%s / %s", shadow, falloff);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.shadow_falloff", value);
+    if (width > 0.0f || height > 0.0f)
+        SDL_snprintf(value, sizeof(value), "%.2f x %.2f", width, height);
+    else if (radius > 0.0f)
+        SDL_snprintf(value, sizeof(value), "r %.2f", radius);
+    else
+        SDL_strlcpy(value, "n/a", sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.geometry", value);
+    if (inner > 0.0f || outer > 0.0f)
+        SDL_snprintf(value, sizeof(value), "%.1f / %.1f", inner, outer);
+    else
+        SDL_strlcpy(value, "n/a", sizeof(value));
+    slayer3d_properties_set_string(scene_state, "editor.inspector.light.cone", value);
+}
+
 static bool inspector_color_equal(slayer3d_color lhs, slayer3d_color rhs)
 {
     return lhs.r == rhs.r && lhs.g == rhs.g && lhs.b == rhs.b && lhs.a == rhs.a;
@@ -165,6 +234,7 @@ static void inspector_set_empty_selection(slayer3d_properties *scene_state)
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tint", "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.prefab", "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags", "");
+    inspector_publish_light_state(scene_state, NULL);
     inspector_publish_brush_color_draft(scene_state, (slayer3d_color){180, 184, 192, 255}, false, "none");
     inspector_publish_actor_color_draft(scene_state, (slayer3d_color){120, 200, 255, 210}, false, "none");
 }
@@ -349,7 +419,8 @@ static void publish_actor_inspector_state(slayer3d_game_data_runtime *runtime,
         return;
     }
     char value[256];
-    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", "Actor");
+    const bool is_light = inspector_actor_is_light(actor);
+    slayer3d_properties_set_string(scene_state, "editor.inspector.selection.kind", is_light ? "Light" : "Actor");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.title",
                                    actor->display_name != NULL && actor->display_name[0] != '\0' ? actor->display_name
                                                                                                  : actor->name);
@@ -375,6 +446,7 @@ static void publish_actor_inspector_state(slayer3d_game_data_runtime *runtime,
                                    actor->prefab != NULL ? actor->prefab : "");
     slayer3d_properties_set_string(scene_state, "editor.inspector.selection.tags",
                                    actor->group != NULL ? actor->group : "");
+    inspector_publish_light_state(scene_state, actor);
     inspector_publish_brush_color_draft(scene_state, (slayer3d_color){180, 184, 192, 255}, false,
                                         actor->name != NULL ? actor->name : "actor");
     inspector_publish_actor_color_draft(scene_state, actor->color, true, actor->name != NULL ? actor->name : "actor");

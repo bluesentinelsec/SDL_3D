@@ -5312,6 +5312,163 @@
               { "id": "ui.editor_shell.left_inspector.actor_color.apply", "type": "button", "w": 128, "h": "fill", "text": "Apply Color", "text_scale": 0.34, "action": "editor.inspector.actor.color.apply" },
               { "id": "ui.editor_shell.left_inspector.actor_color.reset", "type": "button", "w": 92, "h": "fill", "text": "Reset", "text_scale": 0.34, "action": "editor.inspector.actor.color.reset" }
             ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.title",
+            "type": "label",
+            "x": 12,
+            "y": 690,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 18,
+            "layer": 121,
+            "text": "Light",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.type",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 712,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.type.label", "type": "label", "w": 96, "h": "fill", "text": "Type" },
+              { "id": "ui.editor_shell.left_inspector.light.type.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.type", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.kind",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 740,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.kind.label", "type": "label", "w": 96, "h": "fill", "text": "Kind" },
+              { "id": "ui.editor_shell.left_inspector.light.kind.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.kind", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.intensity",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 768,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.intensity.label", "type": "label", "w": 96, "h": "fill", "text": "Intensity / Range" },
+              { "id": "ui.editor_shell.left_inspector.light.intensity.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.intensity_range", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.shadow",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 796,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.shadow.label", "type": "label", "w": 96, "h": "fill", "text": "Shadow / Falloff" },
+              { "id": "ui.editor_shell.left_inspector.light.shadow.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.shadow_falloff", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.geometry",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 824,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.geometry.label", "type": "label", "w": 96, "h": "fill", "text": "Geometry" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.geometry", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.cone",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 852,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.cone.label", "type": "label", "w": 96, "h": "fill", "text": "Cone" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.cone", "default": "" }] }
+            ]
           }
         ]
       },
