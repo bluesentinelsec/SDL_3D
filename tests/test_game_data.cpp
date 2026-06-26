@@ -21533,6 +21533,8 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.validate.button"),
               file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.plan_lighting.button"),
+              file_rects.end());
 
     emit_signal("signal.editor.file.focus.open");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", ""), "open");
@@ -21688,6 +21690,28 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     actor.has_color = true;
     ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &actor, nullptr, 0, error, sizeof(error))) << error;
 
+    slayer3d_properties *light_properties = slayer3d_properties_create();
+    ASSERT_NE(light_properties, nullptr);
+    slayer3d_properties_set_string(light_properties, "role", "light");
+    slayer3d_properties_set_string(light_properties, "light_type", "point");
+    slayer3d_properties_set_string(light_properties, "light_kind", "dynamic");
+    slayer3d_properties_set_float(light_properties, "light_intensity", 3.0f);
+    slayer3d_properties_set_float(light_properties, "light_range", 6.0f);
+    slayer3d_game_data_place_editor_actor_desc light{};
+    light.name = "light.editor_shell.file_probe";
+    light.display_name = "File Probe Light";
+    light.mesh = "sphere";
+    light.group = "Lights";
+    light.position = slayer3d_vec3_make(0.5f, 2.0f, 0.5f);
+    light.has_position = true;
+    light.scale = slayer3d_vec3_make(0.3f, 0.3f, 0.3f);
+    light.has_scale = true;
+    light.color = slayer3d_color{255, 230, 160, 220};
+    light.has_color = true;
+    light.properties = light_properties;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_actor(runtime, &light, nullptr, 0, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(light_properties);
+
     emit_signal("signal.editor.file.validate");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.validate.valid", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.validate.error_count", -1), 0);
@@ -21696,6 +21720,22 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "map validation passed with 6 warnings");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
                  "map validation passed with 6 warnings");
+    emit_signal("signal.editor.file.plan_lighting");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.dynamic_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.static_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.area_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.requires_bake", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.quality", ""), "balanced");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.message", ""),
+                 "lighting plan: 1 lights, 1 runtime, 0 bake");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "lighting plan: 1 lights, 1 runtime, 0 bake");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line4", ""),
+                 "lighting plan quality balanced");
     for (int i = 0; i < 70; ++i)
     {
         char message[64];

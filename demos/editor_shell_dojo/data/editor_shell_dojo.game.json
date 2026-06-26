@@ -696,6 +696,7 @@
     "signal.editor.file.save",
     "signal.editor.file.save_as",
     "signal.editor.file.validate",
+    "signal.editor.file.plan_lighting",
     "signal.editor.file.focus.open",
     "signal.editor.file.focus.save_as",
     "signal.editor.global.toggle",
@@ -5136,6 +5137,52 @@
           { "type": "console.write", "message_from_state": "editor.validate.diagnostic1" },
           { "type": "console.write", "message_from_state": "editor.validate.diagnostic2" },
           { "type": "console.write", "message_from_state": "editor.validate.message" },
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
+        ]
+      },
+      {
+        "signal": "signal.editor.file.plan_lighting",
+        "actions": [
+          {
+            "type": "editor.map.lighting_plan",
+            "world": "brush.editor_shell.target",
+            "outputs": {
+              "valid_key": "editor.lighting.plan.valid",
+              "message_key": "editor.lighting.plan.message",
+              "quality_key": "editor.lighting.plan.quality",
+              "total_count_key": "editor.lighting.plan.total_count",
+              "dynamic_count_key": "editor.lighting.plan.dynamic_count",
+              "static_count_key": "editor.lighting.plan.static_count",
+              "area_count_key": "editor.lighting.plan.area_count",
+              "runtime_count_key": "editor.lighting.plan.runtime_count",
+              "bake_count_key": "editor.lighting.plan.bake_count",
+              "max_dynamic_key": "editor.lighting.plan.max_dynamic",
+              "max_static_key": "editor.lighting.plan.max_static",
+              "requires_bake_key": "editor.lighting.plan.requires_bake",
+              "dynamic_preview_key": "editor.lighting.plan.dynamic_preview",
+              "dynamic_budget_exceeded_key": "editor.lighting.plan.dynamic_budget_exceeded",
+              "static_budget_exceeded_key": "editor.lighting.plan.static_budget_exceeded",
+              "line0_key": "editor.lighting.plan.line0",
+              "line1_key": "editor.lighting.plan.line1",
+              "line2_key": "editor.lighting.plan.line2",
+              "line3_key": "editor.lighting.plan.line3",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line0" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line1" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line2" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line3" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.message" },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]
       },

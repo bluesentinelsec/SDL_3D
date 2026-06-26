@@ -1029,6 +1029,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.map.save", validate_editor_map_save_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.load", validate_editor_map_load_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.validate", validate_editor_map_validate_action),
+        ACTION_RULE_EXACT_HANDLER("editor.map.lighting_plan", validate_editor_map_lighting_plan_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.save_manifest", validate_editor_test_run_save_manifest_action),
         ACTION_RULE_EXACT_HANDLER("editor.brush_world.status", validate_editor_brush_world_status_action),

@@ -1196,6 +1196,53 @@ bool validate_editor_map_validate_action(validation_context *ctx, yyjson_val *ac
     return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
+bool validate_editor_map_lighting_plan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    yyjson_val *include_dynamic_preview = obj_get(action, "include_dynamic_preview");
+    if (include_dynamic_preview != NULL && !yyjson_is_bool(include_dynamic_preview))
+        return validation_error(ctx, json_path, "%s include_dynamic_preview must be a boolean", type);
+    yyjson_val *max_dynamic_lights = obj_get(action, "max_dynamic_lights");
+    if (max_dynamic_lights != NULL &&
+        (!yyjson_is_uint(max_dynamic_lights) || yyjson_get_uint(max_dynamic_lights) > 1024u))
+        return validation_error(ctx, json_path, "%s max_dynamic_lights must be an integer from 0 to 1024", type);
+    yyjson_val *max_static_lights = obj_get(action, "max_static_lights");
+    if (max_static_lights != NULL && (!yyjson_is_uint(max_static_lights) || yyjson_get_uint(max_static_lights) > 4096u))
+        return validation_error(ctx, json_path, "%s max_static_lights must be an integer from 0 to 4096", type);
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "quality_key",
+                                 "total_count_key",
+                                 "dynamic_count_key",
+                                 "static_count_key",
+                                 "area_count_key",
+                                 "runtime_count_key",
+                                 "bake_count_key",
+                                 "max_dynamic_key",
+                                 "max_static_key",
+                                 "requires_bake_key",
+                                 "dynamic_preview_key",
+                                 "dynamic_budget_exceeded_key",
+                                 "static_budget_exceeded_key",
+                                 "line0_key",
+                                 "line1_key",
+                                 "line2_key",
+                                 "line3_key",
+                                 "brush_world_key",
+                                 "brush_source_path_key",
+                                 "brush_dirty_key",
+                                 "brush_revision_key",
+                                 "brush_saved_revision_key",
+                                 "player_start_source_path_key",
+                                 "player_start_count_key",
+                                 "player_start_dirty_key",
+                                 "player_start_revision_key",
+                                 "player_start_saved_revision_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
 bool validate_editor_test_run_common(validation_context *ctx, yyjson_val *action, const char *json_path,
                                      validation_names *names, const char *type, bool require_path)
 {

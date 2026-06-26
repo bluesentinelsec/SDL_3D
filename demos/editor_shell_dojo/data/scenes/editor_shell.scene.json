@@ -873,12 +873,25 @@
             "type": "button",
             "x": 12,
             "y": 72,
-            "w": 284,
+            "w": 138,
             "h": 26,
-            "text": "Validate Document",
-            "text_scale": 0.42,
+            "text": "Validate",
+            "text_scale": 0.40,
             "interactive": true,
             "action": "editor.file.validate",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.plan_lighting.button",
+            "type": "button",
+            "x": 158,
+            "y": 72,
+            "w": 138,
+            "h": 26,
+            "text": "Plan Lighting",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.plan_lighting",
             "layer": 501
           }
         ]
