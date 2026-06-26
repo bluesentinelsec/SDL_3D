@@ -44657,6 +44657,11 @@ TEST(GameDataRuntime, SlayerMapLightingShowcaseWritesPlayablePackage)
     const std::string game_text = read_text(dir / "playable_map.game.json");
     EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
     EXPECT_NE(game_text.find("\"pulse\""), std::string::npos);
+    const std::string scene_text = read_text(dir / "scenes/play.scene.json");
+    EXPECT_NE(scene_text.find("SlayerMap Lighting"), std::string::npos);
+    EXPECT_NE(scene_text.find("Lights total 5 runtime 5 bake 3"), std::string::npos);
+    EXPECT_NE(scene_text.find("Dynamic 2 static 3 area 2"), std::string::npos);
+    EXPECT_NE(scene_text.find("Lighting requires static bake"), std::string::npos);
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));

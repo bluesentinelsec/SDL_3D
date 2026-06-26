@@ -2414,6 +2414,13 @@ static bool map_game_add_rgb_color(yyjson_mut_doc *doc, yyjson_mut_val *object, 
            yyjson_mut_obj_add_val(doc, object, key, array);
 }
 
+static bool map_game_add_vec2(yyjson_mut_doc *doc, yyjson_mut_val *object, const char *key, float x, float y)
+{
+    yyjson_mut_val *array = yyjson_mut_arr(doc);
+    return array != NULL && yyjson_mut_arr_add_real(doc, array, x) && yyjson_mut_arr_add_real(doc, array, y) &&
+           yyjson_mut_obj_add_val(doc, object, key, array);
+}
+
 static float map_game_degrees_to_spot_cutoff(float degrees)
 {
     const float clamped = SDL_clamp(degrees, 0.0f, 179.0f);
@@ -2951,6 +2958,52 @@ static bool map_game_add_scenes_section(yyjson_mut_doc *doc, yyjson_mut_val *roo
            yyjson_mut_arr_add_strcpy(doc, files, "scenes/play.scene.json");
 }
 
+static bool map_scene_add_lighting_debug_line(yyjson_mut_doc *doc, yyjson_mut_val *texts, const char *name,
+                                              const char *text, float y, slayer3d_color color, float scale)
+{
+    yyjson_mut_val *entry = yyjson_mut_obj(doc);
+    return entry != NULL && yyjson_mut_arr_add_val(texts, entry) &&
+           yyjson_mut_obj_add_strcpy(doc, entry, "name", name) && yyjson_mut_obj_add_strcpy(doc, entry, "text", text) &&
+           map_game_add_vec2(doc, entry, "position", 0.02f, y) &&
+           yyjson_mut_obj_add_strcpy(doc, entry, "anchor", "top_left") &&
+           map_game_add_color(doc, entry, "color", color) && yyjson_mut_obj_add_real(doc, entry, "scale", scale);
+}
+
+static bool map_scene_add_lighting_debug_ui(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                            const slayer3d_map_lighting_build_plan *plan)
+{
+    yyjson_mut_val *ui = yyjson_mut_obj(doc);
+    yyjson_mut_val *texts = yyjson_mut_arr(doc);
+    if (ui == NULL || texts == NULL || !yyjson_mut_obj_add_val(doc, root, "ui", ui) ||
+        !yyjson_mut_obj_add_val(doc, ui, "text", texts))
+    {
+        return false;
+    }
+
+    char counts[128];
+    char classes[128];
+    char status[160];
+    SDL_snprintf(counts, sizeof(counts), "Lights total %zu runtime %zu bake %zu",
+                 plan != NULL ? plan->total_light_count : 0u, plan != NULL ? plan->runtime_light_count : 0u,
+                 plan != NULL ? plan->bake_light_count : 0u);
+    SDL_snprintf(classes, sizeof(classes), "Dynamic %zu static %zu area %zu",
+                 plan != NULL ? plan->dynamic_light_count : 0u, plan != NULL ? plan->static_light_count : 0u,
+                 plan != NULL ? plan->area_light_count : 0u);
+    SDL_snprintf(status, sizeof(status), "Lighting %s%s%s",
+                 plan != NULL && plan->requires_static_bake ? "requires static bake" : "runtime only",
+                 plan != NULL && plan->dynamic_light_budget_exceeded ? ", runtime budget exceeded" : "",
+                 plan != NULL && plan->static_light_budget_exceeded ? ", static budget exceeded" : "");
+
+    return map_scene_add_lighting_debug_line(doc, texts, "ui.slayermap.lighting.title", "SlayerMap Lighting", 0.03f,
+                                             (slayer3d_color){220, 235, 255, 230}, 0.72f) &&
+           map_scene_add_lighting_debug_line(doc, texts, "ui.slayermap.lighting.counts", counts, 0.07f,
+                                             (slayer3d_color){190, 255, 210, 230}, 0.58f) &&
+           map_scene_add_lighting_debug_line(doc, texts, "ui.slayermap.lighting.classes", classes, 0.10f,
+                                             (slayer3d_color){210, 220, 255, 230}, 0.58f) &&
+           map_scene_add_lighting_debug_line(doc, texts, "ui.slayermap.lighting.status", status, 0.13f,
+                                             (slayer3d_color){255, 220, 150, 230}, 0.58f);
+}
+
 static bool map_game_add_app(yyjson_mut_doc *doc, yyjson_mut_val *root)
 {
     yyjson_mut_val *app = yyjson_mut_obj(doc);
@@ -3007,7 +3060,8 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     return json;
 }
 
-static char *map_build_playable_scene_json(size_t *out_size, char *error_buffer, int error_buffer_size)
+static char *map_build_playable_scene_json(const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
+                                           char *error_buffer, int error_buffer_size)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
@@ -3047,7 +3101,8 @@ static char *map_build_playable_scene_json(size_t *out_size, char *error_buffer,
               yyjson_mut_obj_add_strcpy(doc, brush_world, "world", "brush.slayermap") &&
               map_game_add_vec3(doc, brush_world, "position", (slayer3d_vec3){0.0f, 0.0f, 0.0f}) &&
               yyjson_mut_obj_add_bool(doc, brush_world, "acceleration", true) &&
-              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", true);
+              yyjson_mut_obj_add_bool(doc, brush_world, "lighting", true) &&
+              map_scene_add_lighting_debug_ui(doc, root, lighting_plan);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);
@@ -3081,6 +3136,9 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
                       "$.brushes: playable game export requires at least one box or plane brush");
         return false;
     }
+    slayer3d_map_lighting_build_plan lighting_plan;
+    if (!slayer3d_map_build_lighting_plan(document, NULL, &lighting_plan, error_buffer, error_buffer_size))
+        return false;
 
     char *scenes_dir = map_join_path(output_dir, "scenes");
     char *game_path = map_join_path(output_dir, "playable_map.game.json");
@@ -3106,8 +3164,9 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
     size_t game_size = 0u;
     size_t scene_size = 0u;
     char *game_json = map_build_playable_game_json(document, &scene, &game_size, error_buffer, error_buffer_size);
-    char *scene_json =
-        game_json != NULL ? map_build_playable_scene_json(&scene_size, error_buffer, error_buffer_size) : NULL;
+    char *scene_json = game_json != NULL
+                           ? map_build_playable_scene_json(&lighting_plan, &scene_size, error_buffer, error_buffer_size)
+                           : NULL;
     bool ok = game_json != NULL && scene_json != NULL &&
               map_write_text_file(game_path, game_json, game_size, error_buffer, error_buffer_size) &&
               map_write_text_file(scene_path, scene_json, scene_size, error_buffer, error_buffer_size);
