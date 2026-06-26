@@ -42,15 +42,17 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "[--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
         "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact] [--output <file>]\n"
+        "  %s lighting-artifact-validate --input <lighting-static.json>\n"
         "\n"
         "Commands:\n"
         "  no args  Launch the bundled editor shell project with a new untitled map.\n"
         "  new    Start from the project's empty editor level and save to --output.\n"
         "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
         "  lighting-plan  Print the shared map lighting build/bake plan without launching the editor.\n"
+        "  lighting-artifact-validate  Validate a generated static-lighting artifact JSON file.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
-        program, program, program, program);
+        program, program, program, program, program);
 }
 
 static bool path_is_absolute_tool(const char *path)
@@ -640,6 +642,10 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     {
         args->command = SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN;
     }
+    else if (SDL_strcmp(argv[1], "lighting-artifact-validate") == 0)
+    {
+        args->command = SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE;
+    }
     else if (argv[1][0] == '-')
     {
         default_launch_with_options = true;
@@ -773,6 +779,27 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->max_dynamic_lights < 0 || args->max_static_lights < 0)
         {
             fprintf(out, "%s: lighting budgets must be non-negative.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_OK;
+    }
+
+    if (args->command == SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE)
+    {
+        if (args->input_path == NULL || args->input_path[0] == '\0')
+        {
+            fprintf(out, "%s: 'lighting-artifact-validate' requires --input <lighting-static.json>.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (project->count > 0 || output->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
+            max_dynamic_lights->count > 0 || max_static_lights->count > 0 || preview_quality->count > 0 ||
+            final_quality->count > 0 || no_dynamic_preview->count > 0 || manifest->count > 0 ||
+            static_artifact->count > 0 || overwrite->count > 0)
+        {
+            fprintf(out, "%s: 'lighting-artifact-validate' only accepts --input.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -952,6 +979,39 @@ bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *s
             plan.static_light_budget_exceeded ? " (exceeded)" : "");
     fprintf(out, "  requires_static_bake: %s\n", plan.requires_static_bake ? "yes" : "no");
     fprintf(out, "  dynamic_preview: %s\n", plan.has_dynamic_preview ? "yes" : "no");
+    return true;
+}
+
+bool slayer3d_editor_run_lighting_artifact_validate(const slayer3d_editor_args *args, FILE *stream, char *error_buffer,
+                                                    int error_buffer_size)
+{
+    FILE *out = stream != NULL ? stream : stdout;
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+    if (args == NULL || args->command != SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "lighting-artifact-validate command arguments are required");
+        return false;
+    }
+    if (args->input_path == NULL || args->input_path[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size, "lighting-artifact-validate requires --input");
+        return false;
+    }
+
+    size_t size = 0u;
+    char *json = (char *)SDL_LoadFile(args->input_path, &size);
+    if (json == NULL)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to read lighting artifact '%s'", args->input_path);
+        return false;
+    }
+    const bool ok = slayer3d_map_validate_static_lighting_artifact_json(json, size, error_buffer, error_buffer_size);
+    SDL_free(json);
+    if (!ok)
+        return false;
+
+    fprintf(out, "Static lighting artifact valid: %s\n", args->input_path);
     return true;
 }
 

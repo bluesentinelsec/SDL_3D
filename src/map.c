@@ -3819,6 +3819,14 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
     {
         static_lighting_json = NULL;
     }
+    if (static_lighting_json != NULL &&
+        !slayer3d_map_validate_static_lighting_artifact_json(static_lighting_json, static_lighting_size, error_buffer,
+                                                             error_buffer_size))
+    {
+        free(static_lighting_json);
+        static_lighting_json = NULL;
+        static_lighting_size = 0u;
+    }
     bool ok =
         game_json != NULL && scene_json != NULL &&
         map_write_text_file(game_path, game_json, game_size, error_buffer, error_buffer_size) &&

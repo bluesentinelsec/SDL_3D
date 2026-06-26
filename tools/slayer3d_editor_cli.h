@@ -22,7 +22,8 @@ extern "C"
         SLAYER3D_EDITOR_COMMAND_NEW,
         SLAYER3D_EDITOR_COMMAND_OPEN,
         SLAYER3D_EDITOR_COMMAND_CHECK,
-        SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN
+        SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN,
+        SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE
     } slayer3d_editor_command;
 
     typedef struct slayer3d_editor_args
@@ -117,6 +118,8 @@ extern "C"
     void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation *invocation);
     bool slayer3d_editor_run_lighting_plan(const slayer3d_editor_args *args, FILE *stream, char *error_buffer,
                                            int error_buffer_size);
+    bool slayer3d_editor_run_lighting_artifact_validate(const slayer3d_editor_args *args, FILE *stream,
+                                                        char *error_buffer, int error_buffer_size);
     void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream);
 
 #ifdef __cplusplus

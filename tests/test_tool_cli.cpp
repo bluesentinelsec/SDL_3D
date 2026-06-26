@@ -815,6 +815,80 @@ TEST(ToolCli, EditorLightingPlanCanWriteStaticArtifactOutputFile)
     std::filesystem::remove_all(output_dir);
 }
 
+TEST(ToolCli, EditorLightingArtifactValidateAcceptsStaticArtifact)
+{
+    const std::filesystem::path artifact_path = unique_cli_test_path("lighting_static_artifact_validate");
+    write_text(artifact_path,
+               R"json({
+  "schema": "slayer3d.lighting_static.v0",
+  "quality": "preview",
+  "bake_group": "default",
+  "self_contained": true,
+  "sample_model": "box_face_irradiance_preview",
+  "counts": { "samples": 1 },
+  "samples": [
+    {
+      "brush": "brush.floor",
+      "face": "positive_y",
+      "position": [0, 1, 0],
+      "normal": [0, 1, 0],
+      "color": [0.25, 0.5, 1.0],
+      "intensity": 1.0
+    }
+  ]
+})json");
+    const std::string input = artifact_path.string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "lighting-artifact-validate", "--input", input.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE);
+
+    FILE *output = std::tmpfile();
+    ASSERT_NE(output, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_editor_run_lighting_artifact_validate(&args, output, error, sizeof(error))) << error;
+    const std::string text = read_temp_file(output);
+    std::fclose(output);
+    EXPECT_NE(text.find("Static lighting artifact valid:"), std::string::npos);
+
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(artifact_path);
+}
+
+TEST(ToolCli, EditorLightingArtifactValidateRejectsInvalidStaticArtifact)
+{
+    const std::filesystem::path artifact_path = unique_cli_test_path("lighting_static_artifact_validate_bad");
+    write_text(artifact_path,
+               R"json({
+  "schema": "slayer3d.lighting_static.v0",
+  "counts": { "samples": 1 },
+  "samples": [
+    {
+      "brush": "brush.floor",
+      "face": "bogus",
+      "position": [0, 1, 0],
+      "normal": [0, 1, 0],
+      "color": [1, 1, 1],
+      "intensity": 1
+    }
+  ]
+})json");
+    const std::string input = artifact_path.string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "lighting-artifact-validate", "--input", input.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+
+    FILE *output = std::tmpfile();
+    ASSERT_NE(output, nullptr);
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_editor_run_lighting_artifact_validate(&args, output, error, sizeof(error)));
+    std::fclose(output);
+    EXPECT_NE(std::string(error).find("$.samples[0].face"), std::string::npos) << error;
+
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove(artifact_path);
+}
+
 TEST(ToolCli, EditorLightingPlanRejectsOutputForSummaryMode)
 {
     const std::filesystem::path map_path = unique_cli_test_path("lighting_summary_output_rejected");

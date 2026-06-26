@@ -411,7 +411,8 @@ preview/integration format, not a final atlas lightmap baker. The machine-readab
 manifest and static-artifact modes also accept `--output <file>` when callers
 want a build artifact on disk instead of stdout. Engine callers can validate the
 static artifact with `slayer3d_map_validate_static_lighting_artifact_json()`
-before loading or caching it.
+before loading or caching it. Tooling can validate an artifact file directly
+with `slayer3d_editor lighting-artifact-validate --input lighting/static.default.json`.
 
 Generated playable-map packages also run the same lighting planner and emit a
 small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,

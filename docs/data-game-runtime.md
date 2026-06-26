@@ -316,6 +316,7 @@ build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json
 build/debug/slayer3d_editor lighting-plan --manifest --input /tmp/level.slayermap.json
 build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json
 build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json --output /tmp/lighting-static.json
+build/debug/slayer3d_editor lighting-artifact-validate --input /tmp/lighting-static.json
 ```
 
 The command accepts `--preview`, `--final`, `--max-dynamic-lights`,
@@ -331,8 +332,9 @@ metadata. `--static-artifact` emits the first concrete static-light payload:
 self-contained per-face irradiance samples for box brushes. It is suitable for
 caller/editor integration and regression tests, and callers can validate the
 payload with `slayer3d_map_validate_static_lighting_artifact_json()` before
-consuming a generated artifact. Final atlas lightmap or vertex-light bake
-payloads remain later lighting slices.
+consuming a generated artifact. The `lighting-artifact-validate` command exposes
+the same validation path for build scripts and CI. Final atlas lightmap or
+vertex-light bake payloads remain later lighting slices.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
