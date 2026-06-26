@@ -323,6 +323,11 @@
     "signal.editor.inspector.light.range.short",
     "signal.editor.inspector.light.range.medium",
     "signal.editor.inspector.light.range.long",
+    "signal.editor.inspector.light.color.warm",
+    "signal.editor.inspector.light.color.cool",
+    "signal.editor.inspector.light.color.red",
+    "signal.editor.inspector.light.color.green",
+    "signal.editor.inspector.light.color.blue",
     "signal.editor.inspector.light.kind.dynamic",
     "signal.editor.inspector.light.kind.baked",
     "signal.editor.inspector.light.shadow.none",
@@ -2202,6 +2207,91 @@
             "target_type": "selection",
             "properties": { "light_range": 20.0 },
             "message": "light range long",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.warm",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [255, 222, 160, 220],
+            "properties": { "light_color": [255, 222, 160, 255] },
+            "message": "light color warm",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.cool",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [120, 170, 255, 220],
+            "properties": { "light_color": [120, 170, 255, 255] },
+            "message": "light color cool",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.red",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [255, 88, 72, 220],
+            "properties": { "light_color": [255, 88, 72, 255] },
+            "message": "light color red",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.green",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [94, 255, 144, 220],
+            "properties": { "light_color": [94, 255, 144, 255] },
+            "message": "light color green",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.blue",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [92, 142, 255, 220],
+            "properties": { "light_color": [92, 142, 255, 255] },
+            "message": "light color blue",
             "outputs": {
               "valid_key": "editor.inspector.actor.update.valid",
               "message_key": "editor.tool.last_action"

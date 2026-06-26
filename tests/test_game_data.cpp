@@ -18897,6 +18897,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 
     emit_signal("signal.editor.inspector.light.intensity.bright");
     emit_signal("signal.editor.inspector.light.range.long");
+    emit_signal("signal.editor.inspector.light.color.cool");
     emit_signal("signal.editor.inspector.light.kind.baked");
     emit_signal("signal.editor.inspector.light.shadow.dynamic");
     emit_signal("signal.editor.inspector.light.falloff.linear");
@@ -18908,6 +18909,15 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_TRUE(slayer3d_properties_get_bool(point_light.properties, "casts_shadow", false));
     EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_intensity", 0.0f), 1.8f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(point_light.properties, "light_range", 0.0f), 20.0f, 0.001f);
+    EXPECT_EQ(point_light.color.r, 120);
+    EXPECT_EQ(point_light.color.g, 170);
+    EXPECT_EQ(point_light.color.b, 255);
+    const slayer3d_color light_color =
+        slayer3d_properties_get_color(point_light.properties, "light_color", slayer3d_color{0, 0, 0, 0});
+    EXPECT_EQ(light_color.r, 120);
+    EXPECT_EQ(light_color.g, 170);
+    EXPECT_EQ(light_color.b, 255);
+    EXPECT_EQ(light_color.a, 255);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.kind", ""), "baked");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.intensity_range", ""),
                  "1.80 / 20.00");
@@ -18933,6 +18943,11 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_NEAR(exported_light.intensity, 1.8f, 0.001f);
     ASSERT_TRUE(exported_light.has_range);
     EXPECT_NEAR(exported_light.range, 20.0f, 0.001f);
+    ASSERT_TRUE(exported_light.has_color);
+    EXPECT_EQ(exported_light.color.r, 120);
+    EXPECT_EQ(exported_light.color.g, 170);
+    EXPECT_EQ(exported_light.color.b, 255);
+    EXPECT_EQ(exported_light.color.a, 255);
     ASSERT_TRUE(exported_light.has_casts_shadow);
     EXPECT_TRUE(exported_light.casts_shadow);
     EXPECT_STREQ(exported_light.shadow_mode, "dynamic");

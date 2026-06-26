@@ -5447,7 +5447,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 824,
+            "y": 852,
             "scroll_y_key": "editor.inspector.scroll",
             "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
             "w": 272,
@@ -5468,11 +5468,38 @@
             ]
           },
           {
+            "id": "ui.editor_shell.left_inspector.light.color",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 824,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.color.label", "type": "label", "w": 48, "h": "fill", "text": "Color" },
+              { "id": "ui.editor_shell.left_inspector.light.color.warm", "type": "button", "w": 44, "h": "fill", "text": "Warm", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.warm" },
+              { "id": "ui.editor_shell.left_inspector.light.color.cool", "type": "button", "w": 42, "h": "fill", "text": "Cool", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.cool" },
+              { "id": "ui.editor_shell.left_inspector.light.color.red", "type": "button", "w": 38, "h": "fill", "text": "Red", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.red" },
+              { "id": "ui.editor_shell.left_inspector.light.color.green", "type": "button", "w": 44, "h": "fill", "text": "Green", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.green" },
+              { "id": "ui.editor_shell.left_inspector.light.color.blue", "type": "button", "w": "fill", "h": "fill", "text": "Blue", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.blue" }
+            ]
+          },
+          {
             "id": "ui.editor_shell.left_inspector.light.falloff",
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 852,
+            "y": 880,
             "scroll_y_key": "editor.inspector.scroll",
             "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
             "w": 272,
@@ -5496,7 +5523,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 880,
+            "y": 908,
             "scroll_y_key": "editor.inspector.scroll",
             "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
             "w": 272,
@@ -5519,7 +5546,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 908,
+            "y": 936,
             "scroll_y_key": "editor.inspector.scroll",
             "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
             "w": 272,
