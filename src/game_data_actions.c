@@ -1604,10 +1604,6 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    "object.editor_shell.rectangle", "Objects", "actor_object", "object_rectangle", "object",
                    "rectangle", (slayer3d_color){230, 166, 108, 190}, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 1003);
     ok = ok && editor_actor_scan_list_append_builtin(
-                   &list, "light_directional", "Directional", "rectangle", "", "light.editor_shell.directional",
-                   "light.editor_shell.directional", "Lights", "actor_light", "directional_light", "light",
-                   "directional", (slayer3d_color){255, 238, 160, 205}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 1500);
-    ok = ok && editor_actor_scan_list_append_builtin(
                    &list, "light_point", "Point", "sphere", "", "light.editor_shell.point", "light.editor_shell.point",
                    "Lights", "actor_light", "point_light", "light", "point", (slayer3d_color){255, 230, 112, 220},
                    slayer3d_vec3_make(0.65f, 0.65f, 0.65f), 1501);
@@ -1715,6 +1711,195 @@ static bool execute_editor_actor_select_index_action(slayer3d_game_data_runtime 
         }
     }
     return editor_actor_select_collection_row(runtime, collection_name, index);
+}
+
+#define EDITOR_GLOBAL_PROPERTY_CAP 64
+
+static bool editor_global_property_text_blank(const char *text)
+{
+    if (text == NULL)
+        return true;
+    while (*text != '\0')
+    {
+        if (*text != ' ' && *text != '\t' && *text != '\r' && *text != '\n')
+            return false;
+        ++text;
+    }
+    return true;
+}
+
+static int editor_global_property_count(const slayer3d_properties *scene_state)
+{
+    int count = slayer3d_properties_get_int(scene_state, "editor.global.property.count", 0);
+    if (count < 0)
+        count = 0;
+    if (count > EDITOR_GLOBAL_PROPERTY_CAP)
+        count = EDITOR_GLOBAL_PROPERTY_CAP;
+    return count;
+}
+
+static void editor_global_property_key(char *buffer, size_t buffer_size, int index, const char *suffix)
+{
+    SDL_snprintf(buffer, buffer_size, "editor.global.property.%d.%s", index, suffix != NULL ? suffix : "");
+}
+
+static int editor_global_property_find(const slayer3d_properties *scene_state, const char *key)
+{
+    if (editor_global_property_text_blank(key))
+        return -1;
+    const int count = editor_global_property_count(scene_state);
+    char state_key[96];
+    for (int i = 0; i < count; ++i)
+    {
+        editor_global_property_key(state_key, sizeof(state_key), i, "key");
+        if (SDL_strcmp(slayer3d_properties_get_string(scene_state, state_key, ""), key) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void editor_global_property_publish_slots(slayer3d_properties *scene_state)
+{
+    if (scene_state == NULL)
+        return;
+    const int count = editor_global_property_count(scene_state);
+    slayer3d_properties_set_int(scene_state, "editor.global.property.count", count);
+    for (int i = 0; i < EDITOR_GLOBAL_PROPERTY_CAP; ++i)
+    {
+        char key[96];
+        editor_global_property_key(key, sizeof(key), i, "available");
+        slayer3d_properties_set_bool(scene_state, key, i < count);
+        if (i >= count)
+        {
+            editor_global_property_key(key, sizeof(key), i, "key");
+            slayer3d_properties_set_string(scene_state, key, "");
+            editor_global_property_key(key, sizeof(key), i, "value");
+            slayer3d_properties_set_string(scene_state, key, "");
+        }
+    }
+}
+
+static bool execute_editor_global_property_new_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    (void)action;
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.key", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.value", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.focus", "key");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.global.data.edit.replace_on_text", false);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.global.data.edit.selected_slot", -1);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.message", "new global property");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "new global property");
+    return true;
+}
+
+static bool execute_editor_global_property_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    (void)action;
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties *scene_state = runtime->scene_state;
+    const char *key = slayer3d_properties_get_string(scene_state, "editor.global.data.edit.key", "");
+    const char *value = slayer3d_properties_get_string(scene_state, "editor.global.data.edit.value", "");
+    if (editor_global_property_text_blank(key) || editor_global_property_text_blank(value))
+    {
+        slayer3d_properties_set_string(scene_state, "editor.global.data.message", "key and value are required");
+        slayer3d_properties_set_string(scene_state, "editor.tool.last_action",
+                                       "global property requires key and value");
+        return true;
+    }
+
+    int count = editor_global_property_count(scene_state);
+    int slot = slayer3d_properties_get_int(scene_state, "editor.global.data.edit.selected_slot", -1);
+    const int existing = editor_global_property_find(scene_state, key);
+    if (slot < 0)
+        slot = existing;
+    if (slot < 0)
+    {
+        if (count >= EDITOR_GLOBAL_PROPERTY_CAP)
+        {
+            slayer3d_properties_set_string(scene_state, "editor.global.data.message", "global property cap reached");
+            slayer3d_properties_set_string(scene_state, "editor.tool.last_action", "global property cap reached");
+            return true;
+        }
+        slot = count++;
+        slayer3d_properties_set_int(scene_state, "editor.global.property.count", count);
+    }
+    else if (existing >= 0 && existing != slot)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.global.data.message", "duplicate global property key");
+        slayer3d_properties_set_string(scene_state, "editor.tool.last_action", "duplicate global property key");
+        return true;
+    }
+
+    char state_key[96];
+    editor_global_property_key(state_key, sizeof(state_key), slot, "key");
+    slayer3d_properties_set_string(scene_state, state_key, key);
+    editor_global_property_key(state_key, sizeof(state_key), slot, "value");
+    slayer3d_properties_set_string(scene_state, state_key, value);
+    editor_global_property_publish_slots(scene_state);
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.key", "");
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.value", "");
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.focus", "key");
+    slayer3d_properties_set_bool(scene_state, "editor.global.data.edit.replace_on_text", false);
+    slayer3d_properties_set_int(scene_state, "editor.global.data.edit.selected_slot", -1);
+    slayer3d_properties_set_string(scene_state, "editor.global.data.message", "global property saved");
+    slayer3d_properties_set_string(scene_state, "editor.tool.last_action", "global property saved");
+    return true;
+}
+
+static bool execute_editor_global_property_select_slot_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const int slot = json_int(action, "slot", -1);
+    if (slot < 0 || slot >= editor_global_property_count(runtime->scene_state))
+        return true;
+    char state_key[96];
+    editor_global_property_key(state_key, sizeof(state_key), slot, "key");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.key",
+                                   slayer3d_properties_get_string(runtime->scene_state, state_key, ""));
+    editor_global_property_key(state_key, sizeof(state_key), slot, "value");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.value",
+                                   slayer3d_properties_get_string(runtime->scene_state, state_key, ""));
+    slayer3d_properties_set_int(runtime->scene_state, "editor.global.data.edit.selected_slot", slot);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.edit.focus",
+                                   json_string(action, "focus", "value"));
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.global.data.edit.replace_on_text", true);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.message", "editing global property");
+    return true;
+}
+
+static bool execute_editor_global_property_remove_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const int slot = json_int(action, "slot", -1);
+    int count = editor_global_property_count(runtime->scene_state);
+    if (slot < 0 || slot >= count)
+        return true;
+
+    for (int i = slot; i + 1 < count; ++i)
+    {
+        char dst[96];
+        char src[96];
+        editor_global_property_key(dst, sizeof(dst), i, "key");
+        editor_global_property_key(src, sizeof(src), i + 1, "key");
+        slayer3d_properties_set_string(runtime->scene_state, dst,
+                                       slayer3d_properties_get_string(runtime->scene_state, src, ""));
+        editor_global_property_key(dst, sizeof(dst), i, "value");
+        editor_global_property_key(src, sizeof(src), i + 1, "value");
+        slayer3d_properties_set_string(runtime->scene_state, dst,
+                                       slayer3d_properties_get_string(runtime->scene_state, src, ""));
+    }
+    --count;
+    slayer3d_properties_set_int(runtime->scene_state, "editor.global.property.count", count);
+    editor_global_property_publish_slots(runtime->scene_state);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.global.data.edit.selected_slot", -1);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.global.data.message", "global property deleted");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "global property deleted");
+    return true;
 }
 
 static void editor_actor_publish_place_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool ok,
@@ -3142,6 +3327,18 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.actor.select_index") == 0)
         return execute_editor_actor_select_index_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.global.property.new") == 0)
+        return execute_editor_global_property_new_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.global.property.apply") == 0)
+        return execute_editor_global_property_apply_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.global.property.select_slot") == 0)
+        return execute_editor_global_property_select_slot_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.global.property.remove") == 0)
+        return execute_editor_global_property_remove_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.actor.place_selected") == 0)
         return execute_editor_actor_place_selected_action(runtime, action);

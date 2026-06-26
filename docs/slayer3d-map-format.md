@@ -389,9 +389,10 @@ maps currently bridge `pulse`/`flicker` to runtime intensity modulation,
 position-orbit movement. Games may ignore unknown animation properties or
 reinterpret them for a custom renderer.
 
-The bundled editor exposes light placement through Things > Lights. Current
-entries match the canonical schema: Directional, Point, Spot, Area Rect, and
-Area Sphere. Selecting a placed light shows a light-specific inspector with
+The bundled editor exposes map-level directional lighting through the Global
+panel because sun/moon-style lights affect the whole map. Things > Lights is for
+placeable local lights and currently offers Point, Spot, Area Rect, and Area
+Sphere. Selecting a placed light shows a light-specific inspector with
 kind, intensity, range, shadow mode, falloff, color presets, spot cone presets,
 area-size presets, and animation presets for steady, torch flicker, rotating
 siren, and orbiting fireball behavior. The animation presets write the same

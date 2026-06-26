@@ -300,9 +300,9 @@ fire/smoke markers, or custom game-defined effect types. Active scene skybox
 data exports as a top-level `skybox` object when present, so game runtimes can
 consume environment selection without understanding the editor-only fragment.
 Global lighting defaults export under the map `global` object. The editor Global
-Lighting panel currently edits ambient light, clear color, exposure, tonemap,
-preview quality, and fog presets. Things > Lights places Directional, Point,
-Spot, Area Rect, and Area Sphere light markers; the selected-light inspector
+panel edits ambient light, clear color, exposure, tonemap, preview quality, fog
+presets, and the map-level directional sun/moon light. Things > Lights places
+Point, Spot, Area Rect, and Area Sphere light markers; the selected-light inspector
 offers common intensity, range, color, shadow, falloff, spot-cone, area-size,
 and dynamic animation presets while the Data inspector remains available for
 game-specific key/value pairs.

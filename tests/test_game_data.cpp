@@ -18582,7 +18582,7 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     emit_signal("signal.editor.things.category.lights");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
     labels = visible_palette_text();
-    EXPECT_TRUE(contains_text(labels, "Directional"));
+    EXPECT_FALSE(contains_text(labels, "Directional"));
     EXPECT_TRUE(contains_text(labels, "Point"));
     EXPECT_TRUE(contains_text(labels, "Spot"));
     EXPECT_TRUE(contains_text(labels, "Area Rect"));
@@ -18625,19 +18625,19 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
 
     emit_signal("signal.editor.palette.game_object");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 19);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 19 actors");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 18);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 18 actors");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.5.available", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.5.label", ""), "Box");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.9.label", ""), "Directional");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.13.label", ""), "Area Sphere");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.14.label", ""), "Particle Emitter");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.18.available", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.18.label", ""), "Alpha Guard");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.18.model", ""),
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.9.label", ""), "Point");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.12.label", ""), "Area Sphere");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.13.label", ""), "Particle Emitter");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.17.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.17.label", ""), "Alpha Guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.17.model", ""),
                  "model.project.actor.alpha_guard");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.3.available", false));
 
@@ -18650,18 +18650,18 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "object_box");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_object");
 
-    emit_signal("signal.editor.actor.select_slot.10");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 10);
+    emit_signal("signal.editor.actor.select_slot.9");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 9);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_light");
 
-    emit_signal("signal.editor.actor.select_slot.14");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 14);
+    emit_signal("signal.editor.actor.select_slot.13");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 13);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "particle_emitter");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_effect");
 
-    emit_signal("signal.editor.actor.select_slot.18");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 18);
+    emit_signal("signal.editor.actor.select_slot.17");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selected_index", -1), 17);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "alpha_guard");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_model");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "alpha_guard");
@@ -18851,7 +18851,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     const int things_lights_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.things.category.lights");
     ASSERT_GE(things_lights_signal, 0);
     slayer3d_signal_emit(bus, things_lights_signal, nullptr);
-    emit_signal("signal.editor.actor.select_slot.10");
+    emit_signal("signal.editor.actor.select_slot.9");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.things.category", ""), "Lights");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_light");
@@ -18993,7 +18993,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     slayer3d_map_destroy(map_document);
     SDL_free(map_json);
 
-    emit_signal("signal.editor.actor.select_slot.11");
+    emit_signal("signal.editor.actor.select_slot.10");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_spot");
     hover.point = slayer3d_vec3_make(1.0f, 0.0f, -1.0f);
     update_editor_placement_preview(runtime, editor, &hover);
@@ -19011,7 +19011,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.cone", ""), "38.0 / 70.0");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "rotating_siren");
 
-    emit_signal("signal.editor.actor.select_slot.12");
+    emit_signal("signal.editor.actor.select_slot.11");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_area_rect");
     hover.point = slayer3d_vec3_make(3.0f, 0.0f, -1.0f);
     update_editor_placement_preview(runtime, editor, &hover);
@@ -22340,13 +22340,14 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     auto contains_text = [&](const char *expected) {
         return std::find(text_capture.values.begin(), text_capture.values.end(), expected) != text_capture.values.end();
     };
-    EXPECT_TRUE(contains_text("Global Lighting"));
+    EXPECT_TRUE(contains_text("Global"));
+    EXPECT_TRUE(contains_text("Lighting"));
+    EXPECT_TRUE(contains_text("Data"));
+    EXPECT_TRUE(contains_text("Directional"));
     EXPECT_TRUE(contains_text("54, 56, 64, 255"));
     EXPECT_TRUE(contains_text("12, 14, 18, 255"));
     EXPECT_TRUE(contains_text("balanced"));
     EXPECT_TRUE(contains_text("Plan Lighting"));
-    EXPECT_TRUE(contains_text("not planned"));
-    EXPECT_TRUE(contains_text("No lighting plan computed"));
 
     slayer3d_ui_layout_model *layout = nullptr;
     ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
@@ -22400,13 +22401,18 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
 
     emit_signal("signal.editor.global.toggle");
     emit_signal("signal.editor.global.preset.night");
+    emit_signal("signal.editor.global.directional.direction.next");
     emit_signal("signal.editor.global.exposure.up");
     emit_signal("signal.editor.global.tonemap.next");
     emit_signal("signal.editor.global.quality.next");
     emit_signal("signal.editor.global.fog.next");
-
+    emit_signal("signal.editor.global.tab.data");
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.key", "mission");
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.value", "lighting-test");
+    emit_signal("signal.editor.global.data.apply");
+
     const slayer3d_color ambient =
         slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", slayer3d_color{0, 0, 0, 0});
     EXPECT_EQ(ambient.r, 20);
@@ -22416,6 +22422,10 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""),
                  "performance");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.directional.enabled", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.directional.direction.label", ""),
+                 "overhead");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.global.property.count", -1), 1);
     EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 4);
     emit_signal("signal.editor.global.quality.next");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "balanced");
@@ -22450,6 +22460,30 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     EXPECT_STREQ(global.lighting_preview_quality, "performance");
     EXPECT_TRUE(global.fog.enabled);
     EXPECT_STREQ(global.fog.mode, "exp");
+    ASSERT_EQ(global.property_count, 1u);
+    EXPECT_STREQ(slayer3d_map_get_global_property_key(document, 0), "mission");
+    char *property_json = nullptr;
+    size_t property_json_size = 0u;
+    ASSERT_TRUE(slayer3d_map_get_global_property_json(document, "mission", &property_json, &property_json_size, error,
+                                                      sizeof(error)))
+        << error;
+    ASSERT_NE(property_json, nullptr);
+    EXPECT_EQ(std::string(property_json, property_json_size), "\"lighting-test\"");
+    slayer3d_map_free_string(property_json);
+
+    ASSERT_EQ(slayer3d_map_get_light_count(document), 1u);
+    slayer3d_map_light global_light{};
+    ASSERT_TRUE(slayer3d_map_get_light(document, 0, &global_light));
+    EXPECT_TRUE(global_light.source_actor == nullptr || global_light.source_actor[0] == '\0');
+    EXPECT_STREQ(global_light.kind, "baked");
+    EXPECT_STREQ(global_light.type, "directional");
+    ASSERT_TRUE(global_light.has_direction);
+    EXPECT_NEAR(global_light.direction.y, -1.0f, 0.001f);
+    ASSERT_TRUE(global_light.has_color);
+    EXPECT_EQ(global_light.color.r, 126);
+    EXPECT_EQ(global_light.color.b, 255);
+    ASSERT_TRUE(global_light.has_intensity);
+    EXPECT_NEAR(global_light.intensity, 0.45f, 0.001f);
 
     slayer3d_map_destroy(document);
     SDL_free(map_json);
