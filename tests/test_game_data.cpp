@@ -18509,6 +18509,8 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     EXPECT_TRUE(contains_text(labels, "Things"));
     EXPECT_TRUE(contains_text(labels, "Actors"));
     EXPECT_TRUE(contains_text(labels, "Objects"));
+    EXPECT_TRUE(contains_text(labels, "Lights"));
+    EXPECT_TRUE(contains_text(labels, "Effects"));
     EXPECT_TRUE(contains_text(labels, "Placeholders"));
     EXPECT_TRUE(contains_text(labels, "Meshes"));
     EXPECT_TRUE(contains_text(labels, "Player"));
@@ -26089,6 +26091,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(contains_ui_text(actor_text, "Things"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Actors"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Objects"));
+    EXPECT_TRUE(contains_ui_text(actor_text, "Lights"));
+    EXPECT_TRUE(contains_ui_text(actor_text, "Effects"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Placeholders"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Meshes"));
     EXPECT_TRUE(contains_ui_text(actor_text, "Player"));
