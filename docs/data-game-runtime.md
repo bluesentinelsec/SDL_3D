@@ -279,6 +279,26 @@ export as top-level `effects` entries for particle emitters, fog volumes,
 fire/smoke markers, or custom game-defined effect types. Active scene skybox
 data exports as a top-level `skybox` object when present, so game runtimes can
 consume environment selection without understanding the editor-only fragment.
+Global lighting defaults export under the map `global` object. The editor Global
+Lighting panel currently edits ambient light, clear color, exposure, tonemap,
+preview quality, and fog presets. Things > Lights places Directional, Point,
+Spot, Area Rect, and Area Sphere light markers; the selected-light inspector
+offers common intensity, range, color, shadow, falloff, spot-cone, and area-size
+presets while the Data inspector remains available for game-specific key/value
+pairs.
+
+Lighting planning is deliberately API-centered. File > Plan Lighting, the Global
+Lighting panel's Plan Lighting button, the editor CLI command below, and caller
+code all use the public SlayerMap lighting-plan API:
+
+```sh
+build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json
+```
+
+The command accepts `--preview`, `--final`, `--max-dynamic-lights`,
+`--max-static-lights`, and `--no-dynamic-preview` for tool and CI workflows.
+Planning reports runtime-preview lights, static/baked lights, area lights,
+whether a bake is required, and whether configured budgets were exceeded.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
@@ -355,7 +375,11 @@ Optional flags:
 
 - `--map <level.slayermap.json>` materializes a saved Slayer3D map to a
   temporary playable data-game package and runs it with the brush FPS
-  controller.
+  controller. The generated package bridges map global lighting and authored
+  directional, point, and spot lights into runtime data. Area lights currently
+  use point-light preview until baked-lighting artifacts are implemented. The
+  generated scene also includes a small lighting debug HUD with planner counts
+  and bake/budget status.
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
 - `--scene <scene-id>` starts directly in a loaded scene instead of

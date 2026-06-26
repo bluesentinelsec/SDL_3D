@@ -361,13 +361,35 @@ a user-facing authoring term.
 }
 ```
 
-Spot lights use `inner_angle_degrees` and `outer_angle_degrees`; area sphere
-lights use `radius`; area rect lights use `width` and `height`. `falloff` may be
-`inverse_square`, `linear`, or `none`. `animation` is a reusable primitive layer
-for common dynamic lights such as torch flicker, fluorescent flicker, warning
-alarms, rotating sirens, projectile fireballs, muzzle flashes, and steady room
-lights. Games may ignore unknown animation properties or reinterpret them for a
-custom renderer.
+Spot lights use `inner_angle_degrees` and `outer_angle_degrees`; the engine
+validator rejects spot lights whose outer cone is smaller than the inner cone.
+Area sphere lights require a positive `radius`; area rect lights require
+positive `width` and `height`. `falloff` may be `inverse_square`, `linear`, or
+`none`. `animation` is a reusable primitive layer for common dynamic lights such
+as torch flicker, fluorescent flicker, warning alarms, rotating sirens,
+projectile fireballs, muzzle flashes, and steady room lights. Games may ignore
+unknown animation properties or reinterpret them for a custom renderer.
+
+The bundled editor exposes light placement through Things > Lights. Current
+entries match the canonical schema: Directional, Point, Spot, Area Rect, and
+Area Sphere. Selecting a placed light shows a light-specific inspector with
+kind, intensity, range, shadow mode, falloff, color presets, spot cone presets,
+and area-size presets. The generic Data inspector remains available for
+arbitrary key/value gameplay properties.
+
+File > Plan Lighting and the Global Lighting panel's Plan Lighting button both
+use `slayer3d_map_build_lighting_plan()`. This is the same public API intended
+for editor GUI commands, editor CLI commands such as
+`slayer3d_editor lighting-plan --input level.slayermap.json`, and caller code.
+The planner reports total, dynamic, static, area, runtime-preview, and bake-light
+counts, plus budget status. It does not bake lighting by itself; it is the
+shared front door for later bake/compute implementations.
+
+Generated playable-map packages also run the same lighting planner and emit a
+small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,
+runtime and bake counts, class counts, and bake/budget status so
+`slayer3d_runner --map` immediately exposes whether a saved map contains the
+expected lighting work.
 
 Map validation warns when authored lighting exceeds the default planning
 budgets: 8 runtime-preview lights and 256 static/baked lights. These warnings

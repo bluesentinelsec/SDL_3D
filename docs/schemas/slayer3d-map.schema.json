@@ -332,6 +332,22 @@
       "type": "object",
       "required": ["id", "type"],
       "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "area_rect" } },
+            "required": ["type"]
+          },
+          "then": { "required": ["width", "height"] }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "area_sphere" } },
+            "required": ["type"]
+          },
+          "then": { "required": ["radius"] }
+        }
+      ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "source_actor": { "type": "string", "minLength": 1 },
