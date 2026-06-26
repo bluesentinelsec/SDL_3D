@@ -718,28 +718,149 @@ static bool map_validate_prefabs(map_validation_context *ctx, yyjson_val *root)
     return ok;
 }
 
+static bool map_validate_optional_non_negative_number(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                      const char *json_path, const char *description);
+static bool map_validate_optional_positive_number(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                                  const char *json_path, const char *description);
+static bool map_validate_optional_bool(map_validation_context *ctx, yyjson_val *object, const char *key,
+                                       const char *json_path, const char *description);
+
 static bool map_validate_light_kind(map_validation_context *ctx, yyjson_val *light, const char *path)
 {
     yyjson_val *kind = map_obj_get(light, "kind");
     if (kind == NULL)
         return true;
     if (!yyjson_is_str(kind) || yyjson_get_str(kind)[0] == '\0')
-        return map_error(ctx, path, "light kind must be dynamic, baked, or both");
+        return map_error(ctx, path, "light kind must be dynamic, baked, static, or both");
     const char *value = yyjson_get_str(kind);
-    if (SDL_strcmp(value, "dynamic") == 0 || SDL_strcmp(value, "baked") == 0 || SDL_strcmp(value, "both") == 0)
+    if (SDL_strcmp(value, "dynamic") == 0 || SDL_strcmp(value, "baked") == 0 || SDL_strcmp(value, "static") == 0 ||
+        SDL_strcmp(value, "both") == 0)
         return true;
-    return map_error(ctx, path, "light kind must be dynamic, baked, or both");
+    return map_error(ctx, path, "light kind must be dynamic, baked, static, or both");
 }
 
 static bool map_validate_light_type(map_validation_context *ctx, yyjson_val *light, const char *path)
 {
     yyjson_val *type = map_obj_get(light, "type");
     if (!yyjson_is_str(type) || yyjson_get_str(type)[0] == '\0')
-        return map_error(ctx, path, "light type must be directional, point, or spot");
+        return map_error(ctx, path, "light type must be directional, point, spot, area_rect, or area_sphere");
     const char *value = yyjson_get_str(type);
-    if (SDL_strcmp(value, "directional") == 0 || SDL_strcmp(value, "point") == 0 || SDL_strcmp(value, "spot") == 0)
+    if (SDL_strcmp(value, "directional") == 0 || SDL_strcmp(value, "point") == 0 || SDL_strcmp(value, "spot") == 0 ||
+        SDL_strcmp(value, "area_rect") == 0 || SDL_strcmp(value, "area_sphere") == 0)
         return true;
-    return map_error(ctx, path, "light type must be directional, point, or spot");
+    return map_error(ctx, path, "light type must be directional, point, spot, area_rect, or area_sphere");
+}
+
+static bool map_validate_light_shadow_mode(map_validation_context *ctx, yyjson_val *light, const char *path)
+{
+    const char *value = map_json_string(light, "shadow_mode");
+    if (value == NULL)
+        return map_obj_get(light, "shadow_mode") == NULL || map_error(ctx, path, "light shadow_mode must be a string");
+    if (SDL_strcmp(value, "none") == 0 || SDL_strcmp(value, "baked") == 0 || SDL_strcmp(value, "dynamic") == 0 ||
+        SDL_strcmp(value, "both") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, path, "light shadow_mode must be none, baked, dynamic, or both");
+}
+
+static bool map_validate_light_falloff(map_validation_context *ctx, yyjson_val *light, const char *path)
+{
+    const char *value = map_json_string(light, "falloff");
+    if (value == NULL)
+        return map_obj_get(light, "falloff") == NULL || map_error(ctx, path, "light falloff must be a string");
+    if (SDL_strcmp(value, "inverse_square") == 0 || SDL_strcmp(value, "linear") == 0 || SDL_strcmp(value, "none") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, path, "light falloff must be inverse_square, linear, or none");
+}
+
+static bool map_validate_light_animation_type(map_validation_context *ctx, yyjson_val *animation, const char *path)
+{
+    const char *value = map_json_string(animation, "type");
+    if (value == NULL)
+        return map_obj_get(animation, "type") == NULL || map_error(ctx, path, "light animation type must be a string");
+    if (SDL_strcmp(value, "none") == 0 || SDL_strcmp(value, "flicker") == 0 || SDL_strcmp(value, "pulse") == 0 ||
+        SDL_strcmp(value, "rotate") == 0 || SDL_strcmp(value, "orbit") == 0 || SDL_strcmp(value, "sweep") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, path, "light animation type must be none, flicker, pulse, rotate, orbit, or sweep");
+}
+
+static bool map_validate_light_animation_preset(map_validation_context *ctx, yyjson_val *animation, const char *path)
+{
+    const char *value = map_json_string(animation, "preset");
+    if (value == NULL)
+        return map_obj_get(animation, "preset") == NULL ||
+               map_error(ctx, path, "light animation preset must be a string");
+    if (SDL_strcmp(value, "torch_fire") == 0 || SDL_strcmp(value, "fluorescent_flicker") == 0 ||
+        SDL_strcmp(value, "warning_alarm") == 0 || SDL_strcmp(value, "rotating_siren") == 0 ||
+        SDL_strcmp(value, "projectile_fireball") == 0 || SDL_strcmp(value, "muzzle_flash") == 0 ||
+        SDL_strcmp(value, "steady_room") == 0)
+    {
+        return true;
+    }
+    return map_error(ctx, path,
+                     "light animation preset must be torch_fire, fluorescent_flicker, warning_alarm, "
+                     "rotating_siren, projectile_fireball, muzzle_flash, or steady_room");
+}
+
+static bool map_validate_light_animation(map_validation_context *ctx, yyjson_val *animation, const char *path)
+{
+    if (animation == NULL)
+        return true;
+    if (!yyjson_is_obj(animation))
+        return map_error(ctx, path, "light animation must be an object");
+    char enabled_path[MAP_PATH_MAX];
+    char type_path[MAP_PATH_MAX];
+    char preset_path[MAP_PATH_MAX];
+    char rate_path[MAP_PATH_MAX];
+    char amplitude_path[MAP_PATH_MAX];
+    char min_path[MAP_PATH_MAX];
+    char max_path[MAP_PATH_MAX];
+    char phase_path[MAP_PATH_MAX];
+    char axis_path[MAP_PATH_MAX];
+    char radius_path[MAP_PATH_MAX];
+    char properties_path[MAP_PATH_MAX];
+    map_format_path(enabled_path, sizeof(enabled_path), "%s.enabled", path);
+    map_format_path(type_path, sizeof(type_path), "%s.type", path);
+    map_format_path(preset_path, sizeof(preset_path), "%s.preset", path);
+    map_format_path(rate_path, sizeof(rate_path), "%s.rate_hz", path);
+    map_format_path(amplitude_path, sizeof(amplitude_path), "%s.amplitude", path);
+    map_format_path(min_path, sizeof(min_path), "%s.min_intensity", path);
+    map_format_path(max_path, sizeof(max_path), "%s.max_intensity", path);
+    map_format_path(phase_path, sizeof(phase_path), "%s.phase", path);
+    map_format_path(axis_path, sizeof(axis_path), "%s.axis", path);
+    map_format_path(radius_path, sizeof(radius_path), "%s.radius", path);
+    map_format_path(properties_path, sizeof(properties_path), "%s.properties", path);
+
+    yyjson_val *min_intensity = map_obj_get(animation, "min_intensity");
+    yyjson_val *max_intensity = map_obj_get(animation, "max_intensity");
+    if (!map_validate_optional_bool(ctx, animation, "enabled", enabled_path, "light animation enabled") ||
+        !map_validate_light_animation_type(ctx, animation, type_path) ||
+        !map_validate_light_animation_preset(ctx, animation, preset_path) ||
+        !map_validate_optional_non_negative_number(ctx, animation, "rate_hz", rate_path, "light animation rate") ||
+        !map_validate_optional_non_negative_number(ctx, animation, "amplitude", amplitude_path,
+                                                   "light animation amplitude") ||
+        !map_validate_optional_non_negative_number(ctx, animation, "min_intensity", min_path,
+                                                   "light animation min intensity") ||
+        !map_validate_optional_non_negative_number(ctx, animation, "max_intensity", max_path,
+                                                   "light animation max intensity") ||
+        !map_validate_optional_non_negative_number(ctx, animation, "phase", phase_path, "light animation phase") ||
+        !map_validate_optional_vec3(ctx, animation, "axis", axis_path, "light animation axis") ||
+        !map_validate_optional_positive_number(ctx, animation, "radius", radius_path, "light animation radius") ||
+        !map_validate_properties(ctx, map_obj_get(animation, "properties"), properties_path))
+    {
+        return false;
+    }
+    if (min_intensity != NULL && max_intensity != NULL && yyjson_is_num(min_intensity) &&
+        yyjson_is_num(max_intensity) && yyjson_get_num(max_intensity) < yyjson_get_num(min_intensity))
+    {
+        return map_error(ctx, max_path, "light animation max_intensity must be greater than or equal to min_intensity");
+    }
+    return true;
 }
 
 static bool map_validate_optional_non_negative_number(map_validation_context *ctx, yyjson_val *object, const char *key,
@@ -890,6 +1011,12 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
         char range_path[MAP_PATH_MAX];
         char inner_path[MAP_PATH_MAX];
         char outer_path[MAP_PATH_MAX];
+        char width_path[MAP_PATH_MAX];
+        char height_path[MAP_PATH_MAX];
+        char radius_path[MAP_PATH_MAX];
+        char shadow_mode_path[MAP_PATH_MAX];
+        char falloff_path[MAP_PATH_MAX];
+        char animation_path[MAP_PATH_MAX];
         map_format_path(path, sizeof(path), "$.lights[%zu]", i);
         map_format_path(id_path, sizeof(id_path), "%s.id", path);
         map_format_path(source_actor_path, sizeof(source_actor_path), "%s.source_actor", path);
@@ -902,6 +1029,12 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
         map_format_path(range_path, sizeof(range_path), "%s.range", path);
         map_format_path(inner_path, sizeof(inner_path), "%s.inner_angle_degrees", path);
         map_format_path(outer_path, sizeof(outer_path), "%s.outer_angle_degrees", path);
+        map_format_path(width_path, sizeof(width_path), "%s.width", path);
+        map_format_path(height_path, sizeof(height_path), "%s.height", path);
+        map_format_path(radius_path, sizeof(radius_path), "%s.radius", path);
+        map_format_path(shadow_mode_path, sizeof(shadow_mode_path), "%s.shadow_mode", path);
+        map_format_path(falloff_path, sizeof(falloff_path), "%s.falloff", path);
+        map_format_path(animation_path, sizeof(animation_path), "%s.animation", path);
         yyjson_val *light = yyjson_arr_get(lights, i);
         if (!yyjson_is_obj(light))
             return map_error(ctx, path, "light entry must be an object");
@@ -922,9 +1055,15 @@ static bool map_validate_lights(map_validation_context *ctx, yyjson_val *root)
                                                    "light inner angle") ||
             !map_validate_optional_positive_number(ctx, light, "outer_angle_degrees", outer_path,
                                                    "light outer angle") ||
+            !map_validate_optional_positive_number(ctx, light, "width", width_path, "light width") ||
+            !map_validate_optional_positive_number(ctx, light, "height", height_path, "light height") ||
+            !map_validate_optional_positive_number(ctx, light, "radius", radius_path, "light radius") ||
             (casts_shadow != NULL && !yyjson_is_bool(casts_shadow) &&
              !map_error(ctx, path, "light casts_shadow must be a boolean")) ||
+            !map_validate_light_shadow_mode(ctx, light, shadow_mode_path) ||
+            !map_validate_light_falloff(ctx, light, falloff_path) ||
             !map_optional_non_empty_string(ctx, light, "bake_group", path, "light bake group") ||
+            !map_validate_light_animation(ctx, map_obj_get(light, "animation"), animation_path) ||
             !map_validate_properties(ctx, map_obj_get(light, "properties"), path))
         {
             return false;
@@ -1625,6 +1764,15 @@ static bool map_read_optional_float(yyjson_val *object, const char *key, float *
     return true;
 }
 
+static bool map_read_optional_bool_value(yyjson_val *object, const char *key, bool *out_value)
+{
+    yyjson_val *value = map_obj_get(object, key);
+    if (!yyjson_is_bool(value) || out_value == NULL)
+        return false;
+    *out_value = yyjson_get_bool(value);
+    return true;
+}
+
 size_t slayer3d_map_get_asset_count(const slayer3d_map_document *document, slayer3d_map_asset_kind kind)
 {
     if (document == NULL || document->doc == NULL)
@@ -1718,6 +1866,65 @@ bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index,
     map_read_transform(actor, &out_actor->transform);
     out_actor->has_color = map_read_optional_color(actor, "color", &out_actor->color);
     out_actor->property_count = map_properties_count(actor);
+    return true;
+}
+
+static void map_read_light_animation(yyjson_val *light, slayer3d_map_light_animation *out_animation)
+{
+    if (out_animation == NULL)
+        return;
+    SDL_zero(*out_animation);
+    out_animation->type = "none";
+
+    yyjson_val *animation = map_obj_get(light, "animation");
+    if (!yyjson_is_obj(animation))
+        return;
+
+    map_read_optional_bool_value(animation, "enabled", &out_animation->enabled);
+    const char *type = map_json_string(animation, "type");
+    if (type != NULL)
+        out_animation->type = type;
+    out_animation->preset = map_json_string(animation, "preset");
+    out_animation->has_rate_hz = map_read_optional_float(animation, "rate_hz", &out_animation->rate_hz);
+    out_animation->has_amplitude = map_read_optional_float(animation, "amplitude", &out_animation->amplitude);
+    out_animation->has_phase = map_read_optional_float(animation, "phase", &out_animation->phase);
+    out_animation->has_min_intensity =
+        map_read_optional_float(animation, "min_intensity", &out_animation->min_intensity);
+    out_animation->has_max_intensity =
+        map_read_optional_float(animation, "max_intensity", &out_animation->max_intensity);
+    out_animation->has_axis = map_read_vec3_value(map_obj_get(animation, "axis"), &out_animation->axis);
+    out_animation->has_radius = map_read_optional_float(animation, "radius", &out_animation->radius);
+    out_animation->property_count = map_properties_count(animation);
+}
+
+bool slayer3d_map_get_light(const slayer3d_map_document *document, size_t index, slayer3d_map_light *out_light)
+{
+    yyjson_val *light = map_root_array_item(document, "lights", index);
+    if (!yyjson_is_obj(light) || out_light == NULL)
+        return false;
+    SDL_zero(*out_light);
+    out_light->id = map_json_string(light, "id");
+    out_light->source_actor = map_json_string(light, "source_actor");
+    out_light->kind = map_json_string(light, "kind");
+    out_light->type = map_json_string(light, "type");
+    map_read_transform(light, &out_light->transform);
+    out_light->has_direction = map_read_vec3_value(map_obj_get(light, "direction"), &out_light->direction);
+    out_light->has_color = map_read_optional_color(light, "color", &out_light->color);
+    out_light->has_intensity = map_read_optional_float(light, "intensity", &out_light->intensity);
+    out_light->has_range = map_read_optional_float(light, "range", &out_light->range);
+    out_light->has_inner_angle_degrees =
+        map_read_optional_float(light, "inner_angle_degrees", &out_light->inner_angle_degrees);
+    out_light->has_outer_angle_degrees =
+        map_read_optional_float(light, "outer_angle_degrees", &out_light->outer_angle_degrees);
+    out_light->has_width = map_read_optional_float(light, "width", &out_light->width);
+    out_light->has_height = map_read_optional_float(light, "height", &out_light->height);
+    out_light->has_radius = map_read_optional_float(light, "radius", &out_light->radius);
+    out_light->has_casts_shadow = map_read_optional_bool_value(light, "casts_shadow", &out_light->casts_shadow);
+    out_light->shadow_mode = map_json_string(light, "shadow_mode");
+    out_light->falloff = map_json_string(light, "falloff");
+    out_light->bake_group = map_json_string(light, "bake_group");
+    map_read_light_animation(light, &out_light->animation);
+    out_light->property_count = map_properties_count(light);
     return true;
 }
 
@@ -1845,6 +2052,20 @@ bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document,
                                           int error_buffer_size)
 {
     return map_get_property_json_from_object(map_root_array_item(document, "actors", actor_index), key, out_json,
+                                             out_json_size, error_buffer, error_buffer_size);
+}
+
+const char *slayer3d_map_get_light_property_key(const slayer3d_map_document *document, size_t light_index,
+                                                size_t property_index)
+{
+    return map_property_key_at(map_root_array_item(document, "lights", light_index), property_index);
+}
+
+bool slayer3d_map_get_light_property_json(const slayer3d_map_document *document, size_t light_index, const char *key,
+                                          char **out_json, size_t *out_json_size, char *error_buffer,
+                                          int error_buffer_size)
+{
+    return map_get_property_json_from_object(map_root_array_item(document, "lights", light_index), key, out_json,
                                              out_json_size, error_buffer, error_buffer_size);
 }
 

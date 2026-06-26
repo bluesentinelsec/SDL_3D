@@ -43670,7 +43670,29 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidDocuments)
     "fog": { "mode": "linear", "start": 8, "end": 4 }
   }
 })json",
-                           "global fog end must be greater than start"}};
+                           "global fog end must be greater than start"},
+                          {"bad_light_type",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    { "id": "light.bad", "type": "volumetric" }
+  ]
+})json",
+                           "light type must be directional, point, spot, area_rect, or area_sphere"},
+                          {"bad_light_animation",
+                           R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "lights": [
+    {
+      "id": "light.bad",
+      "type": "point",
+      "animation": { "type": "flicker", "min_intensity": 2, "max_intensity": 1 }
+    }
+  ]
+})json",
+                           "light animation max_intensity must be greater than or equal to min_intensity"}};
 
     for (const Case &test_case : cases)
     {
@@ -44009,7 +44031,7 @@ TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
     EXPECT_EQ(slayer3d_map_get_brush_count(document), 5u);
     EXPECT_EQ(slayer3d_map_get_actor_count(document), 4u);
     EXPECT_EQ(slayer3d_map_get_prefab_count(document), 1u);
-    EXPECT_EQ(slayer3d_map_get_light_count(document), 2u);
+    EXPECT_EQ(slayer3d_map_get_light_count(document), 3u);
     EXPECT_EQ(slayer3d_map_get_effect_count(document), 1u);
     EXPECT_TRUE(slayer3d_map_has_skybox(document));
     EXPECT_EQ(slayer3d_map_get_connection_count(document), 4u);
@@ -44019,6 +44041,41 @@ TEST(GameDataRuntime, SlayerMapExampleLoadsThroughPublicApi)
     EXPECT_EQ(global.ambient_light.r, 54);
     EXPECT_STREQ(global.tonemap, "aces");
     EXPECT_EQ(global.property_count, 2u);
+
+    slayer3d_map_light key_light{};
+    ASSERT_TRUE(slayer3d_map_get_light(document, 0, &key_light));
+    EXPECT_STREQ(key_light.id, "light.key");
+    EXPECT_STREQ(key_light.kind, "dynamic");
+    EXPECT_STREQ(key_light.type, "point");
+    EXPECT_TRUE(key_light.transform.has_position);
+    EXPECT_TRUE(key_light.has_color);
+    EXPECT_TRUE(key_light.has_intensity);
+    EXPECT_FLOAT_EQ(key_light.intensity, 1.8f);
+    EXPECT_TRUE(key_light.has_range);
+    EXPECT_FLOAT_EQ(key_light.range, 9.0f);
+    EXPECT_TRUE(key_light.has_casts_shadow);
+    EXPECT_TRUE(key_light.casts_shadow);
+    EXPECT_STREQ(key_light.shadow_mode, "dynamic");
+    EXPECT_STREQ(key_light.falloff, "inverse_square");
+    EXPECT_TRUE(key_light.animation.enabled);
+    EXPECT_STREQ(key_light.animation.type, "flicker");
+    EXPECT_STREQ(key_light.animation.preset, "torch_fire");
+    EXPECT_TRUE(key_light.animation.has_rate_hz);
+    EXPECT_FLOAT_EQ(key_light.animation.rate_hz, 7.5f);
+    EXPECT_TRUE(key_light.animation.has_min_intensity);
+    EXPECT_FLOAT_EQ(key_light.animation.min_intensity, 1.4f);
+    EXPECT_EQ(key_light.property_count, 2u);
+    EXPECT_STREQ(slayer3d_map_get_light_property_key(document, 0, 0), "starts_enabled");
+
+    slayer3d_map_light area_light{};
+    ASSERT_TRUE(slayer3d_map_get_light(document, 2, &area_light));
+    EXPECT_STREQ(area_light.id, "light.ceiling.panel");
+    EXPECT_STREQ(area_light.type, "area_rect");
+    EXPECT_TRUE(area_light.has_width);
+    EXPECT_FLOAT_EQ(area_light.width, 3.5f);
+    EXPECT_TRUE(area_light.has_height);
+    EXPECT_FLOAT_EQ(area_light.height, 1.0f);
+    EXPECT_STREQ(area_light.bake_group, "training_room");
 
     slayer3d_map_asset model_asset{};
     ASSERT_TRUE(slayer3d_map_get_asset(document, SLAYER3D_MAP_ASSET_MODEL, 0, &model_asset));

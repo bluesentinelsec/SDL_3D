@@ -335,8 +335,8 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "source_actor": { "type": "string", "minLength": 1 },
-        "kind": { "enum": ["dynamic", "baked", "both"] },
-        "type": { "enum": ["directional", "point", "spot"] },
+        "kind": { "enum": ["dynamic", "baked", "static", "both"] },
+        "type": { "enum": ["directional", "point", "spot", "area_rect", "area_sphere"] },
         "transform": { "$ref": "#/$defs/transform" },
         "direction": { "$ref": "#/$defs/vec3" },
         "color": { "$ref": "#/$defs/rgba" },
@@ -344,8 +344,41 @@
         "range": { "type": "number", "exclusiveMinimum": 0 },
         "inner_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
         "outer_angle_degrees": { "type": "number", "exclusiveMinimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
         "casts_shadow": { "type": "boolean" },
+        "shadow_mode": { "enum": ["none", "baked", "dynamic", "both"] },
+        "falloff": { "enum": ["inverse_square", "linear", "none"] },
         "bake_group": { "type": "string", "minLength": 1 },
+        "animation": { "$ref": "#/$defs/lightAnimation" },
+        "properties": { "$ref": "#/$defs/properties" }
+      }
+    },
+    "lightAnimation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "type": { "enum": ["none", "flicker", "pulse", "rotate", "orbit", "sweep"] },
+        "preset": {
+          "enum": [
+            "torch_fire",
+            "fluorescent_flicker",
+            "warning_alarm",
+            "rotating_siren",
+            "projectile_fireball",
+            "muzzle_flash",
+            "steady_room"
+          ]
+        },
+        "rate_hz": { "type": "number", "minimum": 0 },
+        "amplitude": { "type": "number", "minimum": 0 },
+        "phase": { "type": "number", "minimum": 0 },
+        "min_intensity": { "type": "number", "minimum": 0 },
+        "max_intensity": { "type": "number", "minimum": 0 },
+        "axis": { "$ref": "#/$defs/vec3" },
+        "radius": { "type": "number", "exclusiveMinimum": 0 },
         "properties": { "$ref": "#/$defs/properties" }
       }
     },

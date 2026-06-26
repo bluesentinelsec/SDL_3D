@@ -234,6 +234,17 @@
       "intensity": 1.8,
       "range": 9,
       "casts_shadow": true,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "flicker",
+        "preset": "torch_fire",
+        "rate_hz": 7.5,
+        "amplitude": 0.18,
+        "min_intensity": 1.4,
+        "max_intensity": 2.1
+      },
       "properties": {
         "starts_enabled": true,
         "bake_group": "training_room"
@@ -246,8 +257,27 @@
       "direction": [-0.2, -1, 0.1],
       "color": [210, 225, 255, 255],
       "intensity": 0.4,
+      "shadow_mode": "baked",
       "properties": {
         "bake_group": "ambient"
+      }
+    },
+    {
+      "id": "light.ceiling.panel",
+      "kind": "baked",
+      "type": "area_rect",
+      "transform": {
+        "position": [0, 2.85, 0],
+        "rotation": [90, 0, 0]
+      },
+      "width": 3.5,
+      "height": 1.0,
+      "color": [210, 230, 255, 255],
+      "intensity": 1.2,
+      "shadow_mode": "baked",
+      "bake_group": "training_room",
+      "properties": {
+        "purpose": "soft_room_fill"
       }
     }
   ],

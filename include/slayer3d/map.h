@@ -176,6 +176,64 @@ extern "C"
         size_t property_count;
     } slayer3d_map_global_state;
 
+    /** @brief Optional light animation/modulation authored on a map light. */
+    typedef struct slayer3d_map_light_animation
+    {
+        bool enabled;
+        const char *type;
+        const char *preset;
+        bool has_rate_hz;
+        float rate_hz;
+        bool has_amplitude;
+        float amplitude;
+        bool has_phase;
+        float phase;
+        bool has_min_intensity;
+        float min_intensity;
+        bool has_max_intensity;
+        float max_intensity;
+        bool has_axis;
+        slayer3d_vec3 axis;
+        bool has_radius;
+        float radius;
+        size_t property_count;
+    } slayer3d_map_light_animation;
+
+    /** @brief Loaded light view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_light
+    {
+        const char *id;
+        const char *source_actor;
+        const char *kind;
+        const char *type;
+        slayer3d_map_transform transform;
+        bool has_direction;
+        slayer3d_vec3 direction;
+        bool has_color;
+        slayer3d_color color;
+        bool has_intensity;
+        float intensity;
+        bool has_range;
+        float range;
+        bool has_inner_angle_degrees;
+        float inner_angle_degrees;
+        bool has_outer_angle_degrees;
+        float outer_angle_degrees;
+        bool has_width;
+        float width;
+        bool has_height;
+        float height;
+        bool has_radius;
+        float radius;
+        bool has_casts_shadow;
+        bool casts_shadow;
+        const char *shadow_mode;
+        const char *falloff;
+        const char *bake_group;
+        slayer3d_map_light_animation animation;
+        size_t property_count;
+    } slayer3d_map_light;
+
     /**
      * @brief Minimal playable scene descriptor derived from a loaded map.
      *
@@ -349,6 +407,9 @@ extern "C"
     /** @brief Read an actor by index. Returned string pointers are borrowed from @p document. */
     bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index, slayer3d_map_actor *out_actor);
 
+    /** @brief Read a light by index. Returned string pointers are borrowed from @p document. */
+    bool slayer3d_map_get_light(const slayer3d_map_document *document, size_t index, slayer3d_map_light *out_light);
+
     /** @brief Read map-level global lighting and presentation state. */
     bool slayer3d_map_get_global_state(const slayer3d_map_document *document, slayer3d_map_global_state *out_global);
 
@@ -395,6 +456,15 @@ extern "C"
 
     /** @brief Serialize an actor property value to JSON. Free with slayer3d_map_free_string(). */
     bool slayer3d_map_get_actor_property_json(const slayer3d_map_document *document, size_t actor_index,
+                                              const char *key, char **out_json, size_t *out_json_size,
+                                              char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the light property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_light_property_key(const slayer3d_map_document *document, size_t light_index,
+                                                    size_t property_index);
+
+    /** @brief Serialize a light property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_light_property_json(const slayer3d_map_document *document, size_t light_index,
                                               const char *key, char **out_json, size_t *out_json_size,
                                               char *error_buffer, int error_buffer_size);
 

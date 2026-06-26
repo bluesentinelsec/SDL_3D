@@ -277,6 +277,73 @@ preview of primitive actors. `properties` values may be strings, numbers,
 booleans, arrays, objects, or null. This is the primary escape hatch for
 emergent gameplay data.
 
+## Lights
+
+Lights are first-class map objects for editor previews, bake jobs, and runtime
+callers. The canonical light `type` values are `directional`, `point`, `spot`,
+`area_rect`, and `area_sphere`. `kind` may be `dynamic`, `baked`, `static`, or
+`both`; game callers may treat `static` as baked/precomputed, but it is kept as
+a user-facing authoring term.
+
+```json
+{
+  "lights": [
+    {
+      "id": "light.sun.afternoon",
+      "kind": "baked",
+      "type": "directional",
+      "direction": [-0.25, -1.0, 0.15],
+      "color": [255, 238, 180, 255],
+      "intensity": 0.8,
+      "shadow_mode": "baked",
+      "properties": {
+        "preset": "afternoon"
+      }
+    },
+    {
+      "id": "light.torch.1",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [2.0, 1.5, -1.0] },
+      "color": [255, 148, 72, 255],
+      "intensity": 1.6,
+      "range": 6.0,
+      "casts_shadow": true,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "flicker",
+        "preset": "torch_fire",
+        "rate_hz": 8.0,
+        "amplitude": 0.25,
+        "min_intensity": 1.1,
+        "max_intensity": 1.8
+      }
+    },
+    {
+      "id": "light.ceiling.panel",
+      "kind": "baked",
+      "type": "area_rect",
+      "transform": { "position": [0, 2.9, 0], "rotation": [90, 0, 0] },
+      "width": 2.0,
+      "height": 0.6,
+      "color": [210, 230, 255, 255],
+      "intensity": 2.0,
+      "shadow_mode": "baked"
+    }
+  ]
+}
+```
+
+Spot lights use `inner_angle_degrees` and `outer_angle_degrees`; area sphere
+lights use `radius`; area rect lights use `width` and `height`. `falloff` may be
+`inverse_square`, `linear`, or `none`. `animation` is a reusable primitive layer
+for common dynamic lights such as torch flicker, fluorescent flicker, warning
+alarms, rotating sirens, projectile fireballs, muzzle flashes, and steady room
+lights. Games may ignore unknown animation properties or reinterpret them for a
+custom renderer.
+
 ## Connections
 
 Connections are optional generic links between authored objects:
