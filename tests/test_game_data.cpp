@@ -21679,6 +21679,27 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+    auto press_editor_hotkey = [&](SDL_Scancode scancode, SDL_Keymod modifiers) {
+        SDL_SetModState(modifiers);
+        SDL_Event down{};
+        down.type = SDL_EVENT_KEY_DOWN;
+        down.key.scancode = scancode;
+        down.key.mod = modifiers;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event up{};
+        up.type = SDL_EVENT_KEY_UP;
+        up.key.scancode = scancode;
+        up.key.mod = modifiers;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        SDL_SetModState(SDL_KMOD_NONE);
+    };
     auto wheel_editor = [&](float x, float y, float wheel_y) {
         SDL_Event wheel{};
         wheel.type = SDL_EVENT_MOUSE_WHEEL;
@@ -21893,7 +21914,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "rotate", nullptr));
     ASSERT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "rotate");
 
-    emit_signal("signal.editor.file.new");
+    press_editor_hotkey(SDL_SCANCODE_N, SDL_KMOD_GUI);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.new.valid", false));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     EXPECT_EQ(world.brush_count, 0);

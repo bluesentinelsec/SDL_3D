@@ -841,25 +841,21 @@
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.new",
         "on_pressed": "signal.editor.file.new"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.open",
         "on_pressed": "signal.editor.file.open_dialog"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.export",
         "on_pressed": "signal.editor.file.save"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.save_as",
         "on_pressed": "signal.editor.file.save_as_dialog"
       },

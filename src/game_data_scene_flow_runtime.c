@@ -309,6 +309,13 @@ static bool string_array_contains(yyjson_val *array, const char *value)
     return false;
 }
 
+static bool action_is_native_document_shortcut(const char *action)
+{
+    return action != NULL &&
+           (SDL_strcmp(action, "action.editor.new") == 0 || SDL_strcmp(action, "action.editor.open") == 0 ||
+            SDL_strcmp(action, "action.editor.export") == 0 || SDL_strcmp(action, "action.editor.save_as") == 0);
+}
+
 bool slayer3d_game_data_active_scene_allows_action(const slayer3d_game_data_runtime *runtime, int action_id)
 {
     const char *action = find_action_name(runtime, action_id);
@@ -317,6 +324,7 @@ bool slayer3d_game_data_active_scene_allows_action(const slayer3d_game_data_runt
 
     if (runtime->scene_state != NULL &&
         slayer3d_properties_get_bool(runtime->scene_state, "editor.console.focused", false) &&
+        !action_is_native_document_shortcut(action) &&
         (SDL_strncmp(action, "action.editor.", SDL_strlen("action.editor.")) == 0 ||
          SDL_strncmp(action, "editor.", SDL_strlen("editor.")) == 0))
     {

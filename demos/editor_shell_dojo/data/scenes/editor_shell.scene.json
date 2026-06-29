@@ -16,6 +16,7 @@
       "action.editor.command.undo",
       "action.editor.command.redo",
       "action.editor.delete_selected",
+      "action.editor.new",
       "action.editor.open",
       "action.editor.export",
       "action.editor.save_as",
