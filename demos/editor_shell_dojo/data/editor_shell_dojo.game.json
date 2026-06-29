@@ -86,6 +86,13 @@
             "bindings": []
           },
           {
+            "name": "action.editor.new",
+            "bindings": [
+              { "device": "keyboard", "key": "N", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "N", "modifiers": ["gui"] }
+            ]
+          },
+          {
             "name": "action.editor.open",
             "bindings": [
               { "device": "keyboard", "key": "O", "modifiers": ["ctrl"] },
@@ -696,13 +703,13 @@
     "signal.editor.file.toggle",
     "signal.editor.file.close",
     "signal.editor.file.new",
+    "signal.editor.file.open_dialog",
     "signal.editor.file.open",
     "signal.editor.file.save",
+    "signal.editor.file.save_as_dialog",
     "signal.editor.file.save_as",
     "signal.editor.file.validate",
     "signal.editor.file.plan_lighting",
-    "signal.editor.file.focus.open",
-    "signal.editor.file.focus.save_as",
     "signal.editor.global.toggle",
     "signal.editor.global.close",
     "signal.editor.global.tab.lighting",
@@ -835,20 +842,26 @@
       {
         "type": "sensor.input_pressed",
         "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "action": "action.editor.new",
+        "on_pressed": "signal.editor.file.new"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.open",
-        "on_pressed": "signal.editor.open"
+        "on_pressed": "signal.editor.file.open_dialog"
       },
       {
         "type": "sensor.input_pressed",
         "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.export",
-        "on_pressed": "signal.editor.export"
+        "on_pressed": "signal.editor.file.save"
       },
       {
         "type": "sensor.input_pressed",
         "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.save_as",
-        "on_pressed": "signal.editor.save_as"
+        "on_pressed": "signal.editor.file.save_as_dialog"
       },
       {
         "type": "sensor.input_pressed",
@@ -5381,23 +5394,17 @@
       { "signal": "signal.editor.global.data.delete.2", "actions": [{ "type": "editor.global.property.remove", "slot": 2 }] },
       { "signal": "signal.editor.global.data.delete.3", "actions": [{ "type": "editor.global.property.remove", "slot": 3 }] },
       {
-        "signal": "signal.editor.file.focus.open",
+        "signal": "signal.editor.file.open_dialog",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
-          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "open" },
-          { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing open path" }
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "editor.file.dialog", "mode": "open", "path_key": "editor.file.open.path", "default_path_key": "editor.save.path", "accept_signal": "signal.editor.file.open", "status_key": "editor.file.dialog.status", "message_key": "editor.file.dialog.message" }
         ]
       },
       {
-        "signal": "signal.editor.file.focus.save_as",
+        "signal": "signal.editor.file.save_as_dialog",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
-          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "save_as" },
-          { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing save as path" }
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "editor.file.dialog", "mode": "save", "path_key": "editor.save_as.path", "default_path_key": "editor.save.path", "accept_signal": "signal.editor.file.save_as", "status_key": "editor.file.dialog.status", "message_key": "editor.file.dialog.message" }
         ]
       },
       {
@@ -5591,7 +5598,12 @@
       {
         "signal": "signal.editor.file.save",
         "actions": [
-          { "type": "signal.emit", "signal": "signal.editor.export" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.save.path", "op": "==", "value": "", "default": "" },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.file.save_as_dialog" }],
+            "else": [{ "type": "signal.emit", "signal": "signal.editor.export" }]
+          },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]

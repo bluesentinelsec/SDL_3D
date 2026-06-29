@@ -5,11 +5,14 @@
 #include <SDL3/SDL_timer.h>
 #include <SDL3/SDL_video.h>
 
+#include "slayer3d/game_data_runtime.h"
 #include "slayer3d/game_presentation.h"
 #include "slayer3d/input.h"
 #include "slayer3d/properties.h"
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/transition.h"
+
+#include "game_data_editor_dialog_internal.h"
 
 struct slayer3d_data_game_runtime
 {
@@ -1648,6 +1651,57 @@ static bool refresh_active_input_profile_if_available(slayer3d_data_game_runtime
                     error[0] != '\0' ? error : "unknown error");
         return false;
     }
+    return true;
+}
+
+bool slayer3d_data_game_runtime_process_event(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                              const SDL_Event *event)
+{
+    const Uint32 dialog_event_type = slayer3d_game_data_editor_file_dialog_event_type();
+    if (runtime == NULL || runtime->data == NULL || event == NULL || dialog_event_type == 0 ||
+        event->type != dialog_event_type)
+    {
+        return false;
+    }
+
+    editor_file_dialog_request *request = (editor_file_dialog_request *)event->user.data1;
+    if (ctx != NULL)
+        ctx->input_event_consumed = true;
+    if (request == NULL)
+        return true;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime->data);
+    const char *message = request->message != NULL ? request->message : "";
+    if (scene_state != NULL)
+    {
+        if (request->message_key != NULL && request->message_key[0] != '\0')
+            slayer3d_properties_set_string(scene_state, request->message_key, message);
+        if (request->status_key != NULL && request->status_key[0] != '\0')
+        {
+            const char *status = request->failed ? "failed" : (request->canceled ? "canceled" : "selected");
+            slayer3d_properties_set_string(scene_state, request->status_key, status);
+        }
+    }
+
+    if (request->failed)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D file dialog failed: %s",
+                    message[0] != '\0' ? message : "unknown error");
+    }
+    else if (!request->canceled && request->selected_path != NULL && request->selected_path[0] != '\0')
+    {
+        if (scene_state != NULL && request->path_key != NULL && request->path_key[0] != '\0')
+            slayer3d_properties_set_string(scene_state, request->path_key, request->selected_path);
+        const int signal_id = slayer3d_game_data_find_signal(runtime->data, request->accept_signal);
+        slayer3d_signal_bus *bus =
+            runtime->session != NULL ? slayer3d_game_session_get_signal_bus(runtime->session) : NULL;
+        if (signal_id >= 0 && bus != NULL)
+            slayer3d_signal_emit(bus, signal_id, NULL);
+        else
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D file dialog accept signal was not available");
+    }
+
+    slayer3d_game_data_editor_file_dialog_request_free(request);
     return true;
 }
 

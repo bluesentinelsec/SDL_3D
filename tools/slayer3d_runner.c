@@ -415,6 +415,14 @@ static void runner_pause_tick(slayer3d_game_context *ctx, void *userdata, float 
         (void)slayer3d_data_game_runtime_update_frame(state->runtime, ctx, real_dt);
 }
 
+static bool runner_event(slayer3d_game_context *ctx, void *userdata, const SDL_Event *event)
+{
+    runner_state *state = (runner_state *)userdata;
+    if (state != NULL && slayer3d_data_game_runtime_process_event(state->runtime, ctx, event))
+        return true;
+    return true;
+}
+
 static void runner_render(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     runner_state *state = (runner_state *)userdata;
@@ -486,6 +494,7 @@ int slayer3d_runner_main(int argc, char **argv)
     slayer3d_game_callbacks callbacks;
     SDL_zero(callbacks);
     callbacks.init = runner_init;
+    callbacks.event = runner_event;
     callbacks.tick = runner_tick;
     callbacks.pause_tick = runner_pause_tick;
     callbacks.render = runner_render;

@@ -3,11 +3,149 @@
  * @brief Data-authored action dispatcher.
  */
 
+#include "game_data_editor_dialog_internal.h"
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
+
+void slayer3d_game_data_editor_file_dialog_request_free(editor_file_dialog_request *request)
+{
+    if (request == NULL)
+        return;
+    SDL_free(request->path_key);
+    SDL_free(request->accept_signal);
+    SDL_free(request->status_key);
+    SDL_free(request->message_key);
+    SDL_free(request->default_location);
+    SDL_free(request->selected_path);
+    SDL_free(request->message);
+    SDL_free(request);
+}
+
+Uint32 slayer3d_game_data_editor_file_dialog_event_type(void)
+{
+    static Uint32 event_type = 0;
+    if (event_type == 0)
+        event_type = SDL_RegisterEvents(1);
+    return event_type;
+}
+
+static void SDLCALL editor_file_dialog_callback(void *userdata, const char *const *filelist, int filter)
+{
+    (void)filter;
+    editor_file_dialog_request *request = (editor_file_dialog_request *)userdata;
+    if (request == NULL)
+        return;
+
+    if (filelist == NULL)
+    {
+        const char *error = SDL_GetError();
+        request->failed = true;
+        request->message = SDL_strdup(error != NULL && error[0] != '\0' ? error : "file dialog failed");
+    }
+    else if (filelist[0] == NULL)
+    {
+        request->canceled = true;
+        request->message = SDL_strdup("file dialog canceled");
+    }
+    else
+    {
+        request->selected_path = SDL_strdup(filelist[0]);
+        if (request->selected_path == NULL)
+        {
+            request->failed = true;
+            request->message = SDL_strdup("file dialog result allocation failed");
+        }
+    }
+
+    const Uint32 event_type = slayer3d_game_data_editor_file_dialog_event_type();
+    if (event_type == 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor file dialog could not allocate SDL event type");
+        slayer3d_game_data_editor_file_dialog_request_free(request);
+        return;
+    }
+
+    SDL_Event event;
+    SDL_zero(event);
+    event.type = event_type;
+    event.user.data1 = request;
+    if (!SDL_PushEvent(&event))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor file dialog could not push SDL event: %s",
+                    SDL_GetError());
+        slayer3d_game_data_editor_file_dialog_request_free(request);
+    }
+}
+
+static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    static const SDL_DialogFileFilter map_filters[] = {
+        {"Slayer3D maps", "slayermap.json;json"},
+        {"JSON", "json"},
+        {"All files", "*"},
+    };
+
+    const char *mode = json_string(action, "mode", "");
+    const bool save = SDL_strcmp(mode, "save") == 0;
+    if (!save && SDL_strcmp(mode, "open") != 0)
+        return false;
+
+    const char *path_key = json_string(action, "path_key", NULL);
+    const char *accept_signal = json_string(action, "accept_signal", NULL);
+    if (path_key == NULL || path_key[0] == '\0' || accept_signal == NULL || accept_signal[0] == '\0')
+        return false;
+
+    editor_file_dialog_request *request = (editor_file_dialog_request *)SDL_calloc(1, sizeof(*request));
+    if (request == NULL)
+        return false;
+    request->path_key = SDL_strdup(path_key);
+    request->accept_signal = SDL_strdup(accept_signal);
+    request->status_key = SDL_strdup(json_string(action, "status_key", ""));
+    request->message_key = SDL_strdup(json_string(action, "message_key", ""));
+    const char *default_path_key = json_string(action, "default_path_key", NULL);
+    const char *default_path = default_path_key != NULL && runtime != NULL && runtime->scene_state != NULL
+                                   ? slayer3d_properties_get_string(runtime->scene_state, default_path_key, "")
+                                   : "";
+    if (default_path != NULL && default_path[0] != '\0')
+        request->default_location = SDL_strdup(default_path);
+
+    if (request->path_key == NULL || request->accept_signal == NULL || request->status_key == NULL ||
+        request->message_key == NULL)
+    {
+        slayer3d_game_data_editor_file_dialog_request_free(request);
+        return false;
+    }
+    if (slayer3d_game_data_editor_file_dialog_event_type() == 0)
+    {
+        slayer3d_game_data_editor_file_dialog_request_free(request);
+        return false;
+    }
+
+    if (runtime != NULL && runtime->scene_state != NULL)
+    {
+        if (request->status_key[0] != '\0')
+            slayer3d_properties_set_string(runtime->scene_state, request->status_key,
+                                           save ? "save pending" : "open pending");
+        if (request->message_key[0] != '\0')
+            slayer3d_properties_set_string(runtime->scene_state, request->message_key, "");
+    }
+
+    if (save)
+    {
+        SDL_ShowSaveFileDialog(editor_file_dialog_callback, request, NULL, map_filters, (int)SDL_arraysize(map_filters),
+                               request->default_location);
+    }
+    else
+    {
+        SDL_ShowOpenFileDialog(editor_file_dialog_callback, request, NULL, map_filters, (int)SDL_arraysize(map_filters),
+                               request->default_location, false);
+    }
+    return true;
+}
 
 static bool debug_write_all(SDL_IOStream *stream, const char *text)
 {
@@ -3236,6 +3374,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
             slayer3d_signal_emit(bus, signal_id, payload);
         return signal_id >= 0;
     }
+
+    if (SDL_strcmp(type, "editor.file.dialog") == 0)
+        return execute_editor_file_dialog_action(runtime, action);
 
     if (SDL_strcmp(type, "timer.start") == 0)
     {
