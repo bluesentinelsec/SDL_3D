@@ -1005,6 +1005,10 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.actor.scan", validate_editor_actor_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.select_index", validate_editor_actor_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.place_selected", validate_editor_actor_place_selected_action),
+        ACTION_RULE_EXACT_HANDLER("editor.global.property.new", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.global.property.apply", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.global.property.select_slot", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.global.property.remove", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.connection.mark_source", validate_editor_connection_mark_source_action),
         ACTION_RULE_EXACT_HANDLER("editor.connection.add", validate_editor_connection_add_action),
         ACTION_RULE_EXACT_HANDLER("editor.prefab.define", validate_editor_prefab_define_action),
@@ -1029,6 +1033,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.map.save", validate_editor_map_save_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.load", validate_editor_map_load_action),
         ACTION_RULE_EXACT_HANDLER("editor.map.validate", validate_editor_map_validate_action),
+        ACTION_RULE_EXACT_HANDLER("editor.map.lighting_plan", validate_editor_map_lighting_plan_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.save_manifest", validate_editor_test_run_save_manifest_action),
         ACTION_RULE_EXACT_HANDLER("editor.brush_world.status", validate_editor_brush_world_status_action),
@@ -1718,10 +1723,10 @@ static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val 
             return validation_error(ctx, json_path, "scene_state.set value_from_state must be a non-empty string");
         return true;
     }
-    if (value == NULL ||
-        !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
+    if (value == NULL || !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) ||
+                           is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4)))
     {
-        return validation_error(ctx, json_path, "scene_state.set requires a scalar, vec3, or value_from_state");
+        return validation_error(ctx, json_path, "scene_state.set requires a scalar, vec3, color, or value_from_state");
     }
     return true;
 }

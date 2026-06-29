@@ -96,6 +96,7 @@ static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer
     slayer3d_light selected[SLAYER3D_MAX_LIGHTS];
     float scores[SLAYER3D_MAX_LIGHTS];
     int selected_count = 0;
+    const int upload_limit = SDL_clamp(slayer3d_game_data_world_light_upload_limit(runtime), 0, SLAYER3D_MAX_LIGHTS);
     const int light_count = slayer3d_game_data_world_light_count(runtime);
     for (int i = 0; i < light_count; ++i)
     {
@@ -113,9 +114,9 @@ static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer
                 break;
             }
         }
-        if (insert >= SLAYER3D_MAX_LIGHTS)
+        if (insert >= upload_limit)
             continue;
-        if (selected_count < SLAYER3D_MAX_LIGHTS)
+        if (selected_count < upload_limit)
             ++selected_count;
         for (int move = selected_count - 1; move > insert; --move)
         {

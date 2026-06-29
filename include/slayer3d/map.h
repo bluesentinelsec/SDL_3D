@@ -139,6 +139,153 @@ extern "C"
         size_t property_count;
     } slayer3d_map_actor;
 
+    /** @brief Optional map-level fog state. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_fog
+    {
+        bool enabled;
+        const char *mode;
+        bool has_color;
+        slayer3d_color color;
+        bool has_start;
+        float start;
+        bool has_end;
+        float end;
+        bool has_density;
+        float density;
+    } slayer3d_map_fog;
+
+    /**
+     * @brief Map-level lighting and presentation state.
+     *
+     * Missing fields are expanded to engine defaults so callers can query this
+     * structure for both newly authored maps and older maps without a `global`
+     * object. Arbitrary map-global key/value data lives under
+     * `global.properties`.
+     */
+    typedef struct slayer3d_map_global_state
+    {
+        bool has_ambient_light;
+        slayer3d_color ambient_light;
+        bool has_clear_color;
+        slayer3d_color clear_color;
+        bool has_exposure;
+        float exposure;
+        const char *tonemap;
+        const char *lighting_preview_quality;
+        slayer3d_map_fog fog;
+        size_t property_count;
+    } slayer3d_map_global_state;
+
+    /** @brief Optional light animation/modulation authored on a map light. */
+    typedef struct slayer3d_map_light_animation
+    {
+        bool enabled;
+        const char *type;
+        const char *preset;
+        bool has_rate_hz;
+        float rate_hz;
+        bool has_amplitude;
+        float amplitude;
+        bool has_phase;
+        float phase;
+        bool has_min_intensity;
+        float min_intensity;
+        bool has_max_intensity;
+        float max_intensity;
+        bool has_axis;
+        slayer3d_vec3 axis;
+        bool has_radius;
+        float radius;
+        size_t property_count;
+    } slayer3d_map_light_animation;
+
+    /** @brief Loaded light view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_light
+    {
+        const char *id;
+        const char *source_actor;
+        const char *kind;
+        const char *type;
+        slayer3d_map_transform transform;
+        bool has_direction;
+        slayer3d_vec3 direction;
+        bool has_color;
+        slayer3d_color color;
+        bool has_intensity;
+        float intensity;
+        bool has_range;
+        float range;
+        bool has_inner_angle_degrees;
+        float inner_angle_degrees;
+        bool has_outer_angle_degrees;
+        float outer_angle_degrees;
+        bool has_width;
+        float width;
+        bool has_height;
+        float height;
+        bool has_radius;
+        float radius;
+        bool has_casts_shadow;
+        bool casts_shadow;
+        const char *shadow_mode;
+        const char *falloff;
+        const char *bake_group;
+        slayer3d_map_light_animation animation;
+        size_t property_count;
+    } slayer3d_map_light;
+
+    /** @brief Quality target for map-oriented lighting build/bake jobs. */
+    typedef enum slayer3d_map_lighting_build_quality
+    {
+        /** @brief Fast interactive preview suitable for editor iteration. */
+        SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW = 0,
+        /** @brief Default quality/performance balance for editor and CLI use. */
+        SLAYER3D_MAP_LIGHTING_BUILD_BALANCED = 1,
+        /** @brief Slower final-quality build target for shipping/export. */
+        SLAYER3D_MAP_LIGHTING_BUILD_FINAL = 2,
+    } slayer3d_map_lighting_build_quality;
+
+    /**
+     * @brief Options for planning map lighting work.
+     *
+     * This structure is intentionally map-oriented rather than editor-specific
+     * so the same contract can be used by the editor GUI, editor/asset CLI
+     * commands, and caller code.
+     */
+    typedef struct slayer3d_map_lighting_build_options
+    {
+        slayer3d_map_lighting_build_quality quality;
+        /** @brief Maximum dynamic/runtime lights expected by the target renderer; 0 uses the engine default. */
+        size_t max_dynamic_lights;
+        /** @brief Maximum static/baked lights accepted by the build pipeline; 0 uses the engine default. */
+        size_t max_static_lights;
+        /** @brief When true, baked/static lights may also produce editor/runtime preview lights. */
+        bool include_dynamic_preview;
+    } slayer3d_map_lighting_build_options;
+
+    /**
+     * @brief Summary of lighting work required by an authored map.
+     *
+     * A plan is a non-owning summary. It does not bake lighting by itself; it is
+     * the shared front door for later bake/compute commands and UI status.
+     */
+    typedef struct slayer3d_map_lighting_build_plan
+    {
+        slayer3d_map_lighting_build_quality quality;
+        size_t total_light_count;
+        size_t dynamic_light_count;
+        size_t static_light_count;
+        size_t area_light_count;
+        size_t runtime_light_count;
+        size_t bake_light_count;
+        size_t max_dynamic_lights;
+        size_t max_static_lights;
+        bool requires_static_bake;
+        bool has_dynamic_preview;
+        bool dynamic_light_budget_exceeded;
+        bool static_light_budget_exceeded;
+    } slayer3d_map_lighting_build_plan;
+
     /**
      * @brief Minimal playable scene descriptor derived from a loaded map.
      *
@@ -155,6 +302,7 @@ extern "C"
         size_t material_count;
         size_t playable_brush_count;
         size_t box_brush_count;
+        size_t light_count;
         size_t actor_count;
         bool has_player_character;
         size_t player_actor_index;
@@ -312,6 +460,12 @@ extern "C"
     /** @brief Read an actor by index. Returned string pointers are borrowed from @p document. */
     bool slayer3d_map_get_actor(const slayer3d_map_document *document, size_t index, slayer3d_map_actor *out_actor);
 
+    /** @brief Read a light by index. Returned string pointers are borrowed from @p document. */
+    bool slayer3d_map_get_light(const slayer3d_map_document *document, size_t index, slayer3d_map_light *out_light);
+
+    /** @brief Read map-level global lighting and presentation state. */
+    bool slayer3d_map_get_global_state(const slayer3d_map_document *document, slayer3d_map_global_state *out_global);
+
     /** @brief Return the number of root-level arbitrary map properties. */
     size_t slayer3d_map_get_property_count(const slayer3d_map_document *document);
 
@@ -358,6 +512,82 @@ extern "C"
                                               const char *key, char **out_json, size_t *out_json_size,
                                               char *error_buffer, int error_buffer_size);
 
+    /** @brief Return the light property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_light_property_key(const slayer3d_map_document *document, size_t light_index,
+                                                    size_t property_index);
+
+    /** @brief Serialize a light property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_light_property_json(const slayer3d_map_document *document, size_t light_index,
+                                              const char *key, char **out_json, size_t *out_json_size,
+                                              char *error_buffer, int error_buffer_size);
+
+    /** @brief Return the global-state property key at @p property_index, or NULL. */
+    const char *slayer3d_map_get_global_property_key(const slayer3d_map_document *document, size_t property_index);
+
+    /** @brief Serialize a global-state property value to JSON. Free with slayer3d_map_free_string(). */
+    bool slayer3d_map_get_global_property_json(const slayer3d_map_document *document, const char *key, char **out_json,
+                                               size_t *out_json_size, char *error_buffer, int error_buffer_size);
+
+    /** @brief Fill map lighting build options with engine/editor default values. */
+    void slayer3d_map_init_lighting_build_options(slayer3d_map_lighting_build_options *options);
+
+    /**
+     * @brief Build a lighting work plan from a loaded map document.
+     *
+     * This generalized API is intended to be the common entry point for editor
+     * GUI bake buttons, future CLI bake commands, and caller code. Budget
+     * overages are reported in @p out_plan instead of causing failure so tools
+     * can show actionable diagnostics and still display the complete plan.
+     *
+     * @return true when the plan was built. Returns false only for invalid
+     * arguments or unreadable map data.
+     */
+    bool slayer3d_map_build_lighting_plan(const slayer3d_map_document *document,
+                                          const slayer3d_map_lighting_build_options *options,
+                                          slayer3d_map_lighting_build_plan *out_plan, char *error_buffer,
+                                          int error_buffer_size);
+
+    /**
+     * @brief Build a JSON manifest describing planned static-lighting artifacts.
+     *
+     * This uses the same map-oriented options as
+     * slayer3d_map_build_lighting_plan(). The returned manifest is metadata
+     * only: it reserves a stable contract for editor GUI commands, editor CLI
+     * commands, and caller code before concrete lightmap/vertex-bake payloads
+     * are generated. Free @p out_json with slayer3d_map_free_string().
+     */
+    bool slayer3d_map_build_lighting_artifact_manifest_json(const slayer3d_map_document *document,
+                                                            const slayer3d_map_lighting_build_options *options,
+                                                            char **out_json, size_t *out_json_size, char *error_buffer,
+                                                            int error_buffer_size);
+
+    /**
+     * @brief Build a deterministic static-lighting artifact JSON payload.
+     *
+     * This is the first concrete static-light output shared by the editor GUI,
+     * editor CLI, and caller code. It emits per-face irradiance samples for box
+     * brushes using baked/static map lights plus global ambient light. The
+     * payload is intentionally simple and self-contained; future bake backends
+     * may replace or augment it with atlas/lightmap textures while preserving
+     * this API shape. Free @p out_json with slayer3d_map_free_string().
+     */
+    bool slayer3d_map_build_static_lighting_artifact_json(const slayer3d_map_document *document,
+                                                          const slayer3d_map_lighting_build_options *options,
+                                                          char **out_json, size_t *out_json_size, char *error_buffer,
+                                                          int error_buffer_size);
+
+    /**
+     * @brief Validate a static-lighting artifact JSON payload.
+     *
+     * This validates the `slayer3d.lighting_static.v0` artifact emitted by
+     * slayer3d_map_build_static_lighting_artifact_json(), the editor CLI, and
+     * playable-map package export. It is intentionally independent from loaded
+     * map documents so callers can reject malformed build artifacts before
+     * consuming them at runtime.
+     */
+    bool slayer3d_map_validate_static_lighting_artifact_json(const char *json, size_t json_size, char *error_buffer,
+                                                             int error_buffer_size);
+
     /**
      * @brief Build a minimal playable scene descriptor from a loaded map.
      *
@@ -377,10 +607,12 @@ extern "C"
      * @brief Write a minimal data-game package that can run a map as an FPS brush scene.
      *
      * This emits `playable_map.game.json` and `scenes/play.scene.json` under
-     * @p output_dir. The generated game uses the existing data-game
+     * @p output_dir. Maps that require static lighting also emit
+     * `lighting/static.default.json` and declare it under
+     * `world.lighting_artifacts`. The generated game uses the existing data-game
      * `controller.fps_brush` component, converts map box and plane brushes into
-     * runtime brush-world planes, and spawns the player at the first
-     * actor/object marked with `properties.type`, `properties.actor-type`, or
+     * runtime brush-world planes, and spawns the player at the first actor/object
+     * marked with `properties.type`, `properties.actor-type`, or
      * `properties.actor_type` equal to `"player-character"`.
      *
      * The generated package is a first playable bridge. It preserves geometry,

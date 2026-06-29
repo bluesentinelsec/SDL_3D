@@ -62,6 +62,33 @@ bool validate_render_effects(validation_context *ctx, yyjson_val *root, validati
 
 bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
+    yyjson_val *lighting_artifacts = obj_get(obj_get(root, "world"), "lighting_artifacts");
+    if (lighting_artifacts != NULL && !yyjson_is_arr(lighting_artifacts))
+        return validation_error(ctx, "$.world.lighting_artifacts", "world lighting_artifacts must be an array");
+    for (size_t i = 0; yyjson_is_arr(lighting_artifacts) && i < yyjson_arr_size(lighting_artifacts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.world.lighting_artifacts[%zu]", i);
+        yyjson_val *artifact = yyjson_arr_get(lighting_artifacts, i);
+        if (!yyjson_is_obj(artifact))
+            return validation_error(ctx, path, "lighting artifact entries must be objects");
+        if (!is_non_empty_string(artifact, "id"))
+            return validation_error(ctx, path, "lighting artifact id must be non-empty");
+        if (!is_non_empty_string(artifact, "path"))
+            return validation_error(ctx, path, "lighting artifact path must be non-empty");
+        const char *format = json_string(artifact, "format");
+        if (SDL_strcmp(format != NULL ? format : "", "slayer3d.lighting_static.v0") != 0)
+        {
+            return validation_error(ctx, path, "lighting artifact format must be slayer3d.lighting_static.v0");
+        }
+        yyjson_val *bake_group = obj_get(artifact, "bake_group");
+        if (bake_group != NULL && !is_non_empty_string(artifact, "bake_group"))
+            return validation_error(ctx, path, "lighting artifact bake_group must be non-empty");
+        yyjson_val *self_contained = obj_get(artifact, "self_contained");
+        if (self_contained != NULL && !yyjson_is_bool(self_contained))
+            return validation_error(ctx, path, "lighting artifact self_contained must be a boolean");
+    }
+
     yyjson_val *lights = obj_get(obj_get(root, "world"), "lights");
     if (lights == NULL)
         return true;
@@ -119,6 +146,24 @@ bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names
                     if (!is_vec_array(yyjson_arr_get(colors, color_index), 3))
                         return validation_error(ctx, effect_path, "light color_cycle colors must be vec3 arrays");
                 }
+            }
+            else if (SDL_strcmp(type != NULL ? type : "", "rotate_direction") == 0)
+            {
+                yyjson_val *axis = obj_get(effect, "axis");
+                if (axis != NULL && !is_vec_array(axis, 3))
+                    return validation_error(ctx, effect_path, "light rotate_direction axis must be a vec3 array");
+            }
+            else if (SDL_strcmp(type != NULL ? type : "", "orbit_position") == 0)
+            {
+                yyjson_val *axis = obj_get(effect, "axis");
+                yyjson_val *center = obj_get(effect, "center");
+                yyjson_val *radius = obj_get(effect, "radius");
+                if (axis != NULL && !is_vec_array(axis, 3))
+                    return validation_error(ctx, effect_path, "light orbit_position axis must be a vec3 array");
+                if (center != NULL && !is_vec_array(center, 3))
+                    return validation_error(ctx, effect_path, "light orbit_position center must be a vec3 array");
+                if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) < 0.0))
+                    return validation_error(ctx, effect_path, "light orbit_position radius must be non-negative");
             }
             else if (SDL_strcmp(type != NULL ? type : "", "pulse") != 0)
             {
@@ -291,6 +336,7 @@ bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "bloom_key",
                                 "ssao_key",
                                 "depth_prepass_key",
+                                "clear_color_key",
                                 "tonemap_key",
                                 "profile_key",
                                 "quality_key",

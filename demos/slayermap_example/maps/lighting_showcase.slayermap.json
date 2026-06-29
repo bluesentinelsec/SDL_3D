@@ -1,0 +1,202 @@
+{
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "map.example.lighting_showcase",
+    "name": "SlayerMap Lighting Showcase",
+    "description": "A compact brush map demonstrating global lighting, all canonical light types, baked/static lights, dynamic flicker, and rotating/sweeping light metadata."
+  },
+  "units": "meters",
+  "coordinate_system": "y_up",
+  "global": {
+    "ambient_light": [36, 40, 48, 255],
+    "clear_color": [8, 10, 14, 255],
+    "exposure": 1.0,
+    "tonemap": "aces",
+    "lighting_preview_quality": "quality",
+    "properties": {
+      "lighting_showcase": true,
+      "time_of_day": "night"
+    }
+  },
+  "materials": [
+    {
+      "id": "mat.showcase.floor",
+      "color": [86, 90, 96, 255],
+      "properties": {
+        "graybox_role": "floor"
+      }
+    },
+    {
+      "id": "mat.showcase.wall",
+      "color": [64, 76, 92, 255],
+      "properties": {
+        "graybox_role": "wall"
+      }
+    },
+    {
+      "id": "mat.showcase.trim",
+      "color": [130, 118, 72, 255],
+      "properties": {
+        "graybox_role": "trim"
+      }
+    }
+  ],
+  "brushes": [
+    {
+      "id": "brush.showcase.floor",
+      "geometry": { "kind": "box", "min": [-6, 0, -6], "max": [6, 0.25, 6] },
+      "material": "mat.showcase.floor",
+      "properties": {
+        "walkable": true
+      }
+    },
+    {
+      "id": "brush.showcase.north_wall",
+      "geometry": { "kind": "box", "min": [-6, 0, 5.75], "max": [6, 3.25, 6] },
+      "material": "mat.showcase.wall"
+    },
+    {
+      "id": "brush.showcase.west_wall",
+      "geometry": { "kind": "box", "min": [-6, 0, -6], "max": [-5.75, 3.25, 6] },
+      "material": "mat.showcase.wall"
+    },
+    {
+      "id": "brush.showcase.light_plinth",
+      "geometry": { "kind": "box", "min": [2.5, 0.25, 2.5], "max": [4.5, 0.75, 4.5] },
+      "material": "mat.showcase.trim",
+      "properties": {
+        "role": "light_display"
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.showcase.player_start",
+      "archetype": "player_start",
+      "primitive": "capsule",
+      "transform": {
+        "position": [0, 0.25, -4],
+        "facing": [0, 0, 1]
+      },
+      "color": [80, 220, 120, 255],
+      "display_mode": "solid",
+      "properties": {
+        "type": "player-character",
+        "spawn_group": "lighting_showcase"
+      }
+    }
+  ],
+  "lights": [
+    {
+      "id": "light.showcase.moon",
+      "kind": "baked",
+      "type": "directional",
+      "direction": [-0.3, -1.0, 0.2],
+      "color": [150, 178, 255, 255],
+      "intensity": 0.45,
+      "shadow_mode": "baked",
+      "bake_group": "showcase_room",
+      "properties": {
+        "preset": "moon"
+      }
+    },
+    {
+      "id": "light.showcase.torch",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [-3.5, 1.6, 1.5] },
+      "color": [255, 142, 64, 255],
+      "intensity": 2.0,
+      "range": 7.0,
+      "casts_shadow": true,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "flicker",
+        "preset": "torch_fire",
+        "rate_hz": 8.0,
+        "amplitude": 0.2,
+        "min_intensity": 1.4,
+        "max_intensity": 2.2
+      }
+    },
+    {
+      "id": "light.showcase.siren",
+      "kind": "dynamic",
+      "type": "spot",
+      "transform": { "position": [0.0, 2.7, 0.0] },
+      "direction": [0.0, 0.0, -1.0],
+      "color": [255, 48, 48, 255],
+      "intensity": 2.6,
+      "range": 10.0,
+      "inner_angle_degrees": 18.0,
+      "outer_angle_degrees": 34.0,
+      "shadow_mode": "dynamic",
+      "falloff": "linear",
+      "animation": {
+        "enabled": true,
+        "type": "rotate",
+        "preset": "rotating_siren",
+        "rate_hz": 0.35,
+        "axis": [0.0, 1.0, 0.0]
+      }
+    },
+    {
+      "id": "light.showcase.fireball",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [0.0, 1.4, 0.0] },
+      "color": [255, 96, 32, 255],
+      "intensity": 1.8,
+      "range": 5.5,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "orbit",
+        "preset": "projectile_fireball",
+        "rate_hz": 0.45,
+        "radius": 2.25,
+        "axis": [0.0, 1.0, 0.0]
+      },
+      "properties": {
+        "fixture": "moving_fireball"
+      }
+    },
+    {
+      "id": "light.showcase.panel",
+      "kind": "baked",
+      "type": "area_rect",
+      "transform": {
+        "position": [0.0, 3.1, 0.0],
+        "rotation": [90.0, 0.0, 0.0]
+      },
+      "width": 4.0,
+      "height": 1.25,
+      "color": [210, 235, 255, 255],
+      "intensity": 1.4,
+      "shadow_mode": "baked",
+      "bake_group": "showcase_room"
+    },
+    {
+      "id": "light.showcase.globe",
+      "kind": "baked",
+      "type": "area_sphere",
+      "transform": { "position": [3.5, 1.5, 3.5] },
+      "radius": 0.75,
+      "color": [120, 255, 190, 255],
+      "intensity": 1.1,
+      "shadow_mode": "baked",
+      "bake_group": "showcase_room",
+      "properties": {
+        "fixture": "soft_green_globe"
+      }
+    }
+  ],
+  "properties": {
+    "showcase": "lighting",
+    "expected_runner": "slayer3d_runner --map"
+  }
+}

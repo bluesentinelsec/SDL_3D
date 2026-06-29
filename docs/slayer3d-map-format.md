@@ -22,9 +22,27 @@ provides the initial map I/O surface:
 - `slayer3d_map_to_json()` serializes a loaded document back to canonical
   pretty JSON.
 - `slayer3d_map_write_file()` writes a loaded document to disk.
-- Query helpers expose metadata, top-level object counts, typed views for
-  materials/brushes/actors, and arbitrary property JSON while keeping
+- Query helpers expose metadata, global map state, top-level object counts,
+  typed views for materials/brushes/actors, and arbitrary property JSON while keeping
   project-specific data preserved inside the document.
+- `slayer3d_map_init_lighting_build_options()` and
+  `slayer3d_map_build_lighting_plan()` provide a shared lighting build/bake
+  planning surface for editor GUI commands, CLI commands, and caller code. The
+  initial plan reports dynamic/static/area light counts, runtime preview counts,
+  bake counts, and configured budget overages.
+- `slayer3d_map_build_lighting_artifact_manifest_json()` emits deterministic
+  JSON metadata for planned static-light artifacts. It does not bake texels yet;
+  it reserves the shared artifact contract that later GUI, CLI, and caller bake
+  paths will fill with concrete lightmap or vertex-light payloads.
+- `slayer3d_map_build_static_lighting_artifact_json()` emits the first concrete
+  static-light payload: deterministic per-face irradiance samples for box
+  brushes using baked/static lights and global ambient state. This payload is
+  intentionally simple and self-contained so callers can integrate against a
+  real artifact while later slices add atlas/lightmap bake backends.
+- `slayer3d_map_validate_static_lighting_artifact_json()` validates generated
+  `slayer3d.lighting_static.v0` payloads without requiring the source map to be
+  loaded, so tools and games can reject malformed lighting build artifacts before
+  consuming them.
 
 The loaded handle is intentionally JSON-preserving. String pointers returned by
 typed read helpers are borrowed from the document and remain valid until
@@ -43,7 +61,16 @@ their own renderer, physics, and gameplay objects.
 a minimal data-game package under a caller-provided directory. The package
 contains `playable_map.game.json` plus `scenes/play.scene.json`, converts map
 box brushes into a runtime brush world, and spawns the player through the
-existing `controller.fps_brush` component. Run the generated package with:
+existing `controller.fps_brush` component. Authored directional, point, and spot
+lights are bridged into runtime `world.lights`; area lights currently fall back
+to point-light preview until the baked-lighting pipeline materializes their
+soft/static contribution. Maps that require static lighting also emit
+`lighting/static.default.json` with the current `slayer3d.lighting_static.v0`
+per-face sample artifact and declare it under `world.lighting_artifacts` in the
+generated game JSON. `pulse` and `flicker` light animations are bridged to
+runtime light effects for immediate playable feedback, and `rotate`/`sweep`
+animations are bridged to runtime direction-rotation effects for directional and
+spot-light previews. Run the generated package with:
 
 ```sh
 slayer3d_runner --root path/to/generated-package --data asset://playable_map.game.json
@@ -57,8 +84,9 @@ slayer3d_runner --map path/to/level.slayermap.json
 ```
 
 This bridge is intentionally conservative: it proves the first playable loop
-with brush collision and material colors, while leaving external texture/model
-asset copying and game-specific actor behavior to later project integrations.
+with brush collision, material colors, authored global lighting, and live
+runtime lights, while leaving external texture/model asset copying, baked light
+artifacts, and game-specific actor behavior to later project integrations.
 
 ## Example Game Data
 
@@ -67,6 +95,12 @@ training-room map and native loader example. The map demonstrates the intended
 game-facing data surface: textured graybox brushes, placed actors, reusable
 prefabs, authored lights/effects, a skybox reference, and generic event/action
 connections that a game runtime can interpret.
+
+The same demo directory also includes `maps/lighting_showcase.slayermap.json`,
+a compact fixture for the lighting milestone. It authors directional, point,
+spot, rectangular area, and spherical area lights, plus flicker, rotating, and
+orbiting fireball-style light animation metadata, so editor, CLI, and runner
+work can be tested against one map as lighting support matures.
 
 Build it with `SLAYER3D_BUILD_DEMOS=ON`, then run
 `slayer3d_slayermap_example` to load the bundled map through the public
@@ -91,7 +125,7 @@ namespaced fields such as `x_my_game`.
 ## Runtime Data vs Editor Data
 
 Runtime map data lives in the root document under fields such as `assets`,
-`materials`, `brushes`, `actors`, `connections`, and `properties`.
+`materials`, `brushes`, `actors`, `connections`, `global`, and `properties`.
 
 Editor-only state must live under `editor`. Runtime consumers may ignore this
 field. Examples include viewport layout, selected tool, collapsed inspector
@@ -110,6 +144,8 @@ lossless path used by the editor's open/save workflow today.
 - `metadata`: Optional object with `id`, `name`, `author`, and `description`.
 - `units`: Optional string, either `meters` or `source_units`.
 - `coordinate_system`: Optional string. The initial format uses `y_up`.
+- `global`: Optional map-level lighting and presentation defaults. Missing
+  fields expand to engine defaults through `slayer3d_map_get_global_state()`.
 - `assets`: Optional asset catalogs for textures, models, sprites, skyboxes, and
   effect definitions.
 - `materials`: Optional material definitions used by brushes and faces.
@@ -124,6 +160,50 @@ lossless path used by the editor's open/save workflow today.
   effect primitives.
 - `skybox`: Optional map-level skybox selection.
 - `editor`: Optional editor-only metadata.
+
+## Global Map State
+
+`global` stores caller-agnostic defaults that affect the whole map. It is the
+shared contract used by the editor, command-line baking tools, and game callers.
+The initial fields are intentionally small:
+
+```json
+{
+  "global": {
+    "ambient_light": [54, 56, 64, 255],
+    "clear_color": [12, 14, 18, 255],
+    "exposure": 1.0,
+    "tonemap": "aces",
+    "lighting_preview_quality": "balanced",
+    "fog": {
+      "enabled": false,
+      "mode": "none",
+      "color": [22, 24, 30, 255],
+      "start": 8.0,
+      "end": 64.0,
+      "density": 0.0
+    },
+    "properties": {
+      "time_of_day": "afternoon"
+    }
+  }
+}
+```
+
+Colors use the same 0-255 RGBA convention as materials and actor colors. Runtime
+bridges may convert these values into normalized renderer inputs. `tonemap` may
+be `none`, `reinhard`, or `aces`. `lighting_preview_quality` may be `off`,
+`performance`, `balanced`, or `quality`; editors can use it to trade preview
+speed against fidelity. The bundled editor maps those modes to disabled preview,
+4, 8, and 16 uploaded preview lights respectively. `global.properties` is
+reserved for project-specific state such as weather, biome, audio zones, or game
+rules that the generic editor does not understand.
+
+The bundled editor exposes these defaults through the top-toolbar Global panel.
+Current controls provide afternoon/night/interior presets plus exposure,
+tonemap, preview-quality, and fog cycling. Saving a map writes those values into
+the same `global` object consumed by the public map API and playable runner
+export path.
 
 ## Asset References
 
@@ -237,6 +317,121 @@ editor does not explicitly understand.
 preview of primitive actors. `properties` values may be strings, numbers,
 booleans, arrays, objects, or null. This is the primary escape hatch for
 emergent gameplay data.
+
+## Lights
+
+Lights are first-class map objects for editor previews, bake jobs, and runtime
+callers. The canonical light `type` values are `directional`, `point`, `spot`,
+`area_rect`, and `area_sphere`. `kind` may be `dynamic`, `baked`, `static`, or
+`both`; game callers may treat `static` as baked/precomputed, but it is kept as
+a user-facing authoring term.
+
+```json
+{
+  "lights": [
+    {
+      "id": "light.sun.afternoon",
+      "kind": "baked",
+      "type": "directional",
+      "direction": [-0.25, -1.0, 0.15],
+      "color": [255, 238, 180, 255],
+      "intensity": 0.8,
+      "shadow_mode": "baked",
+      "properties": {
+        "preset": "afternoon"
+      }
+    },
+    {
+      "id": "light.torch.1",
+      "kind": "dynamic",
+      "type": "point",
+      "transform": { "position": [2.0, 1.5, -1.0] },
+      "color": [255, 148, 72, 255],
+      "intensity": 1.6,
+      "range": 6.0,
+      "casts_shadow": true,
+      "shadow_mode": "dynamic",
+      "falloff": "inverse_square",
+      "animation": {
+        "enabled": true,
+        "type": "flicker",
+        "preset": "torch_fire",
+        "rate_hz": 8.0,
+        "amplitude": 0.25,
+        "min_intensity": 1.1,
+        "max_intensity": 1.8
+      }
+    },
+    {
+      "id": "light.ceiling.panel",
+      "kind": "baked",
+      "type": "area_rect",
+      "transform": { "position": [0, 2.9, 0], "rotation": [90, 0, 0] },
+      "width": 2.0,
+      "height": 0.6,
+      "color": [210, 230, 255, 255],
+      "intensity": 2.0,
+      "shadow_mode": "baked"
+    }
+  ]
+}
+```
+
+Spot lights use `inner_angle_degrees` and `outer_angle_degrees`; the engine
+validator rejects spot lights whose outer cone is smaller than the inner cone.
+Area sphere lights require a positive `radius`; area rect lights require
+positive `width` and `height`. `falloff` may be `inverse_square`, `linear`, or
+`none`. `animation` is a reusable primitive layer for common dynamic lights such
+as torch flicker, fluorescent flicker, warning alarms, rotating sirens,
+projectile fireballs, muzzle flashes, and steady room lights. Generated playable
+maps currently bridge `pulse`/`flicker` to runtime intensity modulation,
+`rotate`/`sweep` to runtime direction rotation, and `orbit` to runtime
+position-orbit movement. Games may ignore unknown animation properties or
+reinterpret them for a custom renderer.
+
+The bundled editor exposes map-level directional lighting through the Global
+panel because sun/moon-style lights affect the whole map. The default Global
+Lighting workflow is preset based: choose a preset, press Apply, and the editor
+preview plus exported SlayerMap state receive concrete global lighting values.
+Things > Lights is for placeable local lights and currently offers Point, Spot,
+Area Rect, and Area Sphere. Selecting a placed light shows a light-specific inspector with
+kind, intensity, range, shadow mode, falloff, color presets, spot cone presets,
+area-size presets, and animation presets for steady, torch flicker, rotating
+siren, and orbiting fireball behavior. The animation presets write the same
+canonical `animation` object that hand-authored SlayerMap files use. The generic
+Data inspector remains available for arbitrary key/value gameplay properties.
+
+File > Plan Lighting and the Global Lighting panel's Plan Lighting button both
+use `slayer3d_map_build_lighting_plan()`. This is the same public API intended
+for editor GUI commands, editor CLI commands such as
+`slayer3d_editor lighting-plan --input level.slayermap.json`, and caller code.
+The planner reports total, dynamic, static, area, runtime-preview, and bake-light
+counts, plus budget status. `slayer3d_editor lighting-plan --manifest --input
+level.slayermap.json` emits the planned static-light artifact manifest JSON.
+`slayer3d_editor lighting-plan --static-artifact --input level.slayermap.json`
+emits a concrete `slayer3d.lighting_static.v0` JSON payload containing per-face
+box-brush irradiance samples. The current static artifact is a deterministic
+preview/integration format, not a final atlas lightmap baker. The machine-readable
+manifest and static-artifact modes also accept `--output <file>` when callers
+want a build artifact on disk instead of stdout. Engine callers can validate the
+static artifact with `slayer3d_map_validate_static_lighting_artifact_json()`
+before loading or caching it. Tooling can validate an artifact file directly
+with `slayer3d_editor lighting-artifact-validate --input lighting/static.default.json`.
+
+Generated playable-map packages also run the same lighting planner and emit a
+small debug HUD into `scenes/play.scene.json`. The HUD shows light totals,
+runtime and bake counts, class counts, and bake/budget status, and packages with
+static/baked lights include `lighting/static.default.json` for inspection or
+future renderer consumption. The generated `playable_map.game.json` declares the
+same artifact under `world.lighting_artifacts`, so callers can discover the
+static-lighting payload without hard-coding package layout. This lets
+`slayer3d_runner --map` immediately expose whether a saved map contains the
+expected lighting work.
+
+Map validation warns when authored lighting exceeds the default planning
+budgets: 8 runtime-preview lights and 256 static/baked lights. These warnings
+are advisory by default so editors can show the complete map state, but callers
+may opt into `treat_warnings_as_errors` for stricter CI or export pipelines.
 
 ## Connections
 

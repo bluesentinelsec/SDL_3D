@@ -317,6 +317,33 @@
     "signal.editor.inspector.actor.color.reset",
     "signal.editor.inspector.actor.display.solid",
     "signal.editor.inspector.actor.display.wireframe",
+    "signal.editor.inspector.light.intensity.dim",
+    "signal.editor.inspector.light.intensity.normal",
+    "signal.editor.inspector.light.intensity.bright",
+    "signal.editor.inspector.light.range.short",
+    "signal.editor.inspector.light.range.medium",
+    "signal.editor.inspector.light.range.long",
+    "signal.editor.inspector.light.color.warm",
+    "signal.editor.inspector.light.color.cool",
+    "signal.editor.inspector.light.color.red",
+    "signal.editor.inspector.light.color.green",
+    "signal.editor.inspector.light.color.blue",
+    "signal.editor.inspector.light.kind.dynamic",
+    "signal.editor.inspector.light.kind.baked",
+    "signal.editor.inspector.light.shadow.none",
+    "signal.editor.inspector.light.shadow.dynamic",
+    "signal.editor.inspector.light.falloff.inverse_square",
+    "signal.editor.inspector.light.falloff.linear",
+    "signal.editor.inspector.light.cone.tight",
+    "signal.editor.inspector.light.cone.medium",
+    "signal.editor.inspector.light.cone.wide",
+    "signal.editor.inspector.light.geometry.small",
+    "signal.editor.inspector.light.geometry.medium",
+    "signal.editor.inspector.light.geometry.large",
+    "signal.editor.inspector.light.animation.steady",
+    "signal.editor.inspector.light.animation.torch",
+    "signal.editor.inspector.light.animation.siren",
+    "signal.editor.inspector.light.animation.orbit",
     "signal.editor.property.new",
     "signal.editor.property.focus.key",
     "signal.editor.property.focus.value",
@@ -673,8 +700,40 @@
     "signal.editor.file.save",
     "signal.editor.file.save_as",
     "signal.editor.file.validate",
+    "signal.editor.file.plan_lighting",
     "signal.editor.file.focus.open",
     "signal.editor.file.focus.save_as",
+    "signal.editor.global.toggle",
+    "signal.editor.global.close",
+    "signal.editor.global.tab.lighting",
+    "signal.editor.global.tab.data",
+    "signal.editor.global.preset.afternoon",
+    "signal.editor.global.preset.night",
+    "signal.editor.global.preset.interior",
+    "signal.editor.global.preset.sunrise",
+    "signal.editor.global.preset.morning",
+    "signal.editor.global.preset.sunset",
+    "signal.editor.global.preset.twilight",
+    "signal.editor.global.preset.early_night",
+    "signal.editor.global.preset.midnight",
+    "signal.editor.global.preset.overcast",
+    "signal.editor.global.preset.apply",
+    "signal.editor.global.data.new",
+    "signal.editor.global.data.focus.key",
+    "signal.editor.global.data.focus.value",
+    "signal.editor.global.data.apply",
+    "signal.editor.global.data.select_slot.0.key",
+    "signal.editor.global.data.select_slot.0.value",
+    "signal.editor.global.data.select_slot.1.key",
+    "signal.editor.global.data.select_slot.1.value",
+    "signal.editor.global.data.select_slot.2.key",
+    "signal.editor.global.data.select_slot.2.value",
+    "signal.editor.global.data.select_slot.3.key",
+    "signal.editor.global.data.select_slot.3.value",
+    "signal.editor.global.data.delete.0",
+    "signal.editor.global.data.delete.1",
+    "signal.editor.global.data.delete.2",
+    "signal.editor.global.data.delete.3",
     "signal.editor.open",
     "signal.editor.export",
     "signal.editor.save_as",
@@ -685,205 +744,205 @@
     "sensors": [
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.tool.cycle",
         "on_pressed": "signal.editor.tool.cycle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.selection.clear",
         "on_pressed": "signal.editor.selection.clear"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.escape",
         "on_pressed": "signal.editor.escape"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.inspector.toggle",
         "on_pressed": "signal.editor.inspector.toggle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.commit",
         "on_pressed": "signal.editor.command.commit"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.clip.cycle_keep_mode",
         "on_pressed": "signal.editor.clip.cycle_keep_mode"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.accept",
         "on_pressed": "signal.editor.palette.accept"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.undo",
         "on_pressed": "signal.editor.command.undo"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.delete_selected",
         "on_pressed": "signal.editor.delete_selected"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.lower_y",
         "on_pressed": "signal.editor.brush.lower_y"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.raise_y",
         "on_pressed": "signal.editor.brush.raise_y"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.duplicate",
         "on_pressed": "signal.editor.brush.duplicate"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.flip_horizontal",
         "on_pressed": "signal.editor.brush.flip_horizontal"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.brush.flip_vertical",
         "on_pressed": "signal.editor.brush.flip_vertical"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.open",
         "on_pressed": "signal.editor.open"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.export",
         "on_pressed": "signal.editor.export"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.save_as",
         "on_pressed": "signal.editor.save_as"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.test_run.prepare",
         "on_pressed": "signal.editor.test_run.prepare"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.test_run.enter",
         "on_pressed": "signal.editor.test_run.enter"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.grid.decrease",
         "on_pressed": "signal.editor.grid.decrease"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.grid.increase",
         "on_pressed": "signal.editor.grid.increase"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.wall_axis.toggle",
         "on_pressed": "signal.editor.wall_axis.toggle"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.select",
         "on_pressed": "signal.editor.mode.select"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.brush",
         "on_pressed": "signal.editor.mode.brush"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.face",
         "on_pressed": "signal.editor.mode.face"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.clip",
         "on_pressed": "signal.editor.mode.clip"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.vertex",
         "on_pressed": "signal.editor.mode.vertex"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.mode.rotate",
         "on_pressed": "signal.editor.mode.rotate"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.material",
         "on_pressed": "signal.editor.palette.material"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.game_object",
         "on_pressed": "signal.editor.palette.game_object"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.close",
         "on_pressed": "signal.editor.palette.close"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.previous",
         "on_pressed": "signal.editor.palette.previous"
       },
       {
         "type": "sensor.input_pressed",
-        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }] },
+        "active_if": { "type": "all", "conditions": [{ "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }] },
         "action": "action.editor.palette.next",
         "on_pressed": "signal.editor.palette.next"
       }
@@ -941,6 +1000,43 @@
           },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.directional.kind", "value": "baked" },
+          { "type": "scene_state.set", "key": "editor.global.directional.shadow_mode", "value": "baked" },
+          { "type": "scene_state.set", "key": "editor.global.directional.casts_shadow", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.property.count", "value": 0 },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Object" },
@@ -1121,6 +1217,7 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
@@ -1137,6 +1234,7 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
@@ -2080,6 +2178,487 @@
               "message_key": "editor.tool.last_action"
             }
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.dim",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 0.6 },
+            "message": "light intensity dim",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.normal",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 1.0 },
+            "message": "light intensity normal",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.intensity.bright",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_intensity": 1.8 },
+            "message": "light intensity bright",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.short",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 5.0 },
+            "message": "light range short",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 10.0 },
+            "message": "light range medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.range.long",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_range": 20.0 },
+            "message": "light range long",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.warm",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [255, 222, 160, 220],
+            "properties": { "light_color": [255, 222, 160, 255] },
+            "message": "light color warm",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.cool",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [120, 170, 255, 220],
+            "properties": { "light_color": [120, 170, 255, 255] },
+            "message": "light color cool",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.red",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [255, 88, 72, 220],
+            "properties": { "light_color": [255, 88, 72, 255] },
+            "message": "light color red",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.green",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [94, 255, 144, 220],
+            "properties": { "light_color": [94, 255, 144, 255] },
+            "message": "light color green",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.color.blue",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "color": [92, 142, 255, 220],
+            "properties": { "light_color": [92, 142, 255, 255] },
+            "message": "light color blue",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.kind.dynamic",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_kind": "dynamic" },
+            "message": "light kind dynamic",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.kind.baked",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "light_kind": "baked" },
+            "message": "light kind baked",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.shadow.none",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "casts_shadow": false, "shadow_mode": "none" },
+            "message": "light shadows disabled",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.shadow.dynamic",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "casts_shadow": true, "shadow_mode": "dynamic" },
+            "message": "light shadows dynamic",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.falloff.inverse_square",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "falloff": "inverse_square" },
+            "message": "light falloff inverse square",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.falloff.linear",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "falloff": "linear" },
+            "message": "light falloff linear",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.tight",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 12.0, "outer_angle_degrees": 24.0 },
+            "message": "light cone tight",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 25.0, "outer_angle_degrees": 45.0 },
+            "message": "light cone medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.cone.wide",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "inner_angle_degrees": 38.0, "outer_angle_degrees": 70.0 },
+            "message": "light cone wide",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.small",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 1.0, "height": 1.0, "radius": 0.5 },
+            "message": "light geometry small",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.medium",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 2.0, "height": 1.5, "radius": 1.0 },
+            "message": "light geometry medium",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.geometry.large",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": { "width": 4.0, "height": 2.0, "radius": 2.0 },
+            "message": "light geometry large",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.steady",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": false,
+              "light_animation_type": "none",
+              "light_animation_preset": "steady_room",
+              "light_animation_rate_hz": 0.0,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation steady",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.torch",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "flicker",
+              "light_animation_preset": "torch_fire",
+              "light_animation_rate_hz": 8.0,
+              "light_animation_amplitude": 0.25,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 1.1,
+              "light_animation_max_intensity": 1.8,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation torch",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.siren",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "rotate",
+              "light_animation_preset": "rotating_siren",
+              "light_animation_rate_hz": 0.35,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 0.0,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation siren",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.light.animation.orbit",
+        "actions": [
+          {
+            "type": "editor.actor.update",
+            "target_type": "selection",
+            "properties": {
+              "light_animation_enabled": true,
+              "light_animation_type": "orbit",
+              "light_animation_preset": "projectile_fireball",
+              "light_animation_rate_hz": 0.45,
+              "light_animation_amplitude": 0.0,
+              "light_animation_phase": 0.0,
+              "light_animation_min_intensity": 0.0,
+              "light_animation_max_intensity": 0.0,
+              "light_animation_radius": 2.25,
+              "light_animation_axis": [0.0, 1.0, 0.0]
+            },
+            "message": "light animation orbit",
+            "outputs": {
+              "valid_key": "editor.inspector.actor.update.valid",
+              "message_key": "editor.tool.last_action"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -4480,6 +5059,7 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.file.menu.open", "default": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
@@ -4494,9 +5074,317 @@
         ]
       },
       {
+        "signal": "signal.editor.global.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.global.panel.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global lighting" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global panel closed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.tab.lighting",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global lighting tab" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.tab.data",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.tab", "value": "Data" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global data tab" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.afternoon",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Afternoon Daylight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.sunrise",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Warm low-angle morning light with soft amber contrast." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [64, 48, 46, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [60, 46, 62, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.08 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.65, -0.45, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 174, 108, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.85 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Sunrise" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.morning",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Clean bright daylight with a mild warm tint." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [58, 62, 68, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [72, 92, 124, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.05 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.35, -0.75, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 228, 174, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.95 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Morning" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.night",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "early_night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Early Night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Readable moonlit night with cool ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [24, 30, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [8, 12, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.78 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.25, -0.9, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [126, 156, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Early Night" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.sunset",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Orange late-day light with stronger side shadows." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [58, 42, 48, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [70, 38, 48, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.98 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.75, -0.38, -0.2] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 142, 82, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.8 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Sunset" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.twilight",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Blue-purple ambient light after sunset with faint horizon glow." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [34, 38, 58, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [20, 22, 42, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.9 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.55, -0.28, -0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [156, 162, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.35 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Twilight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.early_night",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "early_night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Early Night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Readable moonlit night with cool ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [24, 30, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [8, 12, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.78 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.25, -0.9, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [126, 156, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Early Night" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.midnight",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "midnight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Midnight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Dark moonlit scene for horror, stealth, and strong local lights." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [12, 16, 30, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [2, 4, 10, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.65 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "exp" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.1, -1.0, 0.05] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "midnight moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [92, 118, 220, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.25 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Midnight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.overcast",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Soft low-contrast daylight with broad ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [76, 80, 84, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [76, 84, 94, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.95 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.1, -1.0, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [194, 202, 214, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Overcast" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.interior",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "interior" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Interior Neutral" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral ambient interior lighting with no global sun contribution." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [42, 44, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [10, 10, 12, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.15 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "reinhard" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.0, -1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 255, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Interior Neutral" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.apply",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.preset", "value_from_state": "editor.global.pending_preset" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value_from_state": "editor.global.pending_preset.label" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value_from_state": "editor.global.pending_preset.description" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value_from_state": "editor.global.pending_ambient_light" },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value_from_state": "editor.global.pending_clear_color" },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value_from_state": "editor.global.pending_exposure" },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value_from_state": "editor.global.pending_tonemap" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value_from_state": "editor.global.pending_lighting_preview_quality" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value_from_state": "editor.global.pending_fog" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value_from_state": "editor.global.pending_directional.enabled" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value_from_state": "editor.global.pending_directional.enabled.label" },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value_from_state": "editor.global.pending_directional.direction" },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value_from_state": "editor.global.pending_directional.direction.label" },
+          { "type": "scene_state.set", "key": "editor.global.directional.color", "value_from_state": "editor.global.pending_directional.color" },
+          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value_from_state": "editor.global.pending_directional.intensity" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "applied global lighting preset {editor.global.pending_preset.label}" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.data.new",
+        "actions": [
+          { "type": "editor.global.property.new" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.data.focus.key",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "key" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.replace_on_text", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing global data key" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.data.focus.value",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "value" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.replace_on_text", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing global data value" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.data.apply",
+        "actions": [
+          { "type": "editor.global.property.apply" }
+        ]
+      },
+      { "signal": "signal.editor.global.data.select_slot.0.key", "actions": [{ "type": "editor.global.property.select_slot", "slot": 0, "focus": "key" }] },
+      { "signal": "signal.editor.global.data.select_slot.0.value", "actions": [{ "type": "editor.global.property.select_slot", "slot": 0, "focus": "value" }] },
+      { "signal": "signal.editor.global.data.select_slot.1.key", "actions": [{ "type": "editor.global.property.select_slot", "slot": 1, "focus": "key" }] },
+      { "signal": "signal.editor.global.data.select_slot.1.value", "actions": [{ "type": "editor.global.property.select_slot", "slot": 1, "focus": "value" }] },
+      { "signal": "signal.editor.global.data.select_slot.2.key", "actions": [{ "type": "editor.global.property.select_slot", "slot": 2, "focus": "key" }] },
+      { "signal": "signal.editor.global.data.select_slot.2.value", "actions": [{ "type": "editor.global.property.select_slot", "slot": 2, "focus": "value" }] },
+      { "signal": "signal.editor.global.data.select_slot.3.key", "actions": [{ "type": "editor.global.property.select_slot", "slot": 3, "focus": "key" }] },
+      { "signal": "signal.editor.global.data.select_slot.3.value", "actions": [{ "type": "editor.global.property.select_slot", "slot": 3, "focus": "value" }] },
+      { "signal": "signal.editor.global.data.delete.0", "actions": [{ "type": "editor.global.property.remove", "slot": 0 }] },
+      { "signal": "signal.editor.global.data.delete.1", "actions": [{ "type": "editor.global.property.remove", "slot": 1 }] },
+      { "signal": "signal.editor.global.data.delete.2", "actions": [{ "type": "editor.global.property.remove", "slot": 2 }] },
+      { "signal": "signal.editor.global.data.delete.3", "actions": [{ "type": "editor.global.property.remove", "slot": 3 }] },
+      {
         "signal": "signal.editor.file.focus.open",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "open" },
           { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing open path" }
@@ -4506,6 +5394,7 @@
         "signal": "signal.editor.file.focus.save_as",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "save_as" },
           { "type": "scene_state.set", "key": "editor.file.edit.replace_on_text", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing save as path" }
@@ -4543,6 +5432,45 @@
           },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.directional.kind", "value": "baked" },
+          { "type": "scene_state.set", "key": "editor.global.directional.shadow_mode", "value": "baked" },
+          { "type": "scene_state.set", "key": "editor.global.directional.casts_shadow", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.property.count", "value": 0 },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.key", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.value", "value": "" },
+          { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]
       },
@@ -4611,6 +5539,52 @@
           { "type": "console.write", "message_from_state": "editor.validate.diagnostic1" },
           { "type": "console.write", "message_from_state": "editor.validate.diagnostic2" },
           { "type": "console.write", "message_from_state": "editor.validate.message" },
+          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
+        ]
+      },
+      {
+        "signal": "signal.editor.file.plan_lighting",
+        "actions": [
+          {
+            "type": "editor.map.lighting_plan",
+            "world": "brush.editor_shell.target",
+            "outputs": {
+              "valid_key": "editor.lighting.plan.valid",
+              "message_key": "editor.lighting.plan.message",
+              "quality_key": "editor.lighting.plan.quality",
+              "total_count_key": "editor.lighting.plan.total_count",
+              "dynamic_count_key": "editor.lighting.plan.dynamic_count",
+              "static_count_key": "editor.lighting.plan.static_count",
+              "area_count_key": "editor.lighting.plan.area_count",
+              "runtime_count_key": "editor.lighting.plan.runtime_count",
+              "bake_count_key": "editor.lighting.plan.bake_count",
+              "max_dynamic_key": "editor.lighting.plan.max_dynamic",
+              "max_static_key": "editor.lighting.plan.max_static",
+              "requires_bake_key": "editor.lighting.plan.requires_bake",
+              "dynamic_preview_key": "editor.lighting.plan.dynamic_preview",
+              "dynamic_budget_exceeded_key": "editor.lighting.plan.dynamic_budget_exceeded",
+              "static_budget_exceeded_key": "editor.lighting.plan.static_budget_exceeded",
+              "line0_key": "editor.lighting.plan.line0",
+              "line1_key": "editor.lighting.plan.line1",
+              "line2_key": "editor.lighting.plan.line2",
+              "line3_key": "editor.lighting.plan.line3",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line0" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line1" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line2" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.line3" },
+          { "type": "console.write", "message_from_state": "editor.lighting.plan.message" },
           { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" }
         ]
       },
@@ -5198,7 +6172,9 @@
   "render": {
     "lighting": true,
     "bloom": false,
-    "clear_color": [18, 20, 24, 255]
+    "clear_color": [18, 20, 24, 255],
+    "clear_color_key": "editor.global.clear_color",
+    "tonemap_key": "editor.global.tonemap"
   },
   "entities": [
     {
@@ -5243,7 +6219,7 @@
             "conditions": [
               { "type": "scene_state.compare", "key": "editor.property.edit.focus", "op": "==", "value": "", "default": "" },
               { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "", "default": "" },
-              { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }
+              { "type": "scene_state.compare", "key": "editor.file.edit.focus", "op": "==", "value": "", "default": "" }, { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "", "default": "" }
             ]
           },
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },

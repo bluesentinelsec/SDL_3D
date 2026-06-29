@@ -125,6 +125,26 @@ the warmup queue to populate the generated mesh cache ahead of first draw; if a
 matching mesh warmup request is still pending, solid mesh drawing waits for the
 budgeted warmup service instead of building the mesh on the draw path.
 
+## Runtime Lighting
+
+Authored `world.lights` and entity `light.*` components are exposed through
+`slayer3d_game_data_world_light_count()`,
+`slayer3d_game_data_get_world_light()`, and
+`slayer3d_game_data_get_world_light_evaluated()`. The evaluated path applies
+generic light effects such as pulse, flicker, rotating direction, orbiting
+position, and property-driven flashes before the presentation layer uploads
+lights to the renderer.
+
+The editor shell uses the same API for WYSIWYG preview: when
+`editor.global.lighting_preview_quality` is set to `performance`, `balanced`, or
+`quality`, placed light Things are appended to the runtime light list after
+authored world/entity lights. Setting that state to `off` disables editor light
+preview without changing saved map output. The presentation layer also uses
+`slayer3d_game_data_world_light_upload_limit()` to cap uploaded lights for
+editor responsiveness: performance uploads 4 lights, balanced uploads 8, and
+quality uploads 16. Normal game runtimes keep the full engine light cap unless
+they opt into the same editor scene-state key.
+
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text
 and editor debug labels skip matching pending/failed font requests instead of
@@ -279,6 +299,57 @@ export as top-level `effects` entries for particle emitters, fog volumes,
 fire/smoke markers, or custom game-defined effect types. Active scene skybox
 data exports as a top-level `skybox` object when present, so game runtimes can
 consume environment selection without understanding the editor-only fragment.
+Global lighting defaults export under the map `global` object. The editor Global
+panel is preset-first: designers choose a broad map-lighting profile such as
+Sunrise, Afternoon Daylight, Twilight, Midnight, Overcast, or Interior Neutral,
+then press Apply to update the live editor preview and the exported map defaults.
+The applied preset writes concrete ambient light, clear color, tonemap, preview
+quality, fog, and map-level directional sun/moon values. Things > Lights places
+Point, Spot, Area Rect, and Area Sphere light markers; the selected-light inspector
+offers common intensity, range, color, shadow, falloff, spot-cone, area-size,
+and dynamic animation presets while the Data inspector remains available for
+game-specific key/value pairs.
+
+Lighting planning is deliberately API-centered. File > Plan Lighting, the Global
+Lighting panel's Plan Lighting button, the editor CLI command below, and caller
+code all use the public SlayerMap lighting-plan API:
+
+```sh
+build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor lighting-plan --manifest --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor lighting-plan --static-artifact --input /tmp/level.slayermap.json --output /tmp/lighting-static.json
+build/debug/slayer3d_editor lighting-artifact-validate --input /tmp/lighting-static.json
+```
+
+The command accepts `--preview`, `--final`, `--max-dynamic-lights`,
+`--max-static-lights`, `--no-dynamic-preview`, `--manifest`, and
+`--static-artifact` for tool and CI workflows. `--output <file>` may be used
+with `--manifest` or `--static-artifact` to write machine-readable JSON to disk;
+without `--output`, those modes write JSON to stdout.
+Planning reports runtime-preview lights, static/baked lights, area lights,
+whether a bake is required, and whether configured budgets were exceeded.
+`--manifest` emits deterministic JSON metadata for the planned static-lighting
+artifact contract. The current manifest reserves self-contained JSON artifact
+metadata. `--static-artifact` emits the first concrete static-light payload:
+self-contained per-face irradiance samples for box brushes. It is suitable for
+caller/editor integration and regression tests, and callers can validate the
+payload with `slayer3d_map_validate_static_lighting_artifact_json()` before
+consuming a generated artifact. The `lighting-artifact-validate` command exposes
+the same validation path for build scripts and CI. Final atlas lightmap or
+vertex-light bake payloads remain later lighting slices.
+
+Generated playable packages declare static-lighting payloads under
+`world.lighting_artifacts`. Runtime callers can enumerate those declarations
+with `slayer3d_game_data_lighting_artifact_count()` and
+`slayer3d_game_data_get_lighting_artifact()` to discover artifact paths and
+formats without hard-coding the generated package layout. Callers that want the
+JSON payload can use `slayer3d_game_data_read_lighting_artifact_json()`, which
+resolves the artifact relative to the loaded game file, validates the current
+`slayer3d.lighting_static.v0` format, and returns a caller-owned buffer. Code
+that only needs typed renderer/tooling metadata can call
+`slayer3d_game_data_get_static_lighting_summary()` to read sample counts and
+average irradiance without parsing JSON directly.
 
 ```sh
 build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
@@ -355,7 +426,13 @@ Optional flags:
 
 - `--map <level.slayermap.json>` materializes a saved Slayer3D map to a
   temporary playable data-game package and runs it with the brush FPS
-  controller.
+  controller. The generated package bridges map global lighting and authored
+  directional, point, and spot lights into runtime data. Area lights currently
+  use point-light preview until baked-lighting artifacts are consumed by the
+  renderer. Maps that require static lighting also materialize
+  `lighting/static.default.json`, declare it under `world.lighting_artifacts`,
+  and include a small lighting debug HUD with planner counts and bake/budget
+  status.
 - `--media <dir>` overrides the built-in media directory used for engine fonts
   and shared media.
 - `--scene <scene-id>` starts directly in a loaded scene instead of

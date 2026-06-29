@@ -7,6 +7,7 @@
 #define SLAYER3D_GAME_DATA_RENDER_RUNTIME_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "slayer3d/camera.h"
 #include "slayer3d/effects.h"
@@ -77,8 +78,91 @@ extern "C"
     bool slayer3d_game_data_get_world_units(const slayer3d_game_data_runtime *runtime, const char **out_units,
                                             float *out_meters_per_unit);
 
-    /** @brief Return the number of authored world lights. */
+    /** @brief Runtime descriptor for one generated or authored world lighting artifact. */
+    typedef struct slayer3d_game_data_lighting_artifact
+    {
+        /** @brief Stable artifact identifier, such as `lighting.static.default`. */
+        const char *id;
+        /** @brief Path to the artifact relative to the loaded game JSON file. */
+        const char *path;
+        /** @brief Artifact schema/format string, such as `slayer3d.lighting_static.v0`. */
+        const char *format;
+        /** @brief Optional bake group name used by editor/build tooling. */
+        const char *bake_group;
+        /** @brief True when the artifact is self-contained and does not require the source map. */
+        bool self_contained;
+    } slayer3d_game_data_lighting_artifact;
+
+    /** @brief Lightweight parsed summary of one static-lighting artifact. */
+    typedef struct slayer3d_game_data_static_lighting_summary
+    {
+        /** @brief Number of per-face irradiance samples in the artifact. */
+        size_t sample_count;
+        /** @brief Average RGB irradiance across all samples. */
+        float average_rgb[3];
+        /** @brief Average scalar intensity across all samples. */
+        float average_intensity;
+    } slayer3d_game_data_static_lighting_summary;
+
+    /**
+     * @brief Return the number of declared world lighting artifacts.
+     *
+     * Generated playable SlayerMap packages use `world.lighting_artifacts` to
+     * point callers at static lighting payloads such as
+     * `lighting/static.default.json`.
+     */
+    int slayer3d_game_data_lighting_artifact_count(const slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Read one declared world lighting artifact by zero-based index.
+     *
+     * Returned string pointers are owned by the loaded game data document and
+     * remain valid until the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_lighting_artifact(const slayer3d_game_data_runtime *runtime, int index,
+                                                  slayer3d_game_data_lighting_artifact *out_artifact);
+
+    /**
+     * @brief Read and validate one declared lighting artifact JSON file.
+     *
+     * The artifact path is resolved relative to the loaded game JSON file. The
+     * returned buffer is NUL-terminated for convenience, but @p out_size reports
+     * the exact file byte count. The caller owns the returned buffer and must
+     * release it with SDL_free().
+     */
+    bool slayer3d_game_data_read_lighting_artifact_json(const slayer3d_game_data_runtime *runtime, int index,
+                                                        char **out_json, size_t *out_size, char *error_buffer,
+                                                        int error_buffer_size);
+
+    /**
+     * @brief Read and summarize one declared static-lighting artifact.
+     *
+     * This is a renderer/tooling bridge for the current
+     * `slayer3d.lighting_static.v0` payload. It validates and parses the
+     * artifact, then reports the sample count and average irradiance without
+     * exposing callers to the raw JSON representation.
+     */
+    bool slayer3d_game_data_get_static_lighting_summary(const slayer3d_game_data_runtime *runtime, int index,
+                                                        slayer3d_game_data_static_lighting_summary *out_summary,
+                                                        char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Return the number of active world lights.
+     *
+     * In normal game runtimes this counts authored world/entity lights. Editor
+     * runtimes may append preview lights from placed light Things when editor
+     * lighting preview is enabled.
+     */
     int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return the light upload budget for active world-light rendering.
+     *
+     * Most game runtimes return `SLAYER3D_MAX_LIGHTS`. Editor runtimes may
+     * lower this based on lighting preview quality so WYSIWYG editing remains
+     * responsive with many placed lights.
+     */
+    int slayer3d_game_data_world_light_upload_limit(const slayer3d_game_data_runtime *runtime);
 
     /**
      * @brief Read the authored world ambient light color.
@@ -89,11 +173,12 @@ extern "C"
     bool slayer3d_game_data_get_world_ambient_light(const slayer3d_game_data_runtime *runtime, float out_rgb[3]);
 
     /**
-     * @brief Read an authored world light by zero-based index.
+     * @brief Read an active world light by zero-based index.
      *
      * The returned light is suitable for passing to slayer3d_add_light(). Lights
      * may target one entity with `target_entity`, or the first active-scene
-     * entity in an ordered `target_entities` fallback list.
+     * entity in an ordered `target_entities` fallback list. Editor preview
+     * lights are returned after authored lights.
      */
     bool slayer3d_game_data_get_world_light(const slayer3d_game_data_runtime *runtime, int index,
                                             slayer3d_light *out_light);
@@ -101,10 +186,11 @@ extern "C"
     /**
      * @brief Read an authored world light with generic visual effects evaluated.
      *
-     * Supported light effects include `pulse`, `color_cycle`, and `flash`,
-     * allowing data to drive color blends, intensity changes, and range changes
-     * over time or from actor properties. Passing NULL for @p eval uses a zeroed
-     * evaluation context.
+     * Supported light effects include `pulse`, `color_cycle`, `flash`,
+     * `rotate_direction`, and `orbit_position`, allowing data to drive color
+     * blends, intensity changes, range changes, direction changes, and moving
+     * light positions over time or from actor properties. Passing NULL for
+     * @p eval uses a zeroed evaluation context.
      */
     bool slayer3d_game_data_get_world_light_evaluated(const slayer3d_game_data_runtime *runtime, int index,
                                                       const slayer3d_game_data_render_eval *eval,

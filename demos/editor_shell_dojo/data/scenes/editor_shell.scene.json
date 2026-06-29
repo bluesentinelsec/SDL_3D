@@ -539,6 +539,17 @@
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
           {
+            "id": "ui.editor_shell.toolbar.global.button",
+            "type": "button",
+            "w": 76,
+            "h": 28,
+            "text": "Global",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.global.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false }
+          },
+          {
             "id": "ui.editor_shell.toolbar.actors.button",
             "type": "button",
             "w": 86,
@@ -862,12 +873,25 @@
             "type": "button",
             "x": 12,
             "y": 72,
-            "w": 284,
+            "w": 138,
             "h": 26,
-            "text": "Validate Document",
-            "text_scale": 0.42,
+            "text": "Validate",
+            "text_scale": 0.40,
             "interactive": true,
             "action": "editor.file.validate",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.plan_lighting.button",
+            "type": "button",
+            "x": 158,
+            "y": 72,
+            "w": 138,
+            "h": 26,
+            "text": "Plan Lighting",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.plan_lighting",
             "layer": 501
           }
         ]
@@ -879,7 +903,7 @@
         "x": 12,
         "y": 92,
         "w": 308,
-        "h": 430,
+        "h": 500,
         "clip_children": true,
         "interactive": true,
         "layer": 120,
@@ -5312,6 +5336,279 @@
               { "id": "ui.editor_shell.left_inspector.actor_color.apply", "type": "button", "w": 128, "h": "fill", "text": "Apply Color", "text_scale": 0.34, "action": "editor.inspector.actor.color.apply" },
               { "id": "ui.editor_shell.left_inspector.actor_color.reset", "type": "button", "w": 92, "h": "fill", "text": "Reset", "text_scale": 0.34, "action": "editor.inspector.actor.color.reset" }
             ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.title",
+            "type": "label",
+            "x": 12,
+            "y": 690,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 18,
+            "layer": 121,
+            "text": "Light",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.type",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 712,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.type.label", "type": "label", "w": 96, "h": "fill", "text": "Type" },
+              { "id": "ui.editor_shell.left_inspector.light.type.value", "type": "label", "w": "fill", "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.type", "default": "" }] }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.kind",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 740,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.kind.label", "type": "label", "w": 42, "h": "fill", "text": "Kind" },
+              { "id": "ui.editor_shell.left_inspector.light.kind.value", "type": "label", "w": 54, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.kind", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.kind.dynamic", "type": "button", "w": 80, "h": "fill", "text": "Dynamic", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.kind.dynamic" },
+              { "id": "ui.editor_shell.left_inspector.light.kind.baked", "type": "button", "w": "fill", "h": "fill", "text": "Baked", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.kind.baked" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.intensity",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 768,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.intensity.label", "type": "label", "w": 56, "h": "fill", "text": "Intensity" },
+              { "id": "ui.editor_shell.left_inspector.light.intensity.value", "type": "label", "w": 52, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.intensity_range", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.intensity.dim", "type": "button", "w": 44, "h": "fill", "text": "Dim", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.intensity.dim" },
+              { "id": "ui.editor_shell.left_inspector.light.intensity.normal", "type": "button", "w": 54, "h": "fill", "text": "Norm", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.intensity.normal" },
+              { "id": "ui.editor_shell.left_inspector.light.intensity.bright", "type": "button", "w": "fill", "h": "fill", "text": "Bright", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.intensity.bright" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.range",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 796,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.range.label", "type": "label", "w": 96, "h": "fill", "text": "Range" },
+              { "id": "ui.editor_shell.left_inspector.light.range.short", "type": "button", "w": 54, "h": "fill", "text": "Short", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.range.short" },
+              { "id": "ui.editor_shell.left_inspector.light.range.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.range.medium" },
+              { "id": "ui.editor_shell.left_inspector.light.range.long", "type": "button", "w": "fill", "h": "fill", "text": "Long", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.range.long" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.shadow",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 852,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.shadow.label", "type": "label", "w": 56, "h": "fill", "text": "Shadow" },
+              { "id": "ui.editor_shell.left_inspector.light.shadow.value", "type": "label", "w": 70, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.shadow_falloff", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.shadow.none", "type": "button", "w": 56, "h": "fill", "text": "None", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.shadow.none" },
+              { "id": "ui.editor_shell.left_inspector.light.shadow.dynamic", "type": "button", "w": "fill", "h": "fill", "text": "Dynamic", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.shadow.dynamic" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.color",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 824,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.color.label", "type": "label", "w": 48, "h": "fill", "text": "Color" },
+              { "id": "ui.editor_shell.left_inspector.light.color.warm", "type": "button", "w": 44, "h": "fill", "text": "Warm", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.warm" },
+              { "id": "ui.editor_shell.left_inspector.light.color.cool", "type": "button", "w": 42, "h": "fill", "text": "Cool", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.cool" },
+              { "id": "ui.editor_shell.left_inspector.light.color.red", "type": "button", "w": 38, "h": "fill", "text": "Red", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.red" },
+              { "id": "ui.editor_shell.left_inspector.light.color.green", "type": "button", "w": 44, "h": "fill", "text": "Green", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.green" },
+              { "id": "ui.editor_shell.left_inspector.light.color.blue", "type": "button", "w": "fill", "h": "fill", "text": "Blue", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.color.blue" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.falloff",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 880,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.falloff.label", "type": "label", "w": 96, "h": "fill", "text": "Falloff" },
+              { "id": "ui.editor_shell.left_inspector.light.falloff.inverse_square", "type": "button", "w": 92, "h": "fill", "text": "Inverse", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.falloff.inverse_square" },
+              { "id": "ui.editor_shell.left_inspector.light.falloff.linear", "type": "button", "w": "fill", "h": "fill", "text": "Linear", "text_scale": 0.31, "interactive": true, "action": "editor.inspector.light.falloff.linear" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.geometry",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 908,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.geometry.label", "type": "label", "w": 52, "h": "fill", "text": "Geometry" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.value", "type": "label", "w": 52, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.geometry", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.small", "type": "button", "w": 54, "h": "fill", "text": "Small", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.small" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.medium" },
+              { "id": "ui.editor_shell.left_inspector.light.geometry.large", "type": "button", "w": "fill", "h": "fill", "text": "Large", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.geometry.large" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.cone",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 936,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.cone.label", "type": "label", "w": 42, "h": "fill", "text": "Cone" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.value", "type": "label", "w": 58, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.cone", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.cone.tight", "type": "button", "w": 54, "h": "fill", "text": "Tight", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.tight" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.medium", "type": "button", "w": 54, "h": "fill", "text": "Med", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.medium" },
+              { "id": "ui.editor_shell.left_inspector.light.cone.wide", "type": "button", "w": "fill", "h": "fill", "text": "Wide", "text_scale": 0.29, "interactive": true, "action": "editor.inspector.light.cone.wide" }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.light.animation",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 964,
+            "scroll_y_key": "editor.inspector.scroll",
+            "clip_rect_id": "ui.editor_shell.left_inspector.scroll.viewport",
+            "w": 272,
+            "h": 24,
+            "layer": 121,
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Object", "default": "Object" },
+                { "type": "scene_state.compare", "key": "editor.inspector.light.visible", "op": "==", "value": true, "default": false }
+              ]
+            },
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.light.animation.label", "type": "label", "w": 36, "h": "fill", "text": "Anim" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.value", "type": "label", "w": 62, "h": "fill", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.inspector.light.animation", "default": "" }] },
+              { "id": "ui.editor_shell.left_inspector.light.animation.steady", "type": "button", "w": 42, "h": "fill", "text": "Steady", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.steady" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.torch", "type": "button", "w": 40, "h": "fill", "text": "Torch", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.torch" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.siren", "type": "button", "w": 40, "h": "fill", "text": "Siren", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.siren" },
+              { "id": "ui.editor_shell.left_inspector.light.animation.orbit", "type": "button", "w": "fill", "h": "fill", "text": "Orbit", "text_scale": 0.25, "interactive": true, "action": "editor.inspector.light.animation.orbit" }
+            ]
           }
         ]
       },
@@ -5584,10 +5881,10 @@
             "type": "button",
             "x": 12,
             "y": 52,
-            "w": 102,
+            "w": 50,
             "h": 26,
             "text": "Actors",
-            "text_scale": 0.38,
+            "text_scale": 0.32,
             "interactive": true,
             "action": "editor.things.category.actors",
             "selected_if": { "type": "scene_state.compare", "key": "editor.things.category", "op": "==", "value": "Actors", "default": "Actors" },
@@ -5596,15 +5893,43 @@
           {
             "id": "ui.editor_shell.actor_viewer.category.objects.button",
             "type": "button",
-            "x": 124,
+            "x": 66,
             "y": 52,
-            "w": 102,
+            "w": 50,
             "h": 26,
             "text": "Objects",
-            "text_scale": 0.38,
+            "text_scale": 0.30,
             "interactive": true,
             "action": "editor.things.category.objects",
             "selected_if": { "type": "scene_state.compare", "key": "editor.things.category", "op": "==", "value": "Objects", "default": "Actors" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.actor_viewer.category.lights.button",
+            "type": "button",
+            "x": 120,
+            "y": 52,
+            "w": 50,
+            "h": 26,
+            "text": "Lights",
+            "text_scale": 0.32,
+            "interactive": true,
+            "action": "editor.things.category.lights",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.things.category", "op": "==", "value": "Lights", "default": "Actors" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.actor_viewer.category.effects.button",
+            "type": "button",
+            "x": 174,
+            "y": 52,
+            "w": 50,
+            "h": 26,
+            "text": "Effects",
+            "text_scale": 0.30,
+            "interactive": true,
+            "action": "editor.things.category.effects",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.things.category", "op": "==", "value": "Effects", "default": "Actors" },
             "layer": 121
           },
           {
@@ -5869,7 +6194,7 @@
                 "layer": 122
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_18.button",
+                "id": "ui.editor_shell.actor_viewer.model_slot_17.button",
                 "type": "button",
                 "x": 108,
                 "y": 312,
@@ -5877,19 +6202,19 @@
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.18",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected_index", "op": "==", "value": 18, "default": -1 },
+                "action": "editor.actor.select_slot.17",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected_index", "op": "==", "value": 17, "default": -1 },
                 "visible_if": {
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.18.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.17.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 122
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_18.preview.body",
+                "id": "ui.editor_shell.actor_viewer.model_slot_17.preview.body",
                 "type": "panel",
                 "x": 136,
                 "y": 336,
@@ -5902,27 +6227,27 @@
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.18.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.17.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 123
               },
               {
-                "id": "ui.editor_shell.actor_viewer.model_slot_18.label",
+                "id": "ui.editor_shell.actor_viewer.model_slot_17.label",
                 "type": "label",
                 "x": 104,
                 "y": 396,
                 "w": 90,
                 "h": 18,
                 "format": "%s",
-                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.18.label", "default": "Model" }],
+                "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.17.label", "default": "Model" }],
                 "text_scale": 0.38,
                 "align": "center",
                 "visible_if": {
                   "type": "all",
                   "conditions": [
                     { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
-                    { "type": "scene_state.compare", "key": "editor.actor.slot.18.available", "op": "==", "value": true, "default": false }
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.17.available", "op": "==", "value": true, "default": false }
                   ]
                 },
                 "layer": 122
@@ -6016,7 +6341,7 @@
             "children": [
               { "id": "ui.editor_shell.actor_viewer.lights.title", "type": "label", "x": 12, "y": 12, "w": 188, "h": 22, "text": "Lights", "text_scale": 0.48 },
               {
-                "id": "ui.editor_shell.actor_viewer.light_ambient.button",
+                "id": "ui.editor_shell.actor_viewer.light_point.button",
                 "type": "button",
                 "x": 14,
                 "y": 48,
@@ -6025,13 +6350,13 @@
                 "text": "",
                 "interactive": true,
                 "action": "editor.actor.select_slot.9",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_ambient" },
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_point" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.light_ambient.preview", "type": "panel", "x": 39, "y": 73, "w": 32, "h": 32, "color": [190, 205, 255, 165], "border_color": [225, 235, 255, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.light_ambient.label", "type": "label", "x": 10, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.9.label", "default": "Ambient" }], "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.light_point.preview", "type": "panel", "x": 41, "y": 73, "w": 28, "h": 28, "color": [255, 230, 112, 220], "border_color": [255, 248, 190, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.light_point.label", "type": "label", "x": 10, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.9.label", "default": "Point" }], "text_scale": 0.38, "align": "center", "layer": 122 },
               {
-                "id": "ui.editor_shell.actor_viewer.light_directional.button",
+                "id": "ui.editor_shell.actor_viewer.light_spot.button",
                 "type": "button",
                 "x": 108,
                 "y": 48,
@@ -6040,13 +6365,13 @@
                 "text": "",
                 "interactive": true,
                 "action": "editor.actor.select_slot.10",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_directional" },
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_spot" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.light_directional.preview", "type": "panel", "x": 126, "y": 81, "w": 46, "h": 16, "color": [255, 238, 160, 205], "border_color": [255, 248, 202, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.light_directional.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.10.label", "default": "Directional" }], "text_scale": 0.34, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.light_spot.preview", "type": "panel", "x": 135, "y": 73, "w": 28, "h": 28, "color": [255, 208, 130, 210], "border_color": [255, 235, 190, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.light_spot.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.10.label", "default": "Spot" }], "text_scale": 0.38, "align": "center", "layer": 122 },
               {
-                "id": "ui.editor_shell.actor_viewer.light_point.button",
+                "id": "ui.editor_shell.actor_viewer.light_area_rect.button",
                 "type": "button",
                 "x": 14,
                 "y": 166,
@@ -6055,13 +6380,13 @@
                 "text": "",
                 "interactive": true,
                 "action": "editor.actor.select_slot.11",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_point" },
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_area_rect" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.light_point.preview", "type": "panel", "x": 41, "y": 193, "w": 28, "h": 28, "color": [255, 230, 112, 220], "border_color": [255, 248, 190, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.light_point.label", "type": "label", "x": 10, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.11.label", "default": "Point" }], "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.light_area_rect.preview", "type": "panel", "x": 29, "y": 200, "w": 52, "h": 14, "color": [255, 222, 178, 195], "border_color": [255, 240, 214, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.light_area_rect.label", "type": "label", "x": 10, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.11.label", "default": "Area Rect" }], "text_scale": 0.34, "align": "center", "layer": 122 },
               {
-                "id": "ui.editor_shell.actor_viewer.light_spot.button",
+                "id": "ui.editor_shell.actor_viewer.light_area_sphere.button",
                 "type": "button",
                 "x": 108,
                 "y": 166,
@@ -6070,26 +6395,11 @@
                 "text": "",
                 "interactive": true,
                 "action": "editor.actor.select_slot.12",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_spot" },
+                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_area_sphere" },
                 "layer": 122
               },
-              { "id": "ui.editor_shell.actor_viewer.light_spot.preview", "type": "panel", "x": 135, "y": 193, "w": 28, "h": 28, "color": [255, 208, 130, 210], "border_color": [255, 235, 190, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.light_spot.label", "type": "label", "x": 104, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.12.label", "default": "Spot" }], "text_scale": 0.38, "align": "center", "layer": 122 },
-              {
-                "id": "ui.editor_shell.actor_viewer.light_area.button",
-                "type": "button",
-                "x": 14,
-                "y": 284,
-                "w": 82,
-                "h": 82,
-                "text": "",
-                "interactive": true,
-                "action": "editor.actor.select_slot.13",
-                "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "light_area" },
-                "layer": 122
-              },
-              { "id": "ui.editor_shell.actor_viewer.light_area.preview", "type": "panel", "x": 29, "y": 318, "w": 52, "h": 14, "color": [255, 222, 178, 195], "border_color": [255, 240, 214, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.light_area.label", "type": "label", "x": 10, "y": 368, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.13.label", "default": "Area" }], "text_scale": 0.38, "align": "center", "layer": 122 }
+              { "id": "ui.editor_shell.actor_viewer.light_area_sphere.preview", "type": "panel", "x": 132, "y": 192, "w": 34, "h": 34, "color": [210, 228, 255, 185], "border_color": [235, 246, 255, 255], "border_thickness": 1, "layer": 123 },
+              { "id": "ui.editor_shell.actor_viewer.light_area_sphere.label", "type": "label", "x": 104, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.12.label", "default": "Area Sphere" }], "text_scale": 0.32, "align": "center", "layer": 122 }
             ]
           },
           {
@@ -6112,12 +6422,12 @@
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.14",
+                "action": "editor.actor.select_slot.13",
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "particle_emitter" },
                 "layer": 122
               },
               { "id": "ui.editor_shell.actor_viewer.particle_emitter.preview", "type": "panel", "x": 41, "y": 73, "w": 28, "h": 28, "color": [255, 214, 92, 180], "border_color": [255, 238, 168, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.particle_emitter.label", "type": "label", "x": 10, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.14.label", "default": "Particle Emitter" }], "text_scale": 0.31, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.particle_emitter.label", "type": "label", "x": 10, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.13.label", "default": "Particle Emitter" }], "text_scale": 0.31, "align": "center", "layer": 122 },
               {
                 "id": "ui.editor_shell.actor_viewer.fog_volume.button",
                 "type": "button",
@@ -6127,12 +6437,12 @@
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.15",
+                "action": "editor.actor.select_slot.14",
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "fog_volume" },
                 "layer": 122
               },
               { "id": "ui.editor_shell.actor_viewer.fog_volume.preview", "type": "panel", "x": 126, "y": 72, "w": 46, "h": 34, "color": [138, 190, 255, 96], "border_color": [190, 225, 255, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.fog_volume.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.15.label", "default": "Fog Volume" }], "text_scale": 0.36, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.fog_volume.label", "type": "label", "x": 104, "y": 132, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.14.label", "default": "Fog Volume" }], "text_scale": 0.36, "align": "center", "layer": 122 },
               {
                 "id": "ui.editor_shell.actor_viewer.fire_marker.button",
                 "type": "button",
@@ -6142,12 +6452,12 @@
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.16",
+                "action": "editor.actor.select_slot.15",
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "fire_marker" },
                 "layer": 122
               },
               { "id": "ui.editor_shell.actor_viewer.fire_marker.preview", "type": "panel", "x": 41, "y": 191, "w": 28, "h": 28, "color": [255, 112, 48, 210], "border_color": [255, 190, 132, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.fire_marker.label", "type": "label", "x": 10, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.16.label", "default": "Fire" }], "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.actor_viewer.fire_marker.label", "type": "label", "x": 10, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.15.label", "default": "Fire" }], "text_scale": 0.38, "align": "center", "layer": 122 },
               {
                 "id": "ui.editor_shell.actor_viewer.smoke_marker.button",
                 "type": "button",
@@ -6157,12 +6467,12 @@
                 "h": 82,
                 "text": "",
                 "interactive": true,
-                "action": "editor.actor.select_slot.17",
+                "action": "editor.actor.select_slot.16",
                 "selected_if": { "type": "scene_state.compare", "key": "editor.actor.selected", "op": "==", "value": "smoke_marker" },
                 "layer": 122
               },
               { "id": "ui.editor_shell.actor_viewer.smoke_marker.preview", "type": "panel", "x": 135, "y": 191, "w": 28, "h": 28, "color": [148, 154, 166, 165], "border_color": [212, 216, 226, 255], "border_thickness": 1, "layer": 123 },
-              { "id": "ui.editor_shell.actor_viewer.smoke_marker.label", "type": "label", "x": 104, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.17.label", "default": "Smoke" }], "text_scale": 0.38, "align": "center", "layer": 122 }
+              { "id": "ui.editor_shell.actor_viewer.smoke_marker.label", "type": "label", "x": 104, "y": 250, "w": 90, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.actor.slot.16.label", "default": "Smoke" }], "text_scale": 0.38, "align": "center", "layer": 122 }
             ]
           }
         ]
@@ -6186,6 +6496,403 @@
             { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": true, "default": false }
           ]
         }
+      },
+      {
+        "id": "ui.editor_shell.global_panel.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 930,
+        "y": 92,
+        "w": 338,
+        "h": 430,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 120,
+        "fill_color": [8, 13, 22, 238],
+        "border_color": [82, 112, 154, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false },
+        "children": [
+          {
+            "id": "ui.editor_shell.global_panel.header",
+            "type": "panel",
+            "x": 8,
+            "y": 8,
+            "w": 322,
+            "h": 34,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.global_panel.title", "type": "label", "x": 10, "y": 6, "w": 180, "h": 20, "text": "Global", "text_scale": 0.46, "layer": 122 },
+              {
+                "id": "ui.editor_shell.global_panel.close.button",
+                "type": "button",
+                "x": 268,
+                "y": 5,
+                "w": 46,
+                "h": 24,
+                "text": "hide",
+                "text_scale": 0.38,
+                "interactive": true,
+                "action": "editor.global.close",
+                "layer": 122
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.global_panel.tab.lighting.button",
+            "type": "button",
+            "x": 18,
+            "y": 50,
+            "w": 144,
+            "h": 26,
+            "text": "Lighting",
+            "text_scale": 0.38,
+            "interactive": true,
+            "action": "editor.global.tab.lighting",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.tab", "op": "==", "value": "Lighting", "default": "Lighting" },
+            "layer": 122
+          },
+          {
+            "id": "ui.editor_shell.global_panel.tab.data.button",
+            "type": "button",
+            "x": 170,
+            "y": 50,
+            "w": 148,
+            "h": 26,
+            "text": "Data",
+            "text_scale": 0.38,
+            "interactive": true,
+            "action": "editor.global.tab.data",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.tab", "op": "==", "value": "Data", "default": "Lighting" },
+            "layer": 122
+          },
+          { "id": "ui.editor_shell.global_panel.summary.label", "type": "label", "x": 18, "y": 82, "w": 300, "h": 18, "text": "Choose a global lighting preset, then Apply to preview it", "text_scale": 0.32, "align": "left", "layer": 121 },
+          { "id": "ui.editor_shell.global_panel.preset.label", "type": "label", "x": 18, "y": 104, "w": 124, "h": 18, "text": "Preset", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.preset.sunrise.button",
+            "type": "button",
+            "x": 18,
+            "y": 124,
+            "w": 92,
+            "h": 26,
+            "text": "Sunrise",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.sunrise",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "sunrise", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.morning.button",
+            "type": "button",
+            "x": 116,
+            "y": 124,
+            "w": 92,
+            "h": 26,
+            "text": "Morning",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.morning",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "morning", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.afternoon.button",
+            "type": "button",
+            "x": 214,
+            "y": 124,
+            "w": 92,
+            "h": 26,
+            "text": "Afternoon",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.afternoon",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "afternoon", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.sunset.button",
+            "type": "button",
+            "x": 18,
+            "y": 158,
+            "w": 92,
+            "h": 26,
+            "text": "Sunset",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.sunset",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "sunset", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.twilight.button",
+            "type": "button",
+            "x": 116,
+            "y": 158,
+            "w": 92,
+            "h": 26,
+            "text": "Twilight",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.twilight",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "twilight", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.early_night.button",
+            "type": "button",
+            "x": 214,
+            "y": 158,
+            "w": 92,
+            "h": 26,
+            "text": "Early Night",
+            "text_scale": 0.32,
+            "interactive": true,
+            "action": "editor.global.preset.early_night",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "early_night", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.midnight.button",
+            "type": "button",
+            "x": 18,
+            "y": 192,
+            "w": 92,
+            "h": 26,
+            "text": "Midnight",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.midnight",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "midnight", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.overcast.button",
+            "type": "button",
+            "x": 116,
+            "y": 192,
+            "w": 92,
+            "h": 26,
+            "text": "Overcast",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.overcast",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "overcast", "default": "afternoon" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.preset.interior.button",
+            "type": "button",
+            "x": 214,
+            "y": 192,
+            "w": 92,
+            "h": 26,
+            "text": "Interior",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.global.preset.interior",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "interior", "default": "afternoon" },
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.selected.label", "type": "label", "x": 18, "y": 230, "w": 100, "h": 18, "text": "Selected", "text_scale": 0.38, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.selected.value",
+            "type": "label",
+            "x": 124,
+            "y": 230,
+            "w": 194,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.pending_preset.label", "default": "Afternoon Daylight" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.description.value",
+            "type": "label",
+            "x": 18,
+            "y": 252,
+            "w": 300,
+            "h": 36,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.pending_preset.description", "default": "Neutral default daylight suitable for most grayboxing work." }],
+            "text_scale": 0.32,
+            "align": "left",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.apply.button", "type": "button", "x": 18, "y": 294, "w": 300, "h": 30, "text": "Apply Preset", "text_scale": 0.40, "interactive": true, "action": "editor.global.preset.apply", "layer": 121 },
+          { "id": "ui.editor_shell.global_panel.applied.label", "type": "label", "x": 18, "y": 334, "w": 100, "h": 18, "text": "Applied", "text_scale": 0.38, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.applied.value",
+            "type": "label",
+            "x": 124,
+            "y": 334,
+            "w": 194,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.global.preset.label", "default": "Afternoon Daylight" }],
+            "text_scale": 0.40,
+            "align": "right",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.plan.button",
+            "type": "button",
+            "x": 18,
+            "y": 366,
+            "w": 300,
+            "h": 26,
+            "text": "Plan Lighting",
+            "text_scale": 0.40,
+            "interactive": true,
+            "action": "editor.file.plan_lighting",
+            "layer": 121
+          },
+          { "id": "ui.editor_shell.global_panel.plan.label", "type": "label", "x": 18, "y": 402, "w": 124, "h": 18, "text": "Last Plan", "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.global_panel.plan.message",
+            "type": "label",
+            "x": 150,
+            "y": 402,
+            "w": 168,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.lighting.plan.message", "default": "not planned" }],
+            "text_scale": 0.34,
+            "align": "right",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.plan.counts",
+            "type": "label",
+            "x": 18,
+            "y": 428,
+            "w": 300,
+            "h": 18,
+            "format": "Runtime %s  Bake %s  Area %s",
+            "bindings": [
+              { "type": "scene_state", "key": "editor.lighting.plan.runtime_count", "default": 0 },
+              { "type": "scene_state", "key": "editor.lighting.plan.bake_count", "default": 0 },
+              { "type": "scene_state", "key": "editor.lighting.plan.area_count", "default": 0 }
+            ],
+            "text_scale": 0.36,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.plan.status",
+            "type": "label",
+            "x": 18,
+            "y": 450,
+            "w": 300,
+            "h": 18,
+            "format": "%s",
+            "bindings": [{ "type": "scene_state", "key": "editor.lighting.plan.line3", "default": "No lighting plan computed" }],
+            "text_scale": 0.34,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.global_panel.data.overlay",
+            "type": "panel",
+            "layout": "none",
+            "x": 8,
+            "y": 82,
+            "w": 322,
+            "h": 410,
+            "fill_color": [8, 13, 22, 252],
+            "border_color": [82, 112, 154, 255],
+            "border_thickness": 0,
+            "interactive": true,
+            "layer": 124,
+            "visible_if": { "type": "scene_state.compare", "key": "editor.global.tab", "op": "==", "value": "Data", "default": "Lighting" },
+            "children": [
+              { "id": "ui.editor_shell.global_panel.data.title", "type": "label", "x": 10, "y": 8, "w": 220, "h": 18, "text": "Map Data", "text_scale": 0.42, "align": "left", "layer": 125 },
+              {
+                "id": "ui.editor_shell.global_panel.data.new.button",
+                "type": "button",
+                "x": 192,
+                "y": 4,
+                "w": 54,
+                "h": 26,
+                "text": "New",
+                "text_scale": 0.34,
+                "interactive": true,
+                "action": "editor.global.data.new",
+                "layer": 125
+              },
+              {
+                "id": "ui.editor_shell.global_panel.data.save.button",
+                "type": "button",
+                "x": 252,
+                "y": 4,
+                "w": 58,
+                "h": 26,
+                "text": "Save",
+                "text_scale": 0.34,
+                "interactive": true,
+                "action": "editor.global.data.apply",
+                "layer": 125
+              },
+              {
+                "id": "ui.editor_shell.global_panel.data.key.input",
+                "type": "button",
+                "x": 10,
+                "y": 42,
+                "w": 112,
+                "h": 28,
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.global.data.edit.key.display", "default": "" }],
+                "text_scale": 0.32,
+                "interactive": true,
+                "action": "editor.global.data.focus.key",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "key", "default": "" },
+                "layer": 125
+              },
+              {
+                "id": "ui.editor_shell.global_panel.data.value.input",
+                "type": "button",
+                "x": 132,
+                "y": 42,
+                "w": 178,
+                "h": 28,
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.global.data.edit.value.display", "default": "" }],
+                "text_scale": 0.32,
+                "interactive": true,
+                "action": "editor.global.data.focus.value",
+                "selected_if": { "type": "scene_state.compare", "key": "editor.global.data.edit.focus", "op": "==", "value": "value", "default": "" },
+                "layer": 125
+              },
+              {
+                "id": "ui.editor_shell.global_panel.data.message",
+                "type": "label",
+                "x": 10,
+                "y": 78,
+                "w": 300,
+                "h": 18,
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.global.data.message", "default": "Global properties are exported as map-level data" }],
+                "text_scale": 0.32,
+                "align": "left",
+                "layer": 125
+              },
+              { "id": "ui.editor_shell.global_panel.data.row0.key", "type": "button", "x": 10, "y": 108, "w": 100, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.0.key", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.0.key", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row0.value", "type": "button", "x": 112, "y": 108, "w": 150, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.0.value", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.0.value", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row0.delete", "type": "button", "x": 266, "y": 108, "w": 44, "h": 26, "text": "Del", "text_scale": 0.30, "interactive": true, "action": "editor.global.data.delete.0", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row1.key", "type": "button", "x": 10, "y": 140, "w": 100, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.1.key", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.1.key", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row1.value", "type": "button", "x": 112, "y": 140, "w": 150, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.1.value", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.1.value", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row1.delete", "type": "button", "x": 266, "y": 140, "w": 44, "h": 26, "text": "Del", "text_scale": 0.30, "interactive": true, "action": "editor.global.data.delete.1", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row2.key", "type": "button", "x": 10, "y": 172, "w": 100, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.2.key", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.2.key", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row2.value", "type": "button", "x": 112, "y": 172, "w": 150, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.2.value", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.2.value", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row2.delete", "type": "button", "x": 266, "y": 172, "w": 44, "h": 26, "text": "Del", "text_scale": 0.30, "interactive": true, "action": "editor.global.data.delete.2", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row3.key", "type": "button", "x": 10, "y": 204, "w": 100, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.3.key", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.3.key", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.3.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row3.value", "type": "button", "x": 112, "y": 204, "w": 150, "h": 26, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.global.property.3.value", "default": "" }], "text_scale": 0.31, "interactive": true, "action": "editor.global.data.select_slot.3.value", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.3.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.global_panel.data.row3.delete", "type": "button", "x": 266, "y": 204, "w": 44, "h": 26, "text": "Del", "text_scale": 0.30, "interactive": true, "action": "editor.global.data.delete.3", "layer": 125, "visible_if": { "type": "scene_state.compare", "key": "editor.global.property.3.available", "op": "==", "value": true, "default": false } }
+            ]
+          }
+        ]
       },
       {
         "id": "ui.editor_shell.asset_warmup.panel",

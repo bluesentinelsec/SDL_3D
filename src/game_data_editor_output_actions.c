@@ -727,6 +727,139 @@ bool slayer3d_game_data_validate_editor_map_action(slayer3d_game_data_runtime *r
     return true;
 }
 
+static slayer3d_map_lighting_build_quality editor_lighting_build_quality_from_map_preview(const char *quality)
+{
+    if (quality != NULL && SDL_strcmp(quality, "performance") == 0)
+        return SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW;
+    if (quality != NULL && SDL_strcmp(quality, "quality") == 0)
+        return SLAYER3D_MAP_LIGHTING_BUILD_FINAL;
+    return SLAYER3D_MAP_LIGHTING_BUILD_BALANCED;
+}
+
+static const char *editor_lighting_build_quality_name(slayer3d_map_lighting_build_quality quality)
+{
+    switch (quality)
+    {
+    case SLAYER3D_MAP_LIGHTING_BUILD_PREVIEW:
+        return "preview";
+    case SLAYER3D_MAP_LIGHTING_BUILD_FINAL:
+        return "final";
+    case SLAYER3D_MAP_LIGHTING_BUILD_BALANCED:
+    default:
+        return "balanced";
+    }
+}
+
+static int editor_size_to_int(size_t value)
+{
+    return value > (size_t)SDL_MAX_SINT32 ? SDL_MAX_SINT32 : (int)value;
+}
+
+bool slayer3d_game_data_plan_editor_map_lighting_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    bool ok =
+        slayer3d_game_data_export_editable_level_map_json(runtime, world_name, &json, &size, error, (int)sizeof(error));
+
+    slayer3d_map_document *document = NULL;
+    slayer3d_map_lighting_build_plan plan;
+    SDL_zero(plan);
+    slayer3d_map_global_state global;
+    SDL_zero(global);
+    if (ok)
+        ok = slayer3d_map_load_json(json, size, NULL, &document, error, (int)sizeof(error));
+    if (ok && !slayer3d_map_get_global_state(document, &global))
+    {
+        ok = false;
+        SDL_snprintf(error, sizeof(error), "$.global: failed to read map global lighting state");
+    }
+    if (ok)
+    {
+        slayer3d_map_lighting_build_options options;
+        slayer3d_map_init_lighting_build_options(&options);
+        options.quality = editor_lighting_build_quality_from_map_preview(global.lighting_preview_quality);
+        options.include_dynamic_preview = json_bool(action, "include_dynamic_preview", options.include_dynamic_preview);
+        yyjson_val *max_dynamic_lights = obj_get(action, "max_dynamic_lights");
+        if (yyjson_is_uint(max_dynamic_lights))
+            options.max_dynamic_lights = (size_t)yyjson_get_uint(max_dynamic_lights);
+        yyjson_val *max_static_lights = obj_get(action, "max_static_lights");
+        if (yyjson_is_uint(max_static_lights))
+            options.max_static_lights = (size_t)yyjson_get_uint(max_static_lights);
+        ok = slayer3d_map_build_lighting_plan(document, &options, &plan, error, (int)sizeof(error));
+    }
+
+    char message[160];
+    char line0[160];
+    char line1[160];
+    char line2[160];
+    char line3[160];
+    message[0] = '\0';
+    line0[0] = '\0';
+    line1[0] = '\0';
+    line2[0] = '\0';
+    line3[0] = '\0';
+    if (ok)
+    {
+        SDL_snprintf(message, sizeof(message), "lighting plan: %llu lights, %llu runtime, %llu bake",
+                     (unsigned long long)plan.total_light_count, (unsigned long long)plan.runtime_light_count,
+                     (unsigned long long)plan.bake_light_count);
+        SDL_snprintf(line0, sizeof(line0), "lighting plan quality %s",
+                     editor_lighting_build_quality_name(plan.quality));
+        SDL_snprintf(line1, sizeof(line1), "lighting plan counts total %llu dynamic %llu static %llu area %llu",
+                     (unsigned long long)plan.total_light_count, (unsigned long long)plan.dynamic_light_count,
+                     (unsigned long long)plan.static_light_count, (unsigned long long)plan.area_light_count);
+        SDL_snprintf(line2, sizeof(line2), "lighting plan work runtime %llu/%llu bake %llu/%llu",
+                     (unsigned long long)plan.runtime_light_count, (unsigned long long)plan.max_dynamic_lights,
+                     (unsigned long long)plan.bake_light_count, (unsigned long long)plan.max_static_lights);
+        SDL_snprintf(line3, sizeof(line3), "lighting plan %s%s%s",
+                     plan.requires_static_bake ? "requires static bake" : "runtime only",
+                     plan.dynamic_light_budget_exceeded ? ", runtime budget exceeded" : "",
+                     plan.static_light_budget_exceeded ? ", static budget exceeded" : "");
+    }
+    else
+    {
+        SDL_snprintf(message, sizeof(message), "lighting plan failed: %s",
+                     error[0] != '\0' ? error : "map lighting plan failed");
+        SDL_strlcpy(line0, message, sizeof(line0));
+    }
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key", message);
+    editor_set_string_output(scene_state, outputs, "quality_key",
+                             ok ? editor_lighting_build_quality_name(plan.quality) : "");
+    editor_set_int_output(scene_state, outputs, "total_count_key", ok ? editor_size_to_int(plan.total_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "dynamic_count_key",
+                          ok ? editor_size_to_int(plan.dynamic_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "static_count_key",
+                          ok ? editor_size_to_int(plan.static_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "area_count_key", ok ? editor_size_to_int(plan.area_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "runtime_count_key",
+                          ok ? editor_size_to_int(plan.runtime_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "bake_count_key", ok ? editor_size_to_int(plan.bake_light_count) : 0);
+    editor_set_int_output(scene_state, outputs, "max_dynamic_key",
+                          ok ? editor_size_to_int(plan.max_dynamic_lights) : 0);
+    editor_set_int_output(scene_state, outputs, "max_static_key", ok ? editor_size_to_int(plan.max_static_lights) : 0);
+    editor_set_bool_output(scene_state, outputs, "requires_bake_key", ok && plan.requires_static_bake);
+    editor_set_bool_output(scene_state, outputs, "dynamic_preview_key", ok && plan.has_dynamic_preview);
+    editor_set_bool_output(scene_state, outputs, "dynamic_budget_exceeded_key",
+                           ok && plan.dynamic_light_budget_exceeded);
+    editor_set_bool_output(scene_state, outputs, "static_budget_exceeded_key", ok && plan.static_light_budget_exceeded);
+    editor_set_string_output(scene_state, outputs, "line0_key", line0);
+    editor_set_string_output(scene_state, outputs, "line1_key", line1);
+    editor_set_string_output(scene_state, outputs, "line2_key", line2);
+    editor_set_string_output(scene_state, outputs, "line3_key", line3);
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    slayer3d_map_destroy(document);
+    SDL_free(json);
+    return true;
+}
+
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

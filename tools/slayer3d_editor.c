@@ -20,6 +20,23 @@ int main(int argc, char **argv)
 
     char error[512];
     error[0] = '\0';
+    if (args.command == SLAYER3D_EDITOR_COMMAND_LIGHTING_PLAN)
+    {
+        const bool ok = slayer3d_editor_run_lighting_plan(&args, stdout, error, (int)sizeof(error));
+        if (!ok)
+            fprintf(stderr, "slayer3d_editor: %s\n", error[0] != '\0' ? error : "failed to build lighting plan");
+        slayer3d_editor_args_destroy(&args);
+        return ok ? 0 : 2;
+    }
+    if (args.command == SLAYER3D_EDITOR_COMMAND_LIGHTING_ARTIFACT_VALIDATE)
+    {
+        const bool ok = slayer3d_editor_run_lighting_artifact_validate(&args, stdout, error, (int)sizeof(error));
+        if (!ok)
+            fprintf(stderr, "slayer3d_editor: %s\n", error[0] != '\0' ? error : "failed to validate lighting artifact");
+        slayer3d_editor_args_destroy(&args);
+        return ok ? 0 : 2;
+    }
+
     slayer3d_editor_project project;
     if (!slayer3d_editor_project_load(args.project, &project, error, (int)sizeof(error)))
     {
