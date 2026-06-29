@@ -84,6 +84,11 @@ static char editor_path_separator(void)
 
 static bool editor_path_absolute(const char *path);
 
+static bool editor_path_asset_uri(const char *path)
+{
+    return path != NULL && SDL_strncmp(path, "asset://", 8) == 0;
+}
+
 static char *editor_path_join(const char *base, const char *leaf)
 {
     if (leaf == NULL)
@@ -108,6 +113,26 @@ static char *editor_path_join(const char *base, const char *leaf)
             *p = '\\';
     }
 #endif
+    return joined;
+}
+
+static char *editor_asset_path_join(const char *base, const char *leaf)
+{
+    if (leaf == NULL)
+        return NULL;
+    if (base == NULL || base[0] == '\0')
+        return SDL_strdup(leaf);
+    const size_t base_len = SDL_strlen(base);
+    const size_t leaf_len = SDL_strlen(leaf);
+    const bool needs_sep = base_len > 0U && base[base_len - 1U] != '/';
+    char *joined = (char *)SDL_malloc(base_len + (needs_sep ? 1U : 0U) + leaf_len + 1U);
+    if (joined == NULL)
+        return NULL;
+    SDL_memcpy(joined, base, base_len);
+    size_t offset = base_len;
+    if (needs_sep)
+        joined[offset++] = '/';
+    SDL_memcpy(joined + offset, leaf, leaf_len + 1U);
     return joined;
 }
 
@@ -172,6 +197,8 @@ static char *editor_resolve_directory(slayer3d_game_data_runtime *runtime, const
 {
     if (directory == NULL || directory[0] == '\0')
         return NULL;
+    if (editor_path_asset_uri(directory))
+        return SDL_strdup(directory);
     if (editor_path_absolute(directory))
         return SDL_strdup(directory);
     const char *base_dir = runtime != NULL && runtime->file_base_dir != NULL
@@ -432,12 +459,11 @@ static bool editor_texture_fuzzy_matches(const editor_texture_scan_entry *entry,
     return true;
 }
 
-static bool editor_texture_scan_list_append(editor_texture_scan_list *list, const char *physical_directory,
-                                            const char *relative_directory, const char *relative_file)
+static bool editor_texture_scan_list_append_source(editor_texture_scan_list *list, const char *source_path,
+                                                   const char *relative_directory, const char *relative_file)
 {
     const char *filename = editor_basename(relative_file);
-    if (list == NULL || physical_directory == NULL || relative_file == NULL ||
-        !editor_texture_extension_supported(filename))
+    if (list == NULL || source_path == NULL || relative_file == NULL || !editor_texture_extension_supported(filename))
         return true;
     if (list->count >= list->capacity)
     {
@@ -453,7 +479,7 @@ static bool editor_texture_scan_list_append(editor_texture_scan_list *list, cons
     editor_texture_scan_entry *entry = &list->entries[list->count];
     SDL_zero(*entry);
     entry->filename = SDL_strdup(filename);
-    entry->path = editor_path_join(physical_directory, filename);
+    entry->path = SDL_strdup(source_path);
     entry->relative_path = editor_path_join(relative_directory != NULL ? relative_directory : "", relative_file);
     entry->directory = editor_texture_relative_parent(relative_file);
     entry->directory_label = editor_texture_directory_label(entry->directory);
@@ -475,6 +501,18 @@ static bool editor_texture_scan_list_append(editor_texture_scan_list *list, cons
     }
     ++list->count;
     return true;
+}
+
+static bool editor_texture_scan_list_append(editor_texture_scan_list *list, const char *physical_directory,
+                                            const char *relative_directory, const char *relative_file)
+{
+    if (physical_directory == NULL || relative_file == NULL)
+        return true;
+    char *source_path = editor_path_join(physical_directory, editor_basename(relative_file));
+    const bool ok = source_path != NULL &&
+                    editor_texture_scan_list_append_source(list, source_path, relative_directory, relative_file);
+    SDL_free(source_path);
+    return ok;
 }
 
 typedef struct editor_texture_enumerate_context
@@ -574,6 +612,110 @@ static bool editor_scan_texture_directory(const char *directory, const char *rel
     if (!ok)
         editor_texture_scan_list_free(out_list);
     return ok;
+}
+
+typedef struct editor_asset_texture_enumerate_context
+{
+    slayer3d_game_data_runtime *runtime;
+    editor_texture_scan_list *list;
+    const char *relative_directory;
+    const char *relative_subdirectory;
+    int depth;
+    bool ok;
+} editor_asset_texture_enumerate_context;
+
+static bool editor_scan_texture_asset_directory_recursive(slayer3d_game_data_runtime *runtime,
+                                                          const char *asset_directory, const char *relative_directory,
+                                                          const char *relative_subdirectory,
+                                                          editor_texture_scan_list *out_list, int depth);
+
+static slayer3d_asset_enumeration_result editor_asset_texture_enumerate_entry(void *userdata, const char *directory,
+                                                                              const char *name,
+                                                                              slayer3d_asset_entry_type type)
+{
+    editor_asset_texture_enumerate_context *ctx = (editor_asset_texture_enumerate_context *)userdata;
+    if (ctx == NULL || ctx->runtime == NULL || ctx->list == NULL)
+        return SLAYER3D_ASSET_ENUM_FAILURE;
+
+    char *child_asset_path = editor_asset_path_join(directory, name);
+    if (child_asset_path == NULL)
+    {
+        ctx->ok = false;
+        return SLAYER3D_ASSET_ENUM_FAILURE;
+    }
+
+    if (type == SLAYER3D_ASSET_ENTRY_DIRECTORY)
+    {
+        char *child_relative = editor_asset_path_join(ctx->relative_subdirectory, name);
+        const bool ok = child_relative != NULL && editor_scan_texture_asset_directory_recursive(
+                                                      ctx->runtime, child_asset_path, ctx->relative_directory,
+                                                      child_relative, ctx->list, ctx->depth + 1);
+        SDL_free(child_relative);
+        SDL_free(child_asset_path);
+        if (!ok)
+        {
+            ctx->ok = false;
+            return SLAYER3D_ASSET_ENUM_FAILURE;
+        }
+        return SLAYER3D_ASSET_ENUM_CONTINUE;
+    }
+
+    if (type == SLAYER3D_ASSET_ENTRY_FILE)
+    {
+        char *relative_file = editor_asset_path_join(ctx->relative_subdirectory, name);
+        const bool ok =
+            relative_file != NULL &&
+            editor_texture_scan_list_append_source(ctx->list, child_asset_path, ctx->relative_directory, relative_file);
+        SDL_free(relative_file);
+        SDL_free(child_asset_path);
+        if (!ok)
+        {
+            ctx->ok = false;
+            return SLAYER3D_ASSET_ENUM_FAILURE;
+        }
+        return SLAYER3D_ASSET_ENUM_CONTINUE;
+    }
+
+    SDL_free(child_asset_path);
+    return SLAYER3D_ASSET_ENUM_CONTINUE;
+}
+
+static bool editor_scan_texture_asset_directory_recursive(slayer3d_game_data_runtime *runtime,
+                                                          const char *asset_directory, const char *relative_directory,
+                                                          const char *relative_subdirectory,
+                                                          editor_texture_scan_list *out_list, int depth)
+{
+    if (runtime == NULL || runtime->assets == NULL || asset_directory == NULL || asset_directory[0] == '\0' ||
+        out_list == NULL || depth > 32)
+    {
+        return false;
+    }
+    editor_asset_texture_enumerate_context enumerate_ctx = {
+        runtime, out_list, relative_directory, relative_subdirectory != NULL ? relative_subdirectory : "", depth, true};
+    char error[256];
+    error[0] = '\0';
+    return slayer3d_asset_resolver_enumerate(runtime->assets, asset_directory, editor_asset_texture_enumerate_entry,
+                                             &enumerate_ctx, error, (int)sizeof(error)) &&
+           enumerate_ctx.ok;
+}
+
+static bool editor_scan_texture_source(slayer3d_game_data_runtime *runtime, const char *directory,
+                                       const char *relative_directory, editor_texture_scan_list *out_list)
+{
+    if (editor_path_asset_uri(directory))
+    {
+        if (out_list != NULL)
+            SDL_zero(*out_list);
+        const bool ok =
+            editor_scan_texture_asset_directory_recursive(runtime, directory, relative_directory, "", out_list, 0);
+        if (ok && out_list->count > 1)
+            SDL_qsort(out_list->entries, (size_t)out_list->count, sizeof(out_list->entries[0]),
+                      editor_texture_scan_entry_compare);
+        if (!ok)
+            editor_texture_scan_list_free(out_list);
+        return ok;
+    }
+    return editor_scan_texture_directory(directory, relative_directory, out_list);
 }
 
 static int editor_brush_material_index_by_name_or_texture(const brush_world_runtime *world_runtime, const char *name,
@@ -935,7 +1077,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
         resolved_fallback_directory = editor_resolve_directory(runtime, fallback_directory);
         directory = resolved_fallback_directory != NULL ? resolved_fallback_directory : "";
     }
-    else if (!editor_path_absolute(directory))
+    else if (!editor_path_asset_uri(directory) && !editor_path_absolute(directory))
     {
         resolved_texture_directory = editor_path_make_absolute_from_cwd(directory);
         SDL_PathInfo texture_info;
@@ -959,7 +1101,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
 
     editor_texture_scan_list list;
     SDL_zero(list);
-    if (!editor_scan_texture_directory(directory, relative_directory, &list))
+    if (!editor_scan_texture_source(runtime, directory, relative_directory, &list))
     {
         editor_set_int_output(runtime->scene_state, outputs, "count_key", 0);
         editor_set_string_output(runtime->scene_state, outputs, "status_key", "texture directory unavailable");
@@ -1299,11 +1441,13 @@ static bool editor_model_asset_id_for_filename(const slayer3d_game_data_runtime 
     return false;
 }
 
-static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, slayer3d_game_data_runtime *runtime,
-                                                const char *directory, const char *relative_directory,
-                                                const char *filename, const char *model_prefix)
+static bool editor_actor_scan_list_append_model_source(editor_actor_scan_list *list,
+                                                       slayer3d_game_data_runtime *runtime, const char *source_path,
+                                                       const char *relative_directory, const char *relative_file,
+                                                       const char *model_prefix)
 {
-    if (list == NULL || directory == NULL || filename == NULL || !editor_model_extension_supported(filename))
+    const char *filename = editor_basename(relative_file);
+    if (list == NULL || source_path == NULL || relative_file == NULL || !editor_model_extension_supported(filename))
         return true;
 
     char slug[96];
@@ -1320,8 +1464,8 @@ static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, sl
     if (!editor_actor_scan_list_append_blank(list, &entry))
         return false;
     entry->filename = SDL_strdup(filename);
-    entry->path = editor_path_join(directory, filename);
-    entry->relative_path = editor_path_join(relative_directory != NULL ? relative_directory : "", filename);
+    entry->path = SDL_strdup(source_path);
+    entry->relative_path = editor_path_join(relative_directory != NULL ? relative_directory : "", relative_file);
     SDL_strlcpy(entry->id, slug, sizeof(entry->id));
     SDL_strlcpy(entry->label, label, sizeof(entry->label));
     SDL_strlcpy(entry->mesh, "box", sizeof(entry->mesh));
@@ -1348,14 +1492,35 @@ static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, sl
     return true;
 }
 
+static bool editor_actor_scan_list_append_model(editor_actor_scan_list *list, slayer3d_game_data_runtime *runtime,
+                                                const char *directory, const char *relative_directory,
+                                                const char *relative_file, const char *model_prefix)
+{
+    if (directory == NULL || relative_file == NULL)
+        return true;
+    char *source_path = editor_path_join(directory, editor_basename(relative_file));
+    const bool ok = source_path != NULL &&
+                    editor_actor_scan_list_append_model_source(list, runtime, source_path, relative_directory,
+                                                               relative_file, model_prefix);
+    SDL_free(source_path);
+    return ok;
+}
+
 typedef struct editor_actor_enumerate_context
 {
     editor_actor_scan_list *list;
     slayer3d_game_data_runtime *runtime;
     const char *relative_directory;
+    const char *relative_subdirectory;
     const char *model_prefix;
+    int depth;
     bool ok;
 } editor_actor_enumerate_context;
+
+static bool editor_scan_actor_model_directory_recursive(slayer3d_game_data_runtime *runtime, const char *directory,
+                                                        const char *relative_directory,
+                                                        const char *relative_subdirectory, const char *model_prefix,
+                                                        editor_actor_scan_list *list, int depth);
 
 static SDL_EnumerationResult SDLCALL editor_actor_enumerate_directory_entry(void *userdata, const char *dirname,
                                                                             const char *fname)
@@ -1366,24 +1531,53 @@ static SDL_EnumerationResult SDLCALL editor_actor_enumerate_directory_entry(void
     char *path = editor_path_join(dirname, fname);
     SDL_PathInfo file_info;
     SDL_zero(file_info);
-    const bool is_file = path != NULL && SDL_GetPathInfo(path, &file_info) && file_info.type == SDL_PATHTYPE_FILE;
-    SDL_free(path);
-    if (!is_file)
+    if (path == NULL || !SDL_GetPathInfo(path, &file_info))
+    {
+        SDL_free(path);
         return SDL_ENUM_CONTINUE;
-    if (!editor_actor_scan_list_append_model(ctx->list, ctx->runtime, dirname, ctx->relative_directory, fname,
+    }
+    if (file_info.type == SDL_PATHTYPE_DIRECTORY)
+    {
+        char *child_relative = editor_path_join(ctx->relative_subdirectory, fname);
+        if (child_relative == NULL ||
+            !editor_scan_actor_model_directory_recursive(ctx->runtime, path, ctx->relative_directory, child_relative,
+                                                         ctx->model_prefix, ctx->list, ctx->depth + 1))
+        {
+            SDL_free(child_relative);
+            SDL_free(path);
+            ctx->ok = false;
+            return SDL_ENUM_FAILURE;
+        }
+        SDL_free(child_relative);
+        SDL_free(path);
+        return SDL_ENUM_CONTINUE;
+    }
+    if (file_info.type != SDL_PATHTYPE_FILE)
+    {
+        SDL_free(path);
+        return SDL_ENUM_CONTINUE;
+    }
+    char *relative_file = editor_path_join(ctx->relative_subdirectory, fname);
+    if (relative_file == NULL ||
+        !editor_actor_scan_list_append_model(ctx->list, ctx->runtime, dirname, ctx->relative_directory, relative_file,
                                              ctx->model_prefix))
     {
+        SDL_free(relative_file);
+        SDL_free(path);
         ctx->ok = false;
         return SDL_ENUM_FAILURE;
     }
+    SDL_free(relative_file);
+    SDL_free(path);
     return SDL_ENUM_CONTINUE;
 }
 
-static bool editor_scan_actor_model_directory(slayer3d_game_data_runtime *runtime, const char *directory,
-                                              const char *relative_directory, const char *model_prefix,
-                                              editor_actor_scan_list *list)
+static bool editor_scan_actor_model_directory_recursive(slayer3d_game_data_runtime *runtime, const char *directory,
+                                                        const char *relative_directory,
+                                                        const char *relative_subdirectory, const char *model_prefix,
+                                                        editor_actor_scan_list *list, int depth)
 {
-    if (directory == NULL || directory[0] == '\0' || list == NULL)
+    if (directory == NULL || directory[0] == '\0' || list == NULL || depth > 32)
         return false;
 
     SDL_PathInfo info;
@@ -1391,9 +1585,104 @@ static bool editor_scan_actor_model_directory(slayer3d_game_data_runtime *runtim
     if (!SDL_GetPathInfo(directory, &info) || info.type != SDL_PATHTYPE_DIRECTORY)
         return false;
 
-    editor_actor_enumerate_context enumerate_ctx = {list, runtime, relative_directory, model_prefix, true};
+    editor_actor_enumerate_context enumerate_ctx = {
+        list,  runtime, relative_directory, relative_subdirectory != NULL ? relative_subdirectory : "", model_prefix,
+        depth, true};
     return SDL_EnumerateDirectory(directory, editor_actor_enumerate_directory_entry, &enumerate_ctx) &&
            enumerate_ctx.ok;
+}
+
+typedef struct editor_asset_actor_enumerate_context
+{
+    editor_actor_scan_list *list;
+    slayer3d_game_data_runtime *runtime;
+    const char *relative_directory;
+    const char *relative_subdirectory;
+    const char *model_prefix;
+    int depth;
+    bool ok;
+} editor_asset_actor_enumerate_context;
+
+static bool editor_scan_actor_model_asset_directory_recursive(
+    slayer3d_game_data_runtime *runtime, const char *asset_directory, const char *relative_directory,
+    const char *relative_subdirectory, const char *model_prefix, editor_actor_scan_list *list, int depth);
+
+static slayer3d_asset_enumeration_result editor_asset_actor_enumerate_entry(void *userdata, const char *directory,
+                                                                            const char *name,
+                                                                            slayer3d_asset_entry_type type)
+{
+    editor_asset_actor_enumerate_context *ctx = (editor_asset_actor_enumerate_context *)userdata;
+    if (ctx == NULL || ctx->runtime == NULL || ctx->list == NULL)
+        return SLAYER3D_ASSET_ENUM_FAILURE;
+
+    char *child_asset_path = editor_asset_path_join(directory, name);
+    if (child_asset_path == NULL)
+    {
+        ctx->ok = false;
+        return SLAYER3D_ASSET_ENUM_FAILURE;
+    }
+    if (type == SLAYER3D_ASSET_ENTRY_DIRECTORY)
+    {
+        char *child_relative = editor_asset_path_join(ctx->relative_subdirectory, name);
+        const bool ok = child_relative != NULL && editor_scan_actor_model_asset_directory_recursive(
+                                                      ctx->runtime, child_asset_path, ctx->relative_directory,
+                                                      child_relative, ctx->model_prefix, ctx->list, ctx->depth + 1);
+        SDL_free(child_relative);
+        SDL_free(child_asset_path);
+        if (!ok)
+        {
+            ctx->ok = false;
+            return SLAYER3D_ASSET_ENUM_FAILURE;
+        }
+        return SLAYER3D_ASSET_ENUM_CONTINUE;
+    }
+    if (type == SLAYER3D_ASSET_ENTRY_FILE)
+    {
+        char *relative_file = editor_asset_path_join(ctx->relative_subdirectory, name);
+        const bool ok = relative_file != NULL && editor_actor_scan_list_append_model_source(
+                                                     ctx->list, ctx->runtime, child_asset_path, ctx->relative_directory,
+                                                     relative_file, ctx->model_prefix);
+        SDL_free(relative_file);
+        SDL_free(child_asset_path);
+        if (!ok)
+        {
+            ctx->ok = false;
+            return SLAYER3D_ASSET_ENUM_FAILURE;
+        }
+        return SLAYER3D_ASSET_ENUM_CONTINUE;
+    }
+    SDL_free(child_asset_path);
+    return SLAYER3D_ASSET_ENUM_CONTINUE;
+}
+
+static bool editor_scan_actor_model_asset_directory_recursive(
+    slayer3d_game_data_runtime *runtime, const char *asset_directory, const char *relative_directory,
+    const char *relative_subdirectory, const char *model_prefix, editor_actor_scan_list *list, int depth)
+{
+    if (runtime == NULL || runtime->assets == NULL || asset_directory == NULL || asset_directory[0] == '\0' ||
+        list == NULL || depth > 32)
+    {
+        return false;
+    }
+    editor_asset_actor_enumerate_context enumerate_ctx = {
+        list,  runtime, relative_directory, relative_subdirectory != NULL ? relative_subdirectory : "", model_prefix,
+        depth, true};
+    char error[256];
+    error[0] = '\0';
+    return slayer3d_asset_resolver_enumerate(runtime->assets, asset_directory, editor_asset_actor_enumerate_entry,
+                                             &enumerate_ctx, error, (int)sizeof(error)) &&
+           enumerate_ctx.ok;
+}
+
+static bool editor_scan_actor_model_source(slayer3d_game_data_runtime *runtime, const char *directory,
+                                           const char *relative_directory, const char *model_prefix,
+                                           editor_actor_scan_list *list)
+{
+    if (editor_path_asset_uri(directory))
+        return editor_scan_actor_model_asset_directory_recursive(runtime, directory, relative_directory, "",
+                                                                 model_prefix, list, 0);
+    return editor_scan_actor_model_directory_recursive(runtime, directory, relative_directory, "", model_prefix, list,
+                                                       0);
 }
 
 static bool editor_actor_collection_publish_row(slayer3d_game_data_runtime *runtime, const char *collection,
@@ -1554,10 +1843,24 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
     const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
     char *resolved_fallback_directory = NULL;
+    char *resolved_model_directory = NULL;
     if (directory == NULL || directory[0] == '\0')
     {
         resolved_fallback_directory = editor_resolve_directory(runtime, fallback_directory);
         directory = resolved_fallback_directory != NULL ? resolved_fallback_directory : "";
+    }
+    else if (!editor_path_asset_uri(directory) && !editor_path_absolute(directory))
+    {
+        resolved_model_directory = editor_path_make_absolute_from_cwd(directory);
+        SDL_PathInfo model_info;
+        SDL_zero(model_info);
+        if (resolved_model_directory == NULL || !SDL_GetPathInfo(resolved_model_directory, &model_info) ||
+            model_info.type != SDL_PATHTYPE_DIRECTORY)
+        {
+            SDL_free(resolved_model_directory);
+            resolved_model_directory = editor_resolve_directory(runtime, directory);
+        }
+        directory = resolved_model_directory != NULL ? resolved_model_directory : directory;
     }
     if (relative_directory == NULL || relative_directory[0] == '\0')
         relative_directory = fallback_relative_directory != NULL ? fallback_relative_directory : "";
@@ -1636,7 +1939,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    &list, "smoke_marker", "Smoke", "sphere", "", "actor.editor_shell.effect.smoke",
                    "actor.editor_shell.smoke_marker", "Effects", "actor_effect", "smoke_marker", "effect", "smoke",
                    (slayer3d_color){148, 154, 166, 165}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 2003);
-    const bool scanned = editor_scan_actor_model_directory(runtime, directory, relative_directory, model_prefix, &list);
+    const bool scanned = editor_scan_actor_model_source(runtime, directory, relative_directory, model_prefix, &list);
     if (ok && list.count > 1)
         SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);
 
@@ -1680,6 +1983,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
     editor_actor_scan_list_free(&list);
     SDL_free(resolved_fallback_directory);
+    SDL_free(resolved_model_directory);
     return true;
 }
 

@@ -72,6 +72,7 @@ extern "C"
         char *owned_media_dir;
         char *test_run_path;
         slayer3d_editor_asset_sources asset_sources;
+        bool embedded;
     } slayer3d_editor_project;
 
     typedef struct slayer3d_editor_launch
@@ -87,6 +88,7 @@ extern "C"
         const slayer3d_editor_asset_sources *asset_sources;
         slayer3d_editor_asset_sources owned_asset_sources;
         bool owns_asset_sources;
+        bool embedded;
     } slayer3d_editor_launch;
 
     typedef struct slayer3d_editor_runner_invocation

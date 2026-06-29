@@ -52,6 +52,36 @@ extern "C"
         const char *source_path;
     } slayer3d_asset_pack_source;
 
+    /** @brief Virtual asset directory entry type. */
+    typedef enum slayer3d_asset_entry_type
+    {
+        /** @brief A regular readable asset file. */
+        SLAYER3D_ASSET_ENTRY_FILE,
+        /** @brief A virtual or filesystem subdirectory. */
+        SLAYER3D_ASSET_ENTRY_DIRECTORY
+    } slayer3d_asset_entry_type;
+
+    /** @brief Result returned by asset enumeration callbacks. */
+    typedef enum slayer3d_asset_enumeration_result
+    {
+        /** @brief Continue enumerating remaining entries. */
+        SLAYER3D_ASSET_ENUM_CONTINUE,
+        /** @brief Stop enumeration successfully. */
+        SLAYER3D_ASSET_ENUM_STOP,
+        /** @brief Stop enumeration and report failure. */
+        SLAYER3D_ASSET_ENUM_FAILURE
+    } slayer3d_asset_enumeration_result;
+
+    /**
+     * @brief Callback invoked once for each immediate child of an asset directory.
+     *
+     * @p directory is the virtual directory being enumerated, such as
+     * asset://textures. @p name is the child name only, not a full path.
+     */
+    typedef slayer3d_asset_enumeration_result (*slayer3d_asset_enumerate_fn)(void *userdata, const char *directory,
+                                                                             const char *name,
+                                                                             slayer3d_asset_entry_type type);
+
     /**
      * @brief Create an empty asset resolver.
      *
@@ -131,6 +161,22 @@ extern "C"
      */
     bool slayer3d_asset_resolver_read_file(const slayer3d_asset_resolver *resolver, const char *asset_path,
                                            slayer3d_asset_buffer *out_buffer, char *error_buffer,
+                                           int error_buffer_size);
+
+    /**
+     * @brief Enumerate immediate children under a virtual asset directory.
+     *
+     * Directory mounts enumerate the host filesystem. Pack and memory-pack
+     * mounts derive virtual directories from packed entry paths. Later mounts
+     * take precedence over earlier mounts, so duplicate child names are only
+     * reported once.
+     *
+     * @p asset_directory may use asset:// or a plain relative virtual path.
+     *
+     * @return true when enumeration completes or the callback asks to stop.
+     */
+    bool slayer3d_asset_resolver_enumerate(const slayer3d_asset_resolver *resolver, const char *asset_directory,
+                                           slayer3d_asset_enumerate_fn callback, void *userdata, char *error_buffer,
                                            int error_buffer_size);
 
     /**

@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -69,6 +70,18 @@ struct slayer3d_asset_resolver
     asset_mount *mounts;
     int mount_count;
 };
+
+typedef struct asset_enumerated_child
+{
+    char *name;
+} asset_enumerated_child;
+
+typedef struct asset_enumerated_child_list
+{
+    asset_enumerated_child *children;
+    int count;
+    int capacity;
+} asset_enumerated_child_list;
 
 static void set_asset_error(char *buffer, int buffer_size, const char *message)
 {
@@ -178,6 +191,21 @@ static char *normalize_asset_path(const char *path)
         return NULL;
     }
     normalized[out_len] = '\0';
+    return normalized;
+}
+
+static char *normalize_asset_directory_path(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    if (path[0] == '\0' || SDL_strcmp(path, "asset://") == 0)
+        return SDL_strdup("");
+    char *normalized = normalize_asset_path(path);
+    if (normalized == NULL)
+        return NULL;
+    const size_t len = SDL_strlen(normalized);
+    if (len > 0u && normalized[len - 1u] == '/')
+        normalized[len - 1u] = '\0';
     return normalized;
 }
 
@@ -779,6 +807,224 @@ static bool directory_asset_exists(const asset_mount *mount, const char *normali
     return true;
 }
 
+static void destroy_enumerated_child_list(asset_enumerated_child_list *list)
+{
+    if (list == NULL)
+        return;
+    for (int i = 0; i < list->count; ++i)
+        SDL_free(list->children[i].name);
+    SDL_free(list->children);
+    SDL_zero(*list);
+}
+
+static bool enumerated_child_exists(const asset_enumerated_child_list *list, const char *name)
+{
+    if (list == NULL || name == NULL)
+        return false;
+    for (int i = 0; i < list->count; ++i)
+    {
+        if (SDL_strcmp(list->children[i].name, name) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool append_enumerated_child(asset_enumerated_child_list *list, const char *name)
+{
+    if (list == NULL || name == NULL || name[0] == '\0')
+        return false;
+    if (enumerated_child_exists(list, name))
+        return true;
+    if (list->count >= list->capacity)
+    {
+        const int next_capacity = list->capacity > 0 ? list->capacity * 2 : 16;
+        asset_enumerated_child *next =
+            (asset_enumerated_child *)SDL_realloc(list->children, (size_t)next_capacity * sizeof(*next));
+        if (next == NULL)
+            return false;
+        SDL_memset(next + list->capacity, 0, (size_t)(next_capacity - list->capacity) * sizeof(*next));
+        list->children = next;
+        list->capacity = next_capacity;
+    }
+    list->children[list->count].name = SDL_strdup(name);
+    if (list->children[list->count].name == NULL)
+        return false;
+    ++list->count;
+    return true;
+}
+
+typedef struct asset_directory_enumeration_context
+{
+    const char *asset_directory;
+    slayer3d_asset_enumerate_fn callback;
+    void *userdata;
+    asset_enumerated_child_list *seen;
+    bool stopped;
+    bool failed;
+} asset_directory_enumeration_context;
+
+static SDL_EnumerationResult SDLCALL enumerate_directory_mount_entry(void *userdata, const char *dirname,
+                                                                     const char *fname)
+{
+    asset_directory_enumeration_context *ctx = (asset_directory_enumeration_context *)userdata;
+    if (ctx == NULL || ctx->callback == NULL || fname == NULL || fname[0] == '\0')
+        return SDL_ENUM_FAILURE;
+    if (enumerated_child_exists(ctx->seen, fname))
+        return SDL_ENUM_CONTINUE;
+
+    char *path = join_directory_path(dirname, fname);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (path == NULL || !SDL_GetPathInfo(path, &info))
+    {
+        SDL_free(path);
+        return SDL_ENUM_CONTINUE;
+    }
+    SDL_free(path);
+
+    slayer3d_asset_entry_type type;
+    if (info.type == SDL_PATHTYPE_FILE)
+        type = SLAYER3D_ASSET_ENTRY_FILE;
+    else if (info.type == SDL_PATHTYPE_DIRECTORY)
+        type = SLAYER3D_ASSET_ENTRY_DIRECTORY;
+    else
+        return SDL_ENUM_CONTINUE;
+
+    if (!append_enumerated_child(ctx->seen, fname))
+    {
+        ctx->failed = true;
+        return SDL_ENUM_FAILURE;
+    }
+
+    const slayer3d_asset_enumeration_result result = ctx->callback(ctx->userdata, ctx->asset_directory, fname, type);
+    if (result == SLAYER3D_ASSET_ENUM_FAILURE)
+    {
+        ctx->failed = true;
+        return SDL_ENUM_FAILURE;
+    }
+    if (result == SLAYER3D_ASSET_ENUM_STOP)
+    {
+        ctx->stopped = true;
+        return SDL_ENUM_SUCCESS;
+    }
+    return SDL_ENUM_CONTINUE;
+}
+
+static bool enumerate_directory_mount(const asset_mount *mount, const char *normalized_directory,
+                                      const char *asset_directory, slayer3d_asset_enumerate_fn callback, void *userdata,
+                                      asset_enumerated_child_list *seen, bool *out_stopped)
+{
+    if (out_stopped != NULL)
+        *out_stopped = false;
+    if (mount == NULL || mount->type != ASSET_MOUNT_DIRECTORY || callback == NULL)
+        return false;
+
+    char *directory = normalized_directory != NULL && normalized_directory[0] != '\0'
+                          ? join_directory_path(mount->directory, normalized_directory)
+                          : SDL_strdup(mount->directory);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (directory == NULL || !SDL_GetPathInfo(directory, &info) || info.type != SDL_PATHTYPE_DIRECTORY)
+    {
+        SDL_free(directory);
+        return true;
+    }
+
+    asset_directory_enumeration_context ctx = {asset_directory, callback, userdata, seen, false, false};
+    const bool ok = SDL_EnumerateDirectory(directory, enumerate_directory_mount_entry, &ctx);
+    SDL_free(directory);
+    if (out_stopped != NULL)
+        *out_stopped = ctx.stopped;
+    return ok && !ctx.failed;
+}
+
+static bool pack_entry_child_for_directory(const char *entry_path, const char *normalized_directory,
+                                           const char **out_child, size_t *out_child_len,
+                                           slayer3d_asset_entry_type *out_type)
+{
+    if (out_child != NULL)
+        *out_child = NULL;
+    if (out_child_len != NULL)
+        *out_child_len = 0u;
+    if (entry_path == NULL || out_child == NULL || out_child_len == NULL || out_type == NULL)
+        return false;
+
+    const char *remainder = entry_path;
+    if (normalized_directory != NULL && normalized_directory[0] != '\0')
+    {
+        const size_t prefix_len = SDL_strlen(normalized_directory);
+        if (SDL_strncmp(entry_path, normalized_directory, prefix_len) != 0 || entry_path[prefix_len] != '/')
+            return false;
+        remainder = entry_path + prefix_len + 1u;
+    }
+    if (remainder[0] == '\0')
+        return false;
+
+    const char *slash = SDL_strchr(remainder, '/');
+    *out_child = remainder;
+    if (slash != NULL)
+    {
+        *out_child_len = (size_t)(slash - remainder);
+        *out_type = SLAYER3D_ASSET_ENTRY_DIRECTORY;
+    }
+    else
+    {
+        *out_child_len = SDL_strlen(remainder);
+        *out_type = SLAYER3D_ASSET_ENTRY_FILE;
+    }
+    return *out_child_len > 0u;
+}
+
+static bool enumerate_pack_mount(const asset_mount *mount, const char *normalized_directory,
+                                 const char *asset_directory, slayer3d_asset_enumerate_fn callback, void *userdata,
+                                 asset_enumerated_child_list *seen, bool *out_stopped)
+{
+    if (out_stopped != NULL)
+        *out_stopped = false;
+    if (mount == NULL || mount->type != ASSET_MOUNT_PACK || callback == NULL)
+        return false;
+
+    for (int i = 0; i < mount->pack.entry_count; ++i)
+    {
+        const char *child = NULL;
+        size_t child_len = 0u;
+        slayer3d_asset_entry_type type = SLAYER3D_ASSET_ENTRY_FILE;
+        if (!pack_entry_child_for_directory(mount->pack.entries[i].path, normalized_directory, &child, &child_len,
+                                            &type))
+        {
+            continue;
+        }
+
+        char *name = (char *)SDL_malloc(child_len + 1u);
+        if (name == NULL)
+            return false;
+        SDL_memcpy(name, child, child_len);
+        name[child_len] = '\0';
+        if (enumerated_child_exists(seen, name))
+        {
+            SDL_free(name);
+            continue;
+        }
+        if (!append_enumerated_child(seen, name))
+        {
+            SDL_free(name);
+            return false;
+        }
+
+        const slayer3d_asset_enumeration_result result = callback(userdata, asset_directory, name, type);
+        SDL_free(name);
+        if (result == SLAYER3D_ASSET_ENUM_FAILURE)
+            return false;
+        if (result == SLAYER3D_ASSET_ENUM_STOP)
+        {
+            if (out_stopped != NULL)
+                *out_stopped = true;
+            return true;
+        }
+    }
+    return true;
+}
+
 slayer3d_asset_resolver *slayer3d_asset_resolver_create(void)
 {
     return (slayer3d_asset_resolver *)SDL_calloc(1, sizeof(slayer3d_asset_resolver));
@@ -950,6 +1196,65 @@ bool slayer3d_asset_resolver_read_file(const slayer3d_asset_resolver *resolver, 
     SDL_free(normalized);
     set_asset_error(error_buffer, error_buffer_size, "asset was not found");
     return false;
+}
+
+bool slayer3d_asset_resolver_enumerate(const slayer3d_asset_resolver *resolver, const char *asset_directory,
+                                       slayer3d_asset_enumerate_fn callback, void *userdata, char *error_buffer,
+                                       int error_buffer_size)
+{
+    if (resolver == NULL || asset_directory == NULL || callback == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid asset enumeration arguments");
+        return false;
+    }
+
+    char *normalized = normalize_asset_directory_path(asset_directory);
+    if (normalized == NULL)
+    {
+        set_asset_error(error_buffer, error_buffer_size, "invalid asset directory path");
+        return false;
+    }
+
+    char *directory_uri = NULL;
+    if (normalized[0] == '\0')
+        directory_uri = SDL_strdup("asset://");
+    else
+    {
+        const size_t normalized_len = SDL_strlen(normalized);
+        directory_uri = (char *)SDL_malloc(8u + normalized_len + 1u);
+        if (directory_uri != NULL)
+            SDL_snprintf(directory_uri, 8u + normalized_len + 1u, "asset://%s", normalized);
+    }
+    if (directory_uri == NULL)
+    {
+        SDL_free(normalized);
+        set_asset_error(error_buffer, error_buffer_size, "failed to allocate asset directory path");
+        return false;
+    }
+
+    asset_enumerated_child_list seen;
+    SDL_zero(seen);
+    bool ok = true;
+    bool stopped = false;
+    for (int i = resolver->mount_count - 1; i >= 0 && ok && !stopped; --i)
+    {
+        const asset_mount *mount = &resolver->mounts[i];
+        if (mount->type == ASSET_MOUNT_DIRECTORY)
+        {
+            ok = enumerate_directory_mount(mount, normalized, directory_uri, callback, userdata, &seen, &stopped);
+        }
+        else
+        {
+            ok = enumerate_pack_mount(mount, normalized, directory_uri, callback, userdata, &seen, &stopped);
+        }
+    }
+
+    destroy_enumerated_child_list(&seen);
+    SDL_free(directory_uri);
+    SDL_free(normalized);
+    if (!ok)
+        set_asset_error(error_buffer, error_buffer_size, "failed to enumerate asset directory");
+    return ok;
 }
 
 bool slayer3d_asset_resolver_resolve_file_path(const slayer3d_asset_resolver *resolver, const char *asset_path,

@@ -259,15 +259,16 @@ build/MyGame
 launches a data-authored editor project, injects editor input/output paths as
 scene state, and leaves the actual tool behavior in JSON/Lua.
 
-Running it with no arguments opens the bundled editor shell project with a new
-untitled `.slayermap.json` save target in SDL's per-user preferences directory:
+Running it with no arguments opens the embedded Slayer3D Editor shell with a
+new untitled `.slayermap.json` save target in SDL's per-user preferences
+directory:
 
 ```sh
 build/debug/slayer3d_editor
 ```
 
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
+build/debug/slayer3d_editor new --project apps/slayer3d_editor --output /tmp/level.slayermap.json --overwrite
 ```
 
 Projects are described by `slayer3d.project.json` manifests. `new` starts from
@@ -352,7 +353,7 @@ that only needs typed renderer/tooling metadata can call
 average irradiance without parsing JSON directly.
 
 ```sh
-build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.slayermap.json --overwrite
+build/debug/slayer3d_editor new --project apps/slayer3d_editor --output /tmp/level.slayermap.json --overwrite
 ```
 
 Inside the editor, use Brush Tool and Select mode to create and edit floors,
@@ -360,7 +361,7 @@ walls, ceilings, pits, platforms, and corridors, place a player start, then save
 with the normal save command. Reopen the same source fragment with:
 
 ```sh
-build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.slayermap.json
+build/debug/slayer3d_editor open --project apps/slayer3d_editor --input /tmp/level.slayermap.json
 ```
 
 The editor test-run command validates the source model, warns about leaks,
@@ -378,7 +379,9 @@ those names otherwise. Missing directories do not abort editor startup; the host
 publishes `editor.asset_source.<kind>.available` and
 `editor.asset_source.any_missing` so data-authored UI can surface path controls.
 
-The editor host translates the manifest into a normal runner launch and injects
+The editor host translates external manifests into a normal runner launch and
+uses the runner's `--embedded` mount for the no-argument built-in editor. It
+injects
 `editor.command`, `editor.input.path`, `editor.save.path`,
 `editor.test_run.path`, `editor.project.dir`, `editor.project.data_root`, and
 `editor.asset_source.<kind>.path` / `.relative` / `.available` as scene state.
@@ -403,8 +406,8 @@ generic runner:
 
 ```sh
 build/debug/slayer3d_runner \
-  --root demos/editor_shell_dojo/data \
-  --data asset://editor_shell_dojo.game.json \
+  --root apps/slayer3d_editor/data \
+  --data asset://slayer3d_editor.game.json \
   --state editor.command=open \
   --state editor.input.path=/tmp/level.slayermap.json \
   --state editor.save.path=/tmp/level.slayermap.json

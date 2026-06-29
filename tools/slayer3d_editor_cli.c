@@ -15,6 +15,11 @@
 
 #include "../vendor/yyjson/yyjson.h"
 
+#define SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI "embedded://slayer3d_editor"
+#if !defined(SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET)
+#define SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET "asset://slayer3d_editor.game.json"
+#endif
+
 static void editor_set_error(char *buffer, int buffer_size, const char *message)
 {
     if (buffer != NULL && buffer_size > 0)
@@ -45,7 +50,7 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "  %s lighting-artifact-validate --input <lighting-static.json>\n"
         "\n"
         "Commands:\n"
-        "  no args  Launch the bundled editor shell project with a new untitled map.\n"
+        "  no args  Launch the embedded Slayer3D Editor shell with a new untitled map.\n"
         "  new    Start from the project's empty editor level and save to --output.\n"
         "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
         "  lighting-plan  Print the shared map lighting build/bake plan without launching the editor.\n"
@@ -280,33 +285,37 @@ static char *editor_default_project_path(void)
     if (directory_exists_tool(env_project))
         return SDL_strdup(env_project);
 
+#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
+    return SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
+#endif
+
 #if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
     if (directory_exists_tool(SLAYER3D_EDITOR_DEFAULT_PROJECT))
         return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
 #endif
 
-    if (directory_exists_tool("demos/editor_shell_dojo"))
-        return SDL_strdup("demos/editor_shell_dojo");
+    if (directory_exists_tool("apps/slayer3d_editor"))
+        return SDL_strdup("apps/slayer3d_editor");
 
     const char *base_path = SDL_GetBasePath();
     char *candidate = NULL;
     if (base_path != NULL)
     {
-        candidate = path_join_tool(base_path, "demos/editor_shell_dojo");
+        candidate = path_join_tool(base_path, "apps/slayer3d_editor");
         if (!directory_exists_tool(candidate))
         {
             SDL_free(candidate);
-            candidate = path_join_tool(base_path, "editor_shell_dojo");
+            candidate = path_join_tool(base_path, "slayer3d_editor");
         }
         if (!directory_exists_tool(candidate))
         {
             SDL_free(candidate);
-            candidate = path_join_tool(base_path, "../share/slayer3d/demos/editor_shell_dojo");
+            candidate = path_join_tool(base_path, "../share/slayer3d/apps/slayer3d_editor");
         }
         if (!directory_exists_tool(candidate))
         {
             SDL_free(candidate);
-            candidate = path_join_tool(base_path, "../Resources/editor_shell_dojo");
+            candidate = path_join_tool(base_path, "../Resources/slayer3d_editor");
         }
     }
     if (directory_exists_tool(candidate))
@@ -316,7 +325,7 @@ static char *editor_default_project_path(void)
 #if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
     return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
 #else
-    return SDL_strdup("demos/editor_shell_dojo");
+    return SDL_strdup("apps/slayer3d_editor");
 #endif
 }
 
@@ -369,6 +378,23 @@ static bool editor_asset_source_copy(const slayer3d_editor_asset_source *source,
     if (out_source->path == NULL || out_source->relative_path == NULL)
     {
         editor_asset_source_destroy(out_source);
+        return false;
+    }
+    return true;
+}
+
+static bool editor_asset_source_init(slayer3d_editor_asset_source *source, const char *path, const char *relative_path,
+                                     bool available)
+{
+    if (source == NULL)
+        return false;
+    SDL_zero(*source);
+    source->path = SDL_strdup(path != NULL ? path : "");
+    source->relative_path = SDL_strdup(relative_path != NULL ? relative_path : "");
+    source->available = available;
+    if (source->path == NULL || source->relative_path == NULL)
+    {
+        editor_asset_source_destroy(source);
         return false;
     }
     return true;
@@ -1026,6 +1052,38 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
         return false;
     }
 
+    if (SDL_strcmp(project_arg != NULL ? project_arg : "", SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI) == 0)
+    {
+#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
+        out_project->project_dir = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
+        out_project->data_root = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
+        out_project->data_root_relative_path = SDL_strdup("embedded");
+        out_project->editor_entry = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET);
+#if defined(SLAYER3D_MEDIA_DIR)
+        out_project->media_dir = SLAYER3D_MEDIA_DIR;
+#endif
+        out_project->embedded = true;
+        const bool ok =
+            out_project->project_dir != NULL && out_project->data_root != NULL &&
+            out_project->data_root_relative_path != NULL && out_project->editor_entry != NULL &&
+            editor_asset_source_init(&out_project->asset_sources.textures, "asset://textures", "textures", true) &&
+            editor_asset_source_init(&out_project->asset_sources.models, "asset://models", "models", true) &&
+            editor_asset_source_init(&out_project->asset_sources.sprites, "asset://sprites", "sprites", true) &&
+            editor_asset_source_init(&out_project->asset_sources.skyboxes, "asset://skyboxes", "skyboxes", true) &&
+            editor_asset_source_init(&out_project->asset_sources.effects, "asset://effects", "effects", true);
+        if (!ok)
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to allocate embedded editor project");
+            slayer3d_editor_project_destroy(out_project);
+            return false;
+        }
+        return true;
+#else
+        editor_set_error(error_buffer, error_buffer_size, "this editor build does not contain embedded assets");
+        return false;
+#endif
+    }
+
     char *manifest = project_manifest_path(project_arg, error_buffer, error_buffer_size);
     if (manifest == NULL)
         return false;
@@ -1118,6 +1176,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     out_project->media_dir = out_project->owned_media_dir;
     out_project->test_run_path = resolved_test_run;
     out_project->asset_sources = asset_sources;
+    out_project->embedded = false;
     yyjson_doc_free(doc);
     SDL_free(manifest);
     return true;
@@ -1190,6 +1249,7 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
     out_launch->asset_sources = &project->asset_sources;
+    out_launch->embedded = project->embedded;
     const bool has_texture_override = args->texture_path != NULL && args->texture_path[0] != '\0';
     const bool has_model_override = args->model_path != NULL && args->model_path[0] != '\0';
     if (has_texture_override || has_model_override)
@@ -1373,7 +1433,7 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     }
 
     const int state_count = 4 + 2 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
-    int argc = 5 + (state_count * 2);
+    int argc = (launch->embedded ? 4 : 5) + (state_count * 2);
     if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
 
@@ -1403,10 +1463,26 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     }
 
     int index = 0;
-    if (!editor_add_arg(out_invocation, &index, (char *)(program != NULL ? program : "slayer3d_editor")) ||
-        !editor_add_arg(out_invocation, &index, "--root") ||
-        !editor_add_arg(out_invocation, &index, (char *)launch->root) ||
-        !editor_add_arg(out_invocation, &index, "--data") ||
+    if (!editor_add_arg(out_invocation, &index, (char *)(program != NULL ? program : "slayer3d_editor")))
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+    if (launch->embedded)
+    {
+        if (!editor_add_arg(out_invocation, &index, "--embedded"))
+        {
+            slayer3d_editor_runner_invocation_destroy(out_invocation);
+            return false;
+        }
+    }
+    else if (!editor_add_arg(out_invocation, &index, "--root") ||
+             !editor_add_arg(out_invocation, &index, (char *)launch->root))
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+    if (!editor_add_arg(out_invocation, &index, "--data") ||
         !editor_add_arg(out_invocation, &index, (char *)launch->data_asset_path))
     {
         slayer3d_editor_runner_invocation_destroy(out_invocation);

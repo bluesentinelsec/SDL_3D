@@ -70,6 +70,31 @@ std::string buffer_string(const slayer3d_asset_buffer &buffer)
     return std::string(static_cast<const char *>(buffer.data), buffer.size);
 }
 
+struct EnumeratedAsset
+{
+    std::string directory;
+    std::string name;
+    slayer3d_asset_entry_type type;
+};
+
+slayer3d_asset_enumeration_result collect_asset_entry(void *userdata, const char *directory, const char *name,
+                                                      slayer3d_asset_entry_type type)
+{
+    auto *entries = static_cast<std::vector<EnumeratedAsset> *>(userdata);
+    entries->push_back({directory != nullptr ? directory : "", name != nullptr ? name : "", type});
+    return SLAYER3D_ASSET_ENUM_CONTINUE;
+}
+
+const EnumeratedAsset *find_enumerated_asset(const std::vector<EnumeratedAsset> &entries, const char *name)
+{
+    for (const EnumeratedAsset &entry : entries)
+    {
+        if (entry.name == name)
+            return &entry;
+    }
+    return nullptr;
+}
+
 std::filesystem::path unique_test_dir(const char *name)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path();
@@ -145,6 +170,70 @@ TEST(AssetResolver, ReadsFromMemoryPack)
         << error;
     EXPECT_EQ(buffer_string(buffer), "{\"ok\":true}\n");
     slayer3d_asset_buffer_free(&buffer);
+
+    slayer3d_asset_resolver_destroy(resolver);
+}
+
+TEST(AssetResolver, EnumeratesMountedDirectory)
+{
+    const std::filesystem::path dir = unique_test_dir("enumerate_directory");
+    write_text(dir / "textures" / "wall.png", "wall");
+    write_text(dir / "textures" / "metal" / "floor.png", "floor");
+
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
+    ASSERT_NE(resolver, nullptr);
+
+    char error[256]{};
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(resolver, dir.string().c_str(), error, sizeof(error))) << error;
+
+    std::vector<EnumeratedAsset> entries;
+    ASSERT_TRUE(slayer3d_asset_resolver_enumerate(resolver, "asset://textures", collect_asset_entry, &entries, error,
+                                                  sizeof(error)))
+        << error;
+    ASSERT_EQ(entries.size(), 2u);
+    const EnumeratedAsset *wall = find_enumerated_asset(entries, "wall.png");
+    const EnumeratedAsset *metal = find_enumerated_asset(entries, "metal");
+    ASSERT_NE(wall, nullptr);
+    ASSERT_NE(metal, nullptr);
+    EXPECT_EQ(wall->directory, "asset://textures");
+    EXPECT_EQ(wall->type, SLAYER3D_ASSET_ENTRY_FILE);
+    EXPECT_EQ(metal->type, SLAYER3D_ASSET_ENTRY_DIRECTORY);
+
+    slayer3d_asset_resolver_destroy(resolver);
+    remove_test_dir(dir);
+}
+
+TEST(AssetResolver, EnumeratesMemoryPackVirtualDirectories)
+{
+    const std::vector<std::uint8_t> pack =
+        make_pack({{"textures/wall.png", "wall"}, {"textures/metal/floor.png", "floor"}, {"scripts/main.lua", ""}});
+    slayer3d_asset_resolver *resolver = slayer3d_asset_resolver_create();
+    ASSERT_NE(resolver, nullptr);
+
+    char error[256]{};
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_memory_pack(resolver, pack.data(), pack.size(), "unit-pack", error,
+                                                          sizeof(error)))
+        << error;
+
+    std::vector<EnumeratedAsset> entries;
+    ASSERT_TRUE(slayer3d_asset_resolver_enumerate(resolver, "asset://textures", collect_asset_entry, &entries, error,
+                                                  sizeof(error)))
+        << error;
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].directory, "asset://textures");
+    EXPECT_EQ(entries[0].name, "wall.png");
+    EXPECT_EQ(entries[0].type, SLAYER3D_ASSET_ENTRY_FILE);
+    EXPECT_EQ(entries[1].name, "metal");
+    EXPECT_EQ(entries[1].type, SLAYER3D_ASSET_ENTRY_DIRECTORY);
+
+    entries.clear();
+    ASSERT_TRUE(slayer3d_asset_resolver_enumerate(resolver, "asset://textures/metal", collect_asset_entry, &entries,
+                                                  error, sizeof(error)))
+        << error;
+    ASSERT_EQ(entries.size(), 1u);
+    EXPECT_EQ(entries[0].directory, "asset://textures/metal");
+    EXPECT_EQ(entries[0].name, "floor.png");
+    EXPECT_EQ(entries[0].type, SLAYER3D_ASSET_ENTRY_FILE);
 
     slayer3d_asset_resolver_destroy(resolver);
 }
