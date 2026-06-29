@@ -336,6 +336,7 @@ bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "bloom_key",
                                 "ssao_key",
                                 "depth_prepass_key",
+                                "clear_color_key",
                                 "tonemap_key",
                                 "profile_key",
                                 "quality_key",

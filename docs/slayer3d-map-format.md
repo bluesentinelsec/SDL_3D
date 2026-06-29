@@ -390,9 +390,11 @@ position-orbit movement. Games may ignore unknown animation properties or
 reinterpret them for a custom renderer.
 
 The bundled editor exposes map-level directional lighting through the Global
-panel because sun/moon-style lights affect the whole map. Things > Lights is for
-placeable local lights and currently offers Point, Spot, Area Rect, and Area
-Sphere. Selecting a placed light shows a light-specific inspector with
+panel because sun/moon-style lights affect the whole map. The default Global
+Lighting workflow is preset based: choose a preset, press Apply, and the editor
+preview plus exported SlayerMap state receive concrete global lighting values.
+Things > Lights is for placeable local lights and currently offers Point, Spot,
+Area Rect, and Area Sphere. Selecting a placed light shows a light-specific inspector with
 kind, intensity, range, shadow mode, falloff, color presets, spot cone presets,
 area-size presets, and animation presets for steady, torch flicker, rotating
 siren, and orbiting fireball behavior. The animation presets write the same

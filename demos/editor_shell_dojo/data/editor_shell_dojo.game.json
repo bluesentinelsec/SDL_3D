@@ -710,13 +710,14 @@
     "signal.editor.global.preset.afternoon",
     "signal.editor.global.preset.night",
     "signal.editor.global.preset.interior",
-    "signal.editor.global.directional.toggle",
-    "signal.editor.global.directional.direction.next",
-    "signal.editor.global.exposure.down",
-    "signal.editor.global.exposure.up",
-    "signal.editor.global.tonemap.next",
-    "signal.editor.global.quality.next",
-    "signal.editor.global.fog.next",
+    "signal.editor.global.preset.sunrise",
+    "signal.editor.global.preset.morning",
+    "signal.editor.global.preset.sunset",
+    "signal.editor.global.preset.twilight",
+    "signal.editor.global.preset.early_night",
+    "signal.editor.global.preset.midnight",
+    "signal.editor.global.preset.overcast",
+    "signal.editor.global.preset.apply",
     "signal.editor.global.data.new",
     "signal.editor.global.data.focus.key",
     "signal.editor.global.data.focus.value",
@@ -1001,15 +1002,32 @@
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
           { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [18, 20, 24, 255] },
           { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
           { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
           { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
           { "type": "scene_state.set", "key": "editor.global.directional.kind", "value": "baked" },
           { "type": "scene_state.set", "key": "editor.global.directional.shadow_mode", "value": "baked" },
           { "type": "scene_state.set", "key": "editor.global.directional.casts_shadow", "value": true },
@@ -5094,131 +5112,232 @@
       {
         "signal": "signal.editor.global.preset.afternoon",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
-          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
-          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
-          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
-          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
-          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
-          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [0.35, -0.85, 0.25] },
-          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value": "afternoon" },
-          { "type": "scene_state.set", "key": "editor.global.directional.color", "value": [255, 238, 160, 255] },
-          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value": 1.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset afternoon" }
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Afternoon Daylight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.sunrise",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Warm low-angle morning light with soft amber contrast." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [64, 48, 46, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [60, 46, 62, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.08 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.65, -0.45, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "sunrise" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 174, 108, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.85 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Sunrise" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.morning",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Clean bright daylight with a mild warm tint." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [58, 62, 68, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [72, 92, 124, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.05 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.35, -0.75, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "morning" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 228, 174, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.95 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Morning" }
         ]
       },
       {
         "signal": "signal.editor.global.preset.night",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "night" },
-          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [20, 24, 42, 255] },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [4, 6, 12, 255] },
-          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 0.75 },
-          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
-          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "quality" },
-          { "type": "scene_state.set", "key": "editor.global.fog", "value": "linear" },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
-          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [-0.25, -0.9, 0.1] },
-          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value": "moon" },
-          { "type": "scene_state.set", "key": "editor.global.directional.color", "value": [126, 156, 255, 255] },
-          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value": 0.45 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset night" }
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "early_night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Early Night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Readable moonlit night with cool ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [24, 30, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [8, 12, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.78 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.25, -0.9, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [126, 156, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Early Night" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.sunset",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Orange late-day light with stronger side shadows." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [58, 42, 48, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [70, 38, 48, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.98 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.75, -0.38, -0.2] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "sunset" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 142, 82, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.8 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Sunset" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.twilight",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Blue-purple ambient light after sunset with faint horizon glow." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [34, 38, 58, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [20, 22, 42, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.9 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.55, -0.28, -0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "twilight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [156, 162, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.35 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Twilight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.early_night",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "early_night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Early Night" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Readable moonlit night with cool ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [24, 30, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [8, 12, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.78 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.25, -0.9, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [126, 156, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Early Night" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.midnight",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "midnight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Midnight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Dark moonlit scene for horror, stealth, and strong local lights." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [12, 16, 30, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [2, 4, 10, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.65 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "quality" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "exp" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [-0.1, -1.0, 0.05] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "midnight moon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [92, 118, 220, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.25 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Midnight" }
+        ]
+      },
+      {
+        "signal": "signal.editor.global.preset.overcast",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Soft low-contrast daylight with broad ambient fill." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [76, 80, 84, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [76, 84, 94, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 0.95 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "linear" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.1, -1.0, 0.1] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "overcast" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [194, 202, 214, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.45 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Overcast" }
         ]
       },
       {
         "signal": "signal.editor.global.preset.interior",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "interior" },
-          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [36, 38, 44, 255] },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [10, 10, 12, 255] },
-          { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.15 },
-          { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "reinhard" },
-          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
-          { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "off" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preset interior" }
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "interior" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Interior Neutral" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral ambient interior lighting with no global sun contribution." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [42, 44, 50, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [10, 10, 12, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.15 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "reinhard" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.0, -1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 255, 255, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected global lighting preset Interior Neutral" }
         ]
       },
       {
-        "signal": "signal.editor.global.directional.toggle",
+        "signal": "signal.editor.global.preset.apply",
         "actions": [
-          { "type": "scene_state.toggle", "key": "editor.global.directional.enabled", "default": false },
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.global.directional.enabled", "op": "==", "value": true, "default": false },
-            "then": [{ "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" }],
-            "else": [{ "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "off" }]
-          },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global directional toggled" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.directional.direction.next",
-        "actions": [
-          { "type": "scene_state.cycle", "key": "editor.global.directional.direction.label", "values": ["afternoon", "moon", "overhead"], "default": "afternoon" },
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.global.directional.direction.label", "op": "==", "value": "moon", "default": "afternoon" },
-            "then": [{ "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [-0.25, -0.9, 0.1] }],
-            "else": [
-              {
-                "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.global.directional.direction.label", "op": "==", "value": "overhead", "default": "afternoon" },
-                "then": [{ "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [0.0, -1.0, 0.0] }],
-                "else": [{ "type": "scene_state.set", "key": "editor.global.directional.direction", "value": [0.35, -0.85, 0.25] }]
-              }
-            ]
-          },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global directional changed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.exposure.down",
-        "actions": [
-          { "type": "scene_state.add", "key": "editor.global.exposure", "value": -0.05, "default": 1.0, "min": 0.1, "max": 4.0 },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global exposure changed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.exposure.up",
-        "actions": [
-          { "type": "scene_state.add", "key": "editor.global.exposure", "value": 0.05, "default": 1.0, "min": 0.1, "max": 4.0 },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global exposure changed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.tonemap.next",
-        "actions": [
-          { "type": "scene_state.cycle", "key": "editor.global.tonemap", "values": ["aces", "reinhard", "none"], "default": "aces" },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global tonemap changed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.quality.next",
-        "actions": [
-          { "type": "scene_state.cycle", "key": "editor.global.lighting_preview_quality", "values": ["performance", "balanced", "quality"], "default": "balanced" },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global preview quality changed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.global.fog.next",
-        "actions": [
-          { "type": "scene_state.cycle", "key": "editor.global.fog", "values": ["none", "linear", "exp", "exp2"], "default": "none" },
-          { "type": "scene_state.set", "key": "editor.global.preset", "value": "custom" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global fog changed" }
+          { "type": "scene_state.set", "key": "editor.global.preset", "value_from_state": "editor.global.pending_preset" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value_from_state": "editor.global.pending_preset.label" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value_from_state": "editor.global.pending_preset.description" },
+          { "type": "scene_state.set", "key": "editor.global.ambient_light", "value_from_state": "editor.global.pending_ambient_light" },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value_from_state": "editor.global.pending_clear_color" },
+          { "type": "scene_state.set", "key": "editor.global.exposure", "value_from_state": "editor.global.pending_exposure" },
+          { "type": "scene_state.set", "key": "editor.global.tonemap", "value_from_state": "editor.global.pending_tonemap" },
+          { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value_from_state": "editor.global.pending_lighting_preview_quality" },
+          { "type": "scene_state.set", "key": "editor.global.fog", "value_from_state": "editor.global.pending_fog" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value_from_state": "editor.global.pending_directional.enabled" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value_from_state": "editor.global.pending_directional.enabled.label" },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction", "value_from_state": "editor.global.pending_directional.direction" },
+          { "type": "scene_state.set", "key": "editor.global.directional.direction.label", "value_from_state": "editor.global.pending_directional.direction.label" },
+          { "type": "scene_state.set", "key": "editor.global.directional.color", "value_from_state": "editor.global.pending_directional.color" },
+          { "type": "scene_state.set", "key": "editor.global.directional.intensity", "value_from_state": "editor.global.pending_directional.intensity" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "applied global lighting preset {editor.global.pending_preset.label}" }
         ]
       },
       {
@@ -5315,15 +5434,32 @@
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.pending_preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
+          { "type": "scene_state.set", "key": "editor.global.pending_ambient_light", "value": [54, 56, 64, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_clear_color", "value": [18, 20, 24, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_exposure", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.global.pending_tonemap", "value": "aces" },
+          { "type": "scene_state.set", "key": "editor.global.pending_lighting_preview_quality", "value": "balanced" },
+          { "type": "scene_state.set", "key": "editor.global.pending_fog", "value": "none" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.enabled.label", "value": "on" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction", "value": [0.35, -0.85, 0.25] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.direction.label", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.color", "value": [255, 238, 160, 255] },
+          { "type": "scene_state.set", "key": "editor.global.pending_directional.intensity", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.preset", "value": "afternoon" },
+          { "type": "scene_state.set", "key": "editor.global.preset.label", "value": "Afternoon Daylight" },
+          { "type": "scene_state.set", "key": "editor.global.preset.description", "value": "Neutral default daylight suitable for most grayboxing work." },
           { "type": "scene_state.set", "key": "editor.global.ambient_light", "value": [54, 56, 64, 255] },
-          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [12, 14, 18, 255] },
+          { "type": "scene_state.set", "key": "editor.global.clear_color", "value": [18, 20, 24, 255] },
           { "type": "scene_state.set", "key": "editor.global.exposure", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.global.tonemap", "value": "aces" },
           { "type": "scene_state.set", "key": "editor.global.lighting_preview_quality", "value": "balanced" },
           { "type": "scene_state.set", "key": "editor.global.fog", "value": "none" },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "off" },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled", "value": true },
+          { "type": "scene_state.set", "key": "editor.global.directional.enabled.label", "value": "on" },
           { "type": "scene_state.set", "key": "editor.global.directional.kind", "value": "baked" },
           { "type": "scene_state.set", "key": "editor.global.directional.shadow_mode", "value": "baked" },
           { "type": "scene_state.set", "key": "editor.global.directional.casts_shadow", "value": true },
@@ -6036,7 +6172,9 @@
   "render": {
     "lighting": true,
     "bloom": false,
-    "clear_color": [18, 20, 24, 255]
+    "clear_color": [18, 20, 24, 255],
+    "clear_color_key": "editor.global.clear_color",
+    "tonemap_key": "editor.global.tonemap"
   },
   "entities": [
     {

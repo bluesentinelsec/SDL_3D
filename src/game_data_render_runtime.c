@@ -894,6 +894,34 @@ static bool editor_actor_is_preview_light(const editor_actor_runtime *actor)
     return (role != NULL && SDL_strcmp(role, "light") == 0) || (light_type != NULL && light_type[0] != '\0');
 }
 
+static bool editor_global_directional_light_enabled(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           slayer3d_properties_get_bool(runtime->scene_state, "editor.global.directional.enabled", false);
+}
+
+static bool read_editor_global_directional_light(const slayer3d_game_data_runtime *runtime, slayer3d_light *out_light)
+{
+    if (out_light != NULL)
+        SDL_zero(*out_light);
+    if (!editor_global_directional_light_enabled(runtime) || out_light == NULL)
+        return false;
+
+    out_light->type = SLAYER3D_LIGHT_DIRECTIONAL;
+    out_light->position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    out_light->direction = slayer3d_properties_get_vec3(runtime->scene_state, "editor.global.directional.direction",
+                                                        slayer3d_vec3_make(0.35f, -0.85f, 0.25f));
+    const slayer3d_color color = slayer3d_properties_get_color(runtime->scene_state, "editor.global.directional.color",
+                                                               (slayer3d_color){255, 238, 160, 255});
+    out_light->color[0] = (float)color.r / 255.0f;
+    out_light->color[1] = (float)color.g / 255.0f;
+    out_light->color[2] = (float)color.b / 255.0f;
+    out_light->intensity =
+        slayer3d_properties_get_float(runtime->scene_state, "editor.global.directional.intensity", 1.0f);
+    out_light->range = 0.0f;
+    return true;
+}
+
 static bool editor_actor_in_active_scene(const slayer3d_game_data_runtime *runtime, const editor_actor_runtime *actor)
 {
     if (runtime == NULL || actor == NULL)
@@ -1056,6 +1084,8 @@ int slayer3d_game_data_world_light_count(const slayer3d_game_data_runtime *runti
                 count += light_components;
         }
     }
+    if (editor_global_directional_light_enabled(runtime))
+        count++;
     return count + editor_preview_light_count(runtime);
 }
 
@@ -1069,6 +1099,16 @@ bool slayer3d_game_data_get_world_ambient_light(const slayer3d_game_data_runtime
     }
     if (runtime == NULL || out_rgb == NULL)
         return false;
+
+    if (runtime->scene_state != NULL && slayer3d_properties_has(runtime->scene_state, "editor.global.ambient_light"))
+    {
+        const slayer3d_color ambient = slayer3d_properties_get_color(
+            runtime->scene_state, "editor.global.ambient_light", (slayer3d_color){54, 56, 64, 255});
+        out_rgb[0] = (float)ambient.r / 255.0f;
+        out_rgb[1] = (float)ambient.g / 255.0f;
+        out_rgb[2] = (float)ambient.b / 255.0f;
+        return true;
+    }
 
     yyjson_val *ambient = obj_get(obj_get(runtime_root(runtime), "world"), "ambient_light");
     if (!yyjson_is_arr(ambient) || yyjson_arr_size(ambient) < 3)
@@ -1168,6 +1208,12 @@ static bool slayer3d_game_data_get_world_light_internal(const slayer3d_game_data
                 *out_light_json = light;
             return read_light_json(runtime, light, NULL, out_light);
         }
+    }
+
+    if (editor_global_directional_light_enabled(runtime))
+    {
+        if (remaining-- == 0)
+            return read_editor_global_directional_light(runtime, out_light);
     }
 
     yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
@@ -2451,6 +2497,13 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
 
     yyjson_val *quality_preset = find_render_quality_preset(render, runtime);
     out_settings->clear_color = json_color(render, "clear_color", out_settings->clear_color);
+    const char *clear_color_key = json_string(render, "clear_color_key", NULL);
+    if (clear_color_key != NULL && runtime->scene_state != NULL &&
+        slayer3d_properties_has(runtime->scene_state, clear_color_key))
+    {
+        out_settings->clear_color =
+            slayer3d_properties_get_color(runtime->scene_state, clear_color_key, out_settings->clear_color);
+    }
     out_settings->lighting_enabled = render_bool_setting(runtime, render, quality_preset, "lighting", "lighting_key",
                                                          out_settings->lighting_enabled);
     out_settings->bloom_enabled =

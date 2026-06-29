@@ -18937,9 +18937,12 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
                  "dynamic / linear");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""), "torch_fire");
 
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
+    slayer3d_light global_preview{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &global_preview));
+    EXPECT_EQ(global_preview.type, SLAYER3D_LIGHT_DIRECTIONAL);
     slayer3d_light point_preview{};
-    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &point_preview));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &point_preview));
     EXPECT_EQ(point_preview.type, SLAYER3D_LIGHT_POINT);
     EXPECT_NEAR(point_preview.position.x, -1.0f, 0.001f);
     EXPECT_NEAR(point_preview.position.z, -2.0f, 0.001f);
@@ -18950,7 +18953,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     slayer3d_light point_preview_eval{};
     slayer3d_game_data_render_eval point_light_eval{};
     point_light_eval.time = 0.03125f;
-    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 0, &point_light_eval, &point_preview_eval));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &point_light_eval, &point_preview_eval));
     EXPECT_GT(point_preview_eval.intensity, point_preview.intensity);
 
     char *map_json = nullptr;
@@ -18962,9 +18965,9 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     slayer3d_map_document *map_document = nullptr;
     ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
     ASSERT_NE(map_document, nullptr);
-    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 1u);
+    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 2u);
     slayer3d_map_light exported_light{};
-    ASSERT_TRUE(slayer3d_map_get_light(map_document, 0, &exported_light));
+    ASSERT_TRUE(slayer3d_map_get_light(map_document, 1, &exported_light));
     EXPECT_STREQ(exported_light.source_actor, "light.editor_shell.point.1");
     EXPECT_STREQ(exported_light.kind, "baked");
     EXPECT_STREQ(exported_light.type, "point");
@@ -19033,26 +19036,26 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.light.animation", ""),
                  "projectile_fireball");
 
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 3);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 4);
     slayer3d_light spot_preview{};
-    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 1, &spot_preview));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 2, &spot_preview));
     EXPECT_EQ(spot_preview.type, SLAYER3D_LIGHT_SPOT);
     EXPECT_GT(spot_preview.inner_cutoff, spot_preview.outer_cutoff);
     slayer3d_light spot_preview_eval{};
     slayer3d_game_data_render_eval spot_light_eval{};
     spot_light_eval.time = 1.0f;
-    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 1, &spot_light_eval, &spot_preview_eval));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &spot_light_eval, &spot_preview_eval));
     EXPECT_NEAR(spot_preview.direction.x, 0.0f, 0.001f);
     EXPECT_LT(spot_preview_eval.direction.x, -0.4f);
 
     slayer3d_light area_preview{};
-    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 2, &area_preview));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 3, &area_preview));
     EXPECT_EQ(area_preview.type, SLAYER3D_LIGHT_POINT);
     EXPECT_NEAR(area_preview.position.x, 3.0f, 0.001f);
     slayer3d_light area_preview_eval{};
     slayer3d_game_data_render_eval area_light_eval{};
     area_light_eval.time = 0.5f;
-    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 2, &area_light_eval, &area_preview_eval));
+    ASSERT_TRUE(slayer3d_game_data_get_world_light_evaluated(runtime, 3, &area_light_eval, &area_preview_eval));
     EXPECT_GT(SDL_fabsf(area_preview_eval.position.x - area_preview.position.x), 0.1f);
 
     map_json = nullptr;
@@ -19064,7 +19067,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
     map_document = nullptr;
     ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
     ASSERT_NE(map_document, nullptr);
-    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 3u);
+    ASSERT_EQ(slayer3d_map_get_light_count(map_document), 4u);
     bool found_spot = false;
     bool found_area_rect = false;
     for (size_t i = 0; i < slayer3d_map_get_light_count(map_document); ++i)
@@ -19452,8 +19455,8 @@ TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
     yyjson_val *root = yyjson_doc_get_root(doc);
     yyjson_val *lights = yyjson_obj_get(root, "lights");
     ASSERT_TRUE(yyjson_is_arr(lights));
-    ASSERT_EQ(yyjson_arr_size(lights), 1u);
-    yyjson_val *light = yyjson_arr_get(lights, 0);
+    ASSERT_EQ(yyjson_arr_size(lights), 2u);
+    yyjson_val *light = yyjson_arr_get(lights, 1);
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "id")), "light.editor_shell.key_spot.light");
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "source_actor")), "light.editor_shell.key_spot");
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(light, "kind")), "dynamic");
@@ -21802,18 +21805,18 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "map validation passed with 6 warnings");
     emit_signal("signal.editor.file.plan_lighting");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.valid", false));
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.dynamic_count", -1), 1);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.static_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.static_count", -1), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.area_count", -1), 0);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 1);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 0);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.requires_bake", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.requires_bake", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.quality", ""), "balanced");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.message", ""),
-                 "lighting plan: 1 lights, 1 runtime, 0 bake");
+                 "lighting plan: 2 lights, 2 runtime, 1 bake");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
-                 "lighting plan: 1 lights, 1 runtime, 0 bake");
+                 "lighting plan: 2 lights, 2 runtime, 1 bake");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line4", ""),
                  "lighting plan quality balanced");
     for (int i = 0; i < 70; ++i)
@@ -22343,10 +22346,11 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     EXPECT_TRUE(contains_text("Global"));
     EXPECT_TRUE(contains_text("Lighting"));
     EXPECT_TRUE(contains_text("Data"));
-    EXPECT_TRUE(contains_text("Directional"));
-    EXPECT_TRUE(contains_text("54, 56, 64, 255"));
-    EXPECT_TRUE(contains_text("12, 14, 18, 255"));
-    EXPECT_TRUE(contains_text("balanced"));
+    EXPECT_TRUE(contains_text("Sunrise"));
+    EXPECT_TRUE(contains_text("Afternoon"));
+    EXPECT_TRUE(contains_text("Early Night"));
+    EXPECT_TRUE(contains_text("Apply Preset"));
+    EXPECT_TRUE(contains_text("Afternoon Daylight"));
     EXPECT_TRUE(contains_text("Plan Lighting"));
 
     slayer3d_ui_layout_model *layout = nullptr;
@@ -22362,13 +22366,13 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     ASSERT_GE(plan_signal, 0);
     slayer3d_signal_emit(bus, plan_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lighting.plan.valid", false));
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 0);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 0);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.total_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.runtime_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lighting.plan.bake_count", -1), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.message", ""),
-                 "lighting plan: 0 lights, 0 runtime, 0 bake");
+                 "lighting plan: 1 lights, 1 runtime, 1 bake");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.lighting.plan.line3", ""),
-                 "lighting plan runtime only");
+                 "lighting plan requires static bake");
 
     const int close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.close");
     ASSERT_GE(close_signal, 0);
@@ -22400,43 +22404,53 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     };
 
     emit_signal("signal.editor.global.toggle");
-    emit_signal("signal.editor.global.preset.night");
-    emit_signal("signal.editor.global.directional.direction.next");
-    emit_signal("signal.editor.global.exposure.up");
-    emit_signal("signal.editor.global.tonemap.next");
-    emit_signal("signal.editor.global.quality.next");
-    emit_signal("signal.editor.global.fog.next");
+    emit_signal("signal.editor.global.preset.midnight");
     emit_signal("signal.editor.global.tab.data");
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.pending_preset", ""), "midnight");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.preset", ""), "afternoon");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.directional.enabled", false));
+    EXPECT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    slayer3d_light preview_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &preview_light));
+    EXPECT_EQ(preview_light.type, SLAYER3D_LIGHT_DIRECTIONAL);
+    EXPECT_NEAR(preview_light.intensity, 1.0f, 0.001f);
+
+    emit_signal("signal.editor.global.preset.apply");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.preset", ""), "midnight");
     slayer3d_properties_set_string(scene_state, "editor.global.data.edit.key", "mission");
     slayer3d_properties_set_string(scene_state, "editor.global.data.edit.value", "lighting-test");
     emit_signal("signal.editor.global.data.apply");
 
     const slayer3d_color ambient =
         slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", slayer3d_color{0, 0, 0, 0});
-    EXPECT_EQ(ambient.r, 20);
-    EXPECT_EQ(ambient.g, 24);
-    EXPECT_EQ(ambient.b, 42);
-    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.exposure", 0.0f), 0.8f);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""),
-                 "performance");
+    EXPECT_EQ(ambient.r, 12);
+    EXPECT_EQ(ambient.g, 16);
+    EXPECT_EQ(ambient.b, 30);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.exposure", 0.0f), 0.65f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "aces");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "quality");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.directional.enabled", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.directional.direction.label", ""),
-                 "overhead");
+                 "midnight moon");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.global.property.count", -1), 1);
-    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 4);
-    emit_signal("signal.editor.global.quality.next");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "balanced");
-    EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 8);
-    emit_signal("signal.editor.global.quality.next");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "quality");
     EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), 16);
     slayer3d_properties_set_string(scene_state, "editor.global.lighting_preview_quality", "off");
     EXPECT_EQ(slayer3d_game_data_world_light_upload_limit(runtime), SLAYER3D_MAX_LIGHTS);
-    slayer3d_properties_set_string(scene_state, "editor.global.lighting_preview_quality", "performance");
+    slayer3d_properties_set_string(scene_state, "editor.global.lighting_preview_quality", "quality");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.fog", ""), "exp");
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &preview_light));
+    EXPECT_EQ(preview_light.type, SLAYER3D_LIGHT_DIRECTIONAL);
+    EXPECT_NEAR(preview_light.direction.y, -1.0f, 0.001f);
+    EXPECT_NEAR(preview_light.intensity, 0.25f, 0.001f);
+    EXPECT_NEAR(preview_light.color[2], 220.0f / 255.0f, 0.001f);
+    float world_ambient[3]{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_ambient_light(runtime, world_ambient));
+    EXPECT_NEAR(world_ambient[0], 12.0f / 255.0f, 0.001f);
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_EQ(render_settings.clear_color.b, 10);
 
     char *map_json = nullptr;
     size_t map_size = 0u;
@@ -22450,14 +22464,14 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     slayer3d_map_global_state global{};
     ASSERT_TRUE(slayer3d_map_get_global_state(document, &global));
     EXPECT_TRUE(global.has_ambient_light);
-    EXPECT_EQ(global.ambient_light.r, 20);
-    EXPECT_EQ(global.ambient_light.b, 42);
+    EXPECT_EQ(global.ambient_light.r, 12);
+    EXPECT_EQ(global.ambient_light.b, 30);
     EXPECT_TRUE(global.has_clear_color);
-    EXPECT_EQ(global.clear_color.b, 12);
+    EXPECT_EQ(global.clear_color.b, 10);
     EXPECT_TRUE(global.has_exposure);
-    EXPECT_FLOAT_EQ(global.exposure, 0.8f);
-    EXPECT_STREQ(global.tonemap, "reinhard");
-    EXPECT_STREQ(global.lighting_preview_quality, "performance");
+    EXPECT_FLOAT_EQ(global.exposure, 0.65f);
+    EXPECT_STREQ(global.tonemap, "aces");
+    EXPECT_STREQ(global.lighting_preview_quality, "quality");
     EXPECT_TRUE(global.fog.enabled);
     EXPECT_STREQ(global.fog.mode, "exp");
     ASSERT_EQ(global.property_count, 1u);
@@ -22480,10 +22494,10 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
     ASSERT_TRUE(global_light.has_direction);
     EXPECT_NEAR(global_light.direction.y, -1.0f, 0.001f);
     ASSERT_TRUE(global_light.has_color);
-    EXPECT_EQ(global_light.color.r, 126);
-    EXPECT_EQ(global_light.color.b, 255);
+    EXPECT_EQ(global_light.color.r, 92);
+    EXPECT_EQ(global_light.color.b, 220);
     ASSERT_TRUE(global_light.has_intensity);
-    EXPECT_NEAR(global_light.intensity, 0.45f, 0.001f);
+    EXPECT_NEAR(global_light.intensity, 0.25f, 0.001f);
 
     slayer3d_map_destroy(document);
     SDL_free(map_json);
