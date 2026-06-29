@@ -311,9 +311,9 @@ offers common intensity, range, color, shadow, falloff, spot-cone, area-size,
 and dynamic animation presets while the Data inspector remains available for
 game-specific key/value pairs.
 
-Lighting planning is deliberately API-centered. File > Plan Lighting, the Global
-Lighting panel's Plan Lighting button, the editor CLI command below, and caller
-code all use the public SlayerMap lighting-plan API:
+Lighting planning is deliberately API-centered. The Global Lighting panel's
+Plan Lighting button, the editor CLI command below, and caller code all use the
+public SlayerMap lighting-plan API:
 
 ```sh
 build/debug/slayer3d_editor lighting-plan --input /tmp/level.slayermap.json

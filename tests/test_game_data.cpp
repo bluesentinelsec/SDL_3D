@@ -21648,7 +21648,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.validate.button"),
               file_rects.end());
-    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.plan_lighting.button"),
+    EXPECT_EQ(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.plan_lighting.button"),
               file_rects.end());
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);

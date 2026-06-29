@@ -401,8 +401,8 @@ siren, and orbiting fireball behavior. The animation presets write the same
 canonical `animation` object that hand-authored SlayerMap files use. The generic
 Data inspector remains available for arbitrary key/value gameplay properties.
 
-File > Plan Lighting and the Global Lighting panel's Plan Lighting button both
-use `slayer3d_map_build_lighting_plan()`. This is the same public API intended
+The Global Lighting panel's Plan Lighting button uses
+`slayer3d_map_build_lighting_plan()`. This is the same public API intended
 for editor GUI commands, editor CLI commands such as
 `slayer3d_editor lighting-plan --input level.slayermap.json`, and caller code.
 The planner reports total, dynamic, static, area, runtime-preview, and bake-light
