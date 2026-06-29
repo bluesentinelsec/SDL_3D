@@ -805,14 +805,17 @@ bool slayer3d_game_data_plan_editor_map_lighting_action(slayer3d_game_data_runti
     line3[0] = '\0';
     if (ok)
     {
-        SDL_snprintf(message, sizeof(message), "lighting plan: %zu lights, %zu runtime, %zu bake",
-                     plan.total_light_count, plan.runtime_light_count, plan.bake_light_count);
+        SDL_snprintf(message, sizeof(message), "lighting plan: %llu lights, %llu runtime, %llu bake",
+                     (unsigned long long)plan.total_light_count, (unsigned long long)plan.runtime_light_count,
+                     (unsigned long long)plan.bake_light_count);
         SDL_snprintf(line0, sizeof(line0), "lighting plan quality %s",
                      editor_lighting_build_quality_name(plan.quality));
-        SDL_snprintf(line1, sizeof(line1), "lighting plan counts total %zu dynamic %zu static %zu area %zu",
-                     plan.total_light_count, plan.dynamic_light_count, plan.static_light_count, plan.area_light_count);
-        SDL_snprintf(line2, sizeof(line2), "lighting plan work runtime %zu/%zu bake %zu/%zu", plan.runtime_light_count,
-                     plan.max_dynamic_lights, plan.bake_light_count, plan.max_static_lights);
+        SDL_snprintf(line1, sizeof(line1), "lighting plan counts total %llu dynamic %llu static %llu area %llu",
+                     (unsigned long long)plan.total_light_count, (unsigned long long)plan.dynamic_light_count,
+                     (unsigned long long)plan.static_light_count, (unsigned long long)plan.area_light_count);
+        SDL_snprintf(line2, sizeof(line2), "lighting plan work runtime %llu/%llu bake %llu/%llu",
+                     (unsigned long long)plan.runtime_light_count, (unsigned long long)plan.max_dynamic_lights,
+                     (unsigned long long)plan.bake_light_count, (unsigned long long)plan.max_static_lights);
         SDL_snprintf(line3, sizeof(line3), "lighting plan %s%s%s",
                      plan.requires_static_bake ? "requires static bake" : "runtime only",
                      plan.dynamic_light_budget_exceeded ? ", runtime budget exceeded" : "",
