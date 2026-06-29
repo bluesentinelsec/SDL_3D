@@ -7,7 +7,7 @@ same managed runtime used by games.
 ## No-Argument Launch
 
 Running the editor with no arguments starts a new untitled map using the bundled
-Editor Shell Dojo project:
+Slayer3D Editor project embedded in the executable:
 
 ```sh
 slayer3d_editor
@@ -24,6 +24,18 @@ slayer3d_editor open --project path/to/project --input path/to/level.slayermap.j
 
 Set `SLAYER3D_EDITOR_PROJECT` to a project directory when testing another
 project as the temporary no-argument default.
+
+## Bundled Assets
+
+The default editor shell lives under `apps/slayer3d_editor/data` in source
+builds. CMake packs that directory with `slayer3d_pack`, embeds the generated
+pack into `slayer3d_editor`, and launches the built-in project through the
+runner's `--embedded` path. Changes to JSON, default textures, default models,
+skyboxes, and other files under that directory are picked up on the next build.
+
+User-provided project, texture, and model directories remain external. For
+example, `--texture-path media/textures` overrides the embedded default texture
+source for that editor session.
 
 ## Desktop Build
 
@@ -50,17 +62,16 @@ Native installs include:
 - `bin/slayer3d_runner`
 - `bin/slayer3d_pack`
 - `bin/slayer3d_bundle`
-- `share/slayer3d/demos/editor_shell_dojo`
 - `share/slayer3d/demos/slayermap_example`
 - `share/slayer3d/media`
 
-The installed no-argument editor discovers the packaged Editor Shell Dojo at
-`../share/slayer3d/demos/editor_shell_dojo` relative to the executable. Build
-tree launches use the compiled-in source-tree default.
+The installed no-argument editor does not need a packaged editor project
+directory. Its built-in shell data is embedded in the binary. External media is
+still installed for tools, examples, and caller-owned projects.
 
 ## Distribution Notes
 
-The editor is generic. Project assets and map files stay external unless a
-future package format embeds them. The bundled Editor Shell Dojo exists so a
-fresh executable opens into a useful brush editor immediately; users can then
+The editor is generic. Project assets and map files stay external unless the
+caller explicitly packages them. The embedded Slayer3D Editor project exists so
+a fresh executable opens into a useful brush editor immediately; users can then
 open or configure their own projects from the editor workflow.

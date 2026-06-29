@@ -165,6 +165,23 @@ extern "C"
                                                                            int error_buffer_size);
 
     /**
+     * @brief Process SDL events owned by the data-game runtime.
+     *
+     * Generic hosts should forward non-quit SDL events here before regular
+     * input processing when they need data-authored runtime services that
+     * complete asynchronously, such as native editor file dialogs. When this
+     * returns true, the event was consumed and the caller should not feed it to
+     * raw input.
+     *
+     * @param runtime Loaded data-game runtime.
+     * @param ctx Managed-loop context receiving the event.
+     * @param event SDL event to inspect.
+     * @return true when the runtime consumed @p event, false otherwise.
+     */
+    bool slayer3d_data_game_runtime_process_event(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx,
+                                                  const SDL_Event *event);
+
+    /**
      * @brief Runtime-binding names used by the generic network packet loop.
      *
      * Each field is a semantic key from `network.runtime_bindings`, not a

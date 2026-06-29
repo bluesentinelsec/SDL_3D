@@ -791,6 +791,8 @@ static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjso
                                                   validation_names *names, const char *type);
 static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
+static bool validate_editor_file_dialog_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
 static bool validate_timer_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_property_set_or_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -920,6 +922,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
 {
     static const action_validation_rule rules[] = {
         ACTION_RULE_EXACT_HANDLER("signal.emit", validate_signal_emit_action),
+        ACTION_RULE_EXACT_HANDLER("editor.file.dialog", validate_editor_file_dialog_action),
         ACTION_RULE_EXACT_HANDLER("timer.start", validate_timer_start_action),
         ACTION_RULE_EXACT_HANDLER("property.set", validate_property_set_or_add_action),
         ACTION_RULE_EXACT_HANDLER("property.add", validate_property_set_or_add_action),
@@ -1119,6 +1122,28 @@ static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *act
 {
     (void)type;
     return require_ref(ctx, &names->signals, "signal", json_string(action, "signal"), json_path);
+}
+
+static bool validate_editor_file_dialog_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)type;
+    const char *mode = json_string(action, "mode");
+    if (mode == NULL || (SDL_strcmp(mode, "open") != 0 && SDL_strcmp(mode, "save") != 0))
+        return validation_error(ctx, json_path, "editor.file.dialog mode must be open or save");
+    if (!is_non_empty_string(action, "path_key"))
+        return validation_error(ctx, json_path, "editor.file.dialog requires a non-empty path_key");
+    if (!require_ref(ctx, &names->signals, "accept_signal", json_string(action, "accept_signal"), json_path))
+        return false;
+
+    const char *optional_keys[] = {"default_path_key", "status_key", "message_key"};
+    for (size_t i = 0; i < SDL_arraysize(optional_keys); ++i)
+    {
+        yyjson_val *value = obj_get(action, optional_keys[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.file.dialog optional keys must be non-empty strings");
+    }
+    return true;
 }
 
 static bool validate_timer_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,

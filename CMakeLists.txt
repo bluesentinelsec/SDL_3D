@@ -495,6 +495,22 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     slayer3d_enable_sanitizers(slayer3d_runner)
     slayer3d_copy_runtime_dlls(slayer3d_runner)
 
+    set(SLAYER3D_EDITOR_DATA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/apps/slayer3d_editor/data")
+    file(
+        GLOB_RECURSE
+        SLAYER3D_EDITOR_ASSET_FILES
+        CONFIGURE_DEPENDS
+        RELATIVE "${SLAYER3D_EDITOR_DATA_ROOT}"
+        "${SLAYER3D_EDITOR_DATA_ROOT}/*"
+    )
+    slayer3d_add_embedded_asset_pack(
+        slayer3d_editor_assets
+        ROOT "${SLAYER3D_EDITOR_DATA_ROOT}"
+        SYMBOL slayer3d_editor_embedded_assets
+        OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/slayer3d_editor_embedded_assets"
+        FILES ${SLAYER3D_EDITOR_ASSET_FILES}
+    )
+
     add_executable(
         slayer3d_editor
         tools/slayer3d_editor.c
@@ -504,6 +520,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
         tools/slayer3d_runner_manifest.c
         tools/slayer3d_runner_state.c
         tools/slayer3d_fused.c
+        $<TARGET_OBJECTS:slayer3d_editor_assets>
     )
     target_link_libraries(slayer3d_editor PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
     target_compile_features(slayer3d_editor PRIVATE c_std_17)
@@ -516,8 +533,12 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
         slayer3d_editor
         PRIVATE
             SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media"
-            SLAYER3D_EDITOR_DEFAULT_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo"
+            SLAYER3D_EDITOR_DEFAULT_PROJECT="${CMAKE_CURRENT_SOURCE_DIR}/apps/slayer3d_editor"
+            SLAYER3D_EDITOR_EMBEDDED_ASSETS
             SLAYER3D_RUNNER_NO_MAIN
+            SLAYER3D_RUNNER_EMBEDDED_ASSETS
+            SLAYER3D_RUNNER_EMBEDDED_ASSETS_DATA=slayer3d_editor_embedded_assets
+            SLAYER3D_RUNNER_EMBEDDED_ASSETS_SIZE=slayer3d_editor_embedded_assets_size
     )
     slayer3d_enable_warnings(slayer3d_editor)
     slayer3d_enable_sanitizers(slayer3d_editor)
@@ -576,11 +597,6 @@ else()
                 BUNDLE DESTINATION ${CMAKE_INSTALL_BINDIR}
             )
         endif()
-
-        install(
-            DIRECTORY demos/editor_shell_dojo/
-            DESTINATION "${CMAKE_INSTALL_DATADIR}/slayer3d/demos/editor_shell_dojo"
-        )
 
         install(
             DIRECTORY demos/slayermap_example/

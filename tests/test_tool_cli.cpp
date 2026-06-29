@@ -614,7 +614,7 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
     ASSERT_NE(args.project, nullptr);
     ASSERT_NE(args.output_path, nullptr);
-    EXPECT_EQ(std::filesystem::path(args.project), std::filesystem::path(SLAYER3D_EDITOR_DEFAULT_PROJECT));
+    EXPECT_STREQ(args.project, "embedded://slayer3d_editor");
     EXPECT_NE(std::string(args.output_path).find(".slayermap.json"), std::string::npos);
 
     char error[512]{};
@@ -625,6 +625,7 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
     EXPECT_STREQ(launch.input_path, "");
     EXPECT_STREQ(launch.save_path, args.output_path);
+    EXPECT_TRUE(launch.embedded);
 
     slayer3d_editor_runner_invocation invocation;
     ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
@@ -635,6 +636,9 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
             joined += "\n";
         joined += invocation.argv[i];
     }
+    EXPECT_NE(joined.find("--embedded"), std::string::npos);
+    EXPECT_EQ(joined.find("--root"), std::string::npos);
+    EXPECT_NE(joined.find("asset://slayer3d_editor.game.json"), std::string::npos);
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
     EXPECT_NE(joined.find("editor.project.dir=" + std::string(launch.project_dir)), std::string::npos);

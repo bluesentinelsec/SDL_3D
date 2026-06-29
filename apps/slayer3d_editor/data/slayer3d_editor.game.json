@@ -1,12 +1,12 @@
 {
   "schema": "slayer3d.game.v0",
   "metadata": {
-    "name": "Slayer 3D Editor Shell Dojo",
-    "id": "demo.editor_shell_dojo",
+    "name": "Slayer 3D Editor",
+    "id": "app.slayer3d_editor",
     "version": "0.1.0"
   },
   "app": {
-    "title": "Slayer 3D Editor Shell Dojo",
+    "title": "Slayer 3D Editor",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",
@@ -6096,7 +6096,7 @@
     }
   ],
   "world": {
-    "name": "world.editor_shell_dojo",
+    "name": "world.slayer3d_editor",
     "kind": "brush",
     "units": "meters",
     "meters_per_unit": 1.0,
