@@ -3638,12 +3638,14 @@ static bool map_scene_add_lighting_debug_ui(yyjson_mut_doc *doc, yyjson_mut_val 
     char counts[128];
     char classes[128];
     char status[160];
-    SDL_snprintf(counts, sizeof(counts), "Lights total %zu runtime %zu bake %zu",
-                 plan != NULL ? plan->total_light_count : 0u, plan != NULL ? plan->runtime_light_count : 0u,
-                 plan != NULL ? plan->bake_light_count : 0u);
-    SDL_snprintf(classes, sizeof(classes), "Dynamic %zu static %zu area %zu",
-                 plan != NULL ? plan->dynamic_light_count : 0u, plan != NULL ? plan->static_light_count : 0u,
-                 plan != NULL ? plan->area_light_count : 0u);
+    SDL_snprintf(counts, sizeof(counts), "Lights total %llu runtime %llu bake %llu",
+                 (unsigned long long)(plan != NULL ? plan->total_light_count : 0u),
+                 (unsigned long long)(plan != NULL ? plan->runtime_light_count : 0u),
+                 (unsigned long long)(plan != NULL ? plan->bake_light_count : 0u));
+    SDL_snprintf(classes, sizeof(classes), "Dynamic %llu static %llu area %llu",
+                 (unsigned long long)(plan != NULL ? plan->dynamic_light_count : 0u),
+                 (unsigned long long)(plan != NULL ? plan->static_light_count : 0u),
+                 (unsigned long long)(plan != NULL ? plan->area_light_count : 0u));
     SDL_snprintf(status, sizeof(status), "Lighting %s%s%s",
                  plan != NULL && plan->requires_static_bake ? "requires static bake" : "runtime only",
                  plan != NULL && plan->dynamic_light_budget_exceeded ? ", runtime budget exceeded" : "",
