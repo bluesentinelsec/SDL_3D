@@ -287,8 +287,7 @@ static char *editor_default_project_path(void)
 
 #if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
     return SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
-#endif
-
+#else
 #if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
     if (directory_exists_tool(SLAYER3D_EDITOR_DEFAULT_PROJECT))
         return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
@@ -326,6 +325,7 @@ static char *editor_default_project_path(void)
     return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
 #else
     return SDL_strdup("apps/slayer3d_editor");
+#endif
 #endif
 }
 
