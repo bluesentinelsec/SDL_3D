@@ -931,6 +931,12 @@ std::filesystem::path editor_shell_dojo_data_path()
     return demo_data_path("editor_shell_dojo", "editor_shell_dojo.game.json");
 }
 
+std::filesystem::path slayer3d_editor_data_path()
+{
+    return std::filesystem::path(SLAYER3D_DEMOS_ROOT).parent_path() / "apps" / "slayer3d_editor" / "data" /
+           "slayer3d_editor.game.json";
+}
+
 class ScopedCurrentPath
 {
   public:
@@ -18590,6 +18596,41 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     EXPECT_TRUE(contains_text(labels, "Area Sphere"));
     EXPECT_TRUE(visible_actor_rect("ui.editor_shell.actor_viewer.light_area_sphere.button"));
     EXPECT_FALSE(contains_text(labels, "Ambient"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, Slayer3DEditorDefaultModelAssetsExistInSourceData)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    struct ModelAssetCapture
+    {
+        std::string simple_robot_path;
+    } capture{};
+    auto collect_model_asset = [](void *userdata, const slayer3d_game_data_model_asset *model) -> bool {
+        auto *model_capture = static_cast<ModelAssetCapture *>(userdata);
+        if (model_capture != nullptr && model != nullptr && model->id != nullptr && model->path != nullptr &&
+            std::strcmp(model->id, "model.editor_shell.simple_robot") == 0)
+        {
+            model_capture->simple_robot_path = model->path;
+        }
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_model_asset(runtime, collect_model_asset, &capture));
+    ASSERT_EQ(capture.simple_robot_path, "asset://models/simple_robot.obj");
+
+    const std::filesystem::path model_path = editor_path.parent_path() / "models" / "simple_robot.obj";
+    EXPECT_TRUE(std::filesystem::exists(model_path)) << model_path;
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

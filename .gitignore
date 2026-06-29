@@ -8,6 +8,8 @@
 *.elf
 # Keep Wavefront .obj model fixtures (the *.obj above is for MSVC object files).
 !tests/assets/**/*.obj
+!apps/*/data/**/*.obj
+!demos/*/data/**/*.obj
 
 # Linker output
 *.ilk
