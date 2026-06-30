@@ -4096,7 +4096,13 @@
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" },
-                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "texture", "default": "select" }
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "texture", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "thing", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "actor_model", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "actor_object", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "actor_light", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "actor_effect", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.selection.type", "op": "==", "value": "editor_actor", "default": "none" }
                           ]
                         },
                         {

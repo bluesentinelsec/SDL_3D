@@ -3726,7 +3726,18 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_select_editor_brush_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
+    {
+        slayer3d_game_data_editor_selection active_selection;
+        SDL_zero(active_selection);
+        const bool active_actor_selection =
+            runtime != NULL && slayer3d_game_data_get_active_editor_selection(runtime, &active_selection) &&
+            active_selection.hit && active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+        if (active_actor_selection)
+        {
+            return slayer3d_game_data_delete_selected_editor_actor_action(runtime, action);
+        }
         return slayer3d_game_data_delete_selected_editor_brushes(runtime, action, payload);
+    }
 
     if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
         return slayer3d_game_data_resize_selected_editor_brushes_y(runtime, action, payload);

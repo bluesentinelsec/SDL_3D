@@ -1451,6 +1451,45 @@ static void mark_editor_connections_dirty(slayer3d_game_data_runtime *runtime)
     runtime->editor_connection_dirty = true;
 }
 
+static bool editor_connection_endpoint_references_actor(const editor_connection_endpoint_runtime *endpoint,
+                                                        const char *actor_name)
+{
+    return endpoint != NULL && !endpoint->external && endpoint->entity != NULL && actor_name != NULL &&
+           SDL_strcmp(endpoint->entity, actor_name) == 0;
+}
+
+static int remove_editor_connections_referencing_actor(slayer3d_game_data_runtime *runtime, const char *actor_name)
+{
+    if (runtime == NULL || actor_name == NULL || actor_name[0] == '\0')
+        return 0;
+
+    int removed = 0;
+    for (int i = 0; i < runtime->editor_connection_count;)
+    {
+        editor_connection_runtime *connection = &runtime->editor_connections[i];
+        if (!editor_connection_endpoint_references_actor(&connection->from, actor_name) &&
+            !editor_connection_endpoint_references_actor(&connection->to, actor_name))
+        {
+            ++i;
+            continue;
+        }
+
+        free_editor_connection_entry(connection);
+        if (i + 1 < runtime->editor_connection_count)
+        {
+            SDL_memmove(&runtime->editor_connections[i], &runtime->editor_connections[i + 1],
+                        (size_t)(runtime->editor_connection_count - i - 1) * sizeof(runtime->editor_connections[i]));
+        }
+        runtime->editor_connection_count--;
+        SDL_zero(runtime->editor_connections[runtime->editor_connection_count]);
+        removed++;
+    }
+
+    if (removed > 0)
+        mark_editor_connections_dirty(runtime);
+    return removed;
+}
+
 static bool copy_editor_connection_endpoint(const slayer3d_game_data_editor_connection_endpoint *source,
                                             editor_connection_endpoint_runtime *dest)
 {
@@ -1824,6 +1863,18 @@ static void publish_editor_actor_outputs(slayer3d_game_data_runtime *runtime, yy
                                          const char *message, const char *name)
 {
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    if (scene_state != NULL)
+    {
+        slayer3d_properties_set_bool(scene_state, "editor.actor.valid", ok);
+        slayer3d_properties_set_string(scene_state, "editor.actor.message", message != NULL ? message : "");
+        slayer3d_properties_set_string(scene_state, "editor.actor.name", ok && name != NULL ? name : "");
+        slayer3d_properties_set_bool(scene_state, "editor.actor.dirty",
+                                     runtime != NULL ? runtime->editor_actor_dirty : false);
+        slayer3d_properties_set_int(scene_state, "editor.actor.revision",
+                                    runtime != NULL ? (int)runtime->editor_actor_revision : 0);
+        slayer3d_properties_set_int(scene_state, "editor.actor.count",
+                                    runtime != NULL ? runtime->editor_actor_count : 0);
+    }
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
     editor_set_string_output(scene_state, outputs, "actor_key", ok ? name : "");
@@ -1831,6 +1882,84 @@ static void publish_editor_actor_outputs(slayer3d_game_data_runtime *runtime, yy
     editor_set_int_output(scene_state, outputs, "revision_key",
                           runtime != NULL ? (int)runtime->editor_actor_revision : 0);
     editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_actor_count : 0);
+}
+
+static const char *editor_actor_role_noun(const char *role)
+{
+    if (role != NULL && SDL_strcmp(role, "object") == 0)
+        return "object";
+    if (role != NULL && SDL_strcmp(role, "light") == 0)
+        return "light";
+    if (role != NULL && SDL_strcmp(role, "effect") == 0)
+        return "effect";
+    return "actor";
+}
+
+bool slayer3d_game_data_delete_selected_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+
+    slayer3d_game_data_editor_selection selection;
+    SDL_zero(selection);
+    if (!slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.hit ||
+        selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR || selection.element_name == NULL ||
+        selection.element_name[0] == '\0')
+    {
+        const char *message = json_string(action, "invalid_message", "nothing selected to delete");
+        publish_editor_actor_outputs(runtime, outputs, false, message, "");
+        if (runtime->scene_state != NULL)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+        return true;
+    }
+
+    char target[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    SDL_strlcpy(target, selection.element_name, sizeof(target));
+
+    int actor_index = -1;
+    editor_actor_runtime *actor = NULL;
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        if (runtime->editor_actors[i].name != NULL && SDL_strcmp(runtime->editor_actors[i].name, target) == 0)
+        {
+            actor_index = i;
+            actor = &runtime->editor_actors[i];
+            break;
+        }
+    }
+
+    if (actor == NULL)
+    {
+        const char *message = json_string(action, "invalid_message", "selected actor no longer exists");
+        publish_editor_actor_outputs(runtime, outputs, false, message, target);
+        if (runtime->scene_state != NULL)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+        return true;
+    }
+
+    const char *role = actor->properties != NULL ? slayer3d_properties_get_string(actor->properties, "role", "") : "";
+    const char *noun = editor_actor_role_noun(role);
+    char message[128];
+    SDL_snprintf(message, sizeof(message), "deleted selected %s", noun);
+
+    remove_editor_connections_referencing_actor(runtime, target);
+    free_editor_actor_entry(actor);
+    if (actor_index + 1 < runtime->editor_actor_count)
+    {
+        SDL_memmove(&runtime->editor_actors[actor_index], &runtime->editor_actors[actor_index + 1],
+                    (size_t)(runtime->editor_actor_count - actor_index - 1) *
+                        sizeof(runtime->editor_actors[actor_index]));
+    }
+    runtime->editor_actor_count--;
+    SDL_zero(runtime->editor_actors[runtime->editor_actor_count]);
+    mark_editor_actors_dirty(runtime);
+
+    (void)slayer3d_game_data_clear_active_editor_selection(runtime);
+    publish_editor_actor_outputs(runtime, outputs, true, message, target);
+    if (runtime->scene_state != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    return true;
 }
 
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)

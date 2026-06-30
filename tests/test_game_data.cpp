@@ -19312,6 +19312,78 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+
+    emit_signal("signal.editor.palette.game_object");
+    emit_signal("signal.editor.things.category.lights");
+    emit_signal("signal.editor.actor.select_slot.9");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "light_point");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.world_name = "brush.editor_shell.target";
+    hover.point = slayer3d_vec3_make(-1.0f, 0.0f, -2.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+
+    slayer3d_game_data_editor_actor point_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.point.1", &point_light));
+    ASSERT_NE(point_light.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "role", ""), "light");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_TRUE(active_selection.hit);
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(active_selection.element_name, "light.editor_shell.point.1");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "thing");
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
+
+    emit_signal("signal.editor.delete_selected");
+    EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "light.editor_shell.point.1", &point_light));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.dirty", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
+                 "deleted selected light");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "deleted selected light");
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 1);
+    slayer3d_light remaining_light{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &remaining_light));
+    EXPECT_EQ(remaining_light.type, SLAYER3D_LIGHT_DIRECTIONAL);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
