@@ -22402,6 +22402,7 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     EXPECT_TRUE(contains_text("Sunrise"));
     EXPECT_TRUE(contains_text("Afternoon"));
     EXPECT_TRUE(contains_text("Early Night"));
+    EXPECT_TRUE(contains_text("Horror"));
     EXPECT_TRUE(contains_text("Apply Preset"));
     EXPECT_TRUE(contains_text("Afternoon Daylight"));
     EXPECT_TRUE(contains_text("Plan Lighting"));
@@ -22431,6 +22432,51 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     ASSERT_GE(close_signal, 0);
     slayer3d_signal_emit(bus, close_signal, nullptr);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", true));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoSurvivalHorrorLightingPresetAppliesDarkSceneDefaults)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    emit_signal("signal.editor.global.toggle");
+    emit_signal("signal.editor.global.preset.survival_horror");
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.pending_preset", ""), "survival_horror");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.pending_preset.label", ""),
+                 "Survival Horror");
+
+    emit_signal("signal.editor.global.preset.apply");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.preset", ""), "survival_horror");
+    const slayer3d_color ambient =
+        slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", slayer3d_color{0, 0, 0, 0});
+    EXPECT_EQ(ambient.r, 4);
+    EXPECT_EQ(ambient.g, 5);
+    EXPECT_EQ(ambient.b, 7);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.exposure", 0.0f), 0.42f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.directional.enabled", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.directional.enabled.label", ""), "off");
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.directional.intensity", 1.0f), 0.0f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

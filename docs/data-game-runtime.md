@@ -302,7 +302,7 @@ data exports as a top-level `skybox` object when present, so game runtimes can
 consume environment selection without understanding the editor-only fragment.
 Global lighting defaults export under the map `global` object. The editor Global
 panel is preset-first: designers choose a broad map-lighting profile such as
-Sunrise, Afternoon Daylight, Twilight, Midnight, Overcast, or Interior Neutral,
+Sunrise, Afternoon Daylight, Twilight, Midnight, Survival Horror, or Interior Neutral,
 then press Apply to update the live editor preview and the exported map defaults.
 The applied preset writes concrete ambient light, clear color, tonemap, preview
 quality, fog, and map-level directional sun/moon values. Things > Lights places

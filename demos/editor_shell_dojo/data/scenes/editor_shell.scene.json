@@ -6625,17 +6625,17 @@
             "layer": 121
           },
           {
-            "id": "ui.editor_shell.global_panel.preset.overcast.button",
+            "id": "ui.editor_shell.global_panel.preset.survival_horror.button",
             "type": "button",
             "x": 116,
             "y": 192,
             "w": 92,
             "h": 26,
-            "text": "Overcast",
+            "text": "Horror",
             "text_scale": 0.34,
             "interactive": true,
-            "action": "editor.global.preset.overcast",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "overcast", "default": "afternoon" },
+            "action": "editor.global.preset.survival_horror",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.global.pending_preset", "op": "==", "value": "survival_horror", "default": "afternoon" },
             "layer": 121
           },
           {
