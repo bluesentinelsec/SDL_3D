@@ -22482,6 +22482,89 @@ TEST(GameDataRuntime, EditorShellDojoSurvivalHorrorLightingPresetAppliesDarkScen
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoMapOpenRestoresSurvivalHorrorGlobalLighting)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    emit_signal("signal.editor.global.preset.survival_horror");
+    emit_signal("signal.editor.global.preset.apply");
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+
+    slayer3d_game_session *import_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &import_session));
+    slayer3d_game_data_runtime *import_runtime = nullptr;
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(dojo_path.string().c_str(), import_session, &import_runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_map_json(import_runtime, "brush.editor_shell.target", map_json,
+                                                                map_size, "/tmp/horror-test.slayermap.json", error,
+                                                                sizeof(error)))
+        << error;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(import_runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.preset", ""), "survival_horror");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.preset.label", ""), "Survival Horror");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.pending_preset", ""), "survival_horror");
+    const slayer3d_color ambient =
+        slayer3d_properties_get_color(scene_state, "editor.global.ambient_light", slayer3d_color{0, 0, 0, 0});
+    EXPECT_EQ(ambient.r, 4);
+    EXPECT_EQ(ambient.g, 5);
+    EXPECT_EQ(ambient.b, 7);
+    const slayer3d_color clear =
+        slayer3d_properties_get_color(scene_state, "editor.global.clear_color", slayer3d_color{0, 0, 0, 0});
+    EXPECT_EQ(clear.r, 1);
+    EXPECT_EQ(clear.g, 1);
+    EXPECT_EQ(clear.b, 2);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.exposure", 0.0f), 0.42f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.tonemap", ""), "reinhard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.lighting_preview_quality", ""), "quality");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.fog", ""), "exp");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.directional.enabled", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.directional.enabled.label", ""), "off");
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.global.directional.intensity", 1.0f), 0.0f);
+    EXPECT_EQ(slayer3d_game_data_world_light_count(import_runtime), 0);
+
+    float world_ambient[3]{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_ambient_light(import_runtime, world_ambient));
+    EXPECT_NEAR(world_ambient[0], 4.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(world_ambient[1], 5.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(world_ambient[2], 7.0f / 255.0f, 0.001f);
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(import_runtime, &render_settings));
+    EXPECT_EQ(render_settings.clear_color.r, 1);
+    EXPECT_EQ(render_settings.clear_color.g, 1);
+    EXPECT_EQ(render_settings.clear_color.b, 2);
+
+    slayer3d_game_data_destroy(import_runtime);
+    slayer3d_game_session_destroy(import_session);
+    SDL_free(map_json);
+}
+
 TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
