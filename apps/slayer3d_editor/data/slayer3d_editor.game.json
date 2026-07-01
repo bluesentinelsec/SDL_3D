@@ -4106,11 +4106,23 @@
                           ]
                         },
                         {
-                          "type": "scene_state.compare",
-                          "key": "editor.selection.count",
-                          "op": ">",
-                          "value": 0,
-                          "default": 0
+                          "type": "any",
+                          "conditions": [
+                            {
+                              "type": "scene_state.compare",
+                              "key": "editor.selection.count",
+                              "op": ">",
+                              "value": 0,
+                              "default": 0
+                            },
+                            {
+                              "type": "scene_state.compare",
+                              "key": "editor.actor.selection.count",
+                              "op": ">",
+                              "value": 0,
+                              "default": 0
+                            }
+                          ]
                         }
                       ]
                     },

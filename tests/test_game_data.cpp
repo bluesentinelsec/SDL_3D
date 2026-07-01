@@ -19356,7 +19356,8 @@ TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
     ASSERT_NE(point_light.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(point_light.properties, "role", ""), "light");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selection.count", 0), 1);
 
     slayer3d_game_data_editor_selection active_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));

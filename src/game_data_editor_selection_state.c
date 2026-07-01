@@ -717,14 +717,13 @@ void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
         return;
     const int brush_count =
         editor_selected_brushes_active_for_scene(runtime) ? runtime->editor_selected_brush_count : 0;
-    int selection_count = brush_count;
-    if (selection_count == 0 && editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
-        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
-    {
-        selection_count = 1;
-    }
+    const bool actor_selected = editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit &&
+                                runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
+    const int selection_count = brush_count;
     slayer3d_properties_set_int(runtime->scene_state, "editor.selection.count", selection_count);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.selection.multiple", selection_count > 1);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selection.count", actor_selected ? 1 : 0);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.selection.active", actor_selected);
     publish_active_inspector_selection_state(runtime, brush_count);
 }
 

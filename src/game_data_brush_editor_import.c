@@ -148,6 +148,7 @@ static bool import_map_find_global_directional_light(const slayer3d_map_document
     for (size_t i = 0u; i < count; ++i)
     {
         slayer3d_map_light light;
+        SDL_zero(light);
         if (!slayer3d_map_get_light(map, i, &light) || light.type == NULL || SDL_strcmp(light.type, "directional") != 0)
             continue;
         if (light.id != NULL && SDL_strcmp(light.id, "global.directional.light") == 0)
@@ -286,6 +287,7 @@ static void import_apply_map_global_state(slayer3d_game_data_runtime *runtime, c
 
     slayer3d_properties *scene_state = runtime->scene_state;
     slayer3d_map_light directional_light;
+    SDL_zero(directional_light);
     const bool has_directional_light = import_map_find_global_directional_light(map, &directional_light);
     const bool survival_horror = import_map_global_matches_survival_horror(&global, has_directional_light);
 
