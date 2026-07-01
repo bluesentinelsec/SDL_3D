@@ -9,6 +9,7 @@
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <math.h>
 #include <stdlib.h>
 
 static void *load_editable_fragment_file(const char *path, size_t *out_size, char *error_buffer, int error_buffer_size)
@@ -111,6 +112,257 @@ static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
     free_editor_connections_runtime(runtime);
     SDL_free(runtime->editor_player_start_source_path);
     runtime->editor_player_start_source_path = NULL;
+}
+
+#define EDITOR_IMPORT_GLOBAL_PROPERTY_CAP 64
+
+static bool import_float_near(float a, float b)
+{
+    return fabsf(a - b) <= 0.001f;
+}
+
+static bool import_color_matches(slayer3d_color color, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
+{
+    return color.r == r && color.g == g && color.b == b && color.a == a;
+}
+
+static bool import_map_global_matches_survival_horror(const slayer3d_map_global_state *global,
+                                                      bool has_directional_light)
+{
+    return global != NULL && !has_directional_light && import_color_matches(global->ambient_light, 4, 5, 7, 255) &&
+           import_color_matches(global->clear_color, 1, 1, 2, 255) && import_float_near(global->exposure, 0.42f) &&
+           global->tonemap != NULL && SDL_strcmp(global->tonemap, "reinhard") == 0 &&
+           global->lighting_preview_quality != NULL && SDL_strcmp(global->lighting_preview_quality, "quality") == 0 &&
+           global->fog.enabled && global->fog.mode != NULL && SDL_strcmp(global->fog.mode, "exp") == 0;
+}
+
+static bool import_map_find_global_directional_light(const slayer3d_map_document *map, slayer3d_map_light *out_light)
+{
+    if (map == NULL || out_light == NULL)
+        return false;
+
+    slayer3d_map_light first_directional;
+    SDL_zero(first_directional);
+    bool found_directional = false;
+    const size_t count = slayer3d_map_get_light_count(map);
+    for (size_t i = 0u; i < count; ++i)
+    {
+        slayer3d_map_light light;
+        SDL_zero(light);
+        if (!slayer3d_map_get_light(map, i, &light) || light.type == NULL || SDL_strcmp(light.type, "directional") != 0)
+            continue;
+        if (light.id != NULL && SDL_strcmp(light.id, "global.directional.light") == 0)
+        {
+            *out_light = light;
+            return true;
+        }
+        if (!found_directional)
+        {
+            first_directional = light;
+            found_directional = true;
+        }
+    }
+
+    if (found_directional)
+        *out_light = first_directional;
+    return found_directional;
+}
+
+static void import_set_global_color_pair(slayer3d_properties *scene_state, const char *active_key,
+                                         const char *pending_key, slayer3d_color color)
+{
+    slayer3d_properties_set_color(scene_state, active_key, color);
+    slayer3d_properties_set_color(scene_state, pending_key, color);
+}
+
+static void import_set_global_float_pair(slayer3d_properties *scene_state, const char *active_key,
+                                         const char *pending_key, float value)
+{
+    slayer3d_properties_set_float(scene_state, active_key, value);
+    slayer3d_properties_set_float(scene_state, pending_key, value);
+}
+
+static void import_set_global_string_pair(slayer3d_properties *scene_state, const char *active_key,
+                                          const char *pending_key, const char *value)
+{
+    slayer3d_properties_set_string(scene_state, active_key, value != NULL ? value : "");
+    slayer3d_properties_set_string(scene_state, pending_key, value != NULL ? value : "");
+}
+
+static const char *import_global_property_json_to_editor_value(const char *json, size_t json_size, char *buffer,
+                                                               size_t buffer_size)
+{
+    if (buffer != NULL && buffer_size > 0u)
+        buffer[0] = '\0';
+    if (json == NULL || json_size == 0u || buffer == NULL || buffer_size == 0u)
+        return "";
+
+    yyjson_doc *doc = yyjson_read(json, json_size, YYJSON_READ_NOFLAG);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    if (yyjson_is_str(root))
+    {
+        const char *value = yyjson_get_str(root);
+        SDL_snprintf(buffer, buffer_size, "%s", value != NULL ? value : "");
+    }
+    else
+    {
+        const size_t copy_size = json_size < buffer_size - 1u ? json_size : buffer_size - 1u;
+        SDL_memcpy(buffer, json, copy_size);
+        buffer[copy_size] = '\0';
+    }
+    yyjson_doc_free(doc);
+    return buffer;
+}
+
+static void import_apply_map_global_properties(slayer3d_properties *scene_state, const slayer3d_map_document *map)
+{
+    if (scene_state == NULL || map == NULL)
+        return;
+
+    for (int i = 0; i < EDITOR_IMPORT_GLOBAL_PROPERTY_CAP; ++i)
+    {
+        char state_key[96];
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.available", i);
+        slayer3d_properties_set_bool(scene_state, state_key, false);
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.key", i);
+        slayer3d_properties_set_string(scene_state, state_key, "");
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.value", i);
+        slayer3d_properties_set_string(scene_state, state_key, "");
+    }
+
+    int imported_count = 0;
+    slayer3d_map_global_state global;
+    if (!slayer3d_map_get_global_state(map, &global))
+    {
+        slayer3d_properties_set_int(scene_state, "editor.global.property.count", 0);
+        return;
+    }
+
+    const size_t property_count = global.property_count;
+    for (size_t i = 0u; i < property_count && imported_count < EDITOR_IMPORT_GLOBAL_PROPERTY_CAP; ++i)
+    {
+        const char *key = slayer3d_map_get_global_property_key(map, i);
+        if (key == NULL || key[0] == '\0')
+            continue;
+
+        char *json = NULL;
+        size_t json_size = 0u;
+        char property_error[256];
+        property_error[0] = '\0';
+        if (!slayer3d_map_get_global_property_json(map, key, &json, &json_size, property_error,
+                                                   sizeof(property_error)) ||
+            json == NULL)
+        {
+            continue;
+        }
+
+        char value[512];
+        char state_key[96];
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.available", imported_count);
+        slayer3d_properties_set_bool(scene_state, state_key, true);
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.key", imported_count);
+        slayer3d_properties_set_string(scene_state, state_key, key);
+        SDL_snprintf(state_key, sizeof(state_key), "editor.global.property.%d.value", imported_count);
+        slayer3d_properties_set_string(
+            scene_state, state_key, import_global_property_json_to_editor_value(json, json_size, value, sizeof(value)));
+        ++imported_count;
+        slayer3d_map_free_string(json);
+    }
+    slayer3d_properties_set_int(scene_state, "editor.global.property.count", imported_count);
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.key", "");
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.value", "");
+    slayer3d_properties_set_string(scene_state, "editor.global.data.edit.focus", "");
+    slayer3d_properties_set_bool(scene_state, "editor.global.data.edit.replace_on_text", false);
+    slayer3d_properties_set_int(scene_state, "editor.global.data.edit.selected_slot", -1);
+}
+
+static void import_apply_map_global_state(slayer3d_game_data_runtime *runtime, const slayer3d_map_document *map)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || map == NULL)
+        return;
+
+    slayer3d_map_global_state global;
+    if (!slayer3d_map_get_global_state(map, &global))
+        return;
+
+    slayer3d_properties *scene_state = runtime->scene_state;
+    slayer3d_map_light directional_light;
+    SDL_zero(directional_light);
+    const bool has_directional_light = import_map_find_global_directional_light(map, &directional_light);
+    const bool survival_horror = import_map_global_matches_survival_horror(&global, has_directional_light);
+
+    import_set_global_color_pair(scene_state, "editor.global.ambient_light", "editor.global.pending_ambient_light",
+                                 global.ambient_light);
+    import_set_global_color_pair(scene_state, "editor.global.clear_color", "editor.global.pending_clear_color",
+                                 global.clear_color);
+    import_set_global_float_pair(scene_state, "editor.global.exposure", "editor.global.pending_exposure",
+                                 global.exposure);
+    import_set_global_string_pair(scene_state, "editor.global.tonemap", "editor.global.pending_tonemap",
+                                  global.tonemap != NULL ? global.tonemap : "aces");
+    import_set_global_string_pair(
+        scene_state, "editor.global.lighting_preview_quality", "editor.global.pending_lighting_preview_quality",
+        global.lighting_preview_quality != NULL ? global.lighting_preview_quality : "balanced");
+    const char *fog_mode = global.fog.enabled && global.fog.mode != NULL ? global.fog.mode : "none";
+    import_set_global_string_pair(scene_state, "editor.global.fog", "editor.global.pending_fog", fog_mode);
+
+    if (survival_horror)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.global.preset", "survival_horror");
+        slayer3d_properties_set_string(scene_state, "editor.global.preset.label", "Survival Horror");
+        slayer3d_properties_set_string(scene_state, "editor.global.preset.description",
+                                       "Very dark base lighting intended for local static and dynamic lights.");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset", "survival_horror");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset.label", "Survival Horror");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset.description",
+                                       "Very dark base lighting intended for local static and dynamic lights.");
+    }
+    else
+    {
+        slayer3d_properties_set_string(scene_state, "editor.global.preset", "custom");
+        slayer3d_properties_set_string(scene_state, "editor.global.preset.label", "Imported Map");
+        slayer3d_properties_set_string(scene_state, "editor.global.preset.description",
+                                       "Imported map lighting values.");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset", "custom");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset.label", "Imported Map");
+        slayer3d_properties_set_string(scene_state, "editor.global.pending_preset.description",
+                                       "Imported map lighting values.");
+    }
+
+    const bool directional_enabled = has_directional_light;
+    slayer3d_properties_set_bool(scene_state, "editor.global.directional.enabled", directional_enabled);
+    slayer3d_properties_set_bool(scene_state, "editor.global.pending_directional.enabled", directional_enabled);
+    slayer3d_properties_set_string(scene_state, "editor.global.directional.enabled.label",
+                                   directional_enabled ? "on" : "off");
+    slayer3d_properties_set_string(scene_state, "editor.global.pending_directional.enabled.label",
+                                   directional_enabled ? "on" : "off");
+    const char *direction_label = directional_enabled ? "imported" : "off";
+    slayer3d_properties_set_string(scene_state, "editor.global.directional.direction.label", direction_label);
+    slayer3d_properties_set_string(scene_state, "editor.global.pending_directional.direction.label", direction_label);
+
+    const slayer3d_vec3 direction = directional_enabled && directional_light.has_direction
+                                        ? directional_light.direction
+                                        : slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
+    const slayer3d_color color = directional_enabled && directional_light.has_color
+                                     ? directional_light.color
+                                     : (slayer3d_color){92, 110, 142, 255};
+    const float intensity = directional_enabled && directional_light.has_intensity ? directional_light.intensity : 0.0f;
+    slayer3d_properties_set_vec3(scene_state, "editor.global.directional.direction", direction);
+    slayer3d_properties_set_vec3(scene_state, "editor.global.pending_directional.direction", direction);
+    slayer3d_properties_set_color(scene_state, "editor.global.directional.color", color);
+    slayer3d_properties_set_color(scene_state, "editor.global.pending_directional.color", color);
+    slayer3d_properties_set_float(scene_state, "editor.global.directional.intensity", intensity);
+    slayer3d_properties_set_float(scene_state, "editor.global.pending_directional.intensity", intensity);
+    slayer3d_properties_set_string(scene_state, "editor.global.directional.kind",
+                                   directional_enabled && directional_light.kind != NULL ? directional_light.kind
+                                                                                         : "baked");
+    slayer3d_properties_set_string(
+        scene_state, "editor.global.directional.shadow_mode",
+        directional_enabled && directional_light.shadow_mode != NULL ? directional_light.shadow_mode : "baked");
+    slayer3d_properties_set_bool(
+        scene_state, "editor.global.directional.casts_shadow",
+        directional_enabled && directional_light.has_casts_shadow ? directional_light.casts_shadow : true);
+
+    import_apply_map_global_properties(scene_state, map);
 }
 
 bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_runtime *runtime, const char *world_name,
@@ -301,7 +553,6 @@ bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime 
     slayer3d_map_document *map = NULL;
     if (!slayer3d_map_load_json((const char *)json, json_size, NULL, &map, error_buffer, error_buffer_size))
         return false;
-    slayer3d_map_destroy(map);
 
     yyjson_read_err read_error;
     SDL_zero(read_error);
@@ -312,6 +563,7 @@ bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime 
     if (!yyjson_is_obj(fragment))
     {
         yyjson_doc_free(doc);
+        slayer3d_map_destroy(map);
         set_error(error_buffer, error_buffer_size,
                   "Slayer3D map must contain editor.editable_level_fragment for editable editor load");
         return false;
@@ -323,12 +575,16 @@ bool slayer3d_game_data_load_editable_level_map_json(slayer3d_game_data_runtime 
     yyjson_doc_free(doc);
     if (fragment_json == NULL)
     {
+        slayer3d_map_destroy(map);
         set_error(error_buffer, error_buffer_size, "failed to extract editable level fragment from Slayer3D map");
         return false;
     }
 
     const bool ok = slayer3d_game_data_load_editable_level_fragment_json(
         runtime, world_name, fragment_json, fragment_size, source_path, error_buffer, error_buffer_size);
+    if (ok)
+        import_apply_map_global_state(runtime, map);
+    slayer3d_map_destroy(map);
     free(fragment_json);
     return ok;
 }
