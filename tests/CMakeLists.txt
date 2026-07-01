@@ -232,6 +232,7 @@ else()
                 "-sINITIAL_MEMORY=134217728"
                 "-sMAXIMUM_MEMORY=536870912"
         )
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/apps" "/apps")
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
@@ -311,6 +312,7 @@ else()
             SLAYER3D_EDITOR_EMBEDDED_ASSETS
             SLAYER3D_RUNNER_EMBEDDED_ASSETS
     )
+    slayer3d_target_preload_asset_directory(slayer3d_tool_cli_test "${CMAKE_SOURCE_DIR}/apps" "/apps")
     slayer3d_target_preload_asset_directory(slayer3d_tool_cli_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
 
     if(NOT EMSCRIPTEN)
