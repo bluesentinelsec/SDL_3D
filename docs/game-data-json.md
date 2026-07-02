@@ -1811,10 +1811,13 @@ image extensions, publishes directory/search metadata into a runtime collection,
 and mirrors the first visible page into `editor.texture.slot.N.*` scene-state
 keys so authored UI can bind labels, thumbnails, and buttons without hard-coded
 paths. New files register `mat.project.texture.<slug>` materials on the target
-brush world using path-aware slugs such as `metal_wall_panel`. If a rescan no
-longer sees a previous `mat.project.texture.*` material path, that material is
-made textureless and `editor.texture.invalidated_count` is updated so the UI can
-warn about stale brush textures.
+brush world using path-aware slugs such as `metal_wall_panel`. Texture slots keep
+the resolved filesystem path for editor thumbnails, but brush materials store
+portable `asset://<relative-path>` texture references so saved maps do not depend
+on a designer's local checkout path. If a rescan no longer sees a previous
+`mat.project.texture.*` material path, that material is made textureless and
+`editor.texture.invalidated_count` is updated so the UI can warn about stale
+brush textures.
 
 ```json
 {

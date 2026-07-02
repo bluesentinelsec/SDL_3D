@@ -236,7 +236,16 @@ else()
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
-        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media" "/media")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media/audio"
+                                             "/media/audio")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media/fonts"
+                                             "/media/fonts")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media/skyboxes"
+                                             "/media/skyboxes")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media/sprites"
+                                             "/media/sprites")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media/textures"
+                                             "/media/textures")
     else()
         target_compile_definitions(
             slayer3d_game_data_test

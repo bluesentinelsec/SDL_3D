@@ -321,6 +321,55 @@ static bool editor_path_text_equal(const char *a, const char *b)
     return *a == '\0' && *b == '\0';
 }
 
+static char *editor_path_normalized_relative_copy(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    while (path[0] == '/' || path[0] == '\\')
+        ++path;
+    size_t len = SDL_strlen(path);
+    while (len > 0U && (path[len - 1U] == '/' || path[len - 1U] == '\\'))
+        --len;
+    if (len == 0U)
+        return NULL;
+    char *copy = (char *)SDL_malloc(len + 1U);
+    if (copy == NULL)
+        return NULL;
+    for (size_t i = 0; i < len; ++i)
+    {
+        const char c = path[i];
+        copy[i] = c == '\\' ? '/' : c;
+    }
+    copy[len] = '\0';
+    return copy;
+}
+
+static bool editor_path_relative_to_base(const char *path, const char *base, const char **relative)
+{
+    if (relative != NULL)
+        *relative = NULL;
+    if (path == NULL || base == NULL || path[0] == '\0' || base[0] == '\0')
+        return false;
+
+    size_t base_len = SDL_strlen(base);
+    while (base_len > 0U && (base[base_len - 1U] == '/' || base[base_len - 1U] == '\\'))
+        --base_len;
+    if (base_len == 0U)
+        return false;
+    for (size_t i = 0; i < base_len; ++i)
+    {
+        if (path[i] == '\0' || editor_path_compare_char(path[i]) != editor_path_compare_char(base[i]))
+            return false;
+    }
+    if (path[base_len] == '\0')
+        return false;
+    if (path[base_len] != '/' && path[base_len] != '\\')
+        return false;
+    if (relative != NULL)
+        *relative = path + base_len + 1U;
+    return true;
+}
+
 static bool editor_asset_uri_matches_relative_path(const char *asset_uri, const char *relative_path)
 {
     static const char prefix[] = "asset://";
@@ -329,6 +378,80 @@ static bool editor_asset_uri_matches_relative_path(const char *asset_uri, const 
     if (SDL_strncmp(asset_uri, prefix, sizeof(prefix) - 1U) != 0)
         return false;
     return editor_path_text_equal(asset_uri + sizeof(prefix) - 1U, relative_path);
+}
+
+static char *editor_asset_uri_from_relative_path(const char *relative_path)
+{
+    static const char prefix[] = "asset://";
+    if (relative_path == NULL || relative_path[0] == '\0')
+        return NULL;
+    if (editor_path_asset_uri(relative_path))
+        return SDL_strdup(relative_path);
+
+    while (relative_path[0] == '/' || relative_path[0] == '\\')
+        ++relative_path;
+    if (relative_path[0] == '\0')
+        return NULL;
+
+    const size_t prefix_len = sizeof(prefix) - 1U;
+    const size_t relative_len = SDL_strlen(relative_path);
+    char *uri = (char *)SDL_malloc(prefix_len + relative_len + 1U);
+    if (uri == NULL)
+        return NULL;
+    SDL_memcpy(uri, prefix, prefix_len);
+    for (size_t i = 0; i < relative_len; ++i)
+    {
+        const char c = relative_path[i];
+        uri[prefix_len + i] = c == '\\' ? '/' : c;
+    }
+    uri[prefix_len + relative_len] = '\0';
+    return uri;
+}
+
+static char *editor_relative_directory_for_source_path(slayer3d_game_data_runtime *runtime, const char *input_path,
+                                                       const char *absolute_path)
+{
+    if (input_path != NULL && input_path[0] != '\0' && !editor_path_asset_uri(input_path) &&
+        !editor_path_absolute(input_path))
+    {
+        char *relative = editor_path_normalized_relative_copy(input_path);
+        if (relative != NULL)
+            return relative;
+    }
+
+    const char *project_dir = runtime != NULL && runtime->scene_state != NULL
+                                  ? slayer3d_properties_get_string(runtime->scene_state, "editor.project.dir", "")
+                                  : "";
+    char *absolute_project_dir = NULL;
+    if (project_dir != NULL && project_dir[0] != '\0')
+    {
+        absolute_project_dir = editor_path_absolute(project_dir) ? SDL_strdup(project_dir)
+                                                                 : editor_path_make_absolute_from_cwd(project_dir);
+    }
+
+    const char *project_relative = NULL;
+    if (absolute_project_dir != NULL &&
+        editor_path_relative_to_base(absolute_path, absolute_project_dir, &project_relative))
+    {
+        char *relative = editor_path_normalized_relative_copy(project_relative);
+        SDL_free(absolute_project_dir);
+        if (relative != NULL)
+            return relative;
+    }
+    SDL_free(absolute_project_dir);
+
+    char *trimmed = editor_path_normalized_relative_copy(absolute_path);
+    if (trimmed == NULL)
+        return NULL;
+    char *last_separator = NULL;
+    for (char *p = trimmed; *p != '\0'; ++p)
+    {
+        if (*p == '/')
+            last_separator = p;
+    }
+    char *basename = SDL_strdup(last_separator != NULL ? last_separator + 1 : trimmed);
+    SDL_free(trimmed);
+    return basename;
 }
 
 static char *editor_resolve_directory(slayer3d_game_data_runtime *runtime, const char *directory)
@@ -885,7 +1008,15 @@ static const char *editor_texture_material_reference(const editor_texture_scan_e
 {
     if (owned != NULL)
         *owned = NULL;
-    return entry != NULL ? entry->path : NULL;
+    if (entry == NULL)
+        return NULL;
+    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' && owned != NULL)
+    {
+        *owned = editor_asset_uri_from_relative_path(entry->relative_path);
+        if (*owned != NULL)
+            return *owned;
+    }
+    return entry->path;
 }
 
 static bool editor_append_brush_material(brush_world_runtime *world_runtime, const char *material_name,
@@ -1263,16 +1394,19 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
             slayer3d_game_data_brush_material *material =
                 (slayer3d_game_data_brush_material *)&world_runtime->desc.materials[existing_index];
             SDL_strlcpy(entry->material, material->name != NULL ? material->name : "", sizeof(entry->material));
-            if (entry->path != NULL && entry->path[0] != '\0' && material->texture != NULL &&
-                !editor_path_text_equal(material->texture, entry->path))
+            char *owned_material_reference = NULL;
+            const char *material_reference = editor_texture_material_reference(entry, &owned_material_reference);
+            if (material_reference != NULL && material_reference[0] != '\0' &&
+                (material->texture == NULL || !editor_path_text_equal(material->texture, material_reference)))
             {
-                char *texture_path = SDL_strdup(entry->path);
+                char *texture_path = SDL_strdup(material_reference);
                 if (texture_path != NULL)
                 {
                     SDL_free((void *)material->texture);
                     material->texture = texture_path;
                 }
             }
+            SDL_free(owned_material_reference);
             entry->sort_order = existing_index;
         }
         else
@@ -1372,11 +1506,14 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
         return true;
     }
 
+    char *relative_path = editor_relative_directory_for_source_path(runtime, path, absolute_path);
     slayer3d_properties_set_string(runtime->scene_state, directory_key, absolute_path);
-    slayer3d_properties_set_string(runtime->scene_state, relative_directory_key, path);
+    slayer3d_properties_set_string(runtime->scene_state, relative_directory_key,
+                                   relative_path != NULL ? relative_path : "textures");
     slayer3d_properties_set_bool(runtime->scene_state, available_key, true);
     slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path updated");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture path updated");
+    SDL_free(relative_path);
     SDL_free(absolute_path);
     return true;
 }
