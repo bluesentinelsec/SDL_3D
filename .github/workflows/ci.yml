@@ -71,12 +71,21 @@ jobs:
           set -e
           for t in build/emscripten/tests/*.html; do
             echo "::group::$t"
+            extra_args=()
+            if [[ "$(basename "$t")" == "slayer3d_game_data_test.html" ]]; then
+              # The native matrix runs the full game-data integration suite.
+              # Keep the browser job focused on the editor/map data paths that
+              # need WebAssembly coverage so this single large test page stays
+              # inside the hosted runner timeout.
+              extra_args+=("--gtest_filter=GameDataRuntime.EditorShellDojoTexturePalettePaintsSelectionAndFace:GameDataRuntime.EditorShellDojoTextureRefreshScansConfiguredTextureDirectory:GameDataRuntime.EditorTexturePathApplyRescansAndInvalidatesStaleProjectTextures:GameDataRuntime.EditorTextureRefreshResolvesRelativeTextureDirectoryToAbsoluteSlotPaths:GameDataRuntime.SlayerMapWarnsOnAbsoluteAssetPaths")
+            fi
             emrun \
               --browser=google-chrome \
               --browser_args="--headless=new --no-sandbox --disable-gpu" \
               --kill_exit \
               --timeout 60 \
-              "$t"
+              "$t" \
+              "${extra_args[@]}"
             echo "::endgroup::"
           done
 
