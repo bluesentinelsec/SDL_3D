@@ -85,6 +85,7 @@ jobs:
               --kill_exit \
               --timeout 60 \
               "$t" \
+              -- \
               "${extra_args[@]}"
             echo "::endgroup::"
           done
