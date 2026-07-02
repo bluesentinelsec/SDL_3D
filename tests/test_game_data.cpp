@@ -18053,9 +18053,9 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
         }
     }
     ASSERT_NE(lava_material, nullptr);
-    EXPECT_TRUE(std::filesystem::is_regular_file(lava_material->texture)) << lava_material->texture;
+    EXPECT_STREQ(lava_material->texture, "asset://textures/lava.jpg");
     ASSERT_NE(wall_material, nullptr);
-    EXPECT_TRUE(std::filesystem::is_regular_file(wall_material->texture)) << wall_material->texture;
+    EXPECT_STREQ(wall_material->texture, "asset://textures/wall_metal.jpg");
     ASSERT_NE(world.render_model, nullptr);
     bool saw_lava_render_material = false;
     for (int i = 0; i < world.render_model->material_count; ++i)
@@ -18065,7 +18065,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
         {
             saw_lava_render_material = true;
             ASSERT_NE(material.albedo_map, nullptr);
-            EXPECT_TRUE(std::filesystem::is_regular_file(material.albedo_map)) << material.albedo_map;
+            EXPECT_STREQ(material.albedo_map, "asset://textures/lava.jpg");
         }
     }
     EXPECT_TRUE(saw_lava_render_material);
