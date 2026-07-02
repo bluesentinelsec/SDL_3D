@@ -63,6 +63,8 @@ bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runt
 bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_selected_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_hide_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_show_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_instantiate_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);

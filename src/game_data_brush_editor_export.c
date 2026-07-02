@@ -3,6 +3,7 @@
  * @brief Brush-world and editable-level JSON export helpers for editor tooling.
  */
 
+#include "game_data_brush_source_model_internal.h"
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_filesystem.h>
@@ -1096,6 +1097,34 @@ static bool export_add_map_plane(yyjson_mut_doc *doc, yyjson_mut_val *planes,
                                     export_add_color(doc, obj, "tint", face->tint)));
 }
 
+static bool export_add_map_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
+                                 const slayer3d_game_data_brush_world *world, const slayer3d_game_data_brush *brush)
+{
+    if (doc == NULL || brushes == NULL || world == NULL || brush == NULL)
+        return false;
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *geometry = yyjson_mut_obj(doc);
+    yyjson_mut_val *planes = yyjson_mut_arr(doc);
+    yyjson_mut_val *properties = yyjson_mut_obj(doc);
+    const char *id = brush->name != NULL && brush->name[0] != '\0' ? brush->name : "brush";
+    if (obj == NULL || geometry == NULL || planes == NULL || properties == NULL ||
+        !yyjson_mut_arr_add_val(brushes, obj) || !yyjson_mut_obj_add_strcpy(doc, obj, "id", id) ||
+        !yyjson_mut_obj_add_val(doc, obj, "geometry", geometry) ||
+        !yyjson_mut_obj_add_strcpy(doc, geometry, "kind", "planes") ||
+        !yyjson_mut_obj_add_val(doc, geometry, "planes", planes) ||
+        !yyjson_mut_obj_add_val(doc, obj, "properties", properties) ||
+        !yyjson_mut_obj_add_strcpy(doc, properties, "brush_world", world->name != NULL ? world->name : ""))
+    {
+        return false;
+    }
+    for (int face_index = 0; face_index < brush->face_count; ++face_index)
+    {
+        if (!export_add_map_plane(doc, planes, world, &brush->faces[face_index]))
+            return false;
+    }
+    return true;
+}
+
 static bool export_add_map_brushes(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
                                    const slayer3d_game_data_brush_world *world)
 {
@@ -1103,27 +1132,31 @@ static bool export_add_map_brushes(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
         return false;
     for (int i = 0; i < world->brush_count; ++i)
     {
-        const slayer3d_game_data_brush *brush = &world->brushes[i];
-        yyjson_mut_val *obj = yyjson_mut_obj(doc);
-        yyjson_mut_val *geometry = yyjson_mut_obj(doc);
-        yyjson_mut_val *planes = yyjson_mut_arr(doc);
-        yyjson_mut_val *properties = yyjson_mut_obj(doc);
-        const char *id = brush->name != NULL && brush->name[0] != '\0' ? brush->name : "brush";
-        if (obj == NULL || geometry == NULL || planes == NULL || properties == NULL ||
-            !yyjson_mut_arr_add_val(brushes, obj) || !yyjson_mut_obj_add_strcpy(doc, obj, "id", id) ||
-            !yyjson_mut_obj_add_val(doc, obj, "geometry", geometry) ||
-            !yyjson_mut_obj_add_strcpy(doc, geometry, "kind", "planes") ||
-            !yyjson_mut_obj_add_val(doc, geometry, "planes", planes) ||
-            !yyjson_mut_obj_add_val(doc, obj, "properties", properties) ||
-            !yyjson_mut_obj_add_strcpy(doc, properties, "brush_world", world->name != NULL ? world->name : ""))
+        if (!export_add_map_brush(doc, brushes, world, &world->brushes[i]))
+            return false;
+    }
+    return true;
+}
+
+static bool export_add_map_brushes_from_source(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
+                                               const brush_world_runtime *world_runtime, char *error_buffer,
+                                               int error_buffer_size)
+{
+    if (doc == NULL || brushes == NULL || world_runtime == NULL)
+        return false;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        slayer3d_game_data_brush brush;
+        SDL_zero(brush);
+        if (!editor_brush_source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[i], &brush,
+                                                      error_buffer, error_buffer_size))
         {
             return false;
         }
-        for (int face_index = 0; face_index < brush->face_count; ++face_index)
-        {
-            if (!export_add_map_plane(doc, planes, world, &brush->faces[face_index]))
-                return false;
-        }
+        const bool ok = export_add_map_brush(doc, brushes, &world_runtime->desc, &brush);
+        editor_brush_source_free_runtime_brush(&brush);
+        if (!ok)
+            return false;
     }
     return true;
 }
@@ -1705,7 +1738,9 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
         export_add_map_global_state(doc, root, runtime) && yyjson_mut_obj_add_val(doc, root, "materials", materials) &&
         export_add_map_materials(doc, materials, &world_runtime->desc) &&
         yyjson_mut_obj_add_val(doc, root, "brushes", brushes) &&
-        export_add_map_brushes(doc, brushes, &world_runtime->desc) &&
+        (world_runtime->editor_has_source_model
+             ? export_add_map_brushes_from_source(doc, brushes, world_runtime, error_buffer, error_buffer_size)
+             : export_add_map_brushes(doc, brushes, &world_runtime->desc)) &&
         yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
         export_add_map_player_start_actors(doc, actors, runtime) &&
         export_add_map_editor_actors(doc, actors, runtime) && yyjson_mut_obj_add_val(doc, root, "lights", lights) &&

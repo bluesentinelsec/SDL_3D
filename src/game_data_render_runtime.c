@@ -926,6 +926,8 @@ static bool editor_actor_in_active_scene(const slayer3d_game_data_runtime *runti
 {
     if (runtime == NULL || actor == NULL)
         return false;
+    if (actor->hidden)
+        return false;
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     return actor->scene == NULL || actor->scene[0] == '\0' || active_scene == NULL ||
            SDL_strcmp(actor->scene, active_scene) == 0;

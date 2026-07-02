@@ -995,13 +995,47 @@
             "type": "button",
             "x": 98,
             "y": 52,
-            "w": 186,
+            "w": 70,
             "h": 28,
             "layer": 124,
             "interactive": true,
             "action": "editor.inspector.tab.data",
             "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.tab", "op": "==", "value": "Data", "default": "Object" },
             "children": [{ "id": "ui.editor_shell.left_inspector.tab.entity.label", "type": "label", "w": "fill", "h": "fill", "text": "Data" }]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.visibility.hide",
+            "type": "button",
+            "x": 174,
+            "y": 52,
+            "w": 52,
+            "h": 28,
+            "layer": 124,
+            "interactive": true,
+            "text": "Hide",
+            "text_scale": 0.36,
+            "action": "editor.visibility.hide_selected",
+            "visible_if": {
+              "type": "any",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.visibility.show_all",
+            "type": "button",
+            "x": 230,
+            "y": 52,
+            "w": 54,
+            "h": 28,
+            "layer": 124,
+            "interactive": true,
+            "text": "Show All",
+            "text_scale": 0.30,
+            "action": "editor.visibility.show_all",
+            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false }
           },
           {
             "id": "ui.editor_shell.left_inspector.row.name",

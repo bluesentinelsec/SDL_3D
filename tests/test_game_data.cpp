@@ -135,6 +135,7 @@ extern "C"
         int vertex_count;
         int vertices[16][3];
         unsigned int contents;
+        bool hidden;
         slayer3d_properties *properties;
     } editor_brush_source_box_runtime;
     typedef struct editor_brush_source_prefab_result
@@ -19380,6 +19381,127 @@ TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
     slayer3d_light remaining_light{};
     ASSERT_TRUE(slayer3d_game_data_get_world_light(runtime, 0, &remaining_light));
     EXPECT_EQ(remaining_light.type, SLAYER3D_LIGHT_DIRECTIONAL);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndThings)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+
+    emit_signal("signal.editor.visibility.hide_selected");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "hid 1 selected object");
+    slayer3d_game_data_editor_selection active_selection{};
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    EXPECT_EQ(std::string(map_json, map_size).find("\"hidden\""), std::string::npos);
+    slayer3d_map_document *map_document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
+    ASSERT_NE(map_document, nullptr);
+    EXPECT_EQ(slayer3d_map_get_brush_count(map_document), 1u);
+    slayer3d_map_destroy(map_document);
+    SDL_free(map_json);
+
+    emit_signal("signal.editor.visibility.show_all");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "showed 1 hidden object");
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    emit_signal("signal.editor.palette.game_object");
+    emit_signal("signal.editor.things.category.objects");
+    emit_signal("signal.editor.actor.select_slot.6");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.world_name = "brush.editor_shell.target";
+    hover.point = slayer3d_vec3_make(2.0f, 0.0f, -3.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+
+    slayer3d_game_data_editor_actor placed{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(active_selection.element_name, "object.editor_shell.capsule.1");
+
+    struct ActorDebugCapture
+    {
+        int edges = 0;
+    } actor_debug;
+    auto count_capsule_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *capture = static_cast<ActorDebugCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE &&
+            primitive->element_name != nullptr &&
+            std::string(primitive->element_name) == "object.editor_shell.capsule.1")
+        {
+            capture->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_GT(actor_debug.edges, 0);
+
+    emit_signal("signal.editor.visibility.hide_selected");
+    EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selection.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+
+    actor_debug.edges = 0;
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_EQ(actor_debug.edges, 0);
+
+    emit_signal("signal.editor.visibility.show_all");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
+    actor_debug.edges = 0;
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_GT(actor_debug.edges, 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

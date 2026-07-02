@@ -991,6 +991,8 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.vertex.snap_selected", validate_editor_vertex_snap_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.select_brush", validate_editor_selection_select_brush_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.delete_selected", validate_editor_selection_delete_selected_action),
+        ACTION_RULE_EXACT_HANDLER("editor.visibility.hide_selected", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.visibility.show_all", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.resize_y", validate_editor_selection_resize_y_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.rotate_selected", validate_editor_selection_rotate_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.scale_selected", validate_editor_selection_scale_selected_action),
