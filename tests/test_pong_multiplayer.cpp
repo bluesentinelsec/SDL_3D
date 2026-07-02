@@ -159,6 +159,34 @@ static bool process_host_input_packet(slayer3d_game_data_runtime *runtime, slaye
                                                   (size_t)packet_size, &tick, error, sizeof(error));
 }
 
+static bool receive_until(slayer3d_network_session *host, slayer3d_network_session *client,
+                          slayer3d_network_session *receiver, const std::function<bool(const Uint8 *, int)> &accept)
+{
+    std::array<Uint8, SLAYER3D_NETWORK_MAX_PACKET_SIZE> packet{};
+    for (int i = 0; i < 120; ++i)
+    {
+        EXPECT_TRUE(slayer3d_network_session_update(host, 0.01f));
+        EXPECT_TRUE(slayer3d_network_session_update(client, 0.01f));
+        for (;;)
+        {
+            const int received = slayer3d_network_session_receive(receiver, packet.data(), (int)packet.size());
+            if (received < 0)
+            {
+                return false;
+            }
+            if (received == 0)
+            {
+                break;
+            }
+            if (accept(packet.data(), received))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static const char *control_binding_for_kind(PongNetworkMessageKind kind)
 {
     switch (kind)
@@ -368,16 +396,9 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
     ASSERT_TRUE(send_client_input_packet(client_runtime, client_session, client_network));
 
-    std::array<Uint8, SLAYER3D_NETWORK_MAX_PACKET_SIZE> packet{};
-    int received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(host_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
-    ASSERT_TRUE(process_host_input_packet(host_runtime, host_session, packet.data(), received));
+    ASSERT_TRUE(receive_until(host_network, client_network, host_network, [&](const Uint8 *packet, int received) {
+        return process_host_input_packet(host_runtime, host_session, packet, received);
+    }));
 
     ASSERT_TRUE(slayer3d_game_session_tick(host_session, 0.25f));
     ASSERT_TRUE(slayer3d_game_data_update(host_runtime, 0.25f));
@@ -385,16 +406,10 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
     EXPECT_NE(host_cpu->position.y, initial_host_cpu_y);
 
     ASSERT_TRUE(send_host_state_packet(host_runtime, host_session, host_network, true));
-    received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(client_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
     bool client_paused = false;
-    ASSERT_TRUE(process_client_state_packet(client_runtime, packet.data(), received, &client_paused));
+    ASSERT_TRUE(receive_until(host_network, client_network, client_network, [&](const Uint8 *packet, int received) {
+        return process_client_state_packet(client_runtime, packet, received, &client_paused);
+    }));
 
     EXPECT_NEAR(client_cpu->position.y, host_cpu->position.y, 0.0001f);
     EXPECT_TRUE(client_paused);
@@ -406,51 +421,25 @@ TEST_F(PongHeadlessMultiplayerTest, HostAppliesRemoteInputAndClientReceivesAutho
 
 TEST_F(PongHeadlessMultiplayerTest, ControlPacketsCarryPauseResumeAndDisconnect)
 {
-    std::array<Uint8, SLAYER3D_NETWORK_MAX_PACKET_SIZE> packet{};
-
     ASSERT_TRUE(send_control_packet(client_runtime, client_network, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
-    int received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(host_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(host_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_PAUSE_REQUEST));
+    ASSERT_TRUE(receive_until(host_network, client_network, host_network, [&](const Uint8 *packet, int received) {
+        return read_control_packet(host_runtime, packet, received, PONG_NETWORK_MESSAGE_PAUSE_REQUEST);
+    }));
 
     ASSERT_TRUE(send_control_packet(host_runtime, host_network, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
-    received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(client_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(client_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_RESUME_REQUEST));
+    ASSERT_TRUE(receive_until(host_network, client_network, client_network, [&](const Uint8 *packet, int received) {
+        return read_control_packet(client_runtime, packet, received, PONG_NETWORK_MESSAGE_RESUME_REQUEST);
+    }));
 
     ASSERT_TRUE(send_control_packet(client_runtime, client_network, PONG_NETWORK_MESSAGE_DISCONNECT));
-    received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(host_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(host_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(receive_until(host_network, client_network, host_network, [&](const Uint8 *packet, int received) {
+        return read_control_packet(host_runtime, packet, received, PONG_NETWORK_MESSAGE_DISCONNECT);
+    }));
 
     ASSERT_TRUE(send_control_packet(host_runtime, host_network, PONG_NETWORK_MESSAGE_DISCONNECT));
-    received = 0;
-    for (int i = 0; i < 120 && received <= 0; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(host_network, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client_network, 0.01f));
-        received = slayer3d_network_session_receive(client_network, packet.data(), (int)packet.size());
-    }
-    ASSERT_GT(received, 0);
-    ASSERT_TRUE(read_control_packet(client_runtime, packet.data(), received, PONG_NETWORK_MESSAGE_DISCONNECT));
+    ASSERT_TRUE(receive_until(host_network, client_network, client_network, [&](const Uint8 *packet, int received) {
+        return read_control_packet(client_runtime, packet, received, PONG_NETWORK_MESSAGE_DISCONNECT);
+    }));
 }
 
 TEST_F(PongHeadlessMultiplayerTest, NetworkPauseMenuOmitsOptions)
