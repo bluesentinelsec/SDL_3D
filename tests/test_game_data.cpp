@@ -21436,22 +21436,33 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.alpha_wall") == 0)
         {
             saw_alpha = true;
-            EXPECT_STREQ(material.texture, (texture_dir / "alpha-wall.jpg").string().c_str());
+            EXPECT_STREQ(material.texture, "asset://custom_textures/alpha-wall.jpg");
         }
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.metal_beta_panel") == 0)
         {
             saw_beta = true;
-            EXPECT_STREQ(material.texture, (texture_dir / "metal" / "beta-panel.png").string().c_str());
+            EXPECT_STREQ(material.texture, "asset://custom_textures/metal/beta-panel.png");
         }
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.zeta_panel") == 0)
         {
             saw_zeta = true;
-            EXPECT_STREQ(material.texture, (texture_dir / "zeta_panel.png").string().c_str());
+            EXPECT_STREQ(material.texture, "asset://custom_textures/zeta_panel.png");
         }
     }
     EXPECT_TRUE(saw_alpha);
     EXPECT_TRUE(saw_beta);
     EXPECT_TRUE(saw_zeta);
+
+    const std::filesystem::path save_path = texture_dir.parent_path() / "portable_textures.slayermap.json";
+    size_t saved_size = 0;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
+        runtime, "brush.editor_shell.target", save_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    EXPECT_GT(saved_size, 0u);
+    const std::string saved_text = read_text(save_path);
+    EXPECT_NE(saved_text.find("\"texture\": \"asset://custom_textures/alpha-wall.jpg\""), std::string::npos);
+    EXPECT_NE(saved_text.find("\"texture\": \"asset://custom_textures/metal/beta-panel.png\""), std::string::npos);
+    EXPECT_EQ(saved_text.find(texture_dir.string()), std::string::npos);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -22216,7 +22227,7 @@ TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTex
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.new_panel") == 0)
         {
             saw_new = true;
-            EXPECT_STREQ(material.texture, (new_dir / "new-panel.png").string().c_str());
+            EXPECT_STREQ(material.texture, "asset://new_textures/new-panel.png");
         }
     }
     EXPECT_TRUE(saw_old);
@@ -22274,8 +22285,7 @@ TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbso
         {
             saw_project_texture = true;
             ASSERT_NE(material.texture, nullptr);
-            EXPECT_TRUE(std::filesystem::path(material.texture).is_absolute()) << material.texture;
-            EXPECT_TRUE(std::filesystem::is_regular_file(material.texture)) << material.texture;
+            EXPECT_EQ(std::string(material.texture).rfind("asset://media/textures/", 0), 0U) << material.texture;
         }
     }
     EXPECT_TRUE(saw_project_texture);
