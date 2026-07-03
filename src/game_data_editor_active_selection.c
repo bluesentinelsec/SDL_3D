@@ -102,6 +102,18 @@ static void publish_editor_drag_move_feedback(slayer3d_game_data_runtime *runtim
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.brush.drag.delta", delta);
 }
 
+static bool editor_reject_locked_transform_start(slayer3d_game_data_runtime *runtime, bool *out_consumed)
+{
+    if (!slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return false;
+
+    if (out_consumed != NULL)
+        *out_consumed = true;
+    clear_editor_drag_move(runtime);
+    (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+    return true;
+}
+
 static bool editor_selected_bounds(const slayer3d_game_data_runtime *runtime, slayer3d_bounding_box *out_bounds)
 {
     if (runtime == NULL || out_bounds == NULL || !editor_selected_brushes_active_for_scene(runtime) ||
@@ -1079,15 +1091,21 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
 
     if (!drag->active && left_pressed && can_resize_face)
     {
+        runtime->editor_active_selection = resolved_editor_selection(runtime, hover_selection);
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        if (editor_reject_locked_transform_start(runtime, out_consumed))
+        {
+            editor_set_face_drag_state(runtime, can_resize_face, false);
+            return true;
+        }
+
         SDL_zero(*drag);
         drag->active = true;
         drag->face_resize = true;
         drag->scene = slayer3d_game_data_active_scene(runtime);
         drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
-        drag->face_selection = resolved_editor_selection(runtime, hover_selection);
+        drag->face_selection = runtime->editor_active_selection;
         (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
-        runtime->editor_active_selection = drag->face_selection;
-        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
     }
@@ -1223,6 +1241,9 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
     if (!drag->active && left_pressed && editor_selected_brushes_active_for_scene(runtime) &&
         runtime->editor_selected_brush_count > 0)
     {
+        if (editor_reject_locked_transform_start(runtime, out_consumed))
+            return true;
+
         slayer3d_bounding_box bounds;
         if (!editor_selected_bounds(runtime, &bounds))
             return true;
@@ -1351,6 +1372,9 @@ static bool editor_handle_scale_drag(slayer3d_game_data_runtime *runtime,
     if (!drag->active && left_pressed && editor_selected_brushes_active_for_scene(runtime) &&
         runtime->editor_selected_brush_count > 0)
     {
+        if (editor_reject_locked_transform_start(runtime, out_consumed))
+            return true;
+
         slayer3d_bounding_box bounds;
         if (!editor_selected_bounds(runtime, &bounds))
             return true;
@@ -1485,6 +1509,9 @@ static bool editor_handle_shear_drag(slayer3d_game_data_runtime *runtime,
     if (!drag->active && left_pressed && editor_selected_brushes_active_for_scene(runtime) &&
         runtime->editor_selected_brush_count > 0)
     {
+        if (editor_reject_locked_transform_start(runtime, out_consumed))
+            return true;
+
         slayer3d_bounding_box bounds;
         if (!editor_selected_bounds(runtime, &bounds))
             return true;
@@ -1637,6 +1664,9 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
             runtime->editor_active_selection = resolved_editor_selection(runtime, hover_selection);
             runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
         }
+        if (editor_reject_locked_transform_start(runtime, out_consumed))
+            return true;
+
         if (duplicate_modifier && runtime->editor_selected_brush_count > 0 && !active_is_actor)
             (void)slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
                                                                        false);

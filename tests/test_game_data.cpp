@@ -19591,8 +19591,54 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     slayer3d_map_destroy(map_document);
     SDL_free(map_json);
 
-    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
     slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    const slayer3d_bounding_box bounds_before_locked_drag = world.brushes[0].bounds;
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = motion.motion.x;
+    down.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "selection contains locked objects");
+
+    motion.motion.x = 760.0f;
+    motion.motion.y = 430.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, bounds_before_locked_drag.min.x, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, bounds_before_locked_drag.min.y, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, bounds_before_locked_drag.min.z, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, bounds_before_locked_drag.max.x, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, bounds_before_locked_drag.max.y, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, bounds_before_locked_drag.max.z, 0.001f);
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     EXPECT_EQ(world.brush_count, 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
