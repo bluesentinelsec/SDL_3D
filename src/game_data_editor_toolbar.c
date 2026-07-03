@@ -965,6 +965,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.view.menu.open", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.visibility.panel.open", false);
     slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
@@ -1000,7 +1002,8 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
          SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.things.", 14) == 0 ||
          SDL_strncmp(action, "editor.file.", 12) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
-         SDL_strncmp(action, "editor.property.", 16) == 0 || SDL_strncmp(action, "editor.global.", 14) == 0))
+         SDL_strncmp(action, "editor.property.", 16) == 0 || SDL_strncmp(action, "editor.global.", 14) == 0 ||
+         SDL_strncmp(action, "editor.visibility.", 18) == 0 || SDL_strncmp(action, "editor.view.", 12) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
