@@ -132,9 +132,9 @@ bool slayer3d_game_data_hide_selected_editor_objects_action(slayer3d_game_data_r
     if (runtime == NULL || runtime->scene_state == NULL)
         return false;
 
+    const bool actor_hidden = hide_selected_actor(runtime);
     int hidden_brushes = 0;
     const bool brushes_ok = hide_selected_brushes(runtime, &hidden_brushes);
-    const bool actor_hidden = hide_selected_actor(runtime);
     const int total_hidden = hidden_brushes + (actor_hidden ? 1 : 0);
 
     if (total_hidden > 0)
