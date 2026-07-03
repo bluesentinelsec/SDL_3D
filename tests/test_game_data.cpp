@@ -135,6 +135,7 @@ extern "C"
         int vertex_count;
         int vertices[16][3];
         unsigned int contents;
+        bool hidden;
         slayer3d_properties *properties;
     } editor_brush_source_box_runtime;
     typedef struct editor_brush_source_prefab_result
@@ -924,11 +925,6 @@ std::filesystem::path lighting_dojo_data_path()
 std::filesystem::path brush_geometry_dojo_data_path()
 {
     return demo_data_path("brush_geometry_dojo", "brush_geometry_dojo.game.json");
-}
-
-std::filesystem::path editor_shell_dojo_data_path()
-{
-    return demo_data_path("editor_shell_dojo", "editor_shell_dojo.game.json");
 }
 
 std::filesystem::path slayer3d_editor_data_path()
@@ -17545,7 +17541,7 @@ TEST(GameDataRuntime, EditorExtrudeCommandResizesSelectedBrushFace)
 
 TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -18001,7 +17997,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 
 TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -18098,7 +18094,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
 
 TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -18343,7 +18339,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
 
 TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewport)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -18445,7 +18441,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
 
 TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -18638,7 +18634,7 @@ TEST(GameDataRuntime, Slayer3DEditorDefaultModelAssetsExistInSourceData)
 
 TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path model_root = unique_test_dir("editor_actor_model_source");
     const std::filesystem::path model_dir = model_root / "models";
@@ -18715,7 +18711,7 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
 
 TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19158,7 +19154,7 @@ TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 
 TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19314,7 +19310,7 @@ TEST(GameDataRuntime, EditorShellDojoMapExportsPlacedActorsAndObjectsRoundTrip)
 
 TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19385,9 +19381,131 @@ TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndThings)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+
+    emit_signal("signal.editor.visibility.hide_selected");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "hid 1 selected object");
+    slayer3d_game_data_editor_selection active_selection{};
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    EXPECT_EQ(std::string(map_json, map_size).find("\"hidden\""), std::string::npos);
+    slayer3d_map_document *map_document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
+    ASSERT_NE(map_document, nullptr);
+    EXPECT_EQ(slayer3d_map_get_brush_count(map_document), 1u);
+    slayer3d_map_destroy(map_document);
+    SDL_free(map_json);
+
+    emit_signal("signal.editor.visibility.show_all");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "showed 1 hidden object");
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    emit_signal("signal.editor.palette.game_object");
+    emit_signal("signal.editor.things.category.objects");
+    emit_signal("signal.editor.actor.select_slot.6");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.world_name = "brush.editor_shell.target";
+    hover.point = slayer3d_vec3_make(2.0f, 0.0f, -3.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+
+    slayer3d_game_data_editor_actor placed{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR);
+    EXPECT_STREQ(active_selection.element_name, "object.editor_shell.capsule.1");
+
+    struct ActorDebugCapture
+    {
+        int edges = 0;
+    } actor_debug;
+    auto count_capsule_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *capture = static_cast<ActorDebugCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE &&
+            primitive->element_name != nullptr &&
+            std::string(primitive->element_name) == "object.editor_shell.capsule.1")
+        {
+            capture->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_GT(actor_debug.edges, 0);
+
+    emit_signal("signal.editor.visibility.hide_selected");
+    EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selection.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+
+    actor_debug.edges = 0;
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_EQ(actor_debug.edges, 0);
+
+    emit_signal("signal.editor.visibility.show_all");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "showed 1 hidden object");
+    actor_debug.edges = 0;
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
+    EXPECT_GT(actor_debug.edges, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19516,7 +19634,7 @@ TEST(GameDataRuntime, EditorShellDojoExportsEffectMarkersAndValidatesEffects)
 
 TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19645,7 +19763,7 @@ TEST(GameDataRuntime, EditorShellDojoExportsLightMarkersAndValidatesSkyboxes)
 
 TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -19832,7 +19950,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsGenericEditorActorProperties
 
 TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -20121,7 +20239,7 @@ TEST(GameDataRuntime, EditorShellDojoEditsAndExportsSelectedBrushProperties)
 
 TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -20274,7 +20392,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesAndExportsGenericEditorConnections)
 
 TEST(GameDataRuntime, EditorShellDojoDefinesInstantiatesPropagatesAndUnlinksActorPrefabs)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -20477,7 +20595,7 @@ TEST(GameDataRuntime, EditorShellDojoDefinesInstantiatesPropagatesAndUnlinksActo
 
 TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFailed)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -20559,7 +20677,7 @@ TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFail
 
 TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -20901,7 +21019,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 
 TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -21352,7 +21470,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
 
 TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirectory)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path texture_dir = unique_test_dir("editor_texture_source") / "textures";
     std::filesystem::create_directories(texture_dir);
@@ -21471,7 +21589,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
 
 TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChanges)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path texture_root = unique_test_dir("editor_texture_thumbnail_reload");
     const std::filesystem::path texture_dir = texture_root / "textures";
@@ -21577,7 +21695,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChan
 
 TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22106,7 +22224,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 
 TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path texture_dir = unique_test_dir("editor_texture_scroll_source") / "textures";
     std::filesystem::create_directories(texture_dir);
@@ -22169,7 +22287,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
 
 TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTextures)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path root_dir = unique_test_dir("editor_texture_path_apply");
     const std::filesystem::path old_dir = root_dir / "old_textures";
@@ -22244,7 +22362,7 @@ TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbso
     ScopedCurrentPath cwd(repo_root);
     ASSERT_TRUE(std::filesystem::is_directory("media/textures"));
 
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22296,7 +22414,7 @@ TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbso
 
 TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22319,7 +22437,7 @@ TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
 
 TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22437,7 +22555,7 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
 
 TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDefaults)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22522,7 +22640,7 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
 
 TEST(GameDataRuntime, EditorShellDojoSurvivalHorrorLightingPresetAppliesDarkSceneDefaults)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22567,7 +22685,7 @@ TEST(GameDataRuntime, EditorShellDojoSurvivalHorrorLightingPresetAppliesDarkScen
 
 TEST(GameDataRuntime, EditorShellDojoMapOpenRestoresSurvivalHorrorGlobalLighting)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22650,7 +22768,7 @@ TEST(GameDataRuntime, EditorShellDojoMapOpenRestoresSurvivalHorrorGlobalLighting
 
 TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22772,7 +22890,7 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
 
 TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -22906,7 +23024,7 @@ TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23107,7 +23225,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeActivatesToolbarWithoutSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23171,7 +23289,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeActivatesToolbarWithoutSelection)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23319,7 +23437,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeLassoSelectsProjectedEdges)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23432,7 +23550,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeLassoSelectsProjectedEdges)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeDragsSelectedEdge)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23529,7 +23647,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeDragsSelectedEdge)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesMultipleSelectedEdges)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23588,7 +23706,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesMultipleSelectedEdges)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesEdgesAcrossBrushes)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23670,7 +23788,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesEdgesAcrossBrushes)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesSharedCoincidentEdgesAsClump)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23747,7 +23865,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesSharedCoincidentEdgesAsClump)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeNudgesSelectedEdgesOnGrid)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23820,7 +23938,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeNudgesSelectedEdgesOnGrid)
 
 TEST(GameDataRuntime, EditorShellDojoEdgeModeRejectsInvalidEdgeMove)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -23953,7 +24071,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeRejectsInvalidEdgeMove)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeCanSelectBrushBeforeVertices)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24030,7 +24148,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeCanSelectBrushBeforeVertices)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeEmitsDragGuides)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24126,7 +24244,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeEmitsDragGuides)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeDominantAxisDragLocksHorizontalMovement)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24201,7 +24319,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeDominantAxisDragLocksHorizontalMo
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeSelectsSharedPositionVertices)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24348,7 +24466,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeSelectsSharedPositionVertices)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24506,7 +24624,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeLassoUsesSelectedBrushSources)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24578,7 +24696,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoUsesSelectedBrushSources)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeMovesSelectedVerticesOnGrid)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24704,7 +24822,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeMovesSelectedVerticesOnGrid)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24813,7 +24931,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeAutoFusesVertexWhenDraggedOntoVertex)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24904,7 +25022,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAutoFusesVertexWhenDraggedOntoVer
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceValidation)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -24975,7 +25093,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceVal
 
 TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -25060,7 +25178,7 @@ TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeAltShiftClickFusesSelectedVertex)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -25152,7 +25270,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAltShiftClickFusesSelectedVertex)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeClickTogglesAndClearsVertexSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -25276,7 +25394,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeClickTogglesAndClearsVertexSelect
 
 TEST(GameDataRuntime, EditorVertexAddToSourceUsesSourceValidation)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -25344,7 +25462,7 @@ TEST(GameDataRuntime, EditorVertexAddToSourceUsesSourceValidation)
 
 TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -25463,7 +25581,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
 
 TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -26718,7 +26836,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
 TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -26830,7 +26948,7 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
 
 TEST(GameDataRuntime, EditorShellDojoSelectModeDragAutoCommitsBrushInEmptySpace)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -26909,7 +27027,7 @@ TEST(GameDataRuntime, EditorShellDojoSelectModeDragAutoCommitsBrushInEmptySpace)
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolDragLeavesPendingSourceBrushFootprint)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27055,7 +27173,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragLeavesPendingSourceBrushFootpr
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolDragNormalizesReversedFootprint)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27140,7 +27258,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragNormalizesReversedFootprint)
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolDragUsesActiveWorkPlaneAxis)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27189,7 +27307,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragUsesActiveWorkPlaneAxis)
 
 TEST(GameDataRuntime, EditorShellDojoSelectModeBrushFaceDragDoesNotStartSecondaryFootprint)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27255,7 +27373,7 @@ TEST(GameDataRuntime, EditorShellDojoSelectModeBrushFaceDragDoesNotStartSecondar
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolDragStartsOnHoveredBrushFace)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27364,7 +27482,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragStartsOnHoveredBrushFace)
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolFaceDragUsesToolingBeforeBrushMove)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27435,7 +27553,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolFaceDragUsesToolingBeforeBrushMove
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolShiftAdjustsPendingFootprintDepth)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27579,7 +27697,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolShiftAdjustsPendingFootprintDepth)
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolEnterCommitsPendingFootprintAsSourceBrush)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27701,7 +27819,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolEnterCommitsPendingFootprintAsSour
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolToolSwitchCancelsPendingFootprint)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27751,7 +27869,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolToolSwitchCancelsPendingFootprint)
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolDeleteCancelsPendingFootprintBeforeDeletingSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27803,7 +27921,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDeleteCancelsPendingFootprintBefor
 
 TEST(GameDataRuntime, EditorShellDojoBrushToolNewDragReplacesPendingFootprint)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -27856,7 +27974,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolNewDragReplacesPendingFootprint)
 
 TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28016,7 +28134,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
 
 TEST(GameDataRuntime, EditorShellDojoBrushKeyboardNudgeUsesCameraRelativeDirection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28103,7 +28221,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushKeyboardNudgeUsesCameraRelativeDirecti
 
 TEST(GameDataRuntime, EditorShellDojoHorizontalFlipToolbarMirrorsMultiSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28276,7 +28394,7 @@ TEST(GameDataRuntime, EditorShellDojoHorizontalFlipToolbarMirrorsMultiSelection)
 
 TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28448,7 +28566,7 @@ TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
 
 TEST(GameDataRuntime, EditorShellDojoDuplicateToolbarCopiesSelectionInPlaceForDrag)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28590,7 +28708,7 @@ TEST(GameDataRuntime, EditorShellDojoDuplicateToolbarCopiesSelectionInPlaceForDr
 
 TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -28744,7 +28862,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection
 
 TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelection)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -29041,7 +29159,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
 
 TEST(GameDataRuntime, EditorShellDojoBrushRotateCanRunConsecutively)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -29119,7 +29237,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushRotateCanRunConsecutively)
 
 TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
 #if defined(__EMSCRIPTEN__)
     const std::string save_path_string = "/tmp/level.fragment.json";
 #else
@@ -29238,7 +29356,7 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
 
 TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -29399,9 +29517,9 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
 
 TEST(GameDataRuntime, EditorShellClipToolFixtureLoadsAsEditableSourceLevel)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
-    const std::filesystem::path fixture_path = std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "editor_shell_dojo" /
-                                               "data" / "fixtures" / "clip_tool.fragment.json";
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    const std::filesystem::path fixture_path =
+        slayer3d_editor_data_path().parent_path() / "fixtures" / "clip_tool.fragment.json";
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     ASSERT_TRUE(std::filesystem::exists(fixture_path)) << fixture_path;
     char error[512]{};
@@ -29463,7 +29581,7 @@ TEST(GameDataRuntime, EditorShellClipToolFixtureLoadsAsEditableSourceLevel)
 
 TEST(GameDataRuntime, EditableLevelFragmentIgnoresStaleRuntimeBrushesWhenSourceExists)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -29569,7 +29687,7 @@ TEST(GameDataRuntime, EditableLevelFragmentIgnoresStaleRuntimeBrushesWhenSourceE
 
 TEST(GameDataRuntime, EditorBrushSourceVertexModelEnumeratesCanonicalCuboid)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -29658,7 +29776,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexModelEnumeratesCanonicalCuboid)
 
 TEST(GameDataRuntime, EditorBrushSourceVertexModelDetectsSharedPositions)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -29753,7 +29871,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexModelDetectsSharedPositions)
 
 TEST(GameDataRuntime, EditorVertexValidateSourceActionPublishesDiagnostics)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -29922,7 +30040,7 @@ static void load_editor_source_clip_fixture(slayer3d_game_session **out_session,
                                             slayer3d_game_data_runtime **out_runtime,
                                             brush_world_runtime **out_world_runtime, const std::string &boxes_json)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31246,7 +31364,7 @@ TEST(GameDataRuntime, EditorBrushSourceClipUndoRedoRestoresSourceRuntimeAndSelec
 
 TEST(GameDataRuntime, EditorBrushSourceVertexRebuildCreatesSlopedConvexBrushAndPreservesMaterials)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31332,7 +31450,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexRebuildCreatesSlopedConvexBrushAndP
 
 TEST(GameDataRuntime, EditorBrushSourceVertexRebuildRejectsConcaveVertexCollapse)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31397,7 +31515,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexRebuildRejectsConcaveVertexCollapse
 
 TEST(GameDataRuntime, EditorBrushSourceVertexOperationsPreviewMergeDeleteAndAdd)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31516,7 +31634,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexOperationsPreviewMergeDeleteAndAdd)
 
 TEST(GameDataRuntime, EditorBrushSourceVertexMoveTransactionsRejectInvalidMutationsAtomically)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31635,7 +31753,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexMoveTransactionsRejectInvalidMutati
 
 TEST(GameDataRuntime, EditorBrushSourceVertexOperationsRejectInvalidAddAndDelete)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31712,7 +31830,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexOperationsRejectInvalidAddAndDelete
 
 TEST(GameDataRuntime, EditorBrushSourceVertexSnapOperationUsesSourceValidation)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31803,7 +31921,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexSnapOperationUsesSourceValidation)
 
 TEST(GameDataRuntime, EditorVertexSnapSelectedActionSnapsSelectedSourceBrushes)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31897,7 +32015,7 @@ TEST(GameDataRuntime, EditorVertexSnapSelectedActionSnapsSelectedSourceBrushes)
 
 TEST(GameDataRuntime, EditorBrushSourceConvexSourcesLoadExportAndReload)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -31997,7 +32115,7 @@ TEST(GameDataRuntime, EditorBrushSourceConvexSourcesLoadExportAndReload)
 
 TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyPersistsConvexSource)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32117,7 +32235,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyPersistsConvexSource)
 
 TEST(GameDataRuntime, EditorBrushSourceVertexEditedSourceRoundTripsCompilesAndSupportsTestRun)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32287,7 +32405,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexEditedSourceRoundTripsCompilesAndSu
     char *manifest_json = nullptr;
     size_t manifest_size = 0u;
     slayer3d_game_data_editor_test_run_desc test_run{};
-    test_run.data_asset_path = "asset://editor_shell_dojo.game.json";
+    test_run.data_asset_path = "asset://slayer3d_editor.game.json";
     test_run.player_start = "player_start.editor_shell";
     ASSERT_TRUE(slayer3d_game_data_export_editor_test_run_manifest_json(runtime, &test_run, &manifest_json,
                                                                         &manifest_size, error, sizeof(error)))
@@ -32309,7 +32427,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexEditedSourceRoundTripsCompilesAndSu
 
 TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyRollbackPreservesSourceOnFailure)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32387,7 +32505,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyRollbackPreservesSour
 
 TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTestRun)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32557,7 +32675,7 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     char *manifest_json = nullptr;
     size_t manifest_size = 0u;
     slayer3d_game_data_editor_test_run_desc test_run{};
-    test_run.data_asset_path = "asset://editor_shell_dojo.game.json";
+    test_run.data_asset_path = "asset://slayer3d_editor.game.json";
     test_run.player_start = "player_start.editor_shell";
     ASSERT_TRUE(slayer3d_game_data_export_editor_test_run_manifest_json(runtime, &test_run, &manifest_json,
                                                                         &manifest_size, error, sizeof(error)))
@@ -32668,7 +32786,7 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
 
 TEST(GameDataRuntime, EditableLevelFragmentRejectsRuntimeOnlyBrushLayout)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32740,7 +32858,7 @@ TEST(GameDataRuntime, EditableLevelExportRejectsRuntimeOnlyBrushWorld)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -32893,7 +33011,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitPartiallyCoveredFaces)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33011,7 +33129,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitPartiallyCoveredFaces
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitMultipleCoveredFaceRegions)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33146,7 +33264,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitMultipleCoveredFaceRe
 
 TEST(GameDataRuntime, EditableLevelFragmentOverlappingSourceBoxesCompileWithoutDuplicateSurfaces)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33243,7 +33361,7 @@ TEST(GameDataRuntime, EditableLevelFragmentOverlappingSourceBoxesCompileWithoutD
 
 TEST(GameDataRuntime, EditableLevelFragmentCompiledSourceSupportsCollisionAndSkyClip)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33358,7 +33476,7 @@ TEST(GameDataRuntime, EditableLevelFragmentCompiledSourceSupportsCollisionAndSky
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxResizeAllowsPositiveOverlap)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33464,7 +33582,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxResizeAllowsPositiveOverlap)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateAllowsOverlapAndContact)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33540,7 +33658,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateAllowsOverlapAndContac
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPlacementPreviewUsesSourceValidator)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33622,7 +33740,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPlacementPreviewUsesSourceVa
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPrefabOperationsAllowGridCorrectBlockouts)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33728,7 +33846,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPrefabOperationsAllowGridCor
 
 TEST(GameDataRuntime, EditorShellDojoCommitsPrefabPreviewSourceCandidate)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33874,7 +33992,7 @@ TEST(GameDataRuntime, EditorShellDojoCommitsPrefabPreviewSourceCandidate)
 
 TEST(GameDataRuntime, EditorShellDojoPrefabPreviewReportsSourceOverlapWarning)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -33970,7 +34088,7 @@ TEST(GameDataRuntime, EditorShellDojoPrefabPreviewReportsSourceOverlapWarning)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxTranslateAllowsOverlapAndContact)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34061,7 +34179,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxTranslateAllowsOverlapAndCon
 
 TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditing)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34228,7 +34346,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
 
 TEST(GameDataRuntime, EditableLevelFragmentRejectsDuplicateSourceBrushNames)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34291,7 +34409,7 @@ TEST(GameDataRuntime, EditableLevelFragmentRejectsDuplicateSourceBrushNames)
 
 TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34559,7 +34677,7 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
 
 TEST(GameDataRuntime, EditableLevelFragmentRejectsOffSnapSourceCoordinates)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34625,7 +34743,7 @@ TEST(GameDataRuntime, EditableLevelFragmentRejectsOffSnapSourceCoordinates)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateRejectsOffSnapCoordinates)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34688,7 +34806,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateRejectsOffSnapCoordina
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateCommandPreviewsAndAppliesAtomically)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -34799,7 +34917,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateCommandPreviewsAndAppl
 
 TEST(GameDataRuntime, EditorShellDojoShearToolDragsHoveredSelectedFace)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -34884,7 +35002,7 @@ TEST(GameDataRuntime, EditorShellDojoShearToolDragsHoveredSelectedFace)
 
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordinates)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -35198,7 +35316,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
 
 TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -35379,7 +35497,7 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
 
 TEST(GameDataRuntime, EditableLevelFragmentValidatesLoweredPitEnclosure)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     char error[512]{};
 
@@ -35494,7 +35612,7 @@ TEST(GameDataRuntime, EditableLevelFragmentValidatesLoweredPitEnclosure)
 
 TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnInvalidSourceModel)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -35589,7 +35707,7 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnInvalidSourceModel)
 
 TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -35676,7 +35794,7 @@ TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
 
 TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::string root = dojo_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
@@ -35766,7 +35884,7 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
 
 TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;
@@ -35796,7 +35914,6 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.toggle"), 0);
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.quad"), 0);
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.perspective"), 0);
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.top"), 0);
@@ -36338,7 +36455,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
 TEST(GameDataRuntime, EditorShellDojoRejectsMissingDirectPlayerStart)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::string root = dojo_path.parent_path().string();
     const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
@@ -45401,7 +45518,7 @@ TEST(GameDataRuntime, EditableLevelMapFileRoundTripsThroughEditorApi)
 {
     const std::filesystem::path dir = unique_test_dir("editable_level_map_roundtrip");
     const std::filesystem::path map_path = dir / "saved.slayermap.json";
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
     slayer3d_game_session *session = nullptr;

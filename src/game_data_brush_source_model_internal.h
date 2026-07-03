@@ -10,5 +10,10 @@ float editor_brush_source_meters_from_units(const brush_world_runtime *world_run
 bool editor_brush_source_contents_are_structural(unsigned int contents);
 void free_editor_brush_source_box(editor_brush_source_box_runtime *box);
 bool copy_source_string(char **field, const char *value);
+bool editor_brush_source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
+                                              const editor_brush_source_box_runtime *box,
+                                              slayer3d_game_data_brush *out_brush, char *error_buffer,
+                                              int error_buffer_size);
+void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
 
 #endif

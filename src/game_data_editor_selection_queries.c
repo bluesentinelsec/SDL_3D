@@ -245,7 +245,7 @@ bool pick_editor_actor(const slayer3d_game_data_runtime *runtime, const slayer3d
     for (int i = 0; i < runtime->editor_actor_count; ++i)
     {
         const editor_actor_runtime *actor = &runtime->editor_actors[i];
-        if (actor->name == NULL || actor->name[0] == '\0')
+        if (actor->hidden || actor->name == NULL || actor->name[0] == '\0')
             continue;
         const slayer3d_bounding_box bounds = editor_actor_bounds(actor);
         float fraction = 1.0f;

@@ -1007,8 +1007,8 @@ intended for actionable editor diagnostics, such as showing the first
 source-model leak point returned by `editor.brush_world.validate_enclosure`.
 
 Editor scenes should keep authoring mode and brush defaults in scene state so
-the host, UI, and save pipeline all see the same values. The editor shell dojo
-uses these conventional keys:
+the host, UI, and save pipeline all see the same values. The standalone
+Slayer3D editor uses these conventional keys:
 
 - `editor.mode`: high-level behavior such as `brush`, `select`, or `texture`.
 - `editor.brush.prefab`: active blockout prefab such as `floor`, `wall`, or
@@ -1413,11 +1413,11 @@ contact with existing structural brushes is allowed, and positive-volume overlap
 with an existing structural brush is accepted as editable source data. Preview
 and commit messages report overlap as a warning, and the brush compiler removes
 hidden/internal faces from runtime render output.
-The editor shell dojo demonstrates the current blockout palette pattern: modal
-palette signals write scene-state selection strings, and the shared commit
-signal branches to source-backed `editor.brush_world.create_box` or
-`editor.player_start.place` actions. That keeps the first editor workflow
-data-authored while a dedicated editor frontend is still evolving.
+The standalone Slayer3D editor demonstrates the current blockout palette
+pattern: modal palette signals write scene-state selection strings, and the
+shared commit signal branches to source-backed `editor.brush_world.create_box`
+or `editor.player_start.place` actions. That keeps the editor workflow
+data-authored while the dedicated frontend evolves.
 `editor.brush_world.validate_source` reports exact face, edge, and vertex
 contacts separately, so editor tools can distinguish legal snapped contact from
 warning-level near gaps or positive-volume overlap.
@@ -1578,12 +1578,12 @@ Each entry has a `mode`, `label`, optional `shortcut`, optional
 `category`/`description`, and an optional `preview` reference. When omitted,
 `preview` defaults to `mode`. Validation requires every palette preview to
 match an authored placement preview, so stale sidebar entries fail at load time.
-Editor scenes can present that metadata however they like. The editor shell dojo
-currently uses authored UI and logic signals: `B` opens the Brushes palette,
-arrow keys move a scene-state cursor, `Enter` writes `selected_key`, and `Esc`
-closes the modal. The Game Objects palette uses the same modal input shape for
-player-start placement, and the Material palette is reserved for the face
-painting workflow.
+Editor scenes can present that metadata however they like. The standalone
+Slayer3D editor currently uses authored UI and logic signals: `B` opens the
+Brushes palette, arrow keys move a scene-state cursor, `Enter` writes
+`selected_key`, and `Esc` closes the modal. The Game Objects palette uses the
+same modal input shape for player-start placement, and the Material palette is
+reserved for the face painting workflow.
 
 ```json
 {

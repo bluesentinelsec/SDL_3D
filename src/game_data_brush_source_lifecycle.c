@@ -88,6 +88,7 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
         dest->vertices[i][2] = source->vertices[i][2];
     }
     dest->contents = source->contents;
+    dest->hidden = source->hidden;
     dest->properties = slayer3d_properties_create();
     if (dest->properties == NULL)
     {

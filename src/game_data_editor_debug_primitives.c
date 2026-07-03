@@ -1351,7 +1351,7 @@ static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data
         for (int a = 0; a < world->editor_source_box_count; ++a)
         {
             const editor_brush_source_box_runtime *box = &world->editor_source_boxes[a];
-            if (!editor_source_box_contents_are_structural(box->contents))
+            if (box->hidden || !editor_source_box_contents_are_structural(box->contents))
                 continue;
 
             bool overlaps = false;
@@ -1360,7 +1360,7 @@ static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data
                 if (a == b)
                     continue;
                 const editor_brush_source_box_runtime *other = &world->editor_source_boxes[b];
-                if (editor_source_box_contents_are_structural(other->contents) &&
+                if (!other->hidden && editor_source_box_contents_are_structural(other->contents) &&
                     editor_source_boxes_overlap_positive(box, other))
                 {
                     overlaps = true;
@@ -2187,7 +2187,7 @@ static bool emit_editor_debug_actor_markers(const slayer3d_game_data_runtime *ru
     for (int actor_index = 0; actor_index < runtime->editor_actor_count; ++actor_index)
     {
         const editor_actor_runtime *actor = &runtime->editor_actors[actor_index];
-        if (actor->name == NULL || actor->name[0] == '\0')
+        if (actor->hidden || actor->name == NULL || actor->name[0] == '\0')
             continue;
         context.element_name = actor->name;
         context.color = actor->color.a > 0 ? actor->color : (slayer3d_color){120, 200, 255, 210};

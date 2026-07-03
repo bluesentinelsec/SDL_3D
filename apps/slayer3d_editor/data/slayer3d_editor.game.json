@@ -300,6 +300,8 @@
     "signal.editor.inspector.toggle",
     "signal.editor.inspector.tab.object",
     "signal.editor.inspector.tab.data",
+    "signal.editor.visibility.hide_selected",
+    "signal.editor.visibility.show_all",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
     "signal.editor.inspector.brush.color.r.down",
@@ -1939,6 +1941,20 @@
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Data" },
           { "type": "scene_state.set", "key": "editor.inspector.scroll", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector data tab" }
+        ]
+      },
+      {
+        "signal": "signal.editor.visibility.hide_selected",
+        "actions": [
+          { "type": "editor.visibility.hide_selected" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.visibility.show_all",
+        "actions": [
+          { "type": "editor.visibility.show_all" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {

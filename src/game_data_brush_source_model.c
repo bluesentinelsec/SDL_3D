@@ -41,10 +41,6 @@ typedef struct source_convex_plane
     int source_face_index;
 } source_convex_plane;
 
-static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
-                                        const editor_brush_source_box_runtime *box, slayer3d_game_data_brush *out_brush,
-                                        char *error_buffer, int error_buffer_size);
-
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
 {
     yyjson_val *value = obj_get(object, key);
@@ -323,7 +319,8 @@ bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_ru
         return false;
 
     slayer3d_game_data_brush brush;
-    if (!source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[source_index], &brush, NULL, 0))
+    if (!editor_brush_source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[source_index],
+                                                  &brush, NULL, 0))
     {
         if (out_normal != NULL)
             *out_normal = source_box_face_normal_for_index(face_index);
@@ -856,6 +853,8 @@ static void validate_source_runtime_brush_identity(const brush_world_runtime *wo
     for (int source_index = 0; source_index < world_runtime->editor_source_box_count; ++source_index)
     {
         const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+        if (box->hidden)
+            continue;
         const char *identity = box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
         const int brush_index = find_runtime_brush_index_by_source_identity(world, identity);
         if (brush_index < 0 || !runtime_brush_matches_source_box(world_runtime, &world->brushes[brush_index], box))
@@ -876,7 +875,7 @@ static void validate_source_runtime_brush_identity(const brush_world_runtime *wo
                                    ? brush->editor.stable_id
                                    : brush->name;
         const int source_index = find_editor_source_box_index_by_identity(world_runtime, identity);
-        if (source_index < 0 ||
+        if (source_index < 0 || world_runtime->editor_source_boxes[source_index].hidden ||
             !runtime_brush_matches_source_box(world_runtime, brush, &world_runtime->editor_source_boxes[source_index]))
         {
             char message[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
@@ -1402,9 +1401,10 @@ static void apply_source_box_face_visual(slayer3d_game_data_brush_face *face,
     }
 }
 
-static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
-                                        const editor_brush_source_box_runtime *box, slayer3d_game_data_brush *out_brush,
-                                        char *error_buffer, int error_buffer_size)
+bool editor_brush_source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
+                                              const editor_brush_source_box_runtime *box,
+                                              slayer3d_game_data_brush *out_brush, char *error_buffer,
+                                              int error_buffer_size)
 {
     if (world_runtime == NULL || box == NULL || out_brush == NULL)
         return false;
@@ -3018,34 +3018,44 @@ bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, 
         return true;
 
     const int source_count = world_runtime->editor_source_box_count;
+    int visible_count = 0;
+    for (int i = 0; i < source_count; ++i)
+    {
+        if (!world_runtime->editor_source_boxes[i].hidden)
+            ++visible_count;
+    }
     slayer3d_game_data_brush *new_brushes =
-        source_count > 0 ? (slayer3d_game_data_brush *)SDL_calloc((size_t)source_count, sizeof(*new_brushes)) : NULL;
-    if (source_count > 0 && new_brushes == NULL)
+        visible_count > 0 ? (slayer3d_game_data_brush *)SDL_calloc((size_t)visible_count, sizeof(*new_brushes)) : NULL;
+    if (visible_count > 0 && new_brushes == NULL)
     {
         set_error(error_buffer, error_buffer_size, "failed to allocate editor source runtime brushes");
         return false;
     }
 
+    int write_index = 0;
     for (int i = 0; i < source_count; ++i)
     {
-        if (!source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[i], &new_brushes[i],
-                                         error_buffer, error_buffer_size))
+        if (world_runtime->editor_source_boxes[i].hidden)
+            continue;
+        if (!editor_brush_source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[i],
+                                                      &new_brushes[write_index], error_buffer, error_buffer_size))
         {
-            free_source_runtime_brushes(new_brushes, source_count);
+            free_source_runtime_brushes(new_brushes, visible_count);
             return false;
         }
+        ++write_index;
     }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
     slayer3d_game_data_brush *old_brushes = (slayer3d_game_data_brush *)world->brushes;
     const int old_count = world->brush_count;
     world->brushes = new_brushes;
-    world->brush_count = source_count;
+    world->brush_count = visible_count;
     if (!rebuild_brush_world_runtime_artifacts(world_runtime, error_buffer, error_buffer_size))
     {
         world->brushes = old_brushes;
         world->brush_count = old_count;
-        free_source_runtime_brushes(new_brushes, source_count);
+        free_source_runtime_brushes(new_brushes, visible_count);
         (void)rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
         return false;
     }
@@ -4637,7 +4647,7 @@ static bool source_face_resize_desc(const brush_world_runtime *world_runtime, co
     editor_brush_source_vertex_model model;
     if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
                                                     error_buffer_size) ||
-        !source_box_to_runtime_brush(world_runtime, box, out_brush, error_buffer, error_buffer_size))
+        !editor_brush_source_box_to_runtime_brush(world_runtime, box, out_brush, error_buffer, error_buffer_size))
     {
         return false;
     }

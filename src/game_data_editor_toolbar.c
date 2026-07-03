@@ -1000,7 +1000,8 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
         (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0 ||
          SDL_strncmp(action, "editor.actor.", 13) == 0 || SDL_strncmp(action, "editor.things.", 14) == 0 ||
          SDL_strncmp(action, "editor.file.", 12) == 0 || SDL_strncmp(action, "editor.inspector.", 17) == 0 ||
-         SDL_strncmp(action, "editor.property.", 16) == 0 || SDL_strncmp(action, "editor.global.", 14) == 0))
+         SDL_strncmp(action, "editor.property.", 16) == 0 || SDL_strncmp(action, "editor.global.", 14) == 0 ||
+         SDL_strncmp(action, "editor.visibility.", 18) == 0))
     {
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);

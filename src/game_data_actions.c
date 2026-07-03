@@ -3882,6 +3882,12 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_delete_selected_editor_brushes(runtime, action, payload);
     }
 
+    if (SDL_strcmp(type, "editor.visibility.hide_selected") == 0)
+        return slayer3d_game_data_hide_selected_editor_objects_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.visibility.show_all") == 0)
+        return slayer3d_game_data_show_all_editor_objects_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
         return slayer3d_game_data_resize_selected_editor_brushes_y(runtime, action, payload);
 
