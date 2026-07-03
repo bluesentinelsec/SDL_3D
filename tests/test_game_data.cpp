@@ -1177,6 +1177,18 @@ std::string read_text(const std::filesystem::path &path)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
+TEST(GameDataRuntime, EditorShellDojoSceneMirrorsStandaloneEditorScene)
+{
+    const std::filesystem::path editor_scene =
+        slayer3d_editor_data_path().parent_path() / "scenes" / "editor_shell.scene.json";
+    const std::filesystem::path dojo_scene =
+        editor_shell_dojo_data_path().parent_path() / "scenes" / "editor_shell.scene.json";
+    ASSERT_TRUE(std::filesystem::exists(editor_scene)) << editor_scene;
+    ASSERT_TRUE(std::filesystem::exists(dojo_scene)) << dojo_scene;
+
+    EXPECT_EQ(read_text(dojo_scene), read_text(editor_scene));
+}
+
 std::filesystem::path unique_test_dir(const char *name)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path();
@@ -19388,14 +19400,14 @@ TEST(GameDataRuntime, EditorShellDojoDeleteSelectedLightThing)
 
 TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndThings)
 {
-    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
-    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
     slayer3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
