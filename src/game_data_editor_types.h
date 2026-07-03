@@ -59,6 +59,7 @@ typedef struct editor_actor_runtime
     char *prefab;
     bool prefab_linked;
     bool hidden;
+    bool locked;
     slayer3d_properties *prefab_overrides;
     slayer3d_properties *properties;
 } editor_actor_runtime;
@@ -241,6 +242,7 @@ typedef struct editor_brush_source_box_runtime
     int vertices[16][3];
     unsigned int contents;
     bool hidden;
+    bool locked;
     slayer3d_properties *properties;
 } editor_brush_source_box_runtime;
 

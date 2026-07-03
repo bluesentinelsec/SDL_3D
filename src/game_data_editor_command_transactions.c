@@ -2417,6 +2417,8 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
     yyjson_val *outputs = obj_get(action, "outputs");
     if (runtime == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
 
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
@@ -2511,6 +2513,8 @@ bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runt
     yyjson_val *outputs = obj_get(action, "outputs");
     if (runtime == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
 
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
@@ -2828,6 +2832,11 @@ bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_run
 {
     if (runtime == NULL || runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return false;
+    }
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     if (active_scene == NULL || SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
         return false;
@@ -3010,6 +3019,8 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
     yyjson_val *outputs = obj_get(action, "outputs");
     if (runtime == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
 
     const char *target = json_string(action, "target", "selection");
     const char *material_name = editor_paint_action_material_name(runtime, action);
@@ -3362,6 +3373,8 @@ bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime
     yyjson_val *outputs = obj_get(action, "outputs");
     if (runtime == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
 
     const editor_brush_color_request request = editor_brush_color_request_from_action(runtime, action);
     if (!editor_brush_color_request_valid(&request))
@@ -3511,6 +3524,11 @@ bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_run
     {
         return false;
     }
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return false;
+    }
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     if (active_scene == NULL || SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
     {
@@ -3581,6 +3599,11 @@ bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtim
     if (runtime == NULL || SDL_fabsf(angle_radians) <= 0.000001f || runtime->editor_selected_brush_count <= 0 ||
         runtime->editor_selected_brush_scene == NULL)
     {
+        return false;
+    }
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
         return false;
     }
     if (!editor_float_finite(pivot.x) || !editor_float_finite(pivot.y) || !editor_float_finite(pivot.z) ||
@@ -3657,6 +3680,11 @@ bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime
 {
     if (runtime == NULL || runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return false;
+    }
     if (!editor_float_finite(anchor.x) || !editor_float_finite(anchor.y) || !editor_float_finite(anchor.z) ||
         !editor_float_finite(factors.x) || !editor_float_finite(factors.y) || !editor_float_finite(factors.z) ||
         factors.x <= 0.000001f || factors.y <= 0.000001f || factors.z <= 0.000001f)
@@ -3757,6 +3785,11 @@ static bool slayer3d_game_data_mirror_selected_editor_brushes(slayer3d_game_data
     if (runtime == NULL || command_name == NULL || command_name[0] == '\0' || adverb == NULL || adverb[0] == '\0' ||
         runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
     {
+        return false;
+    }
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
         return false;
     }
     if (!editor_float_finite(plane_point.x) || !editor_float_finite(plane_point.y) ||
@@ -3937,6 +3970,11 @@ bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime
 {
     if (runtime == NULL || runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
         return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return false;
+    }
     if (!editor_float_finite(bounds.min.x) || !editor_float_finite(bounds.min.y) ||
         !editor_float_finite(bounds.min.z) || !editor_float_finite(bounds.max.x) ||
         !editor_float_finite(bounds.max.y) || !editor_float_finite(bounds.max.z) ||
@@ -4048,6 +4086,11 @@ bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runt
     if (runtime == NULL || quarter_turns == 0 || runtime->editor_selected_brush_count <= 0 ||
         runtime->editor_selected_brush_scene == NULL)
     {
+        return false;
+    }
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
         return false;
     }
     const char *active_scene = slayer3d_game_data_active_scene(runtime);

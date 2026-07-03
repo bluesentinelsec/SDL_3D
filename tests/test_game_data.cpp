@@ -136,6 +136,7 @@ extern "C"
         int vertices[16][3];
         unsigned int contents;
         bool hidden;
+        bool locked;
         slayer3d_properties *properties;
     } editor_brush_source_box_runtime;
     typedef struct editor_brush_source_prefab_result
@@ -19498,6 +19499,145 @@ TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndTh
     actor_debug.edges = 0;
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
     EXPECT_GT(actor_debug.edges, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.lock.lock_selected" })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lock.has_locked", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lock.selection_has_locked", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lock.locked_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "locked 1 selected object");
+
+    char *map_json = nullptr;
+    size_t map_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_map_json(runtime, "brush.editor_shell.target", &map_json,
+                                                                  &map_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(map_json, nullptr);
+    EXPECT_EQ(std::string(map_json, map_size).find("\"locked\""), std::string::npos);
+    slayer3d_map_document *map_document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, map_size, nullptr, &map_document, error, sizeof(error))) << error;
+    ASSERT_NE(map_document, nullptr);
+    EXPECT_EQ(slayer3d_map_get_brush_count(map_document), 1u);
+    slayer3d_map_destroy(map_document);
+    SDL_free(map_json);
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "selection contains locked objects");
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.lock.unlock_selected" })json"));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lock.has_locked", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lock.selection_has_locked", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lock.locked_count", -1), 0);
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorLockTogglesRejectThingMutations)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+
+    emit_signal("signal.editor.palette.game_object");
+    emit_signal("signal.editor.things.category.objects");
+    emit_signal("signal.editor.actor.select_slot.6");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.world_name = "brush.editor_shell.target";
+    hover.point = slayer3d_vec3_make(2.0f, 0.0f, -3.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    emit_signal("signal.editor.command.commit");
+
+    slayer3d_game_data_editor_actor placed{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selection.count", 0), 1);
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.lock.lock_selected" })json"));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lock.selection_has_locked", false));
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
+    EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "selection contains locked objects");
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.lock.unlock_all" })json"));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lock.has_locked", true));
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.selection.delete_selected" })json"));
+    EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", -1), 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
