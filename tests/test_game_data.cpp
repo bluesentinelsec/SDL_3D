@@ -19417,10 +19417,6 @@ TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndTh
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.hidden.0.available", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.hidden.0.type", ""), "Brush");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.hidden.0.label", ""),
-                 "brush.target.cube");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "hid 1 selected object");
     slayer3d_game_data_editor_selection active_selection{};
     EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
@@ -19439,21 +19435,11 @@ TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndTh
     slayer3d_map_destroy(map_document);
     SDL_free(map_json);
 
-    emit_signal("signal.editor.visibility.focus_hidden.0");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.focused.available", false));
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.focused.slot", -1), 0);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.focused.type", ""), "Brush");
-    const slayer3d_value *focused_point = slayer3d_properties_get_value(scene_state, "editor.visibility.focused.point");
-    ASSERT_NE(focused_point, nullptr);
-    EXPECT_EQ(focused_point->type, SLAYER3D_VALUE_VEC3);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "focused hidden object");
-
     emit_signal("signal.editor.visibility.show_all");
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     EXPECT_EQ(world.brush_count, 1);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.focused.available", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "showed 1 hidden object");
 
     yyjson_val *editor = active_editor_tooling_root(runtime);
@@ -19499,30 +19485,16 @@ TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndTh
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.selection.count", -1), 0);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", 0), 1);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.hidden.0.available", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.hidden.0.type", ""), "Thing");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.hidden.0.name", ""),
-                 "object.editor_shell.capsule.1");
     EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
 
     actor_debug.edges = 0;
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
     EXPECT_EQ(actor_debug.edges, 0);
 
-    emit_signal("signal.editor.visibility.focus_hidden.0");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.visibility.focused.available", false));
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.focused.slot", -1), 0);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.visibility.focused.type", ""), "Thing");
-    focused_point = slayer3d_properties_get_value(scene_state, "editor.visibility.focused.point");
-    ASSERT_NE(focused_point, nullptr);
-    EXPECT_EQ(focused_point->type, SLAYER3D_VALUE_VEC3);
-
-    emit_signal("signal.editor.visibility.show_focused");
+    emit_signal("signal.editor.visibility.show_all");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.has_hidden", true));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.visibility.hidden_count", -1), 0);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.visibility.focused.available", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "made hidden object visible");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "showed 1 hidden object");
     actor_debug.edges = 0;
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_capsule_debug, &actor_debug));
     EXPECT_GT(actor_debug.edges, 0);
@@ -35947,7 +35919,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.top"), 0);
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.front"), 0);
     EXPECT_LT(slayer3d_game_data_find_action(runtime, "action.editor.view.side"), 0);
-    EXPECT_GE(slayer3d_game_data_find_signal(runtime, "signal.editor.view.toggle"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.view.toggle"), 0);
     EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.view.quad"), 0);
     EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.view.perspective"), 0);
     EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.view.top"), 0);

@@ -302,21 +302,6 @@
     "signal.editor.inspector.tab.data",
     "signal.editor.visibility.hide_selected",
     "signal.editor.visibility.show_all",
-    "signal.editor.visibility.panel.toggle",
-    "signal.editor.visibility.panel.close",
-    "signal.editor.visibility.show_focused",
-    "signal.editor.visibility.focus_hidden.0",
-    "signal.editor.visibility.focus_hidden.1",
-    "signal.editor.visibility.focus_hidden.2",
-    "signal.editor.visibility.focus_hidden.3",
-    "signal.editor.visibility.focus_hidden.4",
-    "signal.editor.visibility.focus_hidden.5",
-    "signal.editor.visibility.focus_hidden.6",
-    "signal.editor.visibility.focus_hidden.7",
-    "signal.editor.visibility.focus_hidden.8",
-    "signal.editor.visibility.focus_hidden.9",
-    "signal.editor.view.toggle",
-    "signal.editor.view.close",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
     "signal.editor.inspector.brush.color.r.down",
@@ -1969,65 +1954,7 @@
         "signal": "signal.editor.visibility.show_all",
         "actions": [
           { "type": "editor.visibility.show_all" },
-          { "type": "scene_state.set", "key": "editor.visibility.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.view.menu.open", "value": false },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
-        ]
-      },
-      {
-        "signal": "signal.editor.visibility.panel.toggle",
-        "actions": [
-          { "type": "scene_state.toggle", "key": "editor.visibility.panel.open", "default": false },
-          { "type": "scene_state.set", "key": "editor.view.menu.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "hidden objects" }
-        ]
-      },
-      {
-        "signal": "signal.editor.visibility.panel.close",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.visibility.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "hidden objects closed" }
-        ]
-      },
-      {
-        "signal": "signal.editor.visibility.show_focused",
-        "actions": [
-          { "type": "editor.visibility.show_focused" },
-          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
-        ]
-      },
-      { "signal": "signal.editor.visibility.focus_hidden.0", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 0 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.1", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 1 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.2", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 2 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.3", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 3 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.4", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 4 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.5", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 5 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.6", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 6 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.7", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 7 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.8", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 8 }] },
-      { "signal": "signal.editor.visibility.focus_hidden.9", "actions": [{ "type": "editor.visibility.focus_hidden", "slot": 9 }] },
-      {
-        "signal": "signal.editor.view.toggle",
-        "actions": [
-          { "type": "scene_state.toggle", "key": "editor.view.menu.open", "default": false },
-          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.file.edit.focus", "value": "" },
-          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "view menu" }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.close",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.menu.open", "value": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "view menu closed" }
         ]
       },
       {

@@ -508,19 +508,6 @@
               { "type": "scene_state.compare", "key": "editor.leak.candidate_face", "op": "!=", "value": "", "default": "" }
             ]
           }
-        },
-        {
-          "name": "editor.visibility.focus",
-          "point_key": "editor.visibility.focused.point",
-          "color": [120, 255, 150, 255],
-          "size": 0.8,
-          "visible_if": {
-            "type": "scene_state.compare",
-            "key": "editor.visibility.focused.available",
-            "op": "==",
-            "value": true,
-            "default": false
-          }
         }
       ]
     }
@@ -575,16 +562,7 @@
             "selected_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false }
           },
           { "id": "ui.editor_shell.toolbar.tools.button", "type": "button", "w": 76, "h": 28, "text": "Tools", "interactive": true },
-          {
-            "id": "ui.editor_shell.toolbar.view.button",
-            "type": "button",
-            "w": 70,
-            "h": 28,
-            "text": "View",
-            "interactive": true,
-            "action": "editor.view.toggle",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.view.menu.open", "op": "==", "value": true, "default": false }
-          },
+          { "id": "ui.editor_shell.toolbar.view.button", "type": "button", "w": 70, "h": 28, "text": "View", "interactive": true },
           { "id": "ui.editor_shell.toolbar.run.button", "type": "button", "w": 64, "h": 28, "text": "Run", "interactive": true },
           { "id": "ui.editor_shell.toolbar.debug.button", "type": "button", "w": 80, "h": 28, "text": "Debug", "interactive": true },
           { "id": "ui.editor_shell.toolbar.help.button", "type": "button", "w": 70, "h": 28, "text": "Help", "interactive": true }
@@ -877,270 +855,6 @@
         ]
       },
       {
-        "id": "ui.editor_shell.view_menu.panel",
-        "type": "panel",
-        "layout": "none",
-        "x": 500,
-        "y": 38,
-        "w": 190,
-        "h": 112,
-        "clip_children": true,
-        "interactive": true,
-        "layer": 500,
-        "fill_color": [8, 13, 22, 255],
-        "border_color": [82, 112, 154, 255],
-        "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.menu.open", "op": "==", "value": true, "default": false },
-        "children": [
-          { "id": "ui.editor_shell.view_menu.title", "type": "label", "x": 12, "y": 8, "w": 80, "h": 20, "text": "View", "text_scale": 0.46, "layer": 501 },
-          {
-            "id": "ui.editor_shell.view_menu.hidden.button",
-            "type": "button",
-            "x": 12,
-            "y": 36,
-            "w": 166,
-            "h": 26,
-            "text": "View Hidden",
-            "text_scale": 0.42,
-            "interactive": true,
-            "action": "editor.visibility.panel.toggle",
-            "layer": 501
-          },
-          {
-            "id": "ui.editor_shell.view_menu.show_all.button",
-            "type": "button",
-            "x": 12,
-            "y": 72,
-            "w": 166,
-            "h": 26,
-            "text": "Show All",
-            "text_scale": 0.42,
-            "interactive": true,
-            "action": "editor.visibility.show_all",
-            "layer": 501,
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false }
-          }
-        ]
-      },
-      {
-        "id": "ui.editor_shell.hidden_objects.panel",
-        "type": "panel",
-        "layout": "none",
-        "x": 974,
-        "y": 92,
-        "w": 294,
-        "h": 360,
-        "clip_children": true,
-        "interactive": true,
-        "layer": 410,
-        "fill_color": [8, 13, 22, 238],
-        "border_color": [82, 112, 154, 255],
-        "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.panel.open", "op": "==", "value": true, "default": false },
-        "children": [
-          { "id": "ui.editor_shell.hidden_objects.title", "type": "label", "x": 16, "y": 16, "w": 140, "h": 20, "text": "Hidden Objects", "text_scale": 0.46, "layer": 411 },
-          {
-            "id": "ui.editor_shell.hidden_objects.close",
-            "type": "button",
-            "x": 232,
-            "y": 12,
-            "w": 46,
-            "h": 24,
-            "text": "hide",
-            "text_scale": 0.36,
-            "interactive": true,
-            "action": "editor.visibility.panel.close",
-            "layer": 411
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.show_all",
-            "type": "button",
-            "x": 16,
-            "y": 48,
-            "w": 262,
-            "h": 26,
-            "text": "View All",
-            "text_scale": 0.42,
-            "interactive": true,
-            "action": "editor.visibility.show_all",
-            "layer": 411,
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.empty",
-            "type": "label",
-            "x": 16,
-            "y": 88,
-            "w": 240,
-            "h": 22,
-            "text": "No hidden objects",
-            "text_scale": 0.42,
-            "layer": 411,
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": false, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot0",
-            "type": "button",
-            "x": 16,
-            "y": 88,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.0.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.0",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 0, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.0.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot1",
-            "type": "button",
-            "x": 16,
-            "y": 114,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.1.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.1",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 1, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.1.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot2",
-            "type": "button",
-            "x": 16,
-            "y": 140,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.2.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.2",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 2, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.2.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot3",
-            "type": "button",
-            "x": 16,
-            "y": 166,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.3.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.3",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 3, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.3.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot4",
-            "type": "button",
-            "x": 16,
-            "y": 192,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.4.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.4",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 4, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.4.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot5",
-            "type": "button",
-            "x": 16,
-            "y": 218,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.5.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.5",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 5, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.5.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot6",
-            "type": "button",
-            "x": 16,
-            "y": 244,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.6.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.6",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 6, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.6.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot7",
-            "type": "button",
-            "x": 16,
-            "y": 270,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.7.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.7",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 7, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.7.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot8",
-            "type": "button",
-            "x": 16,
-            "y": 296,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.8.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.8",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 8, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.8.available", "op": "==", "value": true, "default": false }
-          },
-          {
-            "id": "ui.editor_shell.hidden_objects.slot9",
-            "type": "button",
-            "x": 16,
-            "y": 322,
-            "w": 262,
-            "h": 22,
-            "text_format": "%s",
-            "text_scale": 0.34,
-            "bindings": [{ "type": "scene_state", "key": "editor.visibility.hidden.9.label", "default": "" }],
-            "interactive": true,
-            "action": "editor.visibility.focus_hidden.9",
-            "layer": 411,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.slot", "op": "==", "value": 9, "default": -1 },
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.hidden.9.available", "op": "==", "value": true, "default": false }
-          }
-        ]
-      },
-      {
         "id": "ui.editor_shell.left_inspector.panel",
         "type": "panel",
         "layout": "none",
@@ -1302,44 +1016,24 @@
             "text_scale": 0.36,
             "action": "editor.visibility.hide_selected",
             "visible_if": {
-              "type": "all",
+              "type": "any",
               "conditions": [
-                { "type": "scene_state.compare", "key": "editor.visibility.focused.available", "op": "!=", "value": true, "default": false },
-                {
-                  "type": "any",
-                  "conditions": [
-                    { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
-                    { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
-                  ]
-                }
+                { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
               ]
             }
           },
           {
-            "id": "ui.editor_shell.left_inspector.visibility.make_visible",
-            "type": "button",
-            "x": 174,
-            "y": 52,
-            "w": 82,
-            "h": 28,
-            "layer": 124,
-            "interactive": true,
-            "text": "Make Visible",
-            "text_scale": 0.30,
-            "action": "editor.visibility.show_focused",
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.focused.available", "op": "==", "value": true, "default": false }
-          },
-          {
             "id": "ui.editor_shell.left_inspector.visibility.show_all",
             "type": "button",
-            "x": 260,
+            "x": 230,
             "y": 52,
-            "w": 30,
+            "w": 60,
             "h": 28,
             "layer": 125,
             "interactive": true,
-            "text": "All",
-            "text_scale": 0.30,
+            "text": "Show hidden",
+            "text_scale": 0.22,
             "action": "editor.visibility.show_all",
             "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false }
           },

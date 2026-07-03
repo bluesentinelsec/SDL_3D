@@ -3888,12 +3888,6 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.visibility.show_all") == 0)
         return slayer3d_game_data_show_all_editor_objects_action(runtime, action);
 
-    if (SDL_strcmp(type, "editor.visibility.focus_hidden") == 0)
-        return slayer3d_game_data_focus_hidden_editor_object_action(runtime, action);
-
-    if (SDL_strcmp(type, "editor.visibility.show_focused") == 0)
-        return slayer3d_game_data_show_focused_editor_object_action(runtime, action);
-
     if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
         return slayer3d_game_data_resize_selected_editor_brushes_y(runtime, action, payload);
 
