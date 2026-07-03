@@ -302,6 +302,8 @@
     "signal.editor.inspector.tab.data",
     "signal.editor.visibility.hide_selected",
     "signal.editor.visibility.show_all",
+    "signal.editor.lock.lock_selected",
+    "signal.editor.lock.unlock_selected",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
     "signal.editor.inspector.brush.color.r.down",
@@ -1954,6 +1956,20 @@
         "signal": "signal.editor.visibility.show_all",
         "actions": [
           { "type": "editor.visibility.show_all" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.lock.lock_selected",
+        "actions": [
+          { "type": "editor.lock.lock_selected" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.lock.unlock_selected",
+        "actions": [
+          { "type": "editor.lock.unlock_selected" },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },

@@ -1024,18 +1024,77 @@
             }
           },
           {
-            "id": "ui.editor_shell.left_inspector.visibility.show_all",
+            "id": "ui.editor_shell.left_inspector.lock.lock",
             "type": "button",
             "x": 230,
             "y": 52,
-            "w": 60,
+            "w": 54,
+            "h": 28,
+            "layer": 124,
+            "interactive": true,
+            "text": "Lock",
+            "text_scale": 0.32,
+            "action": "editor.lock.lock_selected",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                    { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                  ]
+                },
+                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": false, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.lock.unlock",
+            "type": "button",
+            "x": 230,
+            "y": 52,
+            "w": 54,
+            "h": 28,
+            "layer": 124,
+            "interactive": true,
+            "text": "Unlock",
+            "text_scale": 0.26,
+            "action": "editor.lock.unlock_selected",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                    { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                  ]
+                },
+                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": true, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.visibility.show_all",
+            "type": "button",
+            "x": 174,
+            "y": 52,
+            "w": 110,
             "h": 28,
             "layer": 125,
             "interactive": true,
             "text": "Show hidden",
-            "text_scale": 0.22,
+            "text_scale": 0.26,
             "action": "editor.visibility.show_all",
-            "visible_if": { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false }
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.visibility.has_hidden", "op": "==", "value": true, "default": false },
+                { "type": "scene_state.compare", "key": "editor.selection.count", "op": "==", "value": 0, "default": 0 },
+                { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": "==", "value": 0, "default": 0 }
+              ]
+            }
           },
           {
             "id": "ui.editor_shell.left_inspector.row.name",
