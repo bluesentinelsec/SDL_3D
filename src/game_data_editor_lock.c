@@ -7,87 +7,9 @@
 
 #include <SDL3/SDL_stdinc.h>
 
-static int count_locked_editor_objects(const slayer3d_game_data_runtime *runtime)
-{
-    if (runtime == NULL)
-        return 0;
-
-    int count = 0;
-    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
-    {
-        const brush_world_runtime *world = &runtime->brush_worlds[world_index];
-        for (int i = 0; i < world->editor_source_box_count; ++i)
-        {
-            if (world->editor_source_boxes[i].locked)
-                ++count;
-        }
-    }
-    for (int i = 0; i < runtime->editor_actor_count; ++i)
-    {
-        if (runtime->editor_actors[i].locked)
-            ++count;
-    }
-    return count;
-}
-
-static const char *selection_brush_identity(const slayer3d_game_data_editor_selection *selection)
-{
-    if (selection == NULL)
-        return NULL;
-    if (selection->element_editor != NULL && selection->element_editor->stable_id != NULL &&
-        selection->element_editor->stable_id[0] != '\0')
-    {
-        return selection->element_editor->stable_id;
-    }
-    return selection->element_name;
-}
-
-static editor_brush_source_box_runtime *source_box_for_selection(slayer3d_game_data_runtime *runtime,
-                                                                 const slayer3d_game_data_editor_selection *selection)
-{
-    if (runtime == NULL || selection == NULL || !selection->hit ||
-        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->world_name == NULL)
-    {
-        return NULL;
-    }
-
-    brush_world_runtime *world = find_brush_world_runtime_mutable(runtime, selection->world_name);
-    if (world == NULL || !world->editor_has_source_model)
-        return NULL;
-
-    int source_index = editor_brush_world_find_source_box_index(world, selection_brush_identity(selection));
-    if (source_index < 0 && selection->element_name != NULL)
-        source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
-    if (source_index < 0 || source_index >= world->editor_source_box_count)
-        return NULL;
-    return &world->editor_source_boxes[source_index];
-}
-
-static editor_actor_runtime *editor_actor_for_name(slayer3d_game_data_runtime *runtime, const char *name)
-{
-    if (runtime == NULL || name == NULL || name[0] == '\0')
-        return NULL;
-    for (int i = 0; i < runtime->editor_actor_count; ++i)
-    {
-        if (runtime->editor_actors[i].name != NULL && SDL_strcmp(runtime->editor_actors[i].name, name) == 0)
-            return &runtime->editor_actors[i];
-    }
-    return NULL;
-}
-
-static editor_actor_runtime *active_actor_selection(slayer3d_game_data_runtime *runtime)
-{
-    if (runtime == NULL || !editor_selection_active_for_scene(runtime) || !runtime->editor_active_selection.hit ||
-        runtime->editor_active_selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
-    {
-        return NULL;
-    }
-    return editor_actor_for_name(runtime, runtime->editor_active_selection.element_name);
-}
-
 bool slayer3d_game_data_editor_actor_locked(const slayer3d_game_data_runtime *runtime, const char *name)
 {
-    editor_actor_runtime *actor = editor_actor_for_name((slayer3d_game_data_runtime *)runtime, name);
+    const editor_actor_runtime *actor = editor_runtime_find_actor(runtime, name);
     return actor != NULL && actor->locked;
 }
 
@@ -101,14 +23,14 @@ bool slayer3d_game_data_editor_selection_contains_locked_objects(const slayer3d_
     {
         for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
         {
-            editor_brush_source_box_runtime *box =
-                source_box_for_selection(mutable_runtime, &runtime->editor_selected_brushes[i]);
+            const editor_brush_source_box_runtime *box = editor_runtime_find_source_box_for_selection(
+                mutable_runtime, &runtime->editor_selected_brushes[i], NULL);
             if (box != NULL && box->locked)
                 return true;
         }
     }
 
-    editor_actor_runtime *actor = active_actor_selection(mutable_runtime);
+    const editor_actor_runtime *actor = editor_runtime_active_selected_actor(runtime);
     return actor != NULL && actor->locked;
 }
 
@@ -117,7 +39,7 @@ void publish_editor_lock_state(slayer3d_game_data_runtime *runtime)
     if (runtime == NULL || runtime->scene_state == NULL)
         return;
 
-    const int locked_count = count_locked_editor_objects(runtime);
+    const int locked_count = editor_runtime_count_objects_with_state(runtime, EDITOR_OBJECT_STATE_LOCKED);
     slayer3d_properties_set_int(runtime->scene_state, "editor.lock.locked_count", locked_count);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.lock.has_locked", locked_count > 0);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.lock.selection_has_locked",
@@ -136,7 +58,7 @@ bool slayer3d_game_data_reject_locked_editor_selection_action(slayer3d_game_data
 
 static bool set_selected_actor_lock(slayer3d_game_data_runtime *runtime, bool locked)
 {
-    editor_actor_runtime *actor = active_actor_selection(runtime);
+    editor_actor_runtime *actor = editor_runtime_active_selected_actor(runtime);
     if (actor == NULL || actor->locked == locked)
         return false;
     actor->locked = locked;
@@ -151,7 +73,8 @@ static int set_selected_brush_locks(slayer3d_game_data_runtime *runtime, bool lo
     int changed = 0;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
-        editor_brush_source_box_runtime *box = source_box_for_selection(runtime, &runtime->editor_selected_brushes[i]);
+        editor_brush_source_box_runtime *box =
+            editor_runtime_find_source_box_for_selection(runtime, &runtime->editor_selected_brushes[i], NULL);
         if (box == NULL || box->locked == locked)
             continue;
         box->locked = locked;

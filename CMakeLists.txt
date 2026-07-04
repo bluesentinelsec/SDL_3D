@@ -228,6 +228,7 @@ target_sources(
         src/game_data_editor_selection_state.c
         src/game_data_editor_visibility.c
         src/game_data_editor_lock.c
+        src/game_data_editor_object_state.c
         src/game_data_editor_screen_selection.c
         src/game_data_editor_vertex_mode.c
         src/game_data_editor_edge_selection.c
