@@ -65,6 +65,12 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
 bool slayer3d_game_data_delete_selected_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_hide_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_show_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_lock_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_unlock_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_unlock_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_editor_selection_contains_locked_objects(const slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_editor_actor_locked(const slayer3d_game_data_runtime *runtime, const char *name);
+bool slayer3d_game_data_reject_locked_editor_selection_action(slayer3d_game_data_runtime *runtime, const char *message);
 bool slayer3d_game_data_update_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_instantiate_editor_prefab_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);

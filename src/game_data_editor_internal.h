@@ -48,6 +48,7 @@ void publish_editor_edge_move_result(slayer3d_game_data_runtime *runtime, bool v
                                      const char *message);
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime);
 void publish_editor_visibility_state(slayer3d_game_data_runtime *runtime);
+void publish_editor_lock_state(slayer3d_game_data_runtime *runtime);
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime);
 void clear_editor_active_selection(slayer3d_game_data_runtime *runtime);
 bool editor_selection_is_selectable_brush(const slayer3d_game_data_editor_selection *selection);

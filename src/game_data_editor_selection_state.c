@@ -726,6 +726,7 @@ void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.selection.active", actor_selected);
     publish_active_inspector_selection_state(runtime, brush_count);
     publish_editor_visibility_state(runtime);
+    publish_editor_lock_state(runtime);
 }
 
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)
