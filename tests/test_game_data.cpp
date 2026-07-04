@@ -19549,6 +19549,34 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.visible;
     };
+    auto resolved_ui_rect = [&](const char *expected) {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            const char *expected = nullptr;
+            bool found = false;
+            slayer3d_game_data_ui_rect resolved{};
+        } capture{runtime, expected, false, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || rect == nullptr || rect->name == nullptr ||
+                SDL_strcmp(rect->name, capture->expected) != 0)
+            {
+                return true;
+            }
+            bool visible = false;
+            if (slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &capture->resolved, &visible) &&
+                visible)
+            {
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.found) << expected;
+        return capture.resolved;
+    };
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -19556,6 +19584,31 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     select_editor_shell_test_cube(runtime);
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.left_inspector.lock.lock"));
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.left_inspector.lock.unlock"));
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    auto click_editor = [&](float x, float y, Uint64 frame) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = x;
+        down.button.y = y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, frame);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = x;
+        up.button.y = y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, frame + 1U);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
 
     auto execute_json_action = [&](const char *json) {
         yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
@@ -19568,7 +19621,8 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
         return ok;
     };
 
-    emit_signal("signal.editor.lock.lock_selected");
+    slayer3d_game_data_ui_rect lock_rect = resolved_ui_rect("ui.editor_shell.left_inspector.lock.lock");
+    click_editor(lock_rect.x + lock_rect.w * 0.5f, lock_rect.y + lock_rect.h * 0.5f, 1);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lock.has_locked", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.lock.selection_has_locked", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lock.locked_count", 0), 1);
@@ -19595,14 +19649,12 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
     const slayer3d_bounding_box bounds_before_locked_drag = world.brushes[0].bounds;
-    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
-    ASSERT_NE(input, nullptr);
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 640.0f;
     motion.motion.y = 340.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 1);
+    slayer3d_input_update(input, 10);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
     SDL_Event down{};
@@ -19611,7 +19663,7 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     down.button.x = motion.motion.x;
     down.button.y = motion.motion.y;
     slayer3d_input_process_event(input, &down);
-    slayer3d_input_update(input, 2);
+    slayer3d_input_update(input, 11);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "selection contains locked objects");
@@ -19619,7 +19671,7 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     motion.motion.x = 760.0f;
     motion.motion.y = 430.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 12);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     SDL_Event up{};
     up.type = SDL_EVENT_MOUSE_BUTTON_UP;
@@ -19627,7 +19679,7 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     up.button.x = motion.motion.x;
     up.button.y = motion.motion.y;
     slayer3d_input_process_event(input, &up);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 13);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
@@ -19644,7 +19696,8 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "selection contains locked objects");
 
-    emit_signal("signal.editor.lock.unlock_selected");
+    slayer3d_game_data_ui_rect unlock_rect = resolved_ui_rect("ui.editor_shell.left_inspector.lock.unlock");
+    click_editor(unlock_rect.x + unlock_rect.w * 0.5f, unlock_rect.y + unlock_rect.h * 0.5f, 20);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lock.has_locked", true));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.lock.selection_has_locked", true));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.lock.locked_count", -1), 0);
