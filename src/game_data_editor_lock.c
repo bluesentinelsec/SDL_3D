@@ -77,14 +77,12 @@ static editor_actor_runtime *editor_actor_for_name(slayer3d_game_data_runtime *r
 
 static editor_actor_runtime *active_actor_selection(slayer3d_game_data_runtime *runtime)
 {
-    slayer3d_game_data_editor_selection selection;
-    SDL_zero(selection);
-    if (runtime == NULL || !slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.hit ||
-        selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
+    if (runtime == NULL || !editor_selection_active_for_scene(runtime) || !runtime->editor_active_selection.hit ||
+        runtime->editor_active_selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR)
     {
         return NULL;
     }
-    return editor_actor_for_name(runtime, selection.element_name);
+    return editor_actor_for_name(runtime, runtime->editor_active_selection.element_name);
 }
 
 bool slayer3d_game_data_editor_actor_locked(const slayer3d_game_data_runtime *runtime, const char *name)
