@@ -422,6 +422,16 @@ static bool editor_drag_select_created_brush(slayer3d_game_data_runtime *runtime
     return false;
 }
 
+static const char *editor_shape_prefab_override(const char *shape)
+{
+    if (shape == NULL || shape[0] == '\0' || SDL_strcmp(shape, "cuboid") == 0 || SDL_strcmp(shape, "box") == 0 ||
+        SDL_strcmp(shape, "editor.box") == 0)
+    {
+        return NULL;
+    }
+    return shape;
+}
+
 static bool editor_drag_commit_source_box(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
                                           yyjson_val *drag_json, editor_drag_create_state *drag,
                                           editor_brush_source_prefab_result *preview_result)
@@ -442,9 +452,12 @@ static bool editor_drag_commit_source_box(slayer3d_game_data_runtime *runtime, y
         return false;
     }
 
+    const char *shape_prefab = editor_shape_prefab_override(drag->shape);
+    if (shape_prefab == NULL)
+        shape_prefab = json_string(drag_json, "prefab", "editor.box");
     if (!slayer3d_game_data_create_editor_source_box_brush(runtime, drag->world_name, drag->material_name,
                                                            drag->contents, drag->source_min, drag->source_max,
-                                                           preview_result))
+                                                           shape_prefab, preview_result))
     {
         const char *message = preview_result->warning[0] != '\0' ? preview_result->warning : "brush create failed";
         editor_drag_publish_preview(runtime, placement, drag_json, drag, preview_result, message, false);
@@ -475,7 +488,9 @@ static bool editor_drag_preview_source_box(slayer3d_game_data_runtime *runtime, 
 
     editor_brush_source_prefab_desc desc;
     SDL_zero(desc);
-    desc.prefab = json_string(drag_json, "prefab", "editor.box");
+    desc.prefab = editor_shape_prefab_override(drag->shape);
+    if (desc.prefab == NULL)
+        desc.prefab = json_string(drag_json, "prefab", "editor.box");
     desc.material = drag->material_name;
     desc.contents = drag->contents;
 
@@ -503,6 +518,7 @@ static void editor_drag_publish_preview(slayer3d_game_data_runtime *runtime, yyj
         preview->mode = json_string(drag_json, "mode", "drag_box");
         preview->kind = json_string(drag_json, "kind", "box");
         preview->axis = editor_drag_axis_name(editor_drag_extrusion_axis(drag));
+        preview->shape = drag->shape;
         preview->world_name = drag->world_name;
         preview->material_name = drag->material_name;
         preview->contents = drag->contents;
@@ -673,6 +689,9 @@ static editor_brush_source_prefab_desc editor_placement_source_prefab_desc(
     editor_brush_source_prefab_desc desc;
     SDL_zero(desc);
     desc.prefab = preview != NULL ? preview->mode : json_string(preview_json, "mode", NULL);
+    const char *shape_prefab = preview != NULL ? editor_shape_prefab_override(preview->shape) : NULL;
+    if (shape_prefab != NULL)
+        desc.prefab = shape_prefab;
     desc.material = preview != NULL ? preview->material_name : json_string(preview_json, "material", NULL);
     desc.axis = preview != NULL ? preview->axis : json_string(preview_json, "axis", "z");
     desc.contents = preview != NULL ? preview->contents : 0u;
@@ -805,6 +824,8 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         drag->material_name =
             scene_state_string(runtime, json_string(drag_json, "material_key", "editor.brush.material"),
                                json_string(drag_json, "material", "mat.editor.floor"));
+        drag->shape = scene_state_string(runtime, json_string(drag_json, "shape_key", "editor.shape.id"),
+                                         json_string(drag_json, "prefab", "editor.box"));
         drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
                                                SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
         drag->grid_size = grid_size;
@@ -914,6 +935,8 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     preview->mode = json_string(preview_json, "mode", mode);
     preview->kind = json_string(preview_json, "kind", "box");
     preview->axis = editor_placement_axis(runtime, preview_json);
+    preview->shape = scene_state_string(runtime, json_string(preview_json, "shape_key", "editor.shape.id"),
+                                        json_string(preview_json, "prefab", "editor.box"));
     preview->world_name = json_string(preview_json, "world", hover_selection->world_name);
     preview->material_name = json_string(preview_json, "material", hover_selection->material_name);
     preview->contents = brush_flags_from_json(obj_get(preview_json, "contents"), brush_content_flag_from_string,

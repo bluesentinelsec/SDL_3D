@@ -2632,6 +2632,7 @@ resize_record_fail: {
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,
                                                        const int source_min[3], const int source_max[3],
+                                                       const char *prefab,
                                                        editor_brush_source_prefab_result *out_result)
 {
     if (out_result != NULL)
@@ -2652,7 +2653,7 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
 
     editor_brush_source_prefab_desc desc;
     SDL_zero(desc);
-    desc.prefab = "editor.box";
+    desc.prefab = prefab != NULL && prefab[0] != '\0' ? prefab : "editor.box";
     desc.material = material_name;
     desc.contents = contents != 0u ? contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
 
@@ -2687,25 +2688,19 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
     }
 
     editor_brush_source_box_runtime *box = &entry->source_box_snapshot;
-    SDL_zero(*box);
-    box->stable_id = SDL_strdup(brush_name);
-    box->name = SDL_strdup(brush_name);
-    box->prefab = SDL_strdup("editor.box");
-    box->material = SDL_strdup(material_name);
-    if (box->stable_id == NULL || box->name == NULL || box->prefab == NULL || box->material == NULL)
+    char source_error[256] = {0};
+    if (!editor_brush_source_box_from_prefab_bounds(world_runtime, desc.prefab, brush_name, material_name,
+                                                    desc.contents, source_min, source_max, box, source_error,
+                                                    sizeof(source_error)))
     {
         editor_command_history_state *history = &runtime->editor_command_history;
         free_editor_command_transaction_entry(entry);
         history->count--;
         history->cursor = history->count;
+        if (out_result != NULL)
+            SDL_strlcpy(out_result->warning, source_error, sizeof(out_result->warning));
         return false;
     }
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        box->min[axis] = source_min[axis];
-        box->max[axis] = source_max[axis];
-    }
-    box->contents = desc.contents;
     entry->has_source_box_snapshot = true;
     entry->brush_index = world_runtime->editor_source_box_count;
     entry->has_bounds = true;

@@ -168,6 +168,7 @@
         "kind": "box",
         "world": "brush.editor_shell.target",
         "prefab": "editor.box",
+        "shape_key": "editor.shape.id",
         "material_key": "editor.brush.material",
         "material": "mat.editor.floor",
         "contents": ["solid"],

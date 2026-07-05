@@ -29,6 +29,7 @@ typedef struct editor_placement_preview_state
     const char *mode;
     const char *kind;
     const char *axis;
+    const char *shape;
     const char *world_name;
     const char *material_name;
     unsigned int contents;
@@ -124,6 +125,7 @@ typedef struct editor_drag_create_state
     const char *scene;
     const char *world_name;
     const char *material_name;
+    const char *shape;
     unsigned int contents;
     float grid_size;
     int extrusion_axis;

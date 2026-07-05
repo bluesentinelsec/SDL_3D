@@ -115,6 +115,11 @@ bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *w
 bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
                                               const slayer3d_game_data_create_box_brush_desc *desc,
                                               const char *brush_name, editor_brush_source_box_runtime *out_box);
+bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world_runtime, const char *prefab,
+                                                const char *brush_name, const char *material, unsigned int contents,
+                                                const int source_min[3], const int source_max[3],
+                                                editor_brush_source_box_runtime *out_box, char *error_buffer,
+                                                int error_buffer_size);
 slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_runtime *world_runtime,
                                                             const editor_brush_source_box_runtime *box);
 bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
