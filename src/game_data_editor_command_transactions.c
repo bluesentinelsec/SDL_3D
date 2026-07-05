@@ -3110,7 +3110,7 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
                 initial_world_runtime, selection.element_name, element_stable_id);
             const slayer3d_game_data_brush *initial_brush =
                 initial_brush_index >= 0 ? &initial_world_runtime->desc.brushes[initial_brush_index] : NULL;
-            const int face_count = initial_brush != NULL ? SDL_min(initial_brush->face_count, 6) : 0;
+            const int face_count = initial_brush != NULL ? initial_brush->face_count : 0;
             const int initial_material_index =
                 editor_brush_material_index_by_name(initial_world_runtime, material_name);
             if (initial_brush == NULL || initial_material_index < 0)

@@ -89,6 +89,16 @@ static int source_box_face_index_from_key(const char *key)
         if (SDL_strcmp(key, editor_brush_source_box_face_keys[i]) == 0)
             return (int)i;
     }
+    if (key != NULL && key[0] != '\0')
+    {
+        char *end = NULL;
+        const long face_index = strtol(key, &end, 10);
+        if (end != key && end != NULL && *end == '\0' && face_index >= 0 &&
+            face_index < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY)
+        {
+            return (int)face_index;
+        }
+    }
     return -1;
 }
 
@@ -115,7 +125,8 @@ static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box,
             yyjson_get_str(value)[0] == '\0')
         {
             set_error(error_buffer, error_buffer_size,
-                      "editor brush source face_materials requires px/nx/py/ny/pz/nz non-empty string entries");
+                      "editor brush source face_materials requires px/nx/py/ny/pz/nz or numeric non-empty string "
+                      "entries");
             return false;
         }
         if (!copy_source_string(&out_box->face_materials[face_index], yyjson_get_str(value)))
@@ -150,8 +161,8 @@ static bool copy_source_face_visuals(editor_brush_source_box_runtime *out_box, y
         if (face_index < 0 || !yyjson_is_arr(value) || yyjson_arr_size(value) < 3u)
         {
             set_error(error_buffer, error_buffer_size,
-                      tint ? "editor brush source face_tints requires px/nx/py/ny/pz/nz color entries"
-                           : "editor brush source face_colors requires px/nx/py/ny/pz/nz color entries");
+                      tint ? "editor brush source face_tints requires px/nx/py/ny/pz/nz or numeric color entries"
+                           : "editor brush source face_colors requires px/nx/py/ny/pz/nz or numeric color entries");
             return false;
         }
         editor_brush_visual_override_runtime *visual = &out_box->face_visuals[face_index];
@@ -274,7 +285,7 @@ int editor_brush_world_source_box_face_index_for_identity(const brush_world_runt
     const int rebuilt_face_index = source_convex_rebuilt_face_index_for_identity(box, face_identity);
     if (rebuilt_face_index >= 0)
         return rebuilt_face_index;
-    return fallback_face_index >= 0 && fallback_face_index < (int)SDL_arraysize(editor_brush_source_box_face_keys)
+    return fallback_face_index >= 0 && fallback_face_index < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY
                ? fallback_face_index
                : -1;
 }
@@ -1725,14 +1736,16 @@ static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
     return true;
 }
 
-static const char *source_convex_face_material(const editor_brush_source_box_runtime *box, int source_face_index)
+static const char *source_convex_face_material(const editor_brush_source_box_runtime *box, int source_face_index,
+                                               int runtime_face_index)
 {
     if (box == NULL)
         return "";
-    if (source_face_index >= 0 && source_face_index < (int)SDL_arraysize(box->face_materials) &&
-        box->face_materials[source_face_index] != NULL && box->face_materials[source_face_index][0] != '\0')
+    const int face_index = source_face_index >= 0 ? source_face_index : runtime_face_index;
+    if (face_index >= 0 && face_index < (int)SDL_arraysize(box->face_materials) &&
+        box->face_materials[face_index] != NULL && box->face_materials[face_index][0] != '\0')
     {
-        return box->face_materials[source_face_index];
+        return box->face_materials[face_index];
     }
     return box->material != NULL ? box->material : "";
 }
@@ -1793,7 +1806,7 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
     for (int face_index = 0; face_index < plane_count; ++face_index)
     {
         const source_convex_plane *plane = &planes[face_index];
-        const char *material_name = source_convex_face_material(box, plane->source_face_index);
+        const char *material_name = source_convex_face_material(box, plane->source_face_index, face_index);
         const int material_index = source_material_index_by_name(&world_runtime->desc, material_name);
         if (material_index < 0)
         {
@@ -1803,7 +1816,8 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
             return false;
         }
         init_source_box_face(&faces[face_index], plane->normal, plane->distance, material_index, material_name);
-        apply_source_box_face_visual(&faces[face_index], box, plane->source_face_index);
+        apply_source_box_face_visual(&faces[face_index], box,
+                                     plane->source_face_index >= 0 ? plane->source_face_index : face_index);
 
         char face_stable_id[320];
         if (plane->source_face_index >= 0)
@@ -5013,7 +5027,7 @@ bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_
         set_error(error_buffer, error_buffer_size, "source-backed brush paint requires a source model and material");
         return false;
     }
-    if (face_index < 0 || face_index >= (int)SDL_arraysize(editor_brush_source_box_face_keys))
+    if (face_index < 0 || face_index >= SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY)
     {
         set_error(error_buffer, error_buffer_size, "source brush face index out of range");
         return false;

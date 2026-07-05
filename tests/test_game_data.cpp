@@ -127,9 +127,9 @@ extern "C"
         char *name;
         char *prefab;
         char *material;
-        char *face_materials[6];
+        char *face_materials[32];
         editor_brush_visual_override_runtime visual;
-        editor_brush_visual_override_runtime face_visuals[6];
+        editor_brush_visual_override_runtime face_visuals[32];
         int min[3];
         int max[3];
         int vertex_count;
@@ -247,6 +247,9 @@ extern "C"
     bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
                                              slayer3d_vec3 delta, char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
+                                                         int face_index, const char *material_name, char *error_buffer,
+                                                         int error_buffer_size);
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
@@ -35667,6 +35670,16 @@ TEST(GameDataRuntime, EditorSourceBrushCreateSupportsCuboidAndCylinderShapes)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 2);
     EXPECT_EQ(world.brushes[1].face_count, 10);
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_set_source_box_face_material(world_runtime, cylinder_result.brush_name, 6,
+                                                                "mat.editor.floor", error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brushes[1].face_count, 10);
+    ASSERT_LT(6, world.brushes[1].face_count);
+    EXPECT_STREQ(world.brushes[1].faces[6].material_name, "mat.editor.floor");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

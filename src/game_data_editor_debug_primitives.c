@@ -900,6 +900,49 @@ static bool emit_editor_debug_placement_footprint(editor_debug_iteration_context
     return true;
 }
 
+static bool emit_editor_debug_placement_cylinder_bounds(editor_debug_iteration_context *context,
+                                                        const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+    const float cx = (preview->bounds.min.x + preview->bounds.max.x) * 0.5f;
+    const float cz = (preview->bounds.min.z + preview->bounds.max.z) * 0.5f;
+    const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
+    const float rz = (preview->bounds.max.z - preview->bounds.min.z) * 0.5f;
+    if (rx <= 0.0f || rz <= 0.0f || preview->bounds.min.y >= preview->bounds.max.y)
+        return emit_editor_debug_bounds(context, preview->bounds);
+
+    const int segments = 8;
+    slayer3d_vec3 bottom[8];
+    slayer3d_vec3 top[8];
+    for (int i = 0; i < segments; ++i)
+    {
+        const float angle = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+        const float x = cx + SDL_cosf(angle) * rx;
+        const float z = cz + SDL_sinf(angle) * rz;
+        bottom[i] = slayer3d_vec3_make(x, preview->bounds.min.y, z);
+        top[i] = slayer3d_vec3_make(x, preview->bounds.max.y, z);
+    }
+    for (int i = 0; i < segments; ++i)
+    {
+        const int next = (i + 1) % segments;
+        if (!emit_editor_debug_line(context, bottom[i], bottom[next]) ||
+            !emit_editor_debug_line(context, top[i], top[next]) || !emit_editor_debug_line(context, bottom[i], top[i]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool emit_editor_debug_placement_shape_bounds(editor_debug_iteration_context *context,
+                                                     const editor_placement_preview_state *preview)
+{
+    if (preview != NULL && preview->shape != NULL && SDL_strcmp(preview->shape, "cylinder") == 0)
+        return emit_editor_debug_placement_cylinder_bounds(context, preview);
+    return preview != NULL && emit_editor_debug_bounds(context, preview->bounds);
+}
+
 static bool emit_editor_debug_placement_axis(editor_debug_iteration_context *context,
                                              const slayer3d_game_data_runtime *runtime,
                                              const editor_placement_preview_state *preview)
@@ -2964,7 +3007,7 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         context.world_name = preview->world_name;
         context.element_name = preview->mode;
         context.face_index = -1;
-        if (!emit_editor_debug_bounds(&context, preview->bounds))
+        if (!emit_editor_debug_placement_shape_bounds(&context, preview))
             return true;
         context.color = (slayer3d_color){255, 220, 80, 230};
         context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_FOOTPRINT_EDGE;
