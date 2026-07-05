@@ -86,6 +86,16 @@ void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, con
         slayer3d_properties_set_vec3(props, key, value);
 }
 
+bool editor_emit_signal_by_name(slayer3d_game_data_runtime *runtime, const char *signal_name)
+{
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, signal_name);
+    if (bus == NULL || signal_id < 0)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, NULL);
+    return true;
+}
+
 void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message)
 {
     if (runtime == NULL || runtime->scene_state == NULL || message == NULL || message[0] == '\0')
@@ -194,8 +204,6 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.file.edit.replace_on_text", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);

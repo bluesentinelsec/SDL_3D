@@ -171,60 +171,62 @@ bool editor_select_mode_secondary_click(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
-bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
+static bool editor_mode_is(const slayer3d_game_data_runtime *runtime, const char *mode)
 {
     return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "select") == 0;
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), mode) == 0;
+}
+
+static bool editor_tool_mode_is(const slayer3d_game_data_runtime *runtime, const char *tool_mode)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.tool.mode", "select"), tool_mode) ==
+               0;
+}
+
+bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
+{
+    return editor_mode_is(runtime, "select");
 }
 
 bool editor_mode_is_brush(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "brush") == 0;
+    return editor_mode_is(runtime, "brush");
 }
 
 bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "face") == 0;
+    return editor_mode_is(runtime, "face");
 }
 
 bool editor_mode_is_edge(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "edge") == 0;
+    return editor_mode_is(runtime, "edge");
 }
 
 bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "vertex") == 0;
+    return editor_mode_is(runtime, "vertex");
 }
 
 bool editor_mode_is_rotate(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "rotate") == 0;
+    return editor_mode_is(runtime, "rotate");
 }
 
 bool editor_mode_is_scale(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "scale") == 0;
+    return editor_mode_is(runtime, "scale");
 }
 
 bool editor_mode_is_shear(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "shear") == 0;
+    return editor_mode_is(runtime, "shear");
 }
 
 bool editor_mode_is_paint(const slayer3d_game_data_runtime *runtime)
 {
-    return runtime != NULL && runtime->scene_state != NULL &&
-           (SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "paint") == 0 ||
-            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.tool.mode", "select"), "paint") ==
-                0);
+    return editor_mode_is(runtime, "paint") || editor_tool_mode_is(runtime, "paint");
 }
 
 bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,

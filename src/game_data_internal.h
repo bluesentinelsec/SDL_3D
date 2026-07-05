@@ -403,6 +403,7 @@ bool runtime_collection_field_to_string(const runtime_collection *collection, in
                                         char *buffer, size_t buffer_size);
 #include "game_data_editor_actions_internal.h"
 #include "game_data_editor_internal.h"
+#include "game_data_editor_object_state.h"
 #include "game_data_world_internal.h"
 void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata);
 

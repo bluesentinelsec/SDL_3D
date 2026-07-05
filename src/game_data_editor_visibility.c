@@ -7,66 +7,19 @@
 
 #include <SDL3/SDL_stdinc.h>
 
-static int count_hidden_editor_objects(const slayer3d_game_data_runtime *runtime)
-{
-    if (runtime == NULL)
-        return 0;
-
-    int count = 0;
-    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
-    {
-        const brush_world_runtime *world = &runtime->brush_worlds[world_index];
-        for (int i = 0; i < world->editor_source_box_count; ++i)
-        {
-            if (world->editor_source_boxes[i].hidden)
-                ++count;
-        }
-    }
-    for (int i = 0; i < runtime->editor_actor_count; ++i)
-    {
-        if (runtime->editor_actors[i].hidden)
-            ++count;
-    }
-    return count;
-}
-
 void publish_editor_visibility_state(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
         return;
 
-    const int hidden_count = count_hidden_editor_objects(runtime);
+    const int hidden_count = editor_runtime_count_objects_with_state(runtime, EDITOR_OBJECT_STATE_HIDDEN);
     slayer3d_properties_set_int(runtime->scene_state, "editor.visibility.hidden_count", hidden_count);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.visibility.has_hidden", hidden_count > 0);
 }
 
-static bool selection_is_active_actor(const slayer3d_game_data_runtime *runtime,
-                                      slayer3d_game_data_editor_selection *out_selection)
-{
-    if (runtime == NULL || out_selection == NULL)
-        return false;
-    SDL_zero(*out_selection);
-    return slayer3d_game_data_get_active_editor_selection(runtime, out_selection) && out_selection->hit &&
-           out_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR && out_selection->element_name != NULL &&
-           out_selection->element_name[0] != '\0';
-}
-
 static bool hide_selected_actor(slayer3d_game_data_runtime *runtime)
 {
-    slayer3d_game_data_editor_selection selection;
-    if (!selection_is_active_actor(runtime, &selection))
-        return false;
-
-    editor_actor_runtime *actor = NULL;
-    for (int i = 0; i < runtime->editor_actor_count; ++i)
-    {
-        if (runtime->editor_actors[i].name != NULL &&
-            SDL_strcmp(runtime->editor_actors[i].name, selection.element_name) == 0)
-        {
-            actor = &runtime->editor_actors[i];
-            break;
-        }
-    }
+    editor_actor_runtime *actor = editor_runtime_active_selected_actor(runtime);
     if (actor == NULL || actor->hidden)
         return false;
     actor->hidden = true;
@@ -81,44 +34,27 @@ static bool hide_selected_brushes(slayer3d_game_data_runtime *runtime, int *out_
         runtime->editor_selected_brush_count <= 0)
         return true;
 
-    bool ok = true;
     bool *world_changed = runtime->brush_world_count > 0
                               ? (bool *)SDL_calloc((size_t)runtime->brush_world_count, sizeof(*world_changed))
                               : NULL;
     if (runtime->brush_world_count > 0 && world_changed == NULL)
         return false;
+
     int hidden_count = 0;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
-        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
-        if (!selection->hit || selection->world_name == NULL)
+        int world_index = -1;
+        editor_brush_source_box_runtime *box =
+            editor_runtime_find_source_box_for_selection(runtime, &runtime->editor_selected_brushes[i], &world_index);
+        if (box == NULL || box->hidden)
             continue;
-        brush_world_runtime *world = find_brush_world_runtime_mutable(runtime, selection->world_name);
-        if (world == NULL || !world->editor_has_source_model)
-            continue;
-        const char *stable_id = selection->element_editor != NULL && selection->element_editor->stable_id != NULL
-                                    ? selection->element_editor->stable_id
-                                    : NULL;
-        int source_index = editor_brush_world_find_source_box_index(world, stable_id);
-        if (source_index < 0)
-            source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
-        if (source_index < 0 || world->editor_source_boxes[source_index].hidden)
-            continue;
-        world->editor_source_boxes[source_index].hidden = true;
+        box->hidden = true;
         ++hidden_count;
-        const int world_index = (int)(world - runtime->brush_worlds);
         if (world_index >= 0 && world_index < runtime->brush_world_count)
             world_changed[world_index] = true;
     }
 
-    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
-    {
-        if (world_changed[world_index] &&
-            !editor_brush_world_rebuild_from_source(&runtime->brush_worlds[world_index], NULL, 0))
-        {
-            ok = false;
-        }
-    }
+    const bool ok = editor_runtime_rebuild_changed_brush_worlds(runtime, world_changed);
     SDL_free(world_changed);
 
     if (out_count != NULL)
@@ -184,15 +120,7 @@ bool slayer3d_game_data_show_all_editor_objects_action(slayer3d_game_data_runtim
         ++shown_count;
     }
 
-    bool ok = true;
-    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
-    {
-        if (world_changed[world_index] &&
-            !editor_brush_world_rebuild_from_source(&runtime->brush_worlds[world_index], NULL, 0))
-        {
-            ok = false;
-        }
-    }
+    const bool ok = editor_runtime_rebuild_changed_brush_worlds(runtime, world_changed);
     SDL_free(world_changed);
 
     char message[96];
