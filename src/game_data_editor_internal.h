@@ -134,6 +134,7 @@ bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, 
 bool editor_selection_mode_is_click(yyjson_val *selection);
 bool editor_mouse_in_rect(float mouse_x, float mouse_y, yyjson_val *rect);
 bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
+bool editor_handle_shape_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
 bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
 bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
                                    const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);

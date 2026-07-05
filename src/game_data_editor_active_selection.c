@@ -2150,6 +2150,14 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     publish_editor_vertex_hover_state(runtime, &hover_selection);
     publish_editor_edge_hover_state(runtime, &hover_selection);
     bool ui_consumed = false;
+    if (!editor_handle_shape_widget(runtime, editor, &ui_consumed))
+        return false;
+    if (ui_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     if (!editor_handle_grid_widget(runtime, editor, &ui_consumed))
         return false;
     if (ui_consumed)

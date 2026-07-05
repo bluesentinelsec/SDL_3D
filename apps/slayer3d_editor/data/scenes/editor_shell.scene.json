@@ -308,6 +308,28 @@
         }
       ]
     },
+    "shape_widget": {
+      "dropdown_id": "ui.editor_shell.toolbar.shape.button",
+      "open_key": "editor.shape.menu.open",
+      "index_key": "editor.shape.index",
+      "id_key": "editor.shape.id",
+      "label_key": "editor.shape.label",
+      "options": [
+        { "id": "cuboid", "label": "Cuboid" },
+        { "id": "stairs", "label": "Stairs" },
+        { "id": "cylinder", "label": "Cylinder" },
+        { "id": "cone", "label": "Cone" },
+        { "id": "spheroid_uv", "label": "Spheroid (UV)" },
+        { "id": "spheroid_icosahedron", "label": "Spheroid (Icosahedron)" },
+        { "id": "column", "label": "Column" },
+        { "id": "pipe", "label": "Pipe" },
+        { "id": "octagon", "label": "Octagon" },
+        { "id": "hexagon", "label": "Hexagon" },
+        { "id": "capsule", "label": "Capsule" },
+        { "id": "door_frame", "label": "Door Frame" },
+        { "id": "window_frame", "label": "Window Frame" }
+      ]
+    },
     "grid_widget": {
       "grid_key": "editor.grid.size",
       "brush_grid_key": "editor.brush.grid_size",
@@ -539,6 +561,36 @@
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.shape.button",
+            "type": "dropdown",
+            "w": 76,
+            "h": 28,
+            "text": "Shape",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.shape.select",
+            "open_key": "editor.shape.menu.open",
+            "selected_value_key": "editor.shape.index",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.shape.menu.open", "op": "==", "value": true, "default": false },
+            "option_height": 24,
+            "options": [
+              "Cuboid",
+              "Stairs",
+              "Cylinder",
+              "Cone",
+              "Spheroid (UV)",
+              "Spheroid (Icosahedron)",
+              "Column",
+              "Pipe",
+              "Octagon",
+              "Hexagon",
+              "Capsule",
+              "Door Frame",
+              "Window Frame"
+            ],
+            "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+          },
           {
             "id": "ui.editor_shell.toolbar.global.button",
             "type": "button",

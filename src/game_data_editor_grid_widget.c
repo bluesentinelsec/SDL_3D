@@ -97,7 +97,10 @@ bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *
 
     if (over_button)
     {
-        slayer3d_properties_set_bool(runtime->scene_state, open_key, !opened);
+        const bool next_open = !opened;
+        slayer3d_properties_set_bool(runtime->scene_state, open_key, next_open);
+        if (next_open)
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.shape.menu.open", false);
         if (out_consumed != NULL)
             *out_consumed = true;
         slayer3d_ui_layout_destroy(layout);

@@ -380,6 +380,7 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shape.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
         return slayer3d_game_data_enter_editor_clip_tool(runtime, message);
