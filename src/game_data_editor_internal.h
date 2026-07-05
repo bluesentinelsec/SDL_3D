@@ -185,5 +185,14 @@ void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, co
 void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
 void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message);
 void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime);
+bool editor_emit_signal_by_name(slayer3d_game_data_runtime *runtime, const char *signal_name);
+bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime);
+bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime);
+bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime);
+bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime);
+bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime);
+bool editor_update_global_text_edit(slayer3d_game_data_runtime *runtime);
+void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime);
+void editor_update_global_edit_display(slayer3d_game_data_runtime *runtime);
 
 #endif
