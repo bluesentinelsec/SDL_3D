@@ -186,6 +186,25 @@ void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, con
 void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message);
 void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime);
 bool editor_emit_signal_by_name(slayer3d_game_data_runtime *runtime, const char *signal_name);
+const slayer3d_ui_layout_hit_region *editor_find_layout_hit_by_id(const slayer3d_ui_layout_model *layout,
+                                                                  const char *id);
+const slayer3d_ui_layout_render_command *editor_find_layout_render_by_id(const slayer3d_ui_layout_model *layout,
+                                                                         const char *id);
+float editor_clamp_float(float value, float min_value, float max_value);
+bool editor_set_console_scroll(slayer3d_game_data_runtime *runtime, int scroll);
+bool editor_scroll_console_by(slayer3d_game_data_runtime *runtime, int delta);
+void editor_set_console_focus(slayer3d_game_data_runtime *runtime, bool focused);
+void editor_clear_console_selection(slayer3d_game_data_runtime *runtime);
+bool editor_console_set_selection_cursor(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                         float mouse_x, float mouse_y);
+bool editor_console_begin_selection(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                    float mouse_x, float mouse_y);
+bool editor_console_copy_selection(slayer3d_game_data_runtime *runtime);
+bool editor_console_copy_selection_if_requested(slayer3d_game_data_runtime *runtime,
+                                                const slayer3d_input_manager *input);
+int editor_console_wheel_scroll_delta(float wheel_y);
+bool editor_update_console_scroll_drag(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                       float mouse_y);
 bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime);
