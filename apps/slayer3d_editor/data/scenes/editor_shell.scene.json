@@ -784,7 +784,6 @@
             "type": "dropdown",
             "w": 92,
             "h": 28,
-            "text": "Grid",
             "text_scale": 0.42,
             "interactive": true,
             "action": "editor.grid.select",
