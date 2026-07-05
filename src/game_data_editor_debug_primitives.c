@@ -900,11 +900,25 @@ static bool emit_editor_debug_placement_footprint(editor_debug_iteration_context
     return true;
 }
 
-static bool emit_editor_debug_placement_cylinder_bounds(editor_debug_iteration_context *context,
-                                                        const editor_placement_preview_state *preview)
+static bool editor_preview_shape_is_prism(const char *shape)
+{
+    return shape != NULL && (SDL_strcmp(shape, "cylinder") == 0 || SDL_strcmp(shape, "column") == 0 ||
+                             SDL_strcmp(shape, "octagon") == 0 || SDL_strcmp(shape, "hexagon") == 0);
+}
+
+static int editor_preview_prism_segments(const char *shape)
+{
+    return shape != NULL && SDL_strcmp(shape, "hexagon") == 0 ? 6 : 8;
+}
+
+static bool emit_editor_debug_placement_prism_bounds(editor_debug_iteration_context *context,
+                                                     const editor_placement_preview_state *preview, int segments)
 {
     if (context == NULL || preview == NULL || !preview->has_bounds)
         return false;
+    if (segments < 3 || segments > 8)
+        return emit_editor_debug_bounds(context, preview->bounds);
+
     const float cx = (preview->bounds.min.x + preview->bounds.max.x) * 0.5f;
     const float cz = (preview->bounds.min.z + preview->bounds.max.z) * 0.5f;
     const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
@@ -912,7 +926,6 @@ static bool emit_editor_debug_placement_cylinder_bounds(editor_debug_iteration_c
     if (rx <= 0.0f || rz <= 0.0f || preview->bounds.min.y >= preview->bounds.max.y)
         return emit_editor_debug_bounds(context, preview->bounds);
 
-    const int segments = 8;
     slayer3d_vec3 bottom[8];
     slayer3d_vec3 top[8];
     for (int i = 0; i < segments; ++i)
@@ -935,11 +948,145 @@ static bool emit_editor_debug_placement_cylinder_bounds(editor_debug_iteration_c
     return true;
 }
 
+static bool emit_editor_debug_placement_cone_bounds(editor_debug_iteration_context *context,
+                                                    const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+
+    const float cx = (preview->bounds.min.x + preview->bounds.max.x) * 0.5f;
+    const float cz = (preview->bounds.min.z + preview->bounds.max.z) * 0.5f;
+    const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
+    const float rz = (preview->bounds.max.z - preview->bounds.min.z) * 0.5f;
+    if (rx <= 0.0f || rz <= 0.0f || preview->bounds.min.y >= preview->bounds.max.y)
+        return emit_editor_debug_bounds(context, preview->bounds);
+
+    const int segments = 8;
+    const slayer3d_vec3 apex = slayer3d_vec3_make(cx, preview->bounds.max.y, cz);
+    slayer3d_vec3 base[8];
+    for (int i = 0; i < segments; ++i)
+    {
+        const float angle = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+        base[i] = slayer3d_vec3_make(cx + SDL_cosf(angle) * rx, preview->bounds.min.y, cz + SDL_sinf(angle) * rz);
+    }
+    for (int i = 0; i < segments; ++i)
+    {
+        const int next = (i + 1) % segments;
+        if (!emit_editor_debug_line(context, base[i], base[next]) || !emit_editor_debug_line(context, base[i], apex))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_placement_spheroid_uv_bounds(editor_debug_iteration_context *context,
+                                                           const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+
+    const float cx = (preview->bounds.min.x + preview->bounds.max.x) * 0.5f;
+    const float cy = (preview->bounds.min.y + preview->bounds.max.y) * 0.5f;
+    const float cz = (preview->bounds.min.z + preview->bounds.max.z) * 0.5f;
+    const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
+    const float ry = (preview->bounds.max.y - preview->bounds.min.y) * 0.5f;
+    const float rz = (preview->bounds.max.z - preview->bounds.min.z) * 0.5f;
+    if (rx <= 0.0f || ry <= 0.0f || rz <= 0.0f)
+        return emit_editor_debug_bounds(context, preview->bounds);
+
+    static const float unit_circle[6][2] = {
+        {1.0f, 0.0f}, {0.5f, 0.8660254f}, {-0.5f, 0.8660254f}, {-1.0f, 0.0f}, {-0.5f, -0.8660254f}, {0.5f, -0.8660254f},
+    };
+    slayer3d_vec3 bottom = slayer3d_vec3_make(cx, preview->bounds.min.y, cz);
+    slayer3d_vec3 top = slayer3d_vec3_make(cx, preview->bounds.max.y, cz);
+    slayer3d_vec3 rings[2][6];
+    for (int ring = 0; ring < 2; ++ring)
+    {
+        const float y_offset = ring == 0 ? -0.5f : 0.5f;
+        const float radius_scale = 0.8660254f;
+        for (int i = 0; i < 6; ++i)
+        {
+            rings[ring][i] = slayer3d_vec3_make(cx + unit_circle[i][0] * rx * radius_scale, cy + y_offset * ry,
+                                                cz + unit_circle[i][1] * rz * radius_scale);
+        }
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        const int next = (i + 1) % 6;
+        if (!emit_editor_debug_line(context, rings[0][i], rings[0][next]) ||
+            !emit_editor_debug_line(context, rings[1][i], rings[1][next]) ||
+            !emit_editor_debug_line(context, rings[0][i], rings[1][i]) ||
+            !emit_editor_debug_line(context, bottom, rings[0][i]) || !emit_editor_debug_line(context, top, rings[1][i]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static slayer3d_vec3 editor_preview_icosahedron_vertex(const editor_placement_preview_state *preview, int index)
+{
+    const float cx = (preview->bounds.min.x + preview->bounds.max.x) * 0.5f;
+    const float cy = (preview->bounds.min.y + preview->bounds.max.y) * 0.5f;
+    const float cz = (preview->bounds.min.z + preview->bounds.max.z) * 0.5f;
+    const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
+    const float ry = (preview->bounds.max.y - preview->bounds.min.y) * 0.5f;
+    const float rz = (preview->bounds.max.z - preview->bounds.min.z) * 0.5f;
+    static const float inv_phi = 0.61803399f;
+    static const float vertices[12][3] = {
+        {0.0f, inv_phi, 1.0f}, {0.0f, -inv_phi, 1.0f}, {0.0f, inv_phi, -1.0f}, {0.0f, -inv_phi, -1.0f},
+        {inv_phi, 1.0f, 0.0f}, {-inv_phi, 1.0f, 0.0f}, {inv_phi, -1.0f, 0.0f}, {-inv_phi, -1.0f, 0.0f},
+        {1.0f, 0.0f, inv_phi}, {-1.0f, 0.0f, inv_phi}, {1.0f, 0.0f, -inv_phi}, {-1.0f, 0.0f, -inv_phi},
+    };
+    return slayer3d_vec3_make(cx + vertices[index][0] * rx, cy + vertices[index][1] * ry, cz + vertices[index][2] * rz);
+}
+
+static bool emit_editor_debug_placement_icosahedron_bounds(editor_debug_iteration_context *context,
+                                                           const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+    if (preview->bounds.min.x >= preview->bounds.max.x || preview->bounds.min.y >= preview->bounds.max.y ||
+        preview->bounds.min.z >= preview->bounds.max.z)
+    {
+        return emit_editor_debug_bounds(context, preview->bounds);
+    }
+
+    slayer3d_vec3 points[12];
+    for (int i = 0; i < 12; ++i)
+        points[i] = editor_preview_icosahedron_vertex(preview, i);
+    for (int i = 0; i < 12; ++i)
+    {
+        for (int j = i + 1; j < 12; ++j)
+        {
+            const float distance_sq = slayer3d_vec3_length_squared(slayer3d_vec3_sub(points[i], points[j]));
+            const float min_radius = SDL_min(
+                preview->bounds.max.x - preview->bounds.min.x,
+                SDL_min(preview->bounds.max.y - preview->bounds.min.y, preview->bounds.max.z - preview->bounds.min.z));
+            if (distance_sq <= min_radius * min_radius * 0.55f &&
+                !emit_editor_debug_line(context, points[i], points[j]))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool emit_editor_debug_placement_shape_bounds(editor_debug_iteration_context *context,
                                                      const editor_placement_preview_state *preview)
 {
-    if (preview != NULL && preview->shape != NULL && SDL_strcmp(preview->shape, "cylinder") == 0)
-        return emit_editor_debug_placement_cylinder_bounds(context, preview);
+    if (preview != NULL && preview->shape != NULL)
+    {
+        if (editor_preview_shape_is_prism(preview->shape))
+            return emit_editor_debug_placement_prism_bounds(context, preview,
+                                                            editor_preview_prism_segments(preview->shape));
+        if (SDL_strcmp(preview->shape, "cone") == 0)
+            return emit_editor_debug_placement_cone_bounds(context, preview);
+        if (SDL_strcmp(preview->shape, "spheroid_uv") == 0)
+            return emit_editor_debug_placement_spheroid_uv_bounds(context, preview);
+        if (SDL_strcmp(preview->shape, "spheroid_icosahedron") == 0)
+            return emit_editor_debug_placement_icosahedron_bounds(context, preview);
+    }
     return preview != NULL && emit_editor_debug_bounds(context, preview->bounds);
 }
 

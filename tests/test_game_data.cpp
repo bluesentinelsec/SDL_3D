@@ -35591,7 +35591,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     slayer3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, EditorSourceBrushCreateSupportsCuboidAndCylinderShapes)
+TEST(GameDataRuntime, EditorSourceBrushCreateSupportsConvexShapePrefabs)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
@@ -35621,15 +35621,49 @@ TEST(GameDataRuntime, EditorSourceBrushCreateSupportsCuboidAndCylinderShapes)
     ASSERT_TRUE(cylinder_result.valid);
     ASSERT_STRNE(cylinder_result.brush_name, "");
 
+    struct ShapeCase
+    {
+        const char *prefab;
+        int min[3];
+        int max[3];
+        int expected_vertices;
+        int expected_faces;
+    };
+    const ShapeCase shape_cases[] = {
+        {"column", {5000, 0, -1000}, {7000, 1000, 1000}, 16, 10},
+        {"octagon", {8000, 0, -1000}, {10000, 1000, 1000}, 16, 10},
+        {"hexagon", {11000, 0, -1000}, {13000, 1000, 1000}, 12, 8},
+        {"cone", {14000, 0, -1000}, {16000, 1000, 1000}, 9, 9},
+        {"spheroid_uv", {17000, 0, -1000}, {19000, 2000, 1000}, 14, 18},
+        {"spheroid_icosahedron", {20000, 0, -1000}, {22000, 2000, 1000}, 12, 20},
+    };
+    std::vector<editor_brush_source_prefab_result> shape_results(std::size(shape_cases));
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+            runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID,
+            shape_cases[i].min, shape_cases[i].max, shape_cases[i].prefab, &shape_results[i]))
+            << shape_cases[i].prefab;
+        ASSERT_TRUE(shape_results[i].valid) << shape_cases[i].prefab;
+        ASSERT_STRNE(shape_results[i].brush_name, "") << shape_cases[i].prefab;
+    }
+
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
-    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 2 + static_cast<int>(std::size(shape_cases)));
     ASSERT_EQ(world.brushes[0].face_count, 6);
     ASSERT_EQ(world.brushes[1].face_count, 10);
     ASSERT_NE(world.brushes[0].editor.prefab, nullptr);
     ASSERT_NE(world.brushes[1].editor.prefab, nullptr);
     EXPECT_STREQ(world.brushes[0].editor.prefab, "editor.box");
     EXPECT_STREQ(world.brushes[1].editor.prefab, "cylinder");
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        const int brush_index = 2 + static_cast<int>(i);
+        ASSERT_NE(world.brushes[brush_index].editor.prefab, nullptr) << shape_cases[i].prefab;
+        EXPECT_STREQ(world.brushes[brush_index].editor.prefab, shape_cases[i].prefab);
+        EXPECT_EQ(world.brushes[brush_index].face_count, shape_cases[i].expected_faces) << shape_cases[i].prefab;
+    }
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
     ASSERT_NE(world_runtime, nullptr);
@@ -35656,6 +35690,31 @@ TEST(GameDataRuntime, EditorSourceBrushCreateSupportsCuboidAndCylinderShapes)
     EXPECT_EQ(cylinder_model.face_count, 10);
     EXPECT_GT(cylinder_model.edge_count, 0);
 
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        const int brush_index = 2 + static_cast<int>(i);
+        editor_brush_source_box_runtime shape_source{};
+        ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, shape_results[i].brush_name,
+                                                                   &shape_source, nullptr, error, sizeof(error)))
+            << shape_cases[i].prefab << ": " << error;
+        EXPECT_STREQ(shape_source.prefab, shape_cases[i].prefab);
+        EXPECT_EQ(shape_source.vertex_count, shape_cases[i].expected_vertices) << shape_cases[i].prefab;
+        free_editor_brush_source_box_runtime(&shape_source);
+
+        editor_brush_source_vertex_model shape_model{};
+        ASSERT_TRUE(
+            editor_brush_source_box_build_vertex_model(world_runtime, brush_index, &shape_model, error, sizeof(error)))
+            << shape_cases[i].prefab << ": " << error;
+        EXPECT_EQ(shape_model.vertex_count, shape_cases[i].expected_vertices) << shape_cases[i].prefab;
+        EXPECT_EQ(shape_model.face_count, shape_cases[i].expected_faces) << shape_cases[i].prefab;
+        EXPECT_GT(shape_model.edge_count, 0) << shape_cases[i].prefab;
+
+        const int paint_face = shape_cases[i].expected_faces - 1;
+        ASSERT_TRUE(editor_brush_world_set_source_box_face_material(
+            world_runtime, shape_results[i].brush_name, paint_face, "mat.editor.floor", error, sizeof(error)))
+            << shape_cases[i].prefab << ": " << error;
+    }
+
     SDL_zeroa(error);
     ASSERT_TRUE(editor_brush_world_rotate_source_box(
         world_runtime, cylinder_result.brush_name, slayer3d_vec3_make(3.0f, 0.5f, 0.0f),
@@ -35668,18 +35727,54 @@ TEST(GameDataRuntime, EditorSourceBrushCreateSupportsCuboidAndCylinderShapes)
     EXPECT_EQ(cylinder_source.vertex_count, 16);
     free_editor_brush_source_box_runtime(&cylinder_source);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
-    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 2 + static_cast<int>(std::size(shape_cases)));
     EXPECT_EQ(world.brushes[1].face_count, 10);
+
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        const slayer3d_vec3 anchor =
+            slayer3d_vec3_make(static_cast<float>(shape_cases[i].min[0] + shape_cases[i].max[0]) * 0.0005f,
+                               static_cast<float>(shape_cases[i].min[1] + shape_cases[i].max[1]) * 0.0005f,
+                               static_cast<float>(shape_cases[i].min[2] + shape_cases[i].max[2]) * 0.0005f);
+        SDL_zeroa(error);
+        ASSERT_TRUE(editor_brush_world_rotate_source_box(world_runtime, shape_results[i].brush_name, anchor,
+                                                         slayer3d_vec3_make(0.0f, 1.0f, 0.0f), SDL_PI_F * 0.125f, error,
+                                                         sizeof(error)))
+            << shape_cases[i].prefab << ": " << error;
+        editor_brush_source_box_runtime transformed_source{};
+        ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, shape_results[i].brush_name,
+                                                                   &transformed_source, nullptr, error, sizeof(error)))
+            << shape_cases[i].prefab << ": " << error;
+        EXPECT_STREQ(transformed_source.prefab, shape_cases[i].prefab);
+        EXPECT_EQ(transformed_source.vertex_count, shape_cases[i].expected_vertices) << shape_cases[i].prefab;
+        free_editor_brush_source_box_runtime(&transformed_source);
+    }
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2 + static_cast<int>(std::size(shape_cases)));
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        const int brush_index = 2 + static_cast<int>(i);
+        EXPECT_EQ(world.brushes[brush_index].face_count, shape_cases[i].expected_faces) << shape_cases[i].prefab;
+    }
 
     SDL_zeroa(error);
     ASSERT_TRUE(editor_brush_world_set_source_box_face_material(world_runtime, cylinder_result.brush_name, 6,
                                                                 "mat.editor.floor", error, sizeof(error)))
         << error;
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
-    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 2 + static_cast<int>(std::size(shape_cases)));
     ASSERT_EQ(world.brushes[1].face_count, 10);
     ASSERT_LT(6, world.brushes[1].face_count);
     EXPECT_STREQ(world.brushes[1].faces[6].material_name, "mat.editor.floor");
+    for (size_t i = 0; i < std::size(shape_cases); ++i)
+    {
+        const int brush_index = 2 + static_cast<int>(i);
+        const int paint_face = shape_cases[i].expected_faces - 1;
+        ASSERT_LT(paint_face, world.brushes[brush_index].face_count) << shape_cases[i].prefab;
+        EXPECT_STREQ(world.brushes[brush_index].faces[paint_face].material_name, "mat.editor.floor")
+            << shape_cases[i].prefab;
+    }
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

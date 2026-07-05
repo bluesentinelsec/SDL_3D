@@ -3163,7 +3163,10 @@ static bool source_prefab_name_supported(const char *prefab)
     return prefab != NULL &&
            (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 || SDL_strcmp(prefab, "ceiling") == 0 ||
             SDL_strcmp(prefab, "sky") == 0 || SDL_strcmp(prefab, "box") == 0 || SDL_strcmp(prefab, "cuboid") == 0 ||
-            SDL_strcmp(prefab, "editor.box") == 0 || SDL_strcmp(prefab, "cylinder") == 0);
+            SDL_strcmp(prefab, "editor.box") == 0 || SDL_strcmp(prefab, "cylinder") == 0 ||
+            SDL_strcmp(prefab, "column") == 0 || SDL_strcmp(prefab, "octagon") == 0 ||
+            SDL_strcmp(prefab, "hexagon") == 0 || SDL_strcmp(prefab, "cone") == 0 ||
+            SDL_strcmp(prefab, "spheroid_uv") == 0 || SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
 }
 
 static const char *source_prefab_normalized(const char *prefab)
@@ -3287,9 +3290,13 @@ static int source_prefab_snap_coord(const brush_world_runtime *world_runtime, fl
     return (int)SDL_lroundf(value / (float)snap_units) * snap_units;
 }
 
-static bool source_prefab_populate_cylinder_vertices(const brush_world_runtime *world_runtime,
-                                                     editor_brush_source_box_runtime *box, char *error_buffer,
-                                                     int error_buffer_size)
+static bool source_prefab_validate_convex_vertices(const brush_world_runtime *world_runtime,
+                                                   editor_brush_source_box_runtime *box, const char *shape_name,
+                                                   char *error_buffer, int error_buffer_size);
+
+static bool source_prefab_populate_prism_vertices(const brush_world_runtime *world_runtime,
+                                                  editor_brush_source_box_runtime *box, int segments,
+                                                  const char *shape_name, char *error_buffer, int error_buffer_size)
 {
     if (box == NULL)
         return false;
@@ -3299,7 +3306,14 @@ static bool source_prefab_populate_cylinder_vertices(const brush_world_runtime *
     const int width_z = box->max[2] - box->min[2];
     if (width_x < 2 || height_y < 1 || width_z < 2)
     {
-        set_error(error_buffer, error_buffer_size, "source cylinder placement would create invalid geometry");
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "prism");
+        return false;
+    }
+    if (segments < 3 || segments * 2 > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement exceeds editable vertex capacity",
+                   shape_name != NULL ? shape_name : "prism");
         return false;
     }
 
@@ -3307,22 +3321,33 @@ static bool source_prefab_populate_cylinder_vertices(const brush_world_runtime *
     const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
     const float radius_x = (float)width_x * 0.5f;
     const float radius_z = (float)width_z * 0.5f;
-    static const float unit_circle[8][2] = {
-        {1.0f, 0.0f},  {0.70710678f, 0.70710678f},   {0.0f, 1.0f},  {-0.70710678f, 0.70710678f},
-        {-1.0f, 0.0f}, {-0.70710678f, -0.70710678f}, {0.0f, -1.0f}, {0.70710678f, -0.70710678f},
-    };
 
-    box->vertex_count = 16;
+    box->vertex_count = segments * 2;
     for (int ring = 0; ring < 2; ++ring)
     {
         const int y = ring == 0 ? box->min[1] : box->max[1];
-        for (int i = 0; i < 8; ++i)
+        for (int i = 0; i < segments; ++i)
         {
-            const int vertex = ring * 8 + i;
-            box->vertices[vertex][0] = source_prefab_snap_coord(world_runtime, center_x + unit_circle[i][0] * radius_x);
+            const float angle = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+            const int vertex = ring * segments + i;
+            box->vertices[vertex][0] = source_prefab_snap_coord(world_runtime, center_x + SDL_cosf(angle) * radius_x);
             box->vertices[vertex][1] = y;
-            box->vertices[vertex][2] = source_prefab_snap_coord(world_runtime, center_z + unit_circle[i][1] * radius_z);
+            box->vertices[vertex][2] = source_prefab_snap_coord(world_runtime, center_z + SDL_sinf(angle) * radius_z);
         }
+    }
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, shape_name, error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_validate_convex_vertices(const brush_world_runtime *world_runtime,
+                                                   editor_brush_source_box_runtime *box, const char *shape_name,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL || box->vertex_count < 4 || box->vertex_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "shape");
+        return false;
     }
 
     source_convex_plane planes[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
@@ -3335,7 +3360,169 @@ static bool source_prefab_populate_cylinder_vertices(const brush_world_runtime *
     }
 
     source_box_update_bounds_from_vertices(box);
-    return source_box_extents_valid(box);
+    if (!source_box_extents_valid(box))
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "shape");
+        return false;
+    }
+    return true;
+}
+
+static bool source_prefab_populate_cone_vertices(const brush_world_runtime *world_runtime,
+                                                 editor_brush_source_box_runtime *box, char *error_buffer,
+                                                 int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 1 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size, "source cone placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    static const float unit_circle[8][2] = {
+        {1.0f, 0.0f},  {0.70710678f, 0.70710678f},   {0.0f, 1.0f},  {-0.70710678f, 0.70710678f},
+        {-1.0f, 0.0f}, {-0.70710678f, -0.70710678f}, {0.0f, -1.0f}, {0.70710678f, -0.70710678f},
+    };
+
+    box->vertex_count = 9;
+    for (int i = 0; i < 8; ++i)
+    {
+        box->vertices[i][0] = source_prefab_snap_coord(world_runtime, center_x + unit_circle[i][0] * radius_x);
+        box->vertices[i][1] = box->min[1];
+        box->vertices[i][2] = source_prefab_snap_coord(world_runtime, center_z + unit_circle[i][1] * radius_z);
+    }
+    box->vertices[8][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[8][1] = box->max[1];
+    box->vertices[8][2] = source_prefab_snap_coord(world_runtime, center_z);
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "cone", error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_populate_spheroid_uv_vertices(const brush_world_runtime *world_runtime,
+                                                        editor_brush_source_box_runtime *box, char *error_buffer,
+                                                        int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 2 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size, "source UV spheroid placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_y = ((float)box->min[1] + (float)box->max[1]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_y = (float)height_y * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    static const float unit_circle[6][2] = {
+        {1.0f, 0.0f}, {0.5f, 0.8660254f}, {-0.5f, 0.8660254f}, {-1.0f, 0.0f}, {-0.5f, -0.8660254f}, {0.5f, -0.8660254f},
+    };
+    static const float ring_y[2] = {-0.5f, 0.5f};
+    static const float ring_radius[2] = {0.8660254f, 0.8660254f};
+
+    box->vertex_count = 14;
+    box->vertices[0][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[0][1] = box->min[1];
+    box->vertices[0][2] = source_prefab_snap_coord(world_runtime, center_z);
+    for (int ring = 0; ring < 2; ++ring)
+    {
+        const float y = center_y + ring_y[ring] * radius_y;
+        const float ring_rx = radius_x * ring_radius[ring];
+        const float ring_rz = radius_z * ring_radius[ring];
+        for (int i = 0; i < 6; ++i)
+        {
+            const int vertex = 1 + ring * 6 + i;
+            box->vertices[vertex][0] = source_prefab_snap_coord(world_runtime, center_x + unit_circle[i][0] * ring_rx);
+            box->vertices[vertex][1] = source_prefab_snap_coord(world_runtime, y);
+            box->vertices[vertex][2] = source_prefab_snap_coord(world_runtime, center_z + unit_circle[i][1] * ring_rz);
+        }
+    }
+    box->vertices[13][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[13][1] = box->max[1];
+    box->vertices[13][2] = source_prefab_snap_coord(world_runtime, center_z);
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "UV spheroid", error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_populate_spheroid_icosahedron_vertices(const brush_world_runtime *world_runtime,
+                                                                 editor_brush_source_box_runtime *box,
+                                                                 char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 2 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "source icosahedron spheroid placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_y = ((float)box->min[1] + (float)box->max[1]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_y = (float)height_y * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    const float inv_phi = 0.61803399f;
+    static const float vertices[12][3] = {
+        {0.0f, inv_phi, 1.0f}, {0.0f, -inv_phi, 1.0f}, {0.0f, inv_phi, -1.0f}, {0.0f, -inv_phi, -1.0f},
+        {inv_phi, 1.0f, 0.0f}, {-inv_phi, 1.0f, 0.0f}, {inv_phi, -1.0f, 0.0f}, {-inv_phi, -1.0f, 0.0f},
+        {1.0f, 0.0f, inv_phi}, {-1.0f, 0.0f, inv_phi}, {1.0f, 0.0f, -inv_phi}, {-1.0f, 0.0f, -inv_phi},
+    };
+
+    box->vertex_count = 12;
+    for (int i = 0; i < box->vertex_count; ++i)
+    {
+        box->vertices[i][0] = source_prefab_snap_coord(world_runtime, center_x + vertices[i][0] * radius_x);
+        box->vertices[i][1] = source_prefab_snap_coord(world_runtime, center_y + vertices[i][1] * radius_y);
+        box->vertices[i][2] = source_prefab_snap_coord(world_runtime, center_z + vertices[i][2] * radius_z);
+    }
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "icosahedron spheroid", error_buffer,
+                                                  error_buffer_size);
+}
+
+static bool source_prefab_populate_shape_vertices(const brush_world_runtime *world_runtime, const char *prefab,
+                                                  editor_brush_source_box_runtime *box, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    if (prefab == NULL || box == NULL)
+        return true;
+    if (SDL_strcmp(prefab, "cylinder") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 8, "cylinder", error_buffer,
+                                                     error_buffer_size);
+    if (SDL_strcmp(prefab, "column") == 0 || SDL_strcmp(prefab, "octagon") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 8, prefab, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "hexagon") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 6, "hexagon", error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "cone") == 0)
+        return source_prefab_populate_cone_vertices(world_runtime, box, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "spheroid_uv") == 0)
+        return source_prefab_populate_spheroid_uv_vertices(world_runtime, box, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "spheroid_icosahedron") == 0)
+        return source_prefab_populate_spheroid_icosahedron_vertices(world_runtime, box, error_buffer,
+                                                                    error_buffer_size);
+    return true;
 }
 
 bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world_runtime, const char *prefab,
@@ -3381,8 +3568,8 @@ bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world
         return false;
     }
 
-    if (SDL_strcmp(normalized_prefab, "cylinder") == 0 &&
-        !source_prefab_populate_cylinder_vertices(world_runtime, out_box, error_buffer, error_buffer_size))
+    if (!source_prefab_populate_shape_vertices(world_runtime, normalized_prefab, out_box, error_buffer,
+                                               error_buffer_size))
     {
         free_editor_brush_source_box(out_box);
         return false;
@@ -4020,7 +4207,10 @@ static bool mirror_source_vertex_coord(const int coord[3], const float plane_poi
 
 static bool source_prefab_preserved_by_transform(const char *prefab)
 {
-    return prefab != NULL && SDL_strcmp(prefab, "cylinder") == 0;
+    return prefab != NULL && (SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
+                              SDL_strcmp(prefab, "octagon") == 0 || SDL_strcmp(prefab, "hexagon") == 0 ||
+                              SDL_strcmp(prefab, "cone") == 0 || SDL_strcmp(prefab, "spheroid_uv") == 0 ||
+                              SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
 }
 
 static bool source_box_apply_transform_prefab(editor_brush_source_box_runtime *box, const char *operation_name,
