@@ -22413,8 +22413,6 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", "/tmp/slayer3d-textures");
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", "/tmp/slayer3d-models");
-    slayer3d_properties_set_string(scene_state, "editor.file.edit.focus", "open");
-    slayer3d_properties_set_bool(scene_state, "editor.file.edit.replace_on_text", true);
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
     slayer3d_properties_set_bool(scene_state, "editor.texture.viewer.active", true);
     slayer3d_properties_set_bool(scene_state, "editor.actor.viewer.active", true);
@@ -22445,8 +22443,6 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.open.path", ""), "");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", "stale"), "");
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.edit.replace_on_text", true));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", true));
@@ -22475,12 +22471,10 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "/tmp/slayer3d-models");
 
     slayer3d_properties_set_string(scene_state, "editor.file.open.path", save_path.string().c_str());
-    slayer3d_properties_set_string(scene_state, "editor.file.edit.focus", "open");
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
     slayer3d_properties_set_bool(scene_state, "editor.load.valid", false);
     emit_signal("signal.editor.file.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.file.edit.focus", "stale"), "");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), save_path.string().c_str());
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
@@ -33046,7 +33040,7 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     ASSERT_NE(bus, nullptr);
     const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
     ASSERT_GE(test_run_enter_signal, 0);
-    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.slayer3d_editor.main");
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
@@ -35963,7 +35957,7 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnInvalidSourceModel)
     ASSERT_NE(bus, nullptr);
     const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
     ASSERT_GE(test_run_enter_signal, 0);
-    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.slayer3d_editor.main");
 
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);

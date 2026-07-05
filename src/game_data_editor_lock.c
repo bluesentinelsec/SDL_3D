@@ -118,6 +118,12 @@ bool slayer3d_game_data_unlock_selected_editor_objects_action(slayer3d_game_data
     return set_selected_lock_action(runtime, false);
 }
 
+/*
+ * "editor.lock.unlock_all" is intentionally action-API-only: the GUI exposes
+ * per-selection lock/unlock, and this bulk escape hatch mirrors
+ * "editor.visibility.show_all" for data-driven callers until a GUI affordance
+ * is added.
+ */
 bool slayer3d_game_data_unlock_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     (void)action;

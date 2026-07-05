@@ -204,8 +204,6 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.file.edit.replace_on_text", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);

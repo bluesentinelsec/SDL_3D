@@ -49,11 +49,6 @@ static bool editor_hit_is_toolbar(const slayer3d_ui_layout_hit_region *hit)
            editor_hit_id_has_prefix(hit, "ui.editor_shell.tool_toolbar.");
 }
 
-static bool editor_hit_is_palette(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.palette.");
-}
-
 static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
@@ -384,7 +379,6 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.file.edit.focus", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
@@ -609,9 +603,9 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     }
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
-    if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit) ||
-        editor_hit_is_file_menu(hit) || editor_hit_is_global_panel(hit) || editor_hit_is_actor_viewer(hit) ||
-        editor_hit_is_left_inspector(hit) || console_event_active)
+    if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
+        editor_hit_is_global_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
+        console_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;
