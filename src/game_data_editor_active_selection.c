@@ -515,7 +515,7 @@ static void editor_reset_stair_panel_position(slayer3d_game_data_runtime *runtim
     float mouse_y = 0.0f;
     editor_trace_viewport_config viewport;
     slayer3d_camera3d camera;
-    const slayer3d_vec3 anchor = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.add",
+    const slayer3d_vec3 anchor = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.panel.anchor",
                                                               slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     if (slayer3d_input_get_mouse_position(runtime_input(runtime), &mouse_x, &mouse_y) &&
         editor_trace_select_viewport_at(runtime, trace, mouse_x, mouse_y, &viewport) &&
@@ -611,8 +611,6 @@ static bool editor_handle_stair_ui_actions(slayer3d_game_data_runtime *runtime, 
 {
     if (!editor_handle_stair_panel(runtime, selection_json, out_consumed))
         return false;
-    if (runtime != NULL && runtime->scene_state != NULL)
-        slayer3d_properties_set_string(runtime->scene_state, "editor.stair.gizmo.hover", "");
     return true;
 }
 

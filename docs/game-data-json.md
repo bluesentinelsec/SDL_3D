@@ -1210,9 +1210,11 @@ The editor Shape menu also creates source-backed convex brushes for simple
 single-hull presets: `cylinder`, `column`, `octagon`, `hexagon`, `cone`,
 `spheroid_uv`, and `spheroid_icosahedron`. These generated presets use the
 same convex validation, transform, face-material, and save/reopen paths as
-manually edited convex source brushes. Compound or semantically richer presets
-such as stairs, pipes, capsules, doors, and windows are intentionally separate
-future workflows.
+manually edited convex source brushes. Stairs are authored as source-backed box
+brush groups with shared stair metadata and a draggable editor panel for
+toggling direction, adding steps, and removing the most recent step. Other
+compound or semantically richer presets such as pipes, capsules, doors, and
+windows are intentionally separate future workflows.
 `material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
