@@ -493,6 +493,129 @@ static slayer3d_vec3 editor_scale_bounds_point(slayer3d_bounding_box bounds, sla
                               signs.z < -0.5f ? bounds.min.z : (signs.z > 0.5f ? bounds.max.z : center.z));
 }
 
+typedef enum editor_stair_gizmo_pick
+{
+    EDITOR_STAIR_GIZMO_PICK_NONE,
+    EDITOR_STAIR_GIZMO_PICK_DIRECTION,
+    EDITOR_STAIR_GIZMO_PICK_ADD,
+    EDITOR_STAIR_GIZMO_PICK_REMOVE,
+} editor_stair_gizmo_pick;
+
+static editor_stair_gizmo_pick editor_pick_stair_gizmo_at(slayer3d_game_data_runtime *runtime, float mouse_x,
+                                                          float mouse_y)
+{
+    if (runtime == NULL || runtime->scene_state == NULL ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.gizmo.visible", false))
+    {
+        return EDITOR_STAIR_GIZMO_PICK_NONE;
+    }
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *selection = obj_get(editor, "selection");
+    yyjson_val *trace = obj_get(selection, "trace");
+    editor_trace_viewport_config viewport;
+    if (!editor_trace_select_viewport_at(runtime, trace, mouse_x, mouse_y, &viewport))
+        return EDITOR_STAIR_GIZMO_PICK_NONE;
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
+        return EDITOR_STAIR_GIZMO_PICK_NONE;
+
+    const struct
+    {
+        editor_stair_gizmo_pick kind;
+        const char *key;
+        bool enabled;
+    } candidates[] = {
+        {EDITOR_STAIR_GIZMO_PICK_DIRECTION, "editor.stair.gizmo.direction", true},
+        {EDITOR_STAIR_GIZMO_PICK_ADD, "editor.stair.gizmo.add", true},
+        {EDITOR_STAIR_GIZMO_PICK_REMOVE, "editor.stair.gizmo.remove", true},
+    };
+
+    editor_stair_gizmo_pick best = EDITOR_STAIR_GIZMO_PICK_NONE;
+    float best_distance = FLT_MAX;
+    for (size_t i = 0; i < SDL_arraysize(candidates); ++i)
+    {
+        if (!candidates[i].enabled)
+            continue;
+        const slayer3d_vec3 center =
+            slayer3d_properties_get_vec3(runtime->scene_state, candidates[i].key, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        float screen_x = 0.0f;
+        float screen_y = 0.0f;
+        if (!editor_project_world_to_viewport(&camera, &viewport, center, &screen_x, &screen_y))
+            continue;
+        const float dx = mouse_x - (viewport.x + screen_x);
+        const float dy = mouse_y - (viewport.y + screen_y);
+        const float distance = dx * dx + dy * dy;
+        if (distance < best_distance)
+        {
+            best_distance = distance;
+            best = candidates[i].kind;
+        }
+    }
+
+    const float pick_radius = 24.0f;
+    return best_distance <= pick_radius * pick_radius ? best : EDITOR_STAIR_GIZMO_PICK_NONE;
+}
+
+static const char *editor_stair_gizmo_name(editor_stair_gizmo_pick pick)
+{
+    switch (pick)
+    {
+    case EDITOR_STAIR_GIZMO_PICK_DIRECTION:
+        return "direction";
+    case EDITOR_STAIR_GIZMO_PICK_ADD:
+        return "add";
+    case EDITOR_STAIR_GIZMO_PICK_REMOVE:
+        return "remove";
+    default:
+        return "";
+    }
+}
+
+static bool editor_handle_stair_gizmos(slayer3d_game_data_runtime *runtime, bool select_requested, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_select(runtime) ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.selected", false))
+    {
+        return true;
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (!slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        return true;
+
+    const editor_stair_gizmo_pick hovered = editor_pick_stair_gizmo_at(runtime, mouse_x, mouse_y);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.stair.gizmo.hover", editor_stair_gizmo_name(hovered));
+    if (hovered == EDITOR_STAIR_GIZMO_PICK_NONE || !select_requested)
+        return true;
+
+    if (out_consumed != NULL)
+        *out_consumed = true;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+    {
+        (void)slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return true;
+    }
+
+    switch (hovered)
+    {
+    case EDITOR_STAIR_GIZMO_PICK_DIRECTION:
+        return slayer3d_game_data_toggle_selected_editor_stair_direction_action(runtime, NULL);
+    case EDITOR_STAIR_GIZMO_PICK_ADD:
+        return slayer3d_game_data_add_selected_editor_stair_step_action(runtime, NULL);
+    case EDITOR_STAIR_GIZMO_PICK_REMOVE:
+        return slayer3d_game_data_remove_selected_editor_stair_step_action(runtime, NULL);
+    default:
+        return true;
+    }
+}
+
 static int editor_scale_active_axis_count(slayer3d_vec3 signs)
 {
     int count = 0;
@@ -2186,6 +2309,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    bool stair_gizmo_consumed = false;
+    if (!editor_handle_stair_gizmos(runtime, select_requested, &stair_gizmo_consumed))
+        return false;
+    if (stair_gizmo_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool texture_paint_consumed = false;
     if (!editor_handle_texture_paint(runtime, &hover_selection, select_requested, &texture_paint_consumed))
         return false;

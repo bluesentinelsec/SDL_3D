@@ -35834,6 +35834,35 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
         yyjson_doc_free(doc);
         return ok;
     };
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.gizmo.visible", false));
+    const slayer3d_vec3 gizmo_add = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.add",
+                                                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_GT(gizmo_add.z, 2.0f);
+    struct StairGizmoDebug
+    {
+        int direction = 0;
+        int add = 0;
+        int remove = 0;
+    } stair_gizmos;
+    auto capture_stair_gizmos = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *debug = static_cast<StairGizmoDebug *>(userdata);
+        if (debug == nullptr || primitive == nullptr)
+            return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_DIRECTION_GIZMO)
+            ++debug->direction;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_ADD_GIZMO)
+            ++debug->add;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_REMOVE_GIZMO)
+            ++debug->remove;
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_stair_gizmos, &stair_gizmos));
+    EXPECT_GT(stair_gizmos.direction, 0);
+    EXPECT_GT(stair_gizmos.add, 0);
+    EXPECT_GT(stair_gizmos.remove, 0);
+
     ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.add_step" })json"));
 
     slayer3d_game_data_brush_world world{};

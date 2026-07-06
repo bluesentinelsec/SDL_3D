@@ -55,6 +55,9 @@ static bool emit_editor_source_vertex_add_preview(const slayer3d_game_data_runti
 static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+static bool emit_editor_selected_stair_gizmos(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 static bool emit_editor_clip_tool_primitives(const slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_editor_debug_desc *desc,
                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
@@ -124,6 +127,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
     }
     if (SDL_strcmp(value != NULL ? value : "", "actors") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS;
+    if (SDL_strcmp(value != NULL ? value : "", "stair_gizmos") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_STAIR_GIZMOS;
     if (SDL_strcmp(value != NULL ? value : "", "markers") == 0 ||
         SDL_strcmp(value != NULL ? value : "", "diagnostic_markers") == 0)
     {
@@ -284,6 +289,8 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
     if (!emit_editor_source_vertex_add_preview(runtime, &desc, callback, userdata))
         return false;
     if (!emit_editor_overlapping_source_brush_bounds(runtime, &desc, callback, userdata))
+        return false;
+    if (!emit_editor_selected_stair_gizmos(runtime, &desc, callback, userdata))
         return false;
 
     return emit_editor_debug_overlay_markers(runtime, &desc, callback, userdata);
@@ -822,6 +829,98 @@ static bool emit_editor_debug_capsule_marker(editor_debug_iteration_context *con
             return false;
         }
     }
+    return true;
+}
+
+static bool emit_editor_debug_plus_gizmo(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                         slayer3d_vec3 run, slayer3d_vec3 side, float size)
+{
+    if (!emit_editor_debug_line(context, slayer3d_vec3_sub(center, slayer3d_vec3_scale(side, size)),
+                                slayer3d_vec3_add(center, slayer3d_vec3_scale(side, size))))
+    {
+        return false;
+    }
+    return emit_editor_debug_line(context, slayer3d_vec3_sub(center, slayer3d_vec3_scale(run, size)),
+                                  slayer3d_vec3_add(center, slayer3d_vec3_scale(run, size)));
+}
+
+static bool emit_editor_debug_x_gizmo(editor_debug_iteration_context *context, slayer3d_vec3 center, slayer3d_vec3 run,
+                                      slayer3d_vec3 side, float size)
+{
+    const slayer3d_vec3 diagonal_a = slayer3d_vec3_add(run, side);
+    const slayer3d_vec3 diagonal_b = slayer3d_vec3_sub(run, side);
+    if (!emit_editor_debug_line(context, slayer3d_vec3_sub(center, slayer3d_vec3_scale(diagonal_a, size)),
+                                slayer3d_vec3_add(center, slayer3d_vec3_scale(diagonal_a, size))))
+    {
+        return false;
+    }
+    return emit_editor_debug_line(context, slayer3d_vec3_sub(center, slayer3d_vec3_scale(diagonal_b, size)),
+                                  slayer3d_vec3_add(center, slayer3d_vec3_scale(diagonal_b, size)));
+}
+
+static bool emit_editor_debug_vertical_arrow_gizmo(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                                   bool ascending, float size)
+{
+    const slayer3d_vec3 vertical = slayer3d_vec3_make(0.0f, ascending ? 1.0f : -1.0f, 0.0f);
+    const slayer3d_vec3 side = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 tip = slayer3d_vec3_add(center, slayer3d_vec3_scale(vertical, size));
+    const slayer3d_vec3 tail = slayer3d_vec3_sub(center, slayer3d_vec3_scale(vertical, size));
+    if (!emit_editor_debug_line(context, tail, tip))
+        return false;
+    if (!emit_editor_debug_line(context, tip, slayer3d_vec3_add(center, slayer3d_vec3_scale(side, size * 0.45f))))
+    {
+        return false;
+    }
+    return emit_editor_debug_line(context, tip, slayer3d_vec3_sub(center, slayer3d_vec3_scale(side, size * 0.45f)));
+}
+
+static bool emit_editor_selected_stair_gizmos(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || desc == NULL || callback == NULL)
+        return true;
+    const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_STAIR_GIZMOS) == 0u ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.gizmo.visible", false))
+    {
+        return true;
+    }
+
+    const slayer3d_vec3 direction_center = slayer3d_properties_get_vec3(
+        runtime->scene_state, "editor.stair.gizmo.direction", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 add_center = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.add",
+                                                                  slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 remove_center = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.remove",
+                                                                     slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 run = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.run",
+                                                           slayer3d_vec3_make(0.0f, 0.0f, 1.0f));
+    const slayer3d_vec3 side = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.side",
+                                                            slayer3d_vec3_make(1.0f, 0.0f, 0.0f));
+    const bool ascending = slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.ascending", true);
+    const bool can_remove = slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.can_remove_step", false);
+    const float size = 0.18f;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.face_index = -1;
+
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_DIRECTION_GIZMO;
+    context.color = ascending ? (slayer3d_color){70, 255, 120, 255} : (slayer3d_color){70, 150, 255, 255};
+    if (!emit_editor_debug_vertical_arrow_gizmo(&context, direction_center, ascending, size))
+        return false;
+
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_ADD_GIZMO;
+    context.color = (slayer3d_color){70, 255, 120, 255};
+    if (!emit_editor_debug_plus_gizmo(&context, add_center, run, side, size))
+        return false;
+
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_REMOVE_GIZMO;
+    context.color = can_remove ? (slayer3d_color){255, 72, 72, 255} : (slayer3d_color){130, 70, 70, 180};
+    if (!emit_editor_debug_x_gizmo(&context, remove_center, run, side, size))
+        return false;
     return true;
 }
 

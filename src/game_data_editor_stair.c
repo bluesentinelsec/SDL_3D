@@ -12,6 +12,12 @@
 #define EDITOR_STAIR_ASCENDING_KEY "editor.stair.ascending"
 #define EDITOR_STAIR_RUN_DELTA_KEY "editor.stair.run_delta"
 #define EDITOR_STAIR_RISE_DELTA_KEY "editor.stair.rise_delta"
+#define EDITOR_STAIR_GIZMO_VISIBLE_KEY "editor.stair.gizmo.visible"
+#define EDITOR_STAIR_GIZMO_DIRECTION_KEY "editor.stair.gizmo.direction"
+#define EDITOR_STAIR_GIZMO_ADD_KEY "editor.stair.gizmo.add"
+#define EDITOR_STAIR_GIZMO_REMOVE_KEY "editor.stair.gizmo.remove"
+#define EDITOR_STAIR_GIZMO_RUN_KEY "editor.stair.gizmo.run"
+#define EDITOR_STAIR_GIZMO_SIDE_KEY "editor.stair.gizmo.side"
 #define EDITOR_STAIR_MAX_STEPS 64
 
 static bool editor_source_box_is_stair(const editor_brush_source_box_runtime *box)
@@ -246,6 +252,66 @@ static void editor_stair_reselect_root(slayer3d_game_data_runtime *runtime, cons
     update_active_editor_selection_from_selected_brushes(runtime);
 }
 
+static void editor_stair_clear_gizmo_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, EDITOR_STAIR_GIZMO_VISIBLE_KEY, false);
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_DIRECTION_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_ADD_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_REMOVE_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_RUN_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, 1.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_SIDE_KEY,
+                                 slayer3d_vec3_make(1.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(runtime->scene_state, "editor.stair.gizmo.hover", "");
+}
+
+static void editor_stair_publish_gizmo_state(slayer3d_game_data_runtime *runtime, const brush_world_runtime *world,
+                                             const editor_brush_source_box_runtime *root)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || world == NULL || root == NULL)
+        return;
+
+    slayer3d_vec3 run = editor_stair_run_delta(root);
+    run.y = 0.0f;
+    const float run_len_sq = run.x * run.x + run.z * run.z;
+    if (run_len_sq <= 0.000001f)
+        run = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    else
+        run = slayer3d_vec3_scale(run, 1.0f / SDL_sqrtf(run_len_sq));
+
+    slayer3d_vec3 side = slayer3d_vec3_make(run.z, 0.0f, -run.x);
+    const float side_len_sq = side.x * side.x + side.z * side.z;
+    if (side_len_sq <= 0.000001f)
+        side = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    else
+        side = slayer3d_vec3_scale(side, 1.0f / SDL_sqrtf(side_len_sq));
+
+    const slayer3d_bounding_box bounds = editor_brush_source_box_bounds_meters(world, root);
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    const slayer3d_vec3 half = slayer3d_vec3_scale(slayer3d_vec3_sub(bounds.max, bounds.min), 0.5f);
+    const float run_extent = SDL_fabsf(run.x) * half.x + SDL_fabsf(run.z) * half.z;
+    const float base_size = SDL_max(SDL_max(half.x, half.z), 0.25f);
+    const float outward = SDL_clamp(base_size * 0.35f, 0.2f, 0.65f);
+    const float spacing = SDL_clamp(base_size * 0.5f, 0.35f, 0.9f);
+    const float lift = SDL_clamp(SDL_max(bounds.max.y - bounds.min.y, 0.25f) * 0.25f, 0.15f, 0.4f);
+    slayer3d_vec3 anchor = slayer3d_vec3_add(center, slayer3d_vec3_scale(run, run_extent + outward));
+    anchor.y = bounds.max.y + lift;
+
+    slayer3d_properties_set_bool(runtime->scene_state, EDITOR_STAIR_GIZMO_VISIBLE_KEY, true);
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_DIRECTION_KEY,
+                                 slayer3d_vec3_sub(anchor, slayer3d_vec3_scale(side, spacing)));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_ADD_KEY, anchor);
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_REMOVE_KEY,
+                                 slayer3d_vec3_add(anchor, slayer3d_vec3_scale(side, spacing)));
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_RUN_KEY, run);
+    slayer3d_properties_set_vec3(runtime->scene_state, EDITOR_STAIR_GIZMO_SIDE_KEY, side);
+}
+
 void publish_editor_stair_state(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -258,8 +324,10 @@ void publish_editor_stair_state(slayer3d_game_data_runtime *runtime)
     if (!selected || root == NULL)
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.stair.direction_label", "");
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.ascending", true);
         slayer3d_properties_set_int(runtime->scene_state, "editor.stair.step_count", 0);
         slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.can_remove_step", false);
+        editor_stair_clear_gizmo_state(runtime);
         return;
     }
 
@@ -267,8 +335,10 @@ void publish_editor_stair_state(slayer3d_game_data_runtime *runtime)
     const int count = editor_stair_step_count(world, root->stable_id, &max_index, NULL);
     slayer3d_properties_set_string(runtime->scene_state, "editor.stair.direction_label",
                                    editor_stair_ascending(root) ? "Up" : "Down");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.ascending", editor_stair_ascending(root));
     slayer3d_properties_set_int(runtime->scene_state, "editor.stair.step_count", count);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.can_remove_step", max_index > 0);
+    editor_stair_publish_gizmo_state(runtime, world, root);
 }
 
 bool slayer3d_game_data_toggle_selected_editor_stair_direction_action(slayer3d_game_data_runtime *runtime,

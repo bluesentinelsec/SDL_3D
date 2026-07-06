@@ -147,6 +147,12 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ORIGIN_AXIS = 41,
         /** @brief Editor-authored actor placement marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ACTOR_EDGE = 42,
+        /** @brief Selected stair brush direction gizmo line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_DIRECTION_GIZMO = 43,
+        /** @brief Selected stair brush add-step gizmo line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_ADD_GIZMO = 44,
+        /** @brief Selected stair brush remove-step gizmo line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_REMOVE_GIZMO = 45,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -185,6 +191,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES = 1u << 15,
         /** @brief Emit editor-authored actor placement markers. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS = 1u << 16,
+        /** @brief Emit selected stair brush mutation gizmos. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_STAIR_GIZMOS = 1u << 17,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -195,7 +203,8 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ACTORS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_STAIR_GIZMOS,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
