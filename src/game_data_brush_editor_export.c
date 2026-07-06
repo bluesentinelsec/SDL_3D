@@ -225,7 +225,7 @@ static const char *editor_source_face_export_key(size_t face_index, char *buffer
 {
     if (face_index < SDL_arraysize(editor_source_face_keys))
         return editor_source_face_keys[face_index];
-    SDL_snprintf(buffer, buffer_size, "%zu", face_index);
+    SDL_snprintf(buffer, buffer_size, "%llu", (unsigned long long)face_index);
     return buffer;
 }
 
