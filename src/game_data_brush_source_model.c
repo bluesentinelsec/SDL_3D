@@ -10,6 +10,8 @@
 #include <limits.h>
 #include <stdlib.h>
 
+#define SOURCE_PREFAB_ICOSAHEDRON_INV_PHI 0.61803399f
+
 int editor_brush_source_units_from_meters(const brush_world_runtime *world_runtime, float value)
 {
     const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
@@ -89,6 +91,16 @@ static int source_box_face_index_from_key(const char *key)
         if (SDL_strcmp(key, editor_brush_source_box_face_keys[i]) == 0)
             return (int)i;
     }
+    if (key != NULL && key[0] != '\0')
+    {
+        char *end = NULL;
+        const long face_index = strtol(key, &end, 10);
+        if (end != key && end != NULL && *end == '\0' && face_index >= 0 &&
+            face_index < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY)
+        {
+            return (int)face_index;
+        }
+    }
     return -1;
 }
 
@@ -115,7 +127,8 @@ static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box,
             yyjson_get_str(value)[0] == '\0')
         {
             set_error(error_buffer, error_buffer_size,
-                      "editor brush source face_materials requires px/nx/py/ny/pz/nz non-empty string entries");
+                      "editor brush source face_materials requires px/nx/py/ny/pz/nz or numeric non-empty string "
+                      "entries");
             return false;
         }
         if (!copy_source_string(&out_box->face_materials[face_index], yyjson_get_str(value)))
@@ -150,8 +163,8 @@ static bool copy_source_face_visuals(editor_brush_source_box_runtime *out_box, y
         if (face_index < 0 || !yyjson_is_arr(value) || yyjson_arr_size(value) < 3u)
         {
             set_error(error_buffer, error_buffer_size,
-                      tint ? "editor brush source face_tints requires px/nx/py/ny/pz/nz color entries"
-                           : "editor brush source face_colors requires px/nx/py/ny/pz/nz color entries");
+                      tint ? "editor brush source face_tints requires px/nx/py/ny/pz/nz or numeric color entries"
+                           : "editor brush source face_colors requires px/nx/py/ny/pz/nz or numeric color entries");
             return false;
         }
         editor_brush_visual_override_runtime *visual = &out_box->face_visuals[face_index];
@@ -274,7 +287,7 @@ int editor_brush_world_source_box_face_index_for_identity(const brush_world_runt
     const int rebuilt_face_index = source_convex_rebuilt_face_index_for_identity(box, face_identity);
     if (rebuilt_face_index >= 0)
         return rebuilt_face_index;
-    return fallback_face_index >= 0 && fallback_face_index < (int)SDL_arraysize(editor_brush_source_box_face_keys)
+    return fallback_face_index >= 0 && fallback_face_index < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY
                ? fallback_face_index
                : -1;
 }
@@ -370,6 +383,9 @@ static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
 {
     return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
 }
+
+static void source_box_init_stair_metadata(editor_brush_source_box_runtime *box);
+static void source_box_rotate_stair_vectors_y(editor_brush_source_box_runtime *box, int quarter_turns);
 
 static int source_snap_units(const brush_world_runtime *world_runtime)
 {
@@ -1133,6 +1149,7 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
     }
     out_box->contents = brush_flags_from_json(obj_get(box, "contents"), brush_content_flag_from_string,
                                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+    source_box_init_stair_metadata(out_box);
     return true;
 }
 
@@ -1725,14 +1742,16 @@ static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
     return true;
 }
 
-static const char *source_convex_face_material(const editor_brush_source_box_runtime *box, int source_face_index)
+static const char *source_convex_face_material(const editor_brush_source_box_runtime *box, int source_face_index,
+                                               int runtime_face_index)
 {
     if (box == NULL)
         return "";
-    if (source_face_index >= 0 && source_face_index < (int)SDL_arraysize(box->face_materials) &&
-        box->face_materials[source_face_index] != NULL && box->face_materials[source_face_index][0] != '\0')
+    const int face_index = source_face_index >= 0 ? source_face_index : runtime_face_index;
+    if (face_index >= 0 && face_index < (int)SDL_arraysize(box->face_materials) &&
+        box->face_materials[face_index] != NULL && box->face_materials[face_index][0] != '\0')
     {
-        return box->face_materials[source_face_index];
+        return box->face_materials[face_index];
     }
     return box->material != NULL ? box->material : "";
 }
@@ -1793,7 +1812,7 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
     for (int face_index = 0; face_index < plane_count; ++face_index)
     {
         const source_convex_plane *plane = &planes[face_index];
-        const char *material_name = source_convex_face_material(box, plane->source_face_index);
+        const char *material_name = source_convex_face_material(box, plane->source_face_index, face_index);
         const int material_index = source_material_index_by_name(&world_runtime->desc, material_name);
         if (material_index < 0)
         {
@@ -1803,7 +1822,8 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
             return false;
         }
         init_source_box_face(&faces[face_index], plane->normal, plane->distance, material_index, material_name);
-        apply_source_box_face_visual(&faces[face_index], box, plane->source_face_index);
+        apply_source_box_face_visual(&faces[face_index], box,
+                                     plane->source_face_index >= 0 ? plane->source_face_index : face_index);
 
         char face_stable_id[320];
         if (plane->source_face_index >= 0)
@@ -3148,7 +3168,21 @@ static bool source_prefab_name_supported(const char *prefab)
 {
     return prefab != NULL &&
            (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 || SDL_strcmp(prefab, "ceiling") == 0 ||
-            SDL_strcmp(prefab, "sky") == 0 || SDL_strcmp(prefab, "box") == 0 || SDL_strcmp(prefab, "editor.box") == 0);
+            SDL_strcmp(prefab, "sky") == 0 || SDL_strcmp(prefab, "box") == 0 || SDL_strcmp(prefab, "cuboid") == 0 ||
+            SDL_strcmp(prefab, "editor.box") == 0 || SDL_strcmp(prefab, "stairs") == 0 ||
+            SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
+            SDL_strcmp(prefab, "octagon") == 0 || SDL_strcmp(prefab, "hexagon") == 0 ||
+            SDL_strcmp(prefab, "cone") == 0 || SDL_strcmp(prefab, "spheroid_uv") == 0 ||
+            SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
+}
+
+static const char *source_prefab_normalized(const char *prefab)
+{
+    if (prefab == NULL || prefab[0] == '\0')
+        return prefab;
+    if (SDL_strcmp(prefab, "cuboid") == 0 || SDL_strcmp(prefab, "box") == 0)
+        return "editor.box";
+    return prefab;
 }
 
 static unsigned int source_prefab_default_contents(const char *prefab, unsigned int authored_contents)
@@ -3161,6 +3195,50 @@ static unsigned int source_prefab_default_contents(const char *prefab, unsigned 
                SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
     }
     return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+}
+
+#define EDITOR_STAIR_ROOT_KEY "editor.stair.root"
+#define EDITOR_STAIR_INDEX_KEY "editor.stair.index"
+#define EDITOR_STAIR_ASCENDING_KEY "editor.stair.ascending"
+#define EDITOR_STAIR_RUN_DELTA_KEY "editor.stair.run_delta"
+#define EDITOR_STAIR_RISE_DELTA_KEY "editor.stair.rise_delta"
+
+static bool source_box_is_stair_prefab(const editor_brush_source_box_runtime *box)
+{
+    return box != NULL && box->prefab != NULL && SDL_strcmp(box->prefab, "stairs") == 0;
+}
+
+static bool source_box_ensure_properties(editor_brush_source_box_runtime *box)
+{
+    if (box == NULL)
+        return false;
+    if (box->properties != NULL)
+        return true;
+    box->properties = slayer3d_properties_create();
+    return box->properties != NULL;
+}
+
+static void source_box_init_stair_metadata(editor_brush_source_box_runtime *box)
+{
+    if (!source_box_is_stair_prefab(box) || box->stable_id == NULL || box->stable_id[0] == '\0' ||
+        !source_box_ensure_properties(box))
+    {
+        return;
+    }
+
+    const char *root = slayer3d_properties_get_string(box->properties, EDITOR_STAIR_ROOT_KEY, "");
+    if (root != NULL && root[0] != '\0')
+        return;
+
+    const int depth = SDL_max(1, box->max[2] - box->min[2]);
+    const int height = SDL_max(1, box->max[1] - box->min[1]);
+    slayer3d_properties_set_string(box->properties, EDITOR_STAIR_ROOT_KEY, box->stable_id);
+    slayer3d_properties_set_int(box->properties, EDITOR_STAIR_INDEX_KEY, 0);
+    slayer3d_properties_set_bool(box->properties, EDITOR_STAIR_ASCENDING_KEY, true);
+    slayer3d_properties_set_vec3(box->properties, EDITOR_STAIR_RUN_DELTA_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, (float)depth));
+    slayer3d_properties_set_vec3(box->properties, EDITOR_STAIR_RISE_DELTA_KEY,
+                                 slayer3d_vec3_make(0.0f, (float)height, 0.0f));
 }
 
 static slayer3d_vec3 source_prefab_oriented_offset(slayer3d_vec3 value, const char *axis)
@@ -3191,9 +3269,9 @@ static bool editor_brush_world_build_source_prefab_candidate(const brush_world_r
     }
 
     const char *material_prefab = source_prefab_for_material(desc->material);
-    const char *prefab = desc->prefab != NULL && desc->prefab[0] != '\0'
-                             ? desc->prefab
-                             : (material_prefab != NULL ? material_prefab : "");
+    const char *prefab = source_prefab_normalized(desc->prefab != NULL && desc->prefab[0] != '\0'
+                                                      ? desc->prefab
+                                                      : (material_prefab != NULL ? material_prefab : ""));
     if (!source_prefab_name_supported(prefab))
     {
         set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
@@ -3246,10 +3324,309 @@ static bool editor_brush_world_build_source_prefab_candidate(const brush_world_r
         editor_brush_source_units_from_meters(world_runtime, desc->anchor.z + oriented_min.z),
         editor_brush_source_units_from_meters(world_runtime, desc->anchor.z + oriented_max.z));
     out_box->contents = source_prefab_default_contents(prefab, desc->contents);
+    source_box_init_stair_metadata(out_box);
     if (!source_box_extents_valid(out_box))
     {
         free_editor_brush_source_box(out_box);
         set_error(error_buffer, error_buffer_size, "source prefab placement would create invalid geometry");
+        return false;
+    }
+    return true;
+}
+
+static int source_prefab_snap_coord(const brush_world_runtime *world_runtime, float value)
+{
+    const int snap_units = source_snap_units(world_runtime);
+    if (snap_units <= 1)
+        return (int)SDL_lroundf(value);
+    return (int)SDL_lroundf(value / (float)snap_units) * snap_units;
+}
+
+static bool source_prefab_validate_convex_vertices(const brush_world_runtime *world_runtime,
+                                                   editor_brush_source_box_runtime *box, const char *shape_name,
+                                                   char *error_buffer, int error_buffer_size);
+
+static bool source_prefab_populate_prism_vertices(const brush_world_runtime *world_runtime,
+                                                  editor_brush_source_box_runtime *box, int segments,
+                                                  const char *shape_name, char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 1 || width_z < 2)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "prism");
+        return false;
+    }
+    if (segments < 3 || segments * 2 > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement exceeds editable vertex capacity",
+                   shape_name != NULL ? shape_name : "prism");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+
+    box->vertex_count = segments * 2;
+    for (int ring = 0; ring < 2; ++ring)
+    {
+        const int y = ring == 0 ? box->min[1] : box->max[1];
+        for (int i = 0; i < segments; ++i)
+        {
+            const float angle = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+            const int vertex = ring * segments + i;
+            box->vertices[vertex][0] = source_prefab_snap_coord(world_runtime, center_x + SDL_cosf(angle) * radius_x);
+            box->vertices[vertex][1] = y;
+            box->vertices[vertex][2] = source_prefab_snap_coord(world_runtime, center_z + SDL_sinf(angle) * radius_z);
+        }
+    }
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, shape_name, error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_validate_convex_vertices(const brush_world_runtime *world_runtime,
+                                                   editor_brush_source_box_runtime *box, const char *shape_name,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL || box->vertex_count < 4 || box->vertex_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "shape");
+        return false;
+    }
+
+    source_convex_plane planes[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
+    SDL_zeroa(planes);
+    int plane_count = 0;
+    if (!source_convex_build_planes(world_runtime, &box->vertices[0][0], box->vertex_count, planes,
+                                    (int)SDL_arraysize(planes), &plane_count, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    source_box_update_bounds_from_vertices(box);
+    if (!source_box_extents_valid(box))
+    {
+        set_errorf(error_buffer, error_buffer_size, "source %s placement would create invalid geometry",
+                   shape_name != NULL ? shape_name : "shape");
+        return false;
+    }
+    return true;
+}
+
+static bool source_prefab_populate_cone_vertices(const brush_world_runtime *world_runtime,
+                                                 editor_brush_source_box_runtime *box, char *error_buffer,
+                                                 int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 1 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size, "source cone placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    static const float unit_circle[8][2] = {
+        {1.0f, 0.0f},  {0.70710678f, 0.70710678f},   {0.0f, 1.0f},  {-0.70710678f, 0.70710678f},
+        {-1.0f, 0.0f}, {-0.70710678f, -0.70710678f}, {0.0f, -1.0f}, {0.70710678f, -0.70710678f},
+    };
+
+    box->vertex_count = 9;
+    for (int i = 0; i < 8; ++i)
+    {
+        box->vertices[i][0] = source_prefab_snap_coord(world_runtime, center_x + unit_circle[i][0] * radius_x);
+        box->vertices[i][1] = box->min[1];
+        box->vertices[i][2] = source_prefab_snap_coord(world_runtime, center_z + unit_circle[i][1] * radius_z);
+    }
+    box->vertices[8][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[8][1] = box->max[1];
+    box->vertices[8][2] = source_prefab_snap_coord(world_runtime, center_z);
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "cone", error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_populate_spheroid_uv_vertices(const brush_world_runtime *world_runtime,
+                                                        editor_brush_source_box_runtime *box, char *error_buffer,
+                                                        int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 2 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size, "source UV spheroid placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_y = ((float)box->min[1] + (float)box->max[1]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_y = (float)height_y * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    static const float unit_circle[6][2] = {
+        {1.0f, 0.0f}, {0.5f, 0.8660254f}, {-0.5f, 0.8660254f}, {-1.0f, 0.0f}, {-0.5f, -0.8660254f}, {0.5f, -0.8660254f},
+    };
+    static const float ring_y[2] = {-0.5f, 0.5f};
+    static const float ring_radius[2] = {0.8660254f, 0.8660254f};
+
+    box->vertex_count = 14;
+    box->vertices[0][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[0][1] = box->min[1];
+    box->vertices[0][2] = source_prefab_snap_coord(world_runtime, center_z);
+    for (int ring = 0; ring < 2; ++ring)
+    {
+        const float y = center_y + ring_y[ring] * radius_y;
+        const float ring_rx = radius_x * ring_radius[ring];
+        const float ring_rz = radius_z * ring_radius[ring];
+        for (int i = 0; i < 6; ++i)
+        {
+            const int vertex = 1 + ring * 6 + i;
+            box->vertices[vertex][0] = source_prefab_snap_coord(world_runtime, center_x + unit_circle[i][0] * ring_rx);
+            box->vertices[vertex][1] = source_prefab_snap_coord(world_runtime, y);
+            box->vertices[vertex][2] = source_prefab_snap_coord(world_runtime, center_z + unit_circle[i][1] * ring_rz);
+        }
+    }
+    box->vertices[13][0] = source_prefab_snap_coord(world_runtime, center_x);
+    box->vertices[13][1] = box->max[1];
+    box->vertices[13][2] = source_prefab_snap_coord(world_runtime, center_z);
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "UV spheroid", error_buffer, error_buffer_size);
+}
+
+static bool source_prefab_populate_spheroid_icosahedron_vertices(const brush_world_runtime *world_runtime,
+                                                                 editor_brush_source_box_runtime *box,
+                                                                 char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+
+    const int width_x = box->max[0] - box->min[0];
+    const int height_y = box->max[1] - box->min[1];
+    const int width_z = box->max[2] - box->min[2];
+    if (width_x < 2 || height_y < 2 || width_z < 2)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "source icosahedron spheroid placement would create invalid geometry");
+        return false;
+    }
+
+    const float center_x = ((float)box->min[0] + (float)box->max[0]) * 0.5f;
+    const float center_y = ((float)box->min[1] + (float)box->max[1]) * 0.5f;
+    const float center_z = ((float)box->min[2] + (float)box->max[2]) * 0.5f;
+    const float radius_x = (float)width_x * 0.5f;
+    const float radius_y = (float)height_y * 0.5f;
+    const float radius_z = (float)width_z * 0.5f;
+    static const float vertices[12][3] = {
+        {0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f},  {0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f},
+        {0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f}, {0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f},
+        {SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},  {-SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},
+        {SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f}, {-SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f},
+        {1.0f, 0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},  {-1.0f, 0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},
+        {1.0f, 0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI}, {-1.0f, 0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},
+    };
+
+    box->vertex_count = 12;
+    for (int i = 0; i < box->vertex_count; ++i)
+    {
+        box->vertices[i][0] = source_prefab_snap_coord(world_runtime, center_x + vertices[i][0] * radius_x);
+        box->vertices[i][1] = source_prefab_snap_coord(world_runtime, center_y + vertices[i][1] * radius_y);
+        box->vertices[i][2] = source_prefab_snap_coord(world_runtime, center_z + vertices[i][2] * radius_z);
+    }
+
+    return source_prefab_validate_convex_vertices(world_runtime, box, "icosahedron spheroid", error_buffer,
+                                                  error_buffer_size);
+}
+
+static bool source_prefab_populate_shape_vertices(const brush_world_runtime *world_runtime, const char *prefab,
+                                                  editor_brush_source_box_runtime *box, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    if (prefab == NULL || box == NULL)
+        return true;
+    if (SDL_strcmp(prefab, "cylinder") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 8, "cylinder", error_buffer,
+                                                     error_buffer_size);
+    if (SDL_strcmp(prefab, "column") == 0 || SDL_strcmp(prefab, "octagon") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 8, prefab, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "hexagon") == 0)
+        return source_prefab_populate_prism_vertices(world_runtime, box, 6, "hexagon", error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "cone") == 0)
+        return source_prefab_populate_cone_vertices(world_runtime, box, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "spheroid_uv") == 0)
+        return source_prefab_populate_spheroid_uv_vertices(world_runtime, box, error_buffer, error_buffer_size);
+    if (SDL_strcmp(prefab, "spheroid_icosahedron") == 0)
+        return source_prefab_populate_spheroid_icosahedron_vertices(world_runtime, box, error_buffer,
+                                                                    error_buffer_size);
+    return true;
+}
+
+bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world_runtime, const char *prefab,
+                                                const char *brush_name, const char *material, unsigned int contents,
+                                                const int source_min[3], const int source_max[3],
+                                                editor_brush_source_box_runtime *out_box, char *error_buffer,
+                                                int error_buffer_size)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0' || material == NULL ||
+        material[0] == '\0' || source_min == NULL || source_max == NULL || out_box == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires bounds, material, and name");
+        return false;
+    }
+
+    const char *normalized_prefab = source_prefab_normalized(prefab);
+    if (!source_prefab_name_supported(normalized_prefab))
+    {
+        set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
+                   normalized_prefab != NULL && normalized_prefab[0] != '\0' ? normalized_prefab : "<empty>");
+        return false;
+    }
+
+    SDL_zero(*out_box);
+    if (!copy_source_string(&out_box->stable_id, brush_name) || !copy_source_string(&out_box->name, brush_name) ||
+        !copy_source_string(&out_box->prefab, normalized_prefab) || !copy_source_string(&out_box->material, material))
+    {
+        free_editor_brush_source_box(out_box);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source prefab brush");
+        return false;
+    }
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        out_box->min[axis] = SDL_min(source_min[axis], source_max[axis]);
+        out_box->max[axis] = SDL_max(source_min[axis], source_max[axis]);
+    }
+    out_box->contents = source_prefab_default_contents(normalized_prefab, contents);
+    source_box_init_stair_metadata(out_box);
+
+    if (!source_box_extents_valid(out_box))
+    {
+        free_editor_brush_source_box(out_box);
+        set_error(error_buffer, error_buffer_size, "source prefab placement would create invalid geometry");
+        return false;
+    }
+
+    if (!source_prefab_populate_shape_vertices(world_runtime, normalized_prefab, out_box, error_buffer,
+                                               error_buffer_size))
+    {
+        free_editor_brush_source_box(out_box);
         return false;
     }
     return true;
@@ -3326,9 +3703,9 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
     }
 
     const char *material_prefab = source_prefab_for_material(desc->material);
-    const char *prefab = desc->prefab != NULL && desc->prefab[0] != '\0'
-                             ? desc->prefab
-                             : (material_prefab != NULL ? material_prefab : "");
+    const char *prefab = source_prefab_normalized(desc->prefab != NULL && desc->prefab[0] != '\0'
+                                                      ? desc->prefab
+                                                      : (material_prefab != NULL ? material_prefab : ""));
     if (!source_prefab_name_supported(prefab))
     {
         set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
@@ -3356,21 +3733,10 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
     editor_brush_source_box_runtime source_box;
     if (source_min != NULL && source_max != NULL)
     {
-        SDL_zero(source_box);
-        if (!copy_source_string(&source_box.stable_id, name) || !copy_source_string(&source_box.name, name) ||
-            !copy_source_string(&source_box.prefab, prefab) ||
-            !copy_source_string(&source_box.material, desc->material))
-        {
-            free_editor_brush_source_box(&source_box);
-            set_error(error_buffer, error_buffer_size, "failed to allocate source prefab brush");
+        if (!editor_brush_source_box_from_prefab_bounds(world_runtime, prefab, name, desc->material, desc->contents,
+                                                        source_min, source_max, &source_box, error_buffer,
+                                                        error_buffer_size))
             return false;
-        }
-        for (int axis = 0; axis < 3; ++axis)
-        {
-            source_box.min[axis] = source_min[axis];
-            source_box.max[axis] = source_max[axis];
-        }
-        source_box.contents = source_prefab_default_contents(prefab, desc->contents);
     }
     else if (!editor_brush_world_build_source_prefab_candidate(world_runtime, desc, name, &source_box, error_buffer,
                                                                error_buffer_size))
@@ -3715,6 +4081,7 @@ bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *w
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
         return false;
     }
+    source_box_rotate_stair_vectors_y(box, normalized_turns);
     return true;
 }
 
@@ -3731,6 +4098,104 @@ static bool source_rotation_coord(float value, int snap_units, int *out_coord)
     const int rounded = (int)rounded_scaled * snap_units;
     *out_coord = rounded;
     return true;
+}
+
+static bool source_box_has_stair_vector(const editor_brush_source_box_runtime *box, const char *key)
+{
+    return box != NULL && box->properties != NULL && slayer3d_properties_get_value(box->properties, key) != NULL;
+}
+
+static void source_box_transform_stair_vector(editor_brush_source_box_runtime *box, const char *key,
+                                              slayer3d_vec3 value)
+{
+    if (box == NULL || box->properties == NULL || key == NULL || !source_box_has_stair_vector(box, key))
+        return;
+    slayer3d_properties_set_vec3(box->properties, key, value);
+}
+
+static void source_box_rotate_stair_vectors_y(editor_brush_source_box_runtime *box, int quarter_turns)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    quarter_turns %= 4;
+    if (quarter_turns < 0)
+        quarter_turns += 4;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t key_index = 0; key_index < SDL_arraysize(keys); ++key_index)
+    {
+        if (!source_box_has_stair_vector(box, keys[key_index]))
+            continue;
+        slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[key_index], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        for (int turn = 0; turn < quarter_turns; ++turn)
+        {
+            const float next_x = value.z;
+            const float next_z = -value.x;
+            value.x = next_x;
+            value.z = next_z;
+        }
+        source_box_transform_stair_vector(box, keys[key_index], value);
+    }
+}
+
+static slayer3d_vec3 source_rotate_vector(slayer3d_vec3 value, slayer3d_vec3 axis, float angle_radians)
+{
+    const float cos_angle = SDL_cosf(angle_radians);
+    const float sin_angle = SDL_sinf(angle_radians);
+    return slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(value, cos_angle),
+                                               slayer3d_vec3_scale(slayer3d_vec3_cross(axis, value), sin_angle)),
+                             slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, value) * (1.0f - cos_angle)));
+}
+
+static void source_box_rotate_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 axis,
+                                            float angle_radians)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        const slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        source_box_transform_stair_vector(box, keys[i], source_rotate_vector(value, axis, angle_radians));
+    }
+}
+
+static void source_box_scale_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 factors)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        value.x *= factors.x;
+        value.y *= factors.y;
+        value.z *= factors.z;
+        source_box_transform_stair_vector(box, keys[i], value);
+    }
+}
+
+static void source_box_mirror_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 plane_normal)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        const slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const float distance = slayer3d_vec3_dot(value, plane_normal);
+        source_box_transform_stair_vector(box, keys[i],
+                                          slayer3d_vec3_sub(value, slayer3d_vec3_scale(plane_normal, 2.0f * distance)));
+    }
 }
 
 static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3], slayer3d_vec3 axis,
@@ -3751,6 +4216,9 @@ static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3],
            source_rotation_coord(rotated.y + pivot[1], snap_units, &out_coord[1]) &&
            source_rotation_coord(rotated.z + pivot[2], snap_units, &out_coord[2]);
 }
+
+static bool source_box_apply_transform_prefab(editor_brush_source_box_runtime *box, const char *operation_name,
+                                              char *error_buffer, int error_buffer_size);
 
 bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                           slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
@@ -3833,16 +4301,11 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
         return false;
     }
 
-    char *old_prefab = box->prefab;
-    box->prefab = SDL_strdup("convex");
-    if (box->prefab == NULL)
+    if (!source_box_apply_transform_prefab(box, "rotation", error_buffer, error_buffer_size))
     {
-        box->prefab = old_prefab;
         free_editor_brush_source_box(&snapshot);
-        set_error(error_buffer, error_buffer_size, "failed to allocate source brush rotation metadata");
         return false;
     }
-    SDL_free(old_prefab);
     box->vertex_count = model.vertex_count;
     for (int vertex = 0; vertex < model.vertex_count; ++vertex)
     {
@@ -3857,6 +4320,7 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
         box->vertices[vertex][2] = 0;
     }
     source_box_update_bounds_from_vertices(box);
+    source_box_rotate_stair_vectors(box, axis, angle_radians);
 
     if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
         !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
@@ -3896,6 +4360,36 @@ static bool mirror_source_vertex_coord(const int coord[3], const float plane_poi
            source_rotation_coord(mirrored.z, snap_units, &out_coord[2]);
 }
 
+static bool source_prefab_preserved_by_transform(const char *prefab)
+{
+    return prefab != NULL &&
+           (SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
+            SDL_strcmp(prefab, "stairs") == 0 || SDL_strcmp(prefab, "octagon") == 0 ||
+            SDL_strcmp(prefab, "hexagon") == 0 || SDL_strcmp(prefab, "cone") == 0 ||
+            SDL_strcmp(prefab, "spheroid_uv") == 0 || SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
+}
+
+static bool source_box_apply_transform_prefab(editor_brush_source_box_runtime *box, const char *operation_name,
+                                              char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL)
+        return false;
+    if (source_prefab_preserved_by_transform(box->prefab))
+        return true;
+
+    char *old_prefab = box->prefab;
+    box->prefab = SDL_strdup("convex");
+    if (box->prefab == NULL)
+    {
+        box->prefab = old_prefab;
+        set_errorf(error_buffer, error_buffer_size, "failed to allocate source brush %s metadata",
+                   operation_name != NULL ? operation_name : "transform");
+        return false;
+    }
+    SDL_free(old_prefab);
+    return true;
+}
+
 static bool editor_source_box_apply_transformed_vertices(editor_brush_source_box_runtime *box, int vertex_count,
                                                          const int *transformed_vertices, const char *operation_name,
                                                          char *error_buffer, int error_buffer_size)
@@ -3907,15 +4401,8 @@ static bool editor_source_box_apply_transformed_vertices(editor_brush_source_box
         return false;
     }
 
-    char *old_prefab = box->prefab;
-    box->prefab = SDL_strdup("convex");
-    if (box->prefab == NULL)
-    {
-        box->prefab = old_prefab;
-        set_errorf(error_buffer, error_buffer_size, "failed to allocate source brush %s metadata", operation_name);
+    if (!source_box_apply_transform_prefab(box, operation_name, error_buffer, error_buffer_size))
         return false;
-    }
-    SDL_free(old_prefab);
     box->vertex_count = vertex_count;
     for (int vertex = 0; vertex < vertex_count; ++vertex)
     {
@@ -4105,16 +4592,11 @@ bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, con
         return false;
     }
 
-    char *old_prefab = box->prefab;
-    box->prefab = SDL_strdup("convex");
-    if (box->prefab == NULL)
+    if (!source_box_apply_transform_prefab(box, "scale", error_buffer, error_buffer_size))
     {
-        box->prefab = old_prefab;
         free_editor_brush_source_box(&snapshot);
-        set_error(error_buffer, error_buffer_size, "failed to allocate source brush scale metadata");
         return false;
     }
-    SDL_free(old_prefab);
     box->vertex_count = model.vertex_count;
     for (int vertex = 0; vertex < model.vertex_count; ++vertex)
     {
@@ -4129,6 +4611,7 @@ bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, con
         box->vertices[vertex][2] = 0;
     }
     source_box_update_bounds_from_vertices(box);
+    source_box_scale_stair_vectors(box, factors);
 
     if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
         !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
@@ -4202,9 +4685,14 @@ bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, co
         }
     }
 
-    return editor_brush_world_apply_transformed_source_vertices(world_runtime, source_index, brush_name, &model,
-                                                                &mirrored_vertices[0][0], "mirror", error_buffer,
-                                                                error_buffer_size);
+    if (!editor_brush_world_apply_transformed_source_vertices(world_runtime, source_index, brush_name, &model,
+                                                              &mirrored_vertices[0][0], "mirror", error_buffer,
+                                                              error_buffer_size))
+    {
+        return false;
+    }
+    source_box_mirror_stair_vectors(&world_runtime->editor_source_boxes[source_index], plane_normal);
+    return true;
 }
 
 bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, const char *const *brush_identities,
@@ -4324,6 +4812,7 @@ bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, 
         {
             goto fail_restore;
         }
+        source_box_mirror_stair_vectors(box, plane_normal);
     }
     for (int i = 0; i < brush_count; ++i)
     {
@@ -4508,16 +4997,11 @@ bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, con
         return false;
     }
 
-    char *old_prefab = box->prefab;
-    box->prefab = SDL_strdup("convex");
-    if (box->prefab == NULL)
+    if (!source_box_apply_transform_prefab(box, "shear", error_buffer, error_buffer_size))
     {
-        box->prefab = old_prefab;
         free_editor_brush_source_box(&snapshot);
-        set_error(error_buffer, error_buffer_size, "failed to allocate source brush shear metadata");
         return false;
     }
-    SDL_free(old_prefab);
     box->vertex_count = model.vertex_count;
     for (int vertex = 0; vertex < model.vertex_count; ++vertex)
     {
@@ -4896,7 +5380,7 @@ bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_
         set_error(error_buffer, error_buffer_size, "source-backed brush paint requires a source model and material");
         return false;
     }
-    if (face_index < 0 || face_index >= (int)SDL_arraysize(editor_brush_source_box_face_keys))
+    if (face_index < 0 || face_index >= SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY)
     {
         set_error(error_buffer, error_buffer_size, "source brush face index out of range");
         return false;

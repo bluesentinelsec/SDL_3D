@@ -384,7 +384,9 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     {
         return false;
     }
-    if (!ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+    if (!ui_widget_optional_non_empty_string_len(node, "x_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "y_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "open_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "selected_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
     {

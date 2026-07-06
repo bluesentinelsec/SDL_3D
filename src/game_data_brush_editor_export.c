@@ -221,11 +221,20 @@ static bool export_add_brush_contents(yyjson_mut_doc *doc, yyjson_mut_val *brush
 
 static const char *const editor_source_face_keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
 
+static const char *editor_source_face_export_key(size_t face_index, char *buffer, size_t buffer_size)
+{
+    if (face_index < SDL_arraysize(editor_source_face_keys))
+        return editor_source_face_keys[face_index];
+    SDL_snprintf(buffer, buffer_size, "%llu", (unsigned long long)face_index);
+    return buffer;
+}
+
 static bool export_add_source_face_material_overrides(yyjson_mut_doc *doc, yyjson_mut_val *obj,
-                                                      const char *base_material, const char *const face_materials[6])
+                                                      const char *base_material, const char *const *face_materials,
+                                                      size_t face_material_count)
 {
     yyjson_mut_val *face_materials_obj = NULL;
-    for (size_t i = 0; i < SDL_arraysize(editor_source_face_keys); ++i)
+    for (size_t i = 0; i < face_material_count; ++i)
     {
         const char *face_material = face_materials[i];
         if (face_material == NULL || face_material[0] == '\0' ||
@@ -239,7 +248,10 @@ static bool export_add_source_face_material_overrides(yyjson_mut_doc *doc, yyjso
             if (face_materials_obj == NULL)
                 return false;
         }
-        if (!yyjson_mut_obj_add_strcpy(doc, face_materials_obj, editor_source_face_keys[i], face_material))
+        char face_key_buffer[16];
+        if (!yyjson_mut_obj_add_strcpy(doc, face_materials_obj,
+                                       editor_source_face_export_key(i, face_key_buffer, sizeof(face_key_buffer)),
+                                       face_material))
             return false;
     }
     return face_materials_obj == NULL || yyjson_mut_obj_add_val(doc, obj, "face_materials", face_materials_obj);
@@ -249,7 +261,7 @@ static bool export_add_source_face_visuals(yyjson_mut_doc *doc, yyjson_mut_val *
                                            const editor_brush_source_box_runtime *box, bool tint)
 {
     yyjson_mut_val *values_obj = NULL;
-    for (size_t i = 0; box != NULL && i < SDL_arraysize(editor_source_face_keys); ++i)
+    for (size_t i = 0; box != NULL && i < SDL_arraysize(box->face_visuals); ++i)
     {
         const editor_brush_visual_override_runtime *visual = &box->face_visuals[i];
         if ((tint && !visual->tint_enabled) || (!tint && !visual->has_color))
@@ -260,7 +272,10 @@ static bool export_add_source_face_visuals(yyjson_mut_doc *doc, yyjson_mut_val *
             if (values_obj == NULL)
                 return false;
         }
-        if (!export_add_color(doc, values_obj, editor_source_face_keys[i], tint ? visual->tint : visual->color))
+        char face_key_buffer[16];
+        if (!export_add_color(doc, values_obj,
+                              editor_source_face_export_key(i, face_key_buffer, sizeof(face_key_buffer)),
+                              tint ? visual->tint : visual->color))
             return false;
     }
     return values_obj == NULL || yyjson_mut_obj_add_val(doc, obj, tint ? "face_tints" : "face_colors", values_obj);
@@ -272,8 +287,6 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
     if (obj == NULL || !yyjson_mut_arr_add_val(boxes, obj))
         return false;
-    const char *face_materials[6] = {box->face_materials[0], box->face_materials[1], box->face_materials[2],
-                                     box->face_materials[3], box->face_materials[4], box->face_materials[5]};
     return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", box->stable_id != NULL ? box->stable_id : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "name", box->name != NULL ? box->name : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "kind", box->vertex_count > 0 ? "convex" : "box") &&
@@ -286,7 +299,8 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
             (export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
              export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]))) &&
            export_add_source_vertices(doc, obj, box) &&
-           export_add_source_face_material_overrides(doc, obj, box->material, face_materials) &&
+           export_add_source_face_material_overrides(doc, obj, box->material, (const char *const *)box->face_materials,
+                                                     SDL_arraysize(box->face_materials)) &&
            export_add_source_face_visuals(doc, obj, box, false) &&
            export_add_source_face_visuals(doc, obj, box, true) &&
            export_add_properties(doc, obj, "properties", box->properties) &&

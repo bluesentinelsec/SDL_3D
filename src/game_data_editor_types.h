@@ -29,6 +29,7 @@ typedef struct editor_placement_preview_state
     const char *mode;
     const char *kind;
     const char *axis;
+    const char *shape;
     const char *world_name;
     const char *material_name;
     unsigned int contents;
@@ -89,6 +90,14 @@ typedef struct editor_brush_visual_override_runtime
     slayer3d_color tint;
 } editor_brush_visual_override_runtime;
 
+#define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
+#define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
+#define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY 64
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
+#define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
+
 typedef struct editor_connection_endpoint_runtime
 {
     char *entity;
@@ -124,6 +133,7 @@ typedef struct editor_drag_create_state
     const char *scene;
     const char *world_name;
     const char *material_name;
+    const char *shape;
     unsigned int contents;
     float grid_size;
     int extrusion_axis;
@@ -233,9 +243,9 @@ typedef struct editor_brush_source_box_runtime
     char *name;
     char *prefab;
     char *material;
-    char *face_materials[6];
+    char *face_materials[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
     editor_brush_visual_override_runtime visual;
-    editor_brush_visual_override_runtime face_visuals[6];
+    editor_brush_visual_override_runtime face_visuals[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
     int min[3];
     int max[3];
     int vertex_count;
@@ -245,14 +255,6 @@ typedef struct editor_brush_source_box_runtime
     bool locked;
     slayer3d_properties *properties;
 } editor_brush_source_box_runtime;
-
-#define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
-#define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
-#define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
-#define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
-#define SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY 64
-#define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
-#define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
 
 typedef int editor_brush_source_coord[3];
 

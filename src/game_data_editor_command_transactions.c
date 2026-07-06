@@ -434,10 +434,6 @@ static int editor_face_index_for_identity(const slayer3d_game_data_brush *brush,
     return face_index >= 0 && face_index < brush->face_count ? face_index : -1;
 }
 
-static void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
-                                                        slayer3d_game_data_editor_selection *selection,
-                                                        const char *brush_name, const char *brush_stable_id,
-                                                        int face_index, const char *face_stable_id);
 static void publish_editor_transaction_selection_state(slayer3d_game_data_runtime *runtime);
 
 typedef struct editor_selection_identity_snapshot
@@ -1095,10 +1091,10 @@ static void translate_active_editor_selection_for_transaction(slayer3d_game_data
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset, bool active_matches);
 
-static void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
-                                                        slayer3d_game_data_editor_selection *selection,
-                                                        const char *brush_name, const char *brush_stable_id,
-                                                        int face_index, const char *face_stable_id)
+void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
+                                                 slayer3d_game_data_editor_selection *selection, const char *brush_name,
+                                                 const char *brush_stable_id, int face_index,
+                                                 const char *face_stable_id)
 {
     if (world_runtime == NULL || selection == NULL ||
         ((brush_name == NULL || brush_name[0] == '\0') && (brush_stable_id == NULL || brush_stable_id[0] == '\0')))
@@ -2632,6 +2628,7 @@ resize_record_fail: {
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,
                                                        const int source_min[3], const int source_max[3],
+                                                       const char *prefab,
                                                        editor_brush_source_prefab_result *out_result)
 {
     if (out_result != NULL)
@@ -2652,7 +2649,7 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
 
     editor_brush_source_prefab_desc desc;
     SDL_zero(desc);
-    desc.prefab = "editor.box";
+    desc.prefab = prefab != NULL && prefab[0] != '\0' ? prefab : "editor.box";
     desc.material = material_name;
     desc.contents = contents != 0u ? contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
 
@@ -2687,25 +2684,19 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
     }
 
     editor_brush_source_box_runtime *box = &entry->source_box_snapshot;
-    SDL_zero(*box);
-    box->stable_id = SDL_strdup(brush_name);
-    box->name = SDL_strdup(brush_name);
-    box->prefab = SDL_strdup("editor.box");
-    box->material = SDL_strdup(material_name);
-    if (box->stable_id == NULL || box->name == NULL || box->prefab == NULL || box->material == NULL)
+    char source_error[256] = {0};
+    if (!editor_brush_source_box_from_prefab_bounds(world_runtime, desc.prefab, brush_name, material_name,
+                                                    desc.contents, source_min, source_max, box, source_error,
+                                                    sizeof(source_error)))
     {
         editor_command_history_state *history = &runtime->editor_command_history;
         free_editor_command_transaction_entry(entry);
         history->count--;
         history->cursor = history->count;
+        if (out_result != NULL)
+            SDL_strlcpy(out_result->warning, source_error, sizeof(out_result->warning));
         return false;
     }
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        box->min[axis] = source_min[axis];
-        box->max[axis] = source_max[axis];
-    }
-    box->contents = desc.contents;
     entry->has_source_box_snapshot = true;
     entry->brush_index = world_runtime->editor_source_box_count;
     entry->has_bounds = true;
@@ -3115,7 +3106,7 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
                 initial_world_runtime, selection.element_name, element_stable_id);
             const slayer3d_game_data_brush *initial_brush =
                 initial_brush_index >= 0 ? &initial_world_runtime->desc.brushes[initial_brush_index] : NULL;
-            const int face_count = initial_brush != NULL ? SDL_min(initial_brush->face_count, 6) : 0;
+            const int face_count = initial_brush != NULL ? initial_brush->face_count : 0;
             const int initial_material_index =
                 editor_brush_material_index_by_name(initial_world_runtime, material_name);
             if (initial_brush == NULL || initial_material_index < 0)

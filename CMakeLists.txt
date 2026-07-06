@@ -228,6 +228,7 @@ target_sources(
         src/game_data_editor_selection_state.c
         src/game_data_editor_visibility.c
         src/game_data_editor_lock.c
+        src/game_data_editor_stair.c
         src/game_data_editor_object_state.c
         src/game_data_editor_text_edit.c
         src/game_data_editor_console_ui.c
@@ -239,6 +240,7 @@ target_sources(
         src/game_data_editor_selection_queries.c
         src/game_data_editor_debug_primitives.c
         src/game_data_editor_grid_widget.c
+        src/game_data_editor_shape_widget.c
         src/game_data_editor_toolbar.c
         src/game_data_grid_actions.c
         src/game_data_grid_runtime.c

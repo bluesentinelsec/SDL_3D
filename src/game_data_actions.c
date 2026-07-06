@@ -3931,6 +3931,27 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.lock.unlock_all") == 0)
         return slayer3d_game_data_unlock_all_editor_objects_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.stair.toggle_direction") == 0)
+    {
+        if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+            return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return slayer3d_game_data_toggle_selected_editor_stair_direction_action(runtime, action);
+    }
+
+    if (SDL_strcmp(type, "editor.stair.add_step") == 0)
+    {
+        if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+            return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return slayer3d_game_data_add_selected_editor_stair_step_action(runtime, action);
+    }
+
+    if (SDL_strcmp(type, "editor.stair.remove_step") == 0)
+    {
+        if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+            return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+        return slayer3d_game_data_remove_selected_editor_stair_step_action(runtime, action);
+    }
+
     if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
     {
         if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))

@@ -222,6 +222,12 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.height_mode = height != NULL ? ui_widget_size_mode_from_value(height) : SLAYER3D_UI_LAYOUT_SIZE_FILL;
     desc.rect.x = json_float(node, "x", 0.0f);
     desc.rect.y = json_float(node, "y", 0.0f);
+    float scene_x = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "x_key", NULL), &scene_x))
+        desc.rect.x = scene_x;
+    float scene_y = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "y_key", NULL), &scene_y))
+        desc.rect.y = scene_y;
     float scroll_y = 0.0f;
     if (ui_widget_scene_float(runtime, json_string(node, "scroll_y_key", NULL), &scroll_y))
         desc.rect.y -= scroll_y;

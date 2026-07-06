@@ -64,7 +64,7 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
         free_editor_brush_source_box(dest);
         return false;
     }
-    for (int i = 0; i < 6; ++i)
+    for (size_t i = 0; i < SDL_arraysize(dest->face_materials); ++i)
     {
         if (!copy_source_string(&dest->face_materials[i], source->face_materials[i]))
         {
@@ -73,7 +73,7 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
         }
     }
     dest->visual = source->visual;
-    for (int i = 0; i < 6; ++i)
+    for (size_t i = 0; i < SDL_arraysize(dest->face_visuals); ++i)
         dest->face_visuals[i] = source->face_visuals[i];
     for (int i = 0; i < 3; ++i)
     {

@@ -493,6 +493,127 @@ static slayer3d_vec3 editor_scale_bounds_point(slayer3d_bounding_box bounds, sla
                               signs.z < -0.5f ? bounds.min.z : (signs.z > 0.5f ? bounds.max.z : center.z));
 }
 
+static bool editor_screen_rect_contains(float x, float y, float w, float h, float mouse_x, float mouse_y)
+{
+    return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
+}
+
+static void editor_set_stair_panel_position(slayer3d_game_data_runtime *runtime, float x, float y)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_float(runtime->scene_state, "editor.stair.panel.x", SDL_clamp(x, 4.0f, 1124.0f));
+    slayer3d_properties_set_float(runtime->scene_state, "editor.stair.panel.y", SDL_clamp(y, 92.0f, 650.0f));
+}
+
+static void editor_reset_stair_panel_position(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    yyjson_val *trace = obj_get(selection_json, "trace");
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    editor_trace_viewport_config viewport;
+    slayer3d_camera3d camera;
+    const slayer3d_vec3 anchor = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.panel.anchor",
+                                                              slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    if (slayer3d_input_get_mouse_position(runtime_input(runtime), &mouse_x, &mouse_y) &&
+        editor_trace_select_viewport_at(runtime, trace, mouse_x, mouse_y, &viewport) &&
+        slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
+    {
+        float screen_x = 0.0f;
+        float screen_y = 0.0f;
+        if (editor_project_world_to_viewport(&camera, &viewport, anchor, &screen_x, &screen_y))
+        {
+            editor_set_stair_panel_position(runtime, viewport.x + screen_x - 150.0f, viewport.y + screen_y - 70.0f);
+            return;
+        }
+    }
+    editor_set_stair_panel_position(runtime, 360.0f, 120.0f);
+}
+
+static bool editor_handle_stair_panel(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                      bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return true;
+
+    const bool selected = slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.selected", false);
+    if (!selected)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.panel.dragging", false);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.stair.panel.root", "");
+        return true;
+    }
+
+    const char *root = slayer3d_properties_get_string(runtime->scene_state, "editor.stair.root", "");
+    const char *panel_root = slayer3d_properties_get_string(runtime->scene_state, "editor.stair.panel.root", "");
+    if (SDL_strcmp(root != NULL ? root : "", panel_root != NULL ? panel_root : "") != 0)
+    {
+        editor_reset_stair_panel_position(runtime, selection_json);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.stair.panel.root", root != NULL ? root : "");
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (!slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        return true;
+
+    const float panel_x = slayer3d_properties_get_float(runtime->scene_state, "editor.stair.panel.x", 360.0f);
+    const float panel_y = slayer3d_properties_get_float(runtime->scene_state, "editor.stair.panel.y", 120.0f);
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    bool dragging = slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.panel.dragging", false);
+    if (left_pressed && editor_screen_rect_contains(panel_x, panel_y, 132.0f, 18.0f, mouse_x, mouse_y))
+    {
+        dragging = true;
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.panel.dragging", true);
+        slayer3d_properties_set_float(runtime->scene_state, "editor.stair.panel.drag_offset_x", mouse_x - panel_x);
+        slayer3d_properties_set_float(runtime->scene_state, "editor.stair.panel.drag_offset_y", mouse_y - panel_y);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (dragging)
+    {
+        if (left_down)
+        {
+            const float offset_x =
+                slayer3d_properties_get_float(runtime->scene_state, "editor.stair.panel.drag_offset_x", 0.0f);
+            const float offset_y =
+                slayer3d_properties_get_float(runtime->scene_state, "editor.stair.panel.drag_offset_y", 0.0f);
+            editor_set_stair_panel_position(runtime, mouse_x - offset_x, mouse_y - offset_y);
+            if (out_consumed != NULL)
+                *out_consumed = true;
+            return true;
+        }
+        if (left_released)
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.panel.dragging", false);
+    }
+
+    if (left_down && editor_screen_rect_contains(panel_x, panel_y, 132.0f, 54.0f, mouse_x, mouse_y) &&
+        out_consumed != NULL)
+    {
+        *out_consumed = true;
+    }
+    return true;
+}
+
+static bool editor_handle_stair_ui_actions(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                           bool *out_consumed)
+{
+    if (!editor_handle_stair_panel(runtime, selection_json, out_consumed))
+        return false;
+    return true;
+}
+
 static int editor_scale_active_axis_count(slayer3d_vec3 signs)
 {
     int count = 0;
@@ -2150,6 +2271,14 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     publish_editor_vertex_hover_state(runtime, &hover_selection);
     publish_editor_edge_hover_state(runtime, &hover_selection);
     bool ui_consumed = false;
+    if (!editor_handle_shape_widget(runtime, editor, &ui_consumed))
+        return false;
+    if (ui_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     if (!editor_handle_grid_widget(runtime, editor, &ui_consumed))
         return false;
     if (ui_consumed)
@@ -2178,6 +2307,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    bool stair_panel_consumed = false;
+    if (!editor_handle_stair_ui_actions(runtime, selection_json, &stair_panel_consumed))
+        return false;
+    if (stair_panel_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool texture_paint_consumed = false;
     if (!editor_handle_texture_paint(runtime, &hover_selection, select_requested, &texture_paint_consumed))
         return false;

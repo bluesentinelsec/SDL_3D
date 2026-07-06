@@ -88,7 +88,11 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
             brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
             editor_brush_source_prefab_desc source_desc;
             SDL_zero(source_desc);
-            source_desc.prefab = preview->mode;
+            source_desc.prefab =
+                preview->shape != NULL && preview->shape[0] != '\0' && SDL_strcmp(preview->shape, "cuboid") != 0 &&
+                        SDL_strcmp(preview->shape, "box") != 0 && SDL_strcmp(preview->shape, "editor.box") != 0
+                    ? preview->shape
+                    : preview->mode;
             source_desc.material = preview->material_name;
             source_desc.contents = preview->contents;
             editor_brush_source_prefab_result result;

@@ -1206,6 +1206,15 @@ world references a brush world and stores stable source brush IDs, prefab
 metadata, material references, and either integer `min`/`max` coordinates for
 `kind: "box"` sources or integer `vertices` for `kind: "convex"` sources.
 Convex sources are used after topology edits add, remove, or merge vertices.
+The editor Shape menu also creates source-backed convex brushes for simple
+single-hull presets: `cylinder`, `column`, `octagon`, `hexagon`, `cone`,
+`spheroid_uv`, and `spheroid_icosahedron`. These generated presets use the
+same convex validation, transform, face-material, and save/reopen paths as
+manually edited convex source brushes. Stairs are authored as source-backed box
+brush groups with shared stair metadata and a draggable editor panel for
+toggling direction, adding steps, and removing the most recent step. Other
+compound or semantically richer presets such as pipes, capsules, doors, and
+windows are intentionally separate future workflows.
 `material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.

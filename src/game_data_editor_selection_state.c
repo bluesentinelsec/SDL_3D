@@ -727,6 +727,7 @@ void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
     publish_active_inspector_selection_state(runtime, brush_count);
     publish_editor_visibility_state(runtime);
     publish_editor_lock_state(runtime);
+    publish_editor_stair_state(runtime);
 }
 
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)

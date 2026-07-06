@@ -168,6 +168,7 @@
         "kind": "box",
         "world": "brush.editor_shell.target",
         "prefab": "editor.box",
+        "shape_key": "editor.shape.id",
         "material_key": "editor.brush.material",
         "material": "mat.editor.floor",
         "contents": ["solid"],
@@ -306,6 +307,25 @@
           "size": [0.8, 0.8, 0.8],
           "message": "effect preview"
         }
+      ]
+    },
+    "shape_widget": {
+      "dropdown_id": "ui.editor_shell.toolbar.shape.button",
+      "open_key": "editor.shape.menu.open",
+      "index_key": "editor.shape.index",
+      "id_key": "editor.shape.id",
+      "label_key": "editor.shape.label",
+      "options": [
+        { "id": "cuboid", "label": "Cuboid" },
+        { "id": "stairs", "label": "Stairs" },
+        { "id": "cylinder", "label": "Cylinder" },
+        { "id": "cone", "label": "Cone" },
+        { "id": "spheroid_uv", "label": "Spheroid (UV)" },
+        { "id": "spheroid_icosahedron", "label": "Spheroid (Icosahedron)" },
+        { "id": "column", "label": "Column" },
+        { "id": "pipe", "label": "Pipe" },
+        { "id": "octagon", "label": "Octagon" },
+        { "id": "hexagon", "label": "Hexagon" }
       ]
     },
     "grid_widget": {
@@ -539,6 +559,33 @@
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
           { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
           { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.shape.button",
+            "type": "dropdown",
+            "w": 76,
+            "h": 28,
+            "text": "Shape",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.shape.select",
+            "open_key": "editor.shape.menu.open",
+            "selected_value_key": "editor.shape.index",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.shape.menu.open", "op": "==", "value": true, "default": false },
+            "option_height": 24,
+            "options": [
+              "Cuboid",
+              "Stairs",
+              "Cylinder",
+              "Cone",
+              "Spheroid (UV)",
+              "Spheroid (Icosahedron)",
+              "Column",
+              "Pipe",
+              "Octagon",
+              "Hexagon"
+            ],
+            "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+          },
           {
             "id": "ui.editor_shell.toolbar.global.button",
             "type": "button",
@@ -855,6 +902,90 @@
         ]
       },
       {
+        "id": "ui.editor_shell.stair_panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 360,
+        "y": 120,
+        "x_key": "editor.stair.panel.x",
+        "y_key": "editor.stair.panel.y",
+        "w": 132,
+        "h": 54,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 430,
+        "fill_color": [8, 13, 22, 230],
+        "border_color": [82, 112, 154, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": true, "default": false },
+        "children": [
+          { "id": "ui.editor_shell.stair_panel.title", "type": "label", "x": 8, "y": 2, "w": 86, "h": 16, "text": "Stairs", "text_scale": 0.36, "layer": 431 },
+          { "id": "ui.editor_shell.stair_panel.drag_hint", "type": "label", "x": 96, "y": 2, "w": 28, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 431 },
+          {
+            "id": "ui.editor_shell.stair_panel.direction.up",
+            "type": "button",
+            "x": 8,
+            "y": 22,
+            "w": 34,
+            "h": 24,
+            "text": "^",
+            "text_scale": 0.50,
+            "interactive": true,
+            "action": "editor.stair.toggle_direction",
+            "layer": 431,
+            "fill_color": [40, 130, 60, 255],
+            "border_color": [116, 255, 140, 255],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.stair.ascending", "op": "==", "value": true, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.stair_panel.direction.down",
+            "type": "button",
+            "x": 8,
+            "y": 22,
+            "w": 34,
+            "h": 24,
+            "text": "v",
+            "text_scale": 0.50,
+            "interactive": true,
+            "action": "editor.stair.toggle_direction",
+            "layer": 431,
+            "fill_color": [36, 76, 150, 255],
+            "border_color": [88, 156, 255, 255],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.stair.ascending", "op": "==", "value": false, "default": false }
+          },
+          {
+            "id": "ui.editor_shell.stair_panel.add",
+            "type": "button",
+            "x": 50,
+            "y": 22,
+            "w": 34,
+            "h": 24,
+            "text": "+",
+            "text_scale": 0.50,
+            "interactive": true,
+            "action": "editor.stair.add_step",
+            "layer": 431,
+            "fill_color": [28, 100, 50, 255],
+            "border_color": [116, 255, 140, 255]
+          },
+          {
+            "id": "ui.editor_shell.stair_panel.remove",
+            "type": "button",
+            "x": 90,
+            "y": 22,
+            "w": 34,
+            "h": 24,
+            "text": "X",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.stair.remove_step",
+            "layer": 431,
+            "fill_color": [105, 36, 36, 255],
+            "border_color": [255, 90, 90, 255]
+          }
+        ]
+      },
+      {
         "id": "ui.editor_shell.left_inspector.panel",
         "type": "panel",
         "layout": "none",
@@ -1016,10 +1147,15 @@
             "text_scale": 0.36,
             "action": "editor.visibility.hide_selected",
             "visible_if": {
-              "type": "any",
+              "type": "all",
               "conditions": [
-                { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
-                { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                    { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                  ]
+                }
               ]
             }
           },

@@ -7,6 +7,8 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+#include <stdlib.h>
+
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
     return validation_obj_get(object, key);
@@ -474,6 +476,12 @@ static bool editor_brush_source_face_key_valid(const char *key)
         if (SDL_strcmp(key, valid[i]) == 0)
             return true;
     }
+    if (key != NULL && key[0] != '\0')
+    {
+        char *end = NULL;
+        const long face_index = strtol(key, &end, 10);
+        return end != key && end != NULL && *end == '\0' && face_index >= 0 && face_index < 32;
+    }
     return false;
 }
 
@@ -530,8 +538,8 @@ static bool validate_editor_brush_source_face_materials(validation_context *ctx,
             yyjson_get_str(value)[0] == '\0')
         {
             return validation_error(ctx, face_path,
-                                    "editor brush source face material keys must be px/nx/py/ny/pz/nz with non-empty "
-                                    "string material refs");
+                                    "editor brush source face material keys must be px/nx/py/ny/pz/nz or numeric "
+                                    "generated face indices with non-empty string material refs");
         }
         if (!name_table_contains(material_names, yyjson_get_str(value)))
         {
@@ -570,7 +578,10 @@ static bool validate_editor_brush_source_face_visuals(validation_context *ctx, y
         char face_path[PATH_BUFFER_SIZE];
         format_path(face_path, sizeof(face_path), "%s.%s.%s", box_path, key_name, face_key != NULL ? face_key : "");
         if (!editor_brush_source_face_key_valid(face_key))
-            return validation_error(ctx, face_path, "editor brush source %s keys must be px/nx/py/ny/pz/nz", key_name);
+            return validation_error(ctx, face_path,
+                                    "editor brush source %s keys must be px/nx/py/ny/pz/nz or numeric generated face "
+                                    "indices",
+                                    key_name);
         if (!validate_editor_brush_source_color(ctx, value, face_path, key_name))
             return false;
     }

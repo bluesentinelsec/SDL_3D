@@ -8,6 +8,10 @@
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_clear_editor_edge_selection(slayer3d_game_data_runtime *runtime);
+void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime);
+bool add_editor_selected_brush(slayer3d_game_data_runtime *runtime,
+                               const slayer3d_game_data_editor_selection *selection);
+void update_active_editor_selection_from_selected_brushes(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
                                              const char *message_override);
 bool slayer3d_game_data_enter_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);
@@ -23,6 +27,10 @@ bool slayer3d_game_data_move_editor_clip_point_source(slayer3d_game_data_runtime
                                                       const int coord[3], slayer3d_vec3 work_plane_normal);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
+void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
+                                                 slayer3d_game_data_editor_selection *selection, const char *brush_name,
+                                                 const char *brush_stable_id, int face_index,
+                                                 const char *face_stable_id);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -68,6 +76,12 @@ bool slayer3d_game_data_show_all_editor_objects_action(slayer3d_game_data_runtim
 bool slayer3d_game_data_lock_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_unlock_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_unlock_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_toggle_selected_editor_stair_direction_action(slayer3d_game_data_runtime *runtime,
+                                                                      yyjson_val *action);
+bool slayer3d_game_data_add_selected_editor_stair_step_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_remove_selected_editor_stair_step_action(slayer3d_game_data_runtime *runtime,
+                                                                 yyjson_val *action);
+void publish_editor_stair_state(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_editor_selection_contains_locked_objects(const slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_editor_actor_locked(const slayer3d_game_data_runtime *runtime, const char *name);
 bool slayer3d_game_data_reject_locked_editor_selection_action(slayer3d_game_data_runtime *runtime, const char *message);
@@ -115,6 +129,11 @@ bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *w
 bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
                                               const slayer3d_game_data_create_box_brush_desc *desc,
                                               const char *brush_name, editor_brush_source_box_runtime *out_box);
+bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world_runtime, const char *prefab,
+                                                const char *brush_name, const char *material, unsigned int contents,
+                                                const int source_min[3], const int source_max[3],
+                                                editor_brush_source_box_runtime *out_box, char *error_buffer,
+                                                int error_buffer_size);
 slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_runtime *world_runtime,
                                                             const editor_brush_source_box_runtime *box);
 bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
