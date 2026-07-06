@@ -64,6 +64,11 @@ static bool editor_hit_is_global_panel(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.global_panel.");
 }
 
+static bool editor_hit_is_stair_panel(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.stair_panel.");
+}
+
 static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
@@ -605,8 +610,8 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
-        editor_hit_is_global_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
-        console_event_active)
+        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_actor_viewer(hit) ||
+        editor_hit_is_left_inspector(hit) || console_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

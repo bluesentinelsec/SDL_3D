@@ -35842,6 +35842,8 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
     bool found_direction = false;
     bool found_add = false;
     bool found_remove = false;
+    float add_button_x = 0.0f;
+    float add_button_y = 0.0f;
     for (int i = 0, count = slayer3d_ui_layout_hit_region_count(stair_layout); i < count; ++i)
     {
         const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(stair_layout, i);
@@ -35850,16 +35852,46 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
         if (std::strcmp(hit->action, "editor.stair.toggle_direction") == 0)
             found_direction = true;
         else if (std::strcmp(hit->action, "editor.stair.add_step") == 0)
+        {
             found_add = true;
+            add_button_x = hit->rect.x + hit->rect.w * 0.5f;
+            add_button_y = hit->rect.y + hit->rect.h * 0.5f;
+        }
         else if (std::strcmp(hit->action, "editor.stair.remove_step") == 0)
             found_remove = true;
     }
     slayer3d_ui_layout_destroy(stair_layout);
     EXPECT_TRUE(found_direction);
-    EXPECT_TRUE(found_add);
+    ASSERT_TRUE(found_add);
     EXPECT_TRUE(found_remove);
 
-    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.add_step" })json"));
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    Uint64 input_tick = 1U;
+    auto click_editor = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = x;
+        down.button.y = y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = x;
+        up.button.y = y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
+    click_editor(add_button_x, add_button_y);
 
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
