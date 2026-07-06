@@ -304,6 +304,9 @@
     "signal.editor.visibility.show_all",
     "signal.editor.lock.lock_selected",
     "signal.editor.lock.unlock_selected",
+    "signal.editor.stair.toggle_direction",
+    "signal.editor.stair.add_step",
+    "signal.editor.stair.remove_step",
     "signal.editor.inspector.scroll.up",
     "signal.editor.inspector.scroll.down",
     "signal.editor.inspector.brush.color.r.down",
@@ -1974,6 +1977,27 @@
         "signal": "signal.editor.lock.unlock_selected",
         "actions": [
           { "type": "editor.lock.unlock_selected" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.stair.toggle_direction",
+        "actions": [
+          { "type": "editor.stair.toggle_direction" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.stair.add_step",
+        "actions": [
+          { "type": "editor.stair.add_step" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.stair.remove_step",
+        "actions": [
+          { "type": "editor.stair.remove_step" },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },

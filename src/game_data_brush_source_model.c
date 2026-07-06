@@ -382,6 +382,9 @@ static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
     return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
 }
 
+static void source_box_init_stair_metadata(editor_brush_source_box_runtime *box);
+static void source_box_rotate_stair_vectors_y(editor_brush_source_box_runtime *box, int quarter_turns);
+
 static int source_snap_units(const brush_world_runtime *world_runtime)
 {
     return world_runtime != NULL && world_runtime->editor_source_snap_units > 0
@@ -1144,6 +1147,7 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
     }
     out_box->contents = brush_flags_from_json(obj_get(box, "contents"), brush_content_flag_from_string,
                                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+    source_box_init_stair_metadata(out_box);
     return true;
 }
 
@@ -3163,10 +3167,11 @@ static bool source_prefab_name_supported(const char *prefab)
     return prefab != NULL &&
            (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 || SDL_strcmp(prefab, "ceiling") == 0 ||
             SDL_strcmp(prefab, "sky") == 0 || SDL_strcmp(prefab, "box") == 0 || SDL_strcmp(prefab, "cuboid") == 0 ||
-            SDL_strcmp(prefab, "editor.box") == 0 || SDL_strcmp(prefab, "cylinder") == 0 ||
-            SDL_strcmp(prefab, "column") == 0 || SDL_strcmp(prefab, "octagon") == 0 ||
-            SDL_strcmp(prefab, "hexagon") == 0 || SDL_strcmp(prefab, "cone") == 0 ||
-            SDL_strcmp(prefab, "spheroid_uv") == 0 || SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
+            SDL_strcmp(prefab, "editor.box") == 0 || SDL_strcmp(prefab, "stairs") == 0 ||
+            SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
+            SDL_strcmp(prefab, "octagon") == 0 || SDL_strcmp(prefab, "hexagon") == 0 ||
+            SDL_strcmp(prefab, "cone") == 0 || SDL_strcmp(prefab, "spheroid_uv") == 0 ||
+            SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
 }
 
 static const char *source_prefab_normalized(const char *prefab)
@@ -3188,6 +3193,50 @@ static unsigned int source_prefab_default_contents(const char *prefab, unsigned 
                SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
     }
     return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+}
+
+#define EDITOR_STAIR_ROOT_KEY "editor.stair.root"
+#define EDITOR_STAIR_INDEX_KEY "editor.stair.index"
+#define EDITOR_STAIR_ASCENDING_KEY "editor.stair.ascending"
+#define EDITOR_STAIR_RUN_DELTA_KEY "editor.stair.run_delta"
+#define EDITOR_STAIR_RISE_DELTA_KEY "editor.stair.rise_delta"
+
+static bool source_box_is_stair_prefab(const editor_brush_source_box_runtime *box)
+{
+    return box != NULL && box->prefab != NULL && SDL_strcmp(box->prefab, "stairs") == 0;
+}
+
+static bool source_box_ensure_properties(editor_brush_source_box_runtime *box)
+{
+    if (box == NULL)
+        return false;
+    if (box->properties != NULL)
+        return true;
+    box->properties = slayer3d_properties_create();
+    return box->properties != NULL;
+}
+
+static void source_box_init_stair_metadata(editor_brush_source_box_runtime *box)
+{
+    if (!source_box_is_stair_prefab(box) || box->stable_id == NULL || box->stable_id[0] == '\0' ||
+        !source_box_ensure_properties(box))
+    {
+        return;
+    }
+
+    const char *root = slayer3d_properties_get_string(box->properties, EDITOR_STAIR_ROOT_KEY, "");
+    if (root != NULL && root[0] != '\0')
+        return;
+
+    const int depth = SDL_max(1, box->max[2] - box->min[2]);
+    const int height = SDL_max(1, box->max[1] - box->min[1]);
+    slayer3d_properties_set_string(box->properties, EDITOR_STAIR_ROOT_KEY, box->stable_id);
+    slayer3d_properties_set_int(box->properties, EDITOR_STAIR_INDEX_KEY, 0);
+    slayer3d_properties_set_bool(box->properties, EDITOR_STAIR_ASCENDING_KEY, true);
+    slayer3d_properties_set_vec3(box->properties, EDITOR_STAIR_RUN_DELTA_KEY,
+                                 slayer3d_vec3_make(0.0f, 0.0f, (float)depth));
+    slayer3d_properties_set_vec3(box->properties, EDITOR_STAIR_RISE_DELTA_KEY,
+                                 slayer3d_vec3_make(0.0f, (float)height, 0.0f));
 }
 
 static slayer3d_vec3 source_prefab_oriented_offset(slayer3d_vec3 value, const char *axis)
@@ -3273,6 +3322,7 @@ static bool editor_brush_world_build_source_prefab_candidate(const brush_world_r
         editor_brush_source_units_from_meters(world_runtime, desc->anchor.z + oriented_min.z),
         editor_brush_source_units_from_meters(world_runtime, desc->anchor.z + oriented_max.z));
     out_box->contents = source_prefab_default_contents(prefab, desc->contents);
+    source_box_init_stair_metadata(out_box);
     if (!source_box_extents_valid(out_box))
     {
         free_editor_brush_source_box(out_box);
@@ -3560,6 +3610,7 @@ bool editor_brush_source_box_from_prefab_bounds(const brush_world_runtime *world
         out_box->max[axis] = SDL_max(source_min[axis], source_max[axis]);
     }
     out_box->contents = source_prefab_default_contents(normalized_prefab, contents);
+    source_box_init_stair_metadata(out_box);
 
     if (!source_box_extents_valid(out_box))
     {
@@ -4026,6 +4077,7 @@ bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *w
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
         return false;
     }
+    source_box_rotate_stair_vectors_y(box, normalized_turns);
     return true;
 }
 
@@ -4042,6 +4094,104 @@ static bool source_rotation_coord(float value, int snap_units, int *out_coord)
     const int rounded = (int)rounded_scaled * snap_units;
     *out_coord = rounded;
     return true;
+}
+
+static bool source_box_has_stair_vector(const editor_brush_source_box_runtime *box, const char *key)
+{
+    return box != NULL && box->properties != NULL && slayer3d_properties_get_value(box->properties, key) != NULL;
+}
+
+static void source_box_transform_stair_vector(editor_brush_source_box_runtime *box, const char *key,
+                                              slayer3d_vec3 value)
+{
+    if (box == NULL || box->properties == NULL || key == NULL || !source_box_has_stair_vector(box, key))
+        return;
+    slayer3d_properties_set_vec3(box->properties, key, value);
+}
+
+static void source_box_rotate_stair_vectors_y(editor_brush_source_box_runtime *box, int quarter_turns)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    quarter_turns %= 4;
+    if (quarter_turns < 0)
+        quarter_turns += 4;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t key_index = 0; key_index < SDL_arraysize(keys); ++key_index)
+    {
+        if (!source_box_has_stair_vector(box, keys[key_index]))
+            continue;
+        slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[key_index], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        for (int turn = 0; turn < quarter_turns; ++turn)
+        {
+            const float next_x = value.z;
+            const float next_z = -value.x;
+            value.x = next_x;
+            value.z = next_z;
+        }
+        source_box_transform_stair_vector(box, keys[key_index], value);
+    }
+}
+
+static slayer3d_vec3 source_rotate_vector(slayer3d_vec3 value, slayer3d_vec3 axis, float angle_radians)
+{
+    const float cos_angle = SDL_cosf(angle_radians);
+    const float sin_angle = SDL_sinf(angle_radians);
+    return slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(value, cos_angle),
+                                               slayer3d_vec3_scale(slayer3d_vec3_cross(axis, value), sin_angle)),
+                             slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, value) * (1.0f - cos_angle)));
+}
+
+static void source_box_rotate_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 axis,
+                                            float angle_radians)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        const slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        source_box_transform_stair_vector(box, keys[i], source_rotate_vector(value, axis, angle_radians));
+    }
+}
+
+static void source_box_scale_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 factors)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        value.x *= factors.x;
+        value.y *= factors.y;
+        value.z *= factors.z;
+        source_box_transform_stair_vector(box, keys[i], value);
+    }
+}
+
+static void source_box_mirror_stair_vectors(editor_brush_source_box_runtime *box, slayer3d_vec3 plane_normal)
+{
+    if (box == NULL || box->properties == NULL)
+        return;
+    const char *keys[] = {EDITOR_STAIR_RUN_DELTA_KEY, EDITOR_STAIR_RISE_DELTA_KEY};
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        if (!source_box_has_stair_vector(box, keys[i]))
+            continue;
+        const slayer3d_vec3 value =
+            slayer3d_properties_get_vec3(box->properties, keys[i], slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const float distance = slayer3d_vec3_dot(value, plane_normal);
+        source_box_transform_stair_vector(box, keys[i],
+                                          slayer3d_vec3_sub(value, slayer3d_vec3_scale(plane_normal, 2.0f * distance)));
+    }
 }
 
 static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3], slayer3d_vec3 axis,
@@ -4166,6 +4316,7 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
         box->vertices[vertex][2] = 0;
     }
     source_box_update_bounds_from_vertices(box);
+    source_box_rotate_stair_vectors(box, axis, angle_radians);
 
     if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
         !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
@@ -4207,10 +4358,11 @@ static bool mirror_source_vertex_coord(const int coord[3], const float plane_poi
 
 static bool source_prefab_preserved_by_transform(const char *prefab)
 {
-    return prefab != NULL && (SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
-                              SDL_strcmp(prefab, "octagon") == 0 || SDL_strcmp(prefab, "hexagon") == 0 ||
-                              SDL_strcmp(prefab, "cone") == 0 || SDL_strcmp(prefab, "spheroid_uv") == 0 ||
-                              SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
+    return prefab != NULL &&
+           (SDL_strcmp(prefab, "cylinder") == 0 || SDL_strcmp(prefab, "column") == 0 ||
+            SDL_strcmp(prefab, "stairs") == 0 || SDL_strcmp(prefab, "octagon") == 0 ||
+            SDL_strcmp(prefab, "hexagon") == 0 || SDL_strcmp(prefab, "cone") == 0 ||
+            SDL_strcmp(prefab, "spheroid_uv") == 0 || SDL_strcmp(prefab, "spheroid_icosahedron") == 0);
 }
 
 static bool source_box_apply_transform_prefab(editor_brush_source_box_runtime *box, const char *operation_name,
@@ -4455,6 +4607,7 @@ bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, con
         box->vertices[vertex][2] = 0;
     }
     source_box_update_bounds_from_vertices(box);
+    source_box_scale_stair_vectors(box, factors);
 
     if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
         !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
@@ -4528,9 +4681,14 @@ bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, co
         }
     }
 
-    return editor_brush_world_apply_transformed_source_vertices(world_runtime, source_index, brush_name, &model,
-                                                                &mirrored_vertices[0][0], "mirror", error_buffer,
-                                                                error_buffer_size);
+    if (!editor_brush_world_apply_transformed_source_vertices(world_runtime, source_index, brush_name, &model,
+                                                              &mirrored_vertices[0][0], "mirror", error_buffer,
+                                                              error_buffer_size))
+    {
+        return false;
+    }
+    source_box_mirror_stair_vectors(&world_runtime->editor_source_boxes[source_index], plane_normal);
+    return true;
 }
 
 bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, const char *const *brush_identities,
@@ -4650,6 +4808,7 @@ bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, 
         {
             goto fail_restore;
         }
+        source_box_mirror_stair_vectors(box, plane_normal);
     }
     for (int i = 0; i < brush_count; ++i)
     {

@@ -325,10 +325,7 @@
         { "id": "column", "label": "Column" },
         { "id": "pipe", "label": "Pipe" },
         { "id": "octagon", "label": "Octagon" },
-        { "id": "hexagon", "label": "Hexagon" },
-        { "id": "capsule", "label": "Capsule" },
-        { "id": "door_frame", "label": "Door Frame" },
-        { "id": "window_frame", "label": "Window Frame" }
+        { "id": "hexagon", "label": "Hexagon" }
       ]
     },
     "grid_widget": {
@@ -585,12 +582,9 @@
               "Column",
               "Pipe",
               "Octagon",
-              "Hexagon",
-              "Capsule",
-              "Door Frame",
-              "Window Frame"
+              "Hexagon"
             ],
-            "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+            "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
           },
           {
             "id": "ui.editor_shell.toolbar.global.button",
@@ -1069,10 +1063,16 @@
             "text_scale": 0.36,
             "action": "editor.visibility.hide_selected",
             "visible_if": {
-              "type": "any",
+              "type": "all",
               "conditions": [
-                { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
-                { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                    { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
+                  ]
+                },
+                { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": false, "default": false }
               ]
             }
           },
@@ -1098,7 +1098,8 @@
                     { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
                   ]
                 },
-                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": false, "default": false }
+                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": false, "default": false },
+                { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": false, "default": false }
               ]
             }
           },
@@ -1124,7 +1125,57 @@
                     { "type": "scene_state.compare", "key": "editor.actor.selection.count", "op": ">", "value": 0, "default": 0 }
                   ]
                 },
-                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": true, "default": false }
+                { "type": "scene_state.compare", "key": "editor.lock.selection_has_locked", "op": "==", "value": true, "default": false },
+                { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": false, "default": false }
+              ]
+            }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.stair.direction",
+            "type": "button",
+            "x": 174,
+            "y": 52,
+            "w": 52,
+            "h": 28,
+            "layer": 126,
+            "interactive": true,
+            "format": "%s",
+            "text_scale": 0.28,
+            "action": "editor.stair.toggle_direction",
+            "bindings": [{ "type": "scene_state", "key": "editor.stair.direction_label", "default": "Up" }],
+            "visible_if": { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": true, "default": false }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.stair.add",
+            "type": "button",
+            "x": 230,
+            "y": 52,
+            "w": 24,
+            "h": 28,
+            "layer": 126,
+            "interactive": true,
+            "text": "+",
+            "text_scale": 0.42,
+            "action": "editor.stair.add_step",
+            "visible_if": { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": true, "default": false }
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.stair.remove",
+            "type": "button",
+            "x": 260,
+            "y": 52,
+            "w": 24,
+            "h": 28,
+            "layer": 126,
+            "interactive": true,
+            "text": "X",
+            "text_scale": 0.32,
+            "action": "editor.stair.remove_step",
+            "visible_if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.stair.selected", "op": "==", "value": true, "default": false },
+                { "type": "scene_state.compare", "key": "editor.stair.can_remove_step", "op": "==", "value": true, "default": false }
               ]
             }
           },

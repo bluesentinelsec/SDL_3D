@@ -402,8 +402,8 @@ static const char *const editor_signal_action_names[] = {
 
 /* Action families whose members are all forwarded as "signal.<action>". */
 static const char *const editor_signal_action_prefixes[] = {
-    "editor.texture.",   "editor.palette.",  "editor.actor.",  "editor.things.",     "editor.file.",
-    "editor.inspector.", "editor.property.", "editor.global.", "editor.visibility.", "editor.lock.",
+    "editor.texture.",  "editor.palette.", "editor.actor.",      "editor.things.", "editor.file.",  "editor.inspector.",
+    "editor.property.", "editor.global.",  "editor.visibility.", "editor.lock.",   "editor.stair.",
 };
 
 static bool editor_action_routes_to_signal(const char *action)

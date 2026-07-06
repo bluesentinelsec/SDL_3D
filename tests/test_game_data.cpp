@@ -35780,6 +35780,117 @@ TEST(GameDataRuntime, EditorSourceBrushCreateSupportsConvexShapePrefabs)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    editor_brush_source_prefab_result stair_result{};
+    const int stair_min[3] = {0, 0, 0};
+    const int stair_max[3] = {1000, 500, 2000};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.floor", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, stair_min,
+        stair_max, "stairs", &stair_result));
+    ASSERT_TRUE(stair_result.valid);
+    ASSERT_STRNE(stair_result.brush_name, "");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    editor_brush_source_box_runtime stair_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, stair_result.brush_name, &stair_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(stair_source.prefab, "stairs");
+    ASSERT_NE(stair_source.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(stair_source.properties, "editor.stair.root", ""),
+                 stair_result.brush_name);
+    EXPECT_EQ(slayer3d_properties_get_int(stair_source.properties, "editor.stair.index", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(stair_source.properties, "editor.stair.ascending", false));
+    slayer3d_vec3 run_delta = slayer3d_properties_get_vec3(stair_source.properties, "editor.stair.run_delta",
+                                                           slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_vec3 rise_delta = slayer3d_properties_get_vec3(stair_source.properties, "editor.stair.rise_delta",
+                                                            slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(run_delta.x, 0.0f, 0.001f);
+    EXPECT_NEAR(run_delta.z, 2000.0f, 0.001f);
+    EXPECT_NEAR(rise_delta.y, 500.0f, 0.001f);
+    free_editor_brush_source_box_runtime(&stair_source);
+
+    select_editor_shell_test_brush(runtime, stair_result.brush_name);
+    auto execute_json_action = [&](const char *json) {
+        yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), YYJSON_READ_NOFLAG);
+        EXPECT_NE(doc, nullptr) << json;
+        if (doc == nullptr)
+            return false;
+        yyjson_val *root = yyjson_doc_get_root(doc);
+        const bool ok = execute_one_action(runtime, root, nullptr);
+        yyjson_doc_free(doc);
+        return ok;
+    };
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.add_step" })json"));
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+
+    editor_brush_source_box_runtime added_step{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(
+        world_runtime, (std::string(stair_result.brush_name) + ".step.01").c_str(), &added_step, nullptr, error,
+        sizeof(error)))
+        << error;
+    EXPECT_STREQ(added_step.prefab, "stairs");
+    ASSERT_NE(added_step.properties, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(added_step.properties, "editor.stair.root", ""),
+                 stair_result.brush_name);
+    EXPECT_EQ(slayer3d_properties_get_int(added_step.properties, "editor.stair.index", -1), 1);
+    EXPECT_EQ(added_step.min[1], 500);
+    EXPECT_EQ(added_step.min[2], 2000);
+    free_editor_brush_source_box_runtime(&added_step);
+
+    ASSERT_TRUE(editor_brush_world_rotate_source_box_y_quarter_turns(world_runtime, stair_result.brush_name, 1, error,
+                                                                     sizeof(error)))
+        << error;
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, stair_result.brush_name, &stair_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    run_delta = slayer3d_properties_get_vec3(stair_source.properties, "editor.stair.run_delta",
+                                             slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(run_delta.x, 2000.0f, 0.001f);
+    EXPECT_NEAR(run_delta.z, 0.0f, 0.001f);
+    free_editor_brush_source_box_runtime(&stair_source);
+
+    select_editor_shell_test_brush(runtime, stair_result.brush_name);
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.toggle_direction" })json"));
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.add_step" })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 3);
+
+    editor_brush_source_box_runtime descending_step{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(
+        world_runtime, (std::string(stair_result.brush_name) + ".step.02").c_str(), &descending_step, nullptr, error,
+        sizeof(error)))
+        << error;
+    EXPECT_EQ(slayer3d_properties_get_int(descending_step.properties, "editor.stair.index", -1), 2);
+    EXPECT_FALSE(slayer3d_properties_get_bool(descending_step.properties, "editor.stair.ascending", true));
+    EXPECT_LT(descending_step.min[1], stair_min[1]);
+    EXPECT_GT(descending_step.min[0], stair_min[0]);
+    free_editor_brush_source_box_runtime(&descending_step);
+
+    ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.remove_step" })json"));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 2);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();

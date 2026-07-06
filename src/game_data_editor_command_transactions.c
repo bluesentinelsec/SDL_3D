@@ -434,10 +434,6 @@ static int editor_face_index_for_identity(const slayer3d_game_data_brush *brush,
     return face_index >= 0 && face_index < brush->face_count ? face_index : -1;
 }
 
-static void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
-                                                        slayer3d_game_data_editor_selection *selection,
-                                                        const char *brush_name, const char *brush_stable_id,
-                                                        int face_index, const char *face_stable_id);
 static void publish_editor_transaction_selection_state(slayer3d_game_data_runtime *runtime);
 
 typedef struct editor_selection_identity_snapshot
@@ -1095,10 +1091,10 @@ static void translate_active_editor_selection_for_transaction(slayer3d_game_data
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset, bool active_matches);
 
-static void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
-                                                        slayer3d_game_data_editor_selection *selection,
-                                                        const char *brush_name, const char *brush_stable_id,
-                                                        int face_index, const char *face_stable_id)
+void refresh_editor_brush_selection_for_identity(const brush_world_runtime *world_runtime,
+                                                 slayer3d_game_data_editor_selection *selection, const char *brush_name,
+                                                 const char *brush_stable_id, int face_index,
+                                                 const char *face_stable_id)
 {
     if (world_runtime == NULL || selection == NULL ||
         ((brush_name == NULL || brush_name[0] == '\0') && (brush_stable_id == NULL || brush_stable_id[0] == '\0')))
