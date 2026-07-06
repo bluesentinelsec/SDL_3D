@@ -6,6 +6,10 @@
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_stdinc.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
+
 #include "slayer3d/logic.h"
 #include "slayer3d/time.h"
 
@@ -506,233 +510,300 @@ static void slayer3d_game_sync_input_mouse_transform(const slayer3d_game_context
                                                 (float)logical_height / viewport_height, viewport_x, viewport_y);
 }
 
-int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_callbacks *callbacks, void *userdata)
+/**
+ * @brief Mutable state for one managed game loop run.
+ *
+ * The state is heap-allocated so browser builds can keep it alive after
+ * slayer3d_run_game hands per-frame control back to the browser event loop.
+ */
+typedef struct slayer3d_game_run_state
 {
     slayer3d_game_context ctx;
-    const float fixed_dt = slayer3d_game_fixed_dt(config);
-    const int max_ticks_per_frame = slayer3d_game_max_ticks_per_frame(config);
-    const bool profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
-    float accumulator = 0.0f;
-    Uint64 last_counter = 0;
-    Uint64 profile_last_counter = 0;
-    double profile_poll_ms = 0.0;
-    double profile_tick_ms = 0.0;
-    double profile_render_ms = 0.0;
-    double profile_present_ms = 0.0;
-    double profile_frame_ms = 0.0;
-    int profile_frames_count = 0;
-    int profile_ticks_count = 0;
-    int profile_max_ticks = 0;
-    int result = 0;
+    slayer3d_game_callbacks callbacks;
+    void *userdata;
+    float fixed_dt;
+    int max_ticks_per_frame;
+    bool profile_frames;
+    float accumulator;
+    Uint64 last_counter;
+    Uint64 profile_last_counter;
+    double profile_poll_ms;
+    double profile_tick_ms;
+    double profile_render_ms;
+    double profile_present_ms;
+    double profile_frame_ms;
+    int profile_frames_count;
+    int profile_ticks_count;
+    int profile_max_ticks;
+    int result;
+} slayer3d_game_run_state;
 
-    SDL_zero(ctx);
+static void slayer3d_game_run_frame(slayer3d_game_run_state *run)
+{
+    slayer3d_game_context *ctx = &run->ctx;
+    const slayer3d_game_callbacks *callbacks = &run->callbacks;
+    const Uint64 frame_start_counter = SDL_GetPerformanceCounter();
+    Uint64 poll_start_counter = frame_start_counter;
+    Uint64 poll_end_counter;
+    Uint64 tick_start_counter;
+    Uint64 tick_end_counter;
+    Uint64 render_start_counter;
+    Uint64 render_end_counter;
+    Uint64 present_start_counter;
+    Uint64 present_end_counter;
+    SDL_Event event;
+    slayer3d_game_sync_input_mouse_transform(ctx);
+    while (SDL_PollEvent(&event))
+    {
+        ctx->input_event_consumed = false;
+
+        if (event.type == SDL_EVENT_QUIT)
+        {
+            ctx->quit_requested = true;
+            break;
+        }
+
+        if (callbacks->event != NULL && !callbacks->event(ctx, run->userdata, &event))
+        {
+            ctx->quit_requested = true;
+            break;
+        }
+
+        if (!ctx->input_event_consumed)
+        {
+            slayer3d_input_process_event(slayer3d_game_session_get_input(ctx->session), &event);
+        }
+    }
+    poll_end_counter = SDL_GetPerformanceCounter();
+
+    if (ctx->quit_requested)
+    {
+        return;
+    }
+
+    const Uint64 now = SDL_GetPerformanceCounter();
+    const float frame_dt = slayer3d_game_frame_delta(now, run->last_counter);
+    int ticks_this_frame = 0;
+    run->last_counter = now;
+
+    ctx->real_time += frame_dt;
+    slayer3d_time_update();
+    slayer3d_game_session_begin_frame(ctx->session, frame_dt);
+
+    if (ctx->paused)
+    {
+        tick_start_counter = SDL_GetPerformanceCounter();
+        slayer3d_game_session_update_input(ctx->session);
+        if (callbacks->pause_tick != NULL)
+        {
+            callbacks->pause_tick(ctx, run->userdata, frame_dt);
+        }
+        tick_end_counter = SDL_GetPerformanceCounter();
+    }
+    else
+    {
+        tick_start_counter = SDL_GetPerformanceCounter();
+        run->accumulator += frame_dt;
+
+        while (!ctx->quit_requested && !ctx->paused && run->accumulator >= run->fixed_dt &&
+               ticks_this_frame < run->max_ticks_per_frame)
+        {
+            slayer3d_game_session_begin_tick(ctx->session, run->fixed_dt);
+
+            if (callbacks->tick != NULL)
+            {
+                callbacks->tick(ctx, run->userdata, run->fixed_dt);
+            }
+
+            slayer3d_game_session_end_tick(ctx->session, run->fixed_dt);
+            run->accumulator -= run->fixed_dt;
+            ticks_this_frame++;
+        }
+
+        if (ticks_this_frame == run->max_ticks_per_frame && run->accumulator >= run->fixed_dt)
+        {
+            run->accumulator = SDL_fmodf(run->accumulator, run->fixed_dt);
+        }
+        tick_end_counter = SDL_GetPerformanceCounter();
+    }
+
+    if (ctx->quit_requested)
+    {
+        return;
+    }
+
+    if (callbacks->render != NULL)
+    {
+        float alpha = ctx->paused ? 0.0f : run->accumulator / run->fixed_dt;
+        if (alpha > 1.0f)
+        {
+            alpha = 1.0f;
+        }
+        render_start_counter = SDL_GetPerformanceCounter();
+        callbacks->render(ctx, run->userdata, alpha);
+        render_end_counter = SDL_GetPerformanceCounter();
+    }
+    else
+    {
+        render_start_counter = SDL_GetPerformanceCounter();
+        render_end_counter = render_start_counter;
+    }
+
+    present_start_counter = SDL_GetPerformanceCounter();
+    if (!slayer3d_present_render_context(ctx->renderer))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D present failed: %s", SDL_GetError());
+        run->result = 1;
+        ctx->quit_requested = true;
+    }
+    present_end_counter = SDL_GetPerformanceCounter();
+    const float frame_ms =
+        (float)((double)(present_end_counter - frame_start_counter) * 1000.0 / (double)SDL_GetPerformanceFrequency());
+    if (!slayer3d_update_dynamic_world_render_scale(ctx->renderer, frame_ms))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D dynamic render scale update failed: %s", SDL_GetError());
+        SDL_ClearError();
+    }
+
+    if (run->profile_frames)
+    {
+        const double inv_freq_ms = 1000.0 / (double)SDL_GetPerformanceFrequency();
+        run->profile_poll_ms += (double)(poll_end_counter - poll_start_counter) * inv_freq_ms;
+        run->profile_tick_ms += (double)(tick_end_counter - tick_start_counter) * inv_freq_ms;
+        run->profile_render_ms += (double)(render_end_counter - render_start_counter) * inv_freq_ms;
+        run->profile_present_ms += (double)(present_end_counter - present_start_counter) * inv_freq_ms;
+        run->profile_frame_ms += (double)(present_end_counter - frame_start_counter) * inv_freq_ms;
+        run->profile_frames_count++;
+        run->profile_ticks_count += ticks_this_frame;
+        if (ticks_this_frame > run->profile_max_ticks)
+        {
+            run->profile_max_ticks = ticks_this_frame;
+        }
+
+        if (run->profile_last_counter == 0)
+        {
+            run->profile_last_counter = present_end_counter;
+        }
+        else if ((double)(present_end_counter - run->profile_last_counter) / (double)SDL_GetPerformanceFrequency() >=
+                 1.0)
+        {
+            const double frames = run->profile_frames_count > 0 ? (double)run->profile_frames_count : 1.0;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "SLAYER3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
+                        "ticks/frame=%.2f max_ticks=%d",
+                        frames * (double)SDL_GetPerformanceFrequency() /
+                            (double)(present_end_counter - run->profile_last_counter),
+                        run->profile_frame_ms / frames, run->profile_poll_ms / frames, run->profile_tick_ms / frames,
+                        run->profile_render_ms / frames, run->profile_present_ms / frames,
+                        run->profile_ticks_count / frames, run->profile_max_ticks);
+            run->profile_last_counter = present_end_counter;
+            run->profile_poll_ms = 0.0;
+            run->profile_tick_ms = 0.0;
+            run->profile_render_ms = 0.0;
+            run->profile_present_ms = 0.0;
+            run->profile_frame_ms = 0.0;
+            run->profile_frames_count = 0;
+            run->profile_ticks_count = 0;
+            run->profile_max_ticks = 0;
+        }
+    }
+}
+
+static int slayer3d_game_run_shutdown(slayer3d_game_run_state *run)
+{
+    if (run->callbacks.shutdown != NULL)
+    {
+        run->callbacks.shutdown(&run->ctx, run->userdata);
+    }
+
+#if SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
+    SDL_StopTextInput(run->ctx.window);
+#endif
+    slayer3d_game_cleanup_context(&run->ctx);
+    SDL_Quit();
+    return run->result;
+}
+
+#if defined(__EMSCRIPTEN__)
+static void slayer3d_game_emscripten_frame(void *userdata)
+{
+    slayer3d_game_run_state *run = (slayer3d_game_run_state *)userdata;
+    slayer3d_game_run_frame(run);
+    if (!run->ctx.quit_requested)
+    {
+        return;
+    }
+
+    (void)slayer3d_game_run_shutdown(run);
+    SDL_free(run);
+    emscripten_cancel_main_loop();
+}
+#endif
+
+int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_callbacks *callbacks, void *userdata)
+{
+    slayer3d_game_run_state *run = (slayer3d_game_run_state *)SDL_calloc(1, sizeof(*run));
+    if (run == NULL)
+    {
+        SDL_OutOfMemory();
+        return 1;
+    }
+
+    if (callbacks != NULL)
+    {
+        run->callbacks = *callbacks;
+    }
+    run->userdata = userdata;
+    run->fixed_dt = slayer3d_game_fixed_dt(config);
+    run->max_ticks_per_frame = slayer3d_game_max_ticks_per_frame(config);
+    run->profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
+
     SDL_SetMainReady();
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC))
     {
+        SDL_free(run);
         return 1;
     }
 
-    if (!slayer3d_game_create_context(config, &ctx))
+    if (!slayer3d_game_create_context(config, &run->ctx))
     {
-        slayer3d_game_cleanup_context(&ctx);
+        slayer3d_game_cleanup_context(&run->ctx);
         SDL_Quit();
+        SDL_free(run);
         return 1;
     }
 #if SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
-    SDL_StartTextInput(ctx.window);
+    SDL_StartTextInput(run->ctx.window);
 #endif
 
     slayer3d_time_reset();
 
-    if (callbacks != NULL && callbacks->init != NULL && !callbacks->init(&ctx, userdata))
+    if (run->callbacks.init != NULL && !run->callbacks.init(&run->ctx, run->userdata))
     {
-        slayer3d_game_cleanup_context(&ctx);
+        slayer3d_game_cleanup_context(&run->ctx);
         SDL_Quit();
+        SDL_free(run);
         return 1;
     }
 
-    last_counter = SDL_GetPerformanceCounter();
+    run->last_counter = SDL_GetPerformanceCounter();
 
-    while (!ctx.quit_requested)
+#if defined(__EMSCRIPTEN__)
+    /* Browsers own the outer loop: register the per-frame callback and unwind
+     * back to the browser event loop instead of blocking. The callback runs
+     * shutdown and cleanup when quit is requested, and this call does not
+     * return, so caller code after slayer3d_run_game does not run on web. */
+    emscripten_set_main_loop_arg(slayer3d_game_emscripten_frame, run, 0, 1);
+    return 0;
+#else
+    while (!run->ctx.quit_requested)
     {
-        const Uint64 frame_start_counter = SDL_GetPerformanceCounter();
-        Uint64 poll_start_counter = frame_start_counter;
-        Uint64 poll_end_counter;
-        Uint64 tick_start_counter;
-        Uint64 tick_end_counter;
-        Uint64 render_start_counter;
-        Uint64 render_end_counter;
-        Uint64 present_start_counter;
-        Uint64 present_end_counter;
-        SDL_Event event;
-        slayer3d_game_sync_input_mouse_transform(&ctx);
-        while (SDL_PollEvent(&event))
-        {
-            ctx.input_event_consumed = false;
-
-            if (event.type == SDL_EVENT_QUIT)
-            {
-                ctx.quit_requested = true;
-                break;
-            }
-
-            if (callbacks != NULL && callbacks->event != NULL && !callbacks->event(&ctx, userdata, &event))
-            {
-                ctx.quit_requested = true;
-                break;
-            }
-
-            if (!ctx.input_event_consumed)
-            {
-                slayer3d_input_process_event(slayer3d_game_session_get_input(ctx.session), &event);
-            }
-        }
-        poll_end_counter = SDL_GetPerformanceCounter();
-
-        if (ctx.quit_requested)
-        {
-            break;
-        }
-
-        const Uint64 now = SDL_GetPerformanceCounter();
-        const float frame_dt = slayer3d_game_frame_delta(now, last_counter);
-        int ticks_this_frame = 0;
-        last_counter = now;
-
-        ctx.real_time += frame_dt;
-        slayer3d_time_update();
-        slayer3d_game_session_begin_frame(ctx.session, frame_dt);
-
-        if (ctx.paused)
-        {
-            tick_start_counter = SDL_GetPerformanceCounter();
-            slayer3d_game_session_update_input(ctx.session);
-            if (callbacks != NULL && callbacks->pause_tick != NULL)
-            {
-                callbacks->pause_tick(&ctx, userdata, frame_dt);
-            }
-            tick_end_counter = SDL_GetPerformanceCounter();
-        }
-        else
-        {
-            tick_start_counter = SDL_GetPerformanceCounter();
-            accumulator += frame_dt;
-
-            while (!ctx.quit_requested && !ctx.paused && accumulator >= fixed_dt &&
-                   ticks_this_frame < max_ticks_per_frame)
-            {
-                slayer3d_game_session_begin_tick(ctx.session, fixed_dt);
-
-                if (callbacks != NULL && callbacks->tick != NULL)
-                {
-                    callbacks->tick(&ctx, userdata, fixed_dt);
-                }
-
-                slayer3d_game_session_end_tick(ctx.session, fixed_dt);
-                accumulator -= fixed_dt;
-                ticks_this_frame++;
-            }
-
-            if (ticks_this_frame == max_ticks_per_frame && accumulator >= fixed_dt)
-            {
-                accumulator = SDL_fmodf(accumulator, fixed_dt);
-            }
-            tick_end_counter = SDL_GetPerformanceCounter();
-        }
-
-        if (ctx.quit_requested)
-        {
-            break;
-        }
-
-        if (callbacks != NULL && callbacks->render != NULL)
-        {
-            float alpha = ctx.paused ? 0.0f : accumulator / fixed_dt;
-            if (alpha > 1.0f)
-            {
-                alpha = 1.0f;
-            }
-            render_start_counter = SDL_GetPerformanceCounter();
-            callbacks->render(&ctx, userdata, alpha);
-            render_end_counter = SDL_GetPerformanceCounter();
-        }
-        else
-        {
-            render_start_counter = SDL_GetPerformanceCounter();
-            render_end_counter = render_start_counter;
-        }
-
-        present_start_counter = SDL_GetPerformanceCounter();
-        if (!slayer3d_present_render_context(ctx.renderer))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D present failed: %s", SDL_GetError());
-            result = 1;
-            ctx.quit_requested = true;
-        }
-        present_end_counter = SDL_GetPerformanceCounter();
-        const float frame_ms = (float)((double)(present_end_counter - frame_start_counter) * 1000.0 /
-                                       (double)SDL_GetPerformanceFrequency());
-        if (!slayer3d_update_dynamic_world_render_scale(ctx.renderer, frame_ms))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D dynamic render scale update failed: %s",
-                        SDL_GetError());
-            SDL_ClearError();
-        }
-
-        if (profile_frames)
-        {
-            const double inv_freq_ms = 1000.0 / (double)SDL_GetPerformanceFrequency();
-            profile_poll_ms += (double)(poll_end_counter - poll_start_counter) * inv_freq_ms;
-            profile_tick_ms += (double)(tick_end_counter - tick_start_counter) * inv_freq_ms;
-            profile_render_ms += (double)(render_end_counter - render_start_counter) * inv_freq_ms;
-            profile_present_ms += (double)(present_end_counter - present_start_counter) * inv_freq_ms;
-            profile_frame_ms += (double)(present_end_counter - frame_start_counter) * inv_freq_ms;
-            profile_frames_count++;
-            profile_ticks_count += ticks_this_frame;
-            if (ticks_this_frame > profile_max_ticks)
-            {
-                profile_max_ticks = ticks_this_frame;
-            }
-
-            if (profile_last_counter == 0)
-            {
-                profile_last_counter = present_end_counter;
-            }
-            else if ((double)(present_end_counter - profile_last_counter) / (double)SDL_GetPerformanceFrequency() >=
-                     1.0)
-            {
-                const double frames = profile_frames_count > 0 ? (double)profile_frames_count : 1.0;
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                            "SLAYER3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
-                            "ticks/frame=%.2f max_ticks=%d",
-                            frames * (double)SDL_GetPerformanceFrequency() /
-                                (double)(present_end_counter - profile_last_counter),
-                            profile_frame_ms / frames, profile_poll_ms / frames, profile_tick_ms / frames,
-                            profile_render_ms / frames, profile_present_ms / frames, profile_ticks_count / frames,
-                            profile_max_ticks);
-                profile_last_counter = present_end_counter;
-                profile_poll_ms = 0.0;
-                profile_tick_ms = 0.0;
-                profile_render_ms = 0.0;
-                profile_present_ms = 0.0;
-                profile_frame_ms = 0.0;
-                profile_frames_count = 0;
-                profile_ticks_count = 0;
-                profile_max_ticks = 0;
-            }
-        }
+        slayer3d_game_run_frame(run);
     }
 
-    if (callbacks != NULL && callbacks->shutdown != NULL)
-    {
-        callbacks->shutdown(&ctx, userdata);
-    }
-
-#if SLAYER3D_GAME_ENABLE_GLOBAL_TEXT_INPUT
-    SDL_StopTextInput(ctx.window);
-#endif
-    slayer3d_game_cleanup_context(&ctx);
-    SDL_Quit();
+    const int result = slayer3d_game_run_shutdown(run);
+    SDL_free(run);
     return result;
+#endif
 }

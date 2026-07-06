@@ -383,6 +383,7 @@ static bool editor_asset_source_copy(const slayer3d_editor_asset_source *source,
     return true;
 }
 
+#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
 static bool editor_asset_source_init(slayer3d_editor_asset_source *source, const char *path, const char *relative_path,
                                      bool available)
 {
@@ -399,6 +400,7 @@ static bool editor_asset_source_init(slayer3d_editor_asset_source *source, const
     }
     return true;
 }
+#endif
 
 static bool editor_asset_sources_copy(const slayer3d_editor_asset_sources *sources,
                                       slayer3d_editor_asset_sources *out_sources)

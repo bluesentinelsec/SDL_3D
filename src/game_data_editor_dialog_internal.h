@@ -19,7 +19,10 @@ typedef struct editor_file_dialog_request
     bool failed;
 } editor_file_dialog_request;
 
+struct slayer3d_game_data_runtime;
+
 Uint32 slayer3d_game_data_editor_file_dialog_event_type(void);
 void slayer3d_game_data_editor_file_dialog_request_free(editor_file_dialog_request *request);
+void slayer3d_game_data_editor_publish_console_message(struct slayer3d_game_data_runtime *runtime, const char *message);
 
 #endif

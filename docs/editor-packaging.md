@@ -75,3 +75,48 @@ The editor is generic. Project assets and map files stay external unless the
 caller explicitly packages them. The embedded Slayer3D Editor project exists so
 a fresh executable opens into a useful brush editor immediately; users can then
 open or configure their own projects from the editor workflow.
+
+## Browser Editor (Emscripten)
+
+`slayer3d_editor_web` is an Emscripten-only CMake target that runs the same
+data-authored editor shell in a web browser. Instead of the desktop embedded
+asset pack (which requires the native `slayer3d_pack` tool), the web build
+preloads `apps/slayer3d_editor` and the built-in media it references into the
+Emscripten virtual filesystem and resolves the default project from
+`/apps/slayer3d_editor` at startup. No CLI arguments are required; the browser
+editor boots into the default untitled map.
+
+The supported build-and-host workflow is Docker-based:
+
+```sh
+docker build -f docker/emscripten-editor/Dockerfile -t slayer3d-editor-web .
+docker run --rm -it -p 8080:8080 slayer3d-editor-web
+```
+
+Then open:
+
+```text
+http://localhost:8080/slayer3d_editor_web.html
+```
+
+With a local Emscripten SDK, the same target builds directly:
+
+```sh
+emcmake cmake -S . -B build/emscripten-editor -DCMAKE_BUILD_TYPE=Release
+cmake --build build/emscripten-editor --target slayer3d_editor_web
+python3 -m http.server 8080 --directory build/emscripten-editor
+```
+
+The build produces `slayer3d_editor_web.html`, `.js`, `.wasm`, and `.data`
+artifacts in the build root. The managed game loop drives the browser build
+through `emscripten_set_main_loop_arg` rather than the native blocking loop;
+native desktop behavior is unchanged.
+
+### Current Browser Limitations
+
+- Saves write to the in-memory Emscripten filesystem, so edits do not persist
+  across page reloads. Browser-native import/export (file picker and download
+  bridge, or persistent IDBFS storage) is follow-up work.
+- Open/save file dialogs depend on SDL's dialog support for Emscripten. When a
+  dialog is unavailable, the editor reports "File dialog failed" in the editor
+  console instead of failing silently.

@@ -1,0 +1,5 @@
+# Keep Docker build contexts lean: local build trees and VCS metadata are
+# never needed inside image builds.
+build/
+.git/
+.cache/
