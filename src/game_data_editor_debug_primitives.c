@@ -10,6 +10,8 @@
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
+#define EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI 0.61803399f
+
 typedef struct editor_debug_iteration_context
 {
     slayer3d_game_data_editor_debug_primitive_fn callback;
@@ -1030,11 +1032,13 @@ static slayer3d_vec3 editor_preview_icosahedron_vertex(const editor_placement_pr
     const float rx = (preview->bounds.max.x - preview->bounds.min.x) * 0.5f;
     const float ry = (preview->bounds.max.y - preview->bounds.min.y) * 0.5f;
     const float rz = (preview->bounds.max.z - preview->bounds.min.z) * 0.5f;
-    static const float inv_phi = 0.61803399f;
     static const float vertices[12][3] = {
-        {0.0f, inv_phi, 1.0f}, {0.0f, -inv_phi, 1.0f}, {0.0f, inv_phi, -1.0f}, {0.0f, -inv_phi, -1.0f},
-        {inv_phi, 1.0f, 0.0f}, {-inv_phi, 1.0f, 0.0f}, {inv_phi, -1.0f, 0.0f}, {-inv_phi, -1.0f, 0.0f},
-        {1.0f, 0.0f, inv_phi}, {-1.0f, 0.0f, inv_phi}, {1.0f, 0.0f, -inv_phi}, {-1.0f, 0.0f, -inv_phi},
+        {0.0f, EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, 1.0f},  {0.0f, -EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, 1.0f},
+        {0.0f, EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, -1.0f}, {0.0f, -EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, -1.0f},
+        {EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},  {-EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},
+        {EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f}, {-EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f},
+        {1.0f, 0.0f, EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI},  {-1.0f, 0.0f, EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI},
+        {1.0f, 0.0f, -EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI}, {-1.0f, 0.0f, -EDITOR_PREVIEW_ICOSAHEDRON_INV_PHI},
     };
     return slayer3d_vec3_make(cx + vertices[index][0] * rx, cy + vertices[index][1] * ry, cz + vertices[index][2] * rz);
 }
