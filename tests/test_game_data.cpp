@@ -35835,29 +35835,29 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
         return ok;
     };
 
-    struct StairGizmoDebug
+    slayer3d_ui_layout_model *stair_layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&stair_layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, stair_layout));
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(stair_layout, "ui.editor_shell.stair_panel"), nullptr);
+    bool found_direction = false;
+    bool found_add = false;
+    bool found_remove = false;
+    for (int i = 0, count = slayer3d_ui_layout_hit_region_count(stair_layout); i < count; ++i)
     {
-        int direction = 0;
-        int add = 0;
-        int remove = 0;
-    } stair_gizmos;
-    auto capture_stair_gizmos = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
-        auto *debug = static_cast<StairGizmoDebug *>(userdata);
-        if (debug == nullptr || primitive == nullptr)
-            return true;
-        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_DIRECTION_GIZMO)
-            ++debug->direction;
-        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_ADD_GIZMO)
-            ++debug->add;
-        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_STAIR_REMOVE_GIZMO)
-            ++debug->remove;
-        return true;
-    };
-    ASSERT_TRUE(
-        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_stair_gizmos, &stair_gizmos));
-    EXPECT_GT(stair_gizmos.direction, 0);
-    EXPECT_GT(stair_gizmos.add, 0);
-    EXPECT_GT(stair_gizmos.remove, 0);
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(stair_layout, i);
+        if (hit == nullptr)
+            continue;
+        if (std::strcmp(hit->action, "editor.stair.toggle_direction") == 0)
+            found_direction = true;
+        else if (std::strcmp(hit->action, "editor.stair.add_step") == 0)
+            found_add = true;
+        else if (std::strcmp(hit->action, "editor.stair.remove_step") == 0)
+            found_remove = true;
+    }
+    slayer3d_ui_layout_destroy(stair_layout);
+    EXPECT_TRUE(found_direction);
+    EXPECT_TRUE(found_add);
+    EXPECT_TRUE(found_remove);
 
     ASSERT_TRUE(execute_json_action(R"json({ "type": "editor.stair.add_step" })json"));
 

@@ -323,6 +323,7 @@ void publish_editor_stair_state(slayer3d_game_data_runtime *runtime)
     slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.selected", selected);
     if (!selected || root == NULL)
     {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.stair.root", "");
         slayer3d_properties_set_string(runtime->scene_state, "editor.stair.direction_label", "");
         slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.ascending", true);
         slayer3d_properties_set_int(runtime->scene_state, "editor.stair.step_count", 0);
@@ -333,6 +334,7 @@ void publish_editor_stair_state(slayer3d_game_data_runtime *runtime)
 
     int max_index = 0;
     const int count = editor_stair_step_count(world, root->stable_id, &max_index, NULL);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.stair.root", root->stable_id);
     slayer3d_properties_set_string(runtime->scene_state, "editor.stair.direction_label",
                                    editor_stair_ascending(root) ? "Up" : "Down");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.stair.ascending", editor_stair_ascending(root));
