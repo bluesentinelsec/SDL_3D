@@ -10,6 +10,8 @@
 #include <limits.h>
 #include <stdlib.h>
 
+#define SOURCE_PREFAB_ICOSAHEDRON_INV_PHI 0.61803399f
+
 int editor_brush_source_units_from_meters(const brush_world_runtime *world_runtime, float value)
 {
     const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
@@ -3533,11 +3535,13 @@ static bool source_prefab_populate_spheroid_icosahedron_vertices(const brush_wor
     const float radius_x = (float)width_x * 0.5f;
     const float radius_y = (float)height_y * 0.5f;
     const float radius_z = (float)width_z * 0.5f;
-    const float inv_phi = 0.61803399f;
     static const float vertices[12][3] = {
-        {0.0f, inv_phi, 1.0f}, {0.0f, -inv_phi, 1.0f}, {0.0f, inv_phi, -1.0f}, {0.0f, -inv_phi, -1.0f},
-        {inv_phi, 1.0f, 0.0f}, {-inv_phi, 1.0f, 0.0f}, {inv_phi, -1.0f, 0.0f}, {-inv_phi, -1.0f, 0.0f},
-        {1.0f, 0.0f, inv_phi}, {-1.0f, 0.0f, inv_phi}, {1.0f, 0.0f, -inv_phi}, {-1.0f, 0.0f, -inv_phi},
+        {0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f},  {0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f},
+        {0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f}, {0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f},
+        {SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},  {-SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, 1.0f, 0.0f},
+        {SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f}, {-SOURCE_PREFAB_ICOSAHEDRON_INV_PHI, -1.0f, 0.0f},
+        {1.0f, 0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},  {-1.0f, 0.0f, SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},
+        {1.0f, 0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI}, {-1.0f, 0.0f, -SOURCE_PREFAB_ICOSAHEDRON_INV_PHI},
     };
 
     box->vertex_count = 12;
