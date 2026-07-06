@@ -482,6 +482,7 @@
         "rotate_handles",
         "scale_handles",
         "shear_handles",
+        "stair_gizmos",
         "command_preview",
         "clip_preview",
         "markers"

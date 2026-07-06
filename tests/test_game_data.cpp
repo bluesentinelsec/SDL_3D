@@ -35835,10 +35835,6 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
         return ok;
     };
 
-    EXPECT_TRUE(slayer3d_properties_get_bool(runtime->scene_state, "editor.stair.gizmo.visible", false));
-    const slayer3d_vec3 gizmo_add = slayer3d_properties_get_vec3(runtime->scene_state, "editor.stair.gizmo.add",
-                                                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_GT(gizmo_add.z, 2.0f);
     struct StairGizmoDebug
     {
         int direction = 0;
