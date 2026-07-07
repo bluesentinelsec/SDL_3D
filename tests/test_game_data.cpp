@@ -938,6 +938,30 @@ std::filesystem::path slayer3d_editor_data_path()
            "slayer3d_editor.game.json";
 }
 
+void copy_slayer3d_editor_default_material_assets(const std::filesystem::path &editor_data_root,
+                                                  const std::filesystem::path &target_root)
+{
+    const std::filesystem::path target_textures_dir = target_root / "textures";
+    std::filesystem::create_directories(target_textures_dir);
+    const std::filesystem::path editor_textures_dir = editor_data_root / "textures";
+    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
+                                     "lava.jpg", "radioactive-crate.png"})
+    {
+        std::filesystem::copy_file(editor_textures_dir / texture_name, target_textures_dir / texture_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+
+    const std::filesystem::path target_liquids_dir = target_root / "liquids";
+    std::filesystem::create_directories(target_liquids_dir);
+    const std::filesystem::path editor_liquids_dir = editor_data_root / "liquids";
+    for (const char *liquid_name :
+         {"clean_water.png", "dirty_water.png", "green_nukage.png", "lava.png", "purple_poison.png"})
+    {
+        std::filesystem::copy_file(editor_liquids_dir / liquid_name, target_liquids_dir / liquid_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+}
+
 class ScopedCurrentPath
 {
   public:
@@ -10399,6 +10423,37 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, AcceptsLiquidEditorToolMode)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_liquid_tool_mode");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "liquid_tool.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Liquid Tool Mode" },
+  "world": { "name": "world.liquid_tool", "kind": "fixed_screen" },
+  "signals": ["signal.editor.liquid"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.liquid",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "liquid" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "liquid_tool.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
+        << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RetainedUIWidgetsValidate)
 {
     const std::filesystem::path dir = unique_test_dir("retained_ui_widgets");
@@ -17932,15 +17987,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(std::string(editor_state.source_path), saved_path_string);
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
-    const std::filesystem::path exported_textures_dir = export_dir / "textures";
-    std::filesystem::create_directories(exported_textures_dir);
-    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
-    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
-                                     "lava.jpg", "radioactive-crate.png"})
-    {
-        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
-                                   std::filesystem::copy_options::overwrite_existing);
-    }
+    copy_slayer3d_editor_default_material_assets(dojo_path.parent_path(), export_dir);
     write_text(export_dir / "exported.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -18464,15 +18511,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
     const std::filesystem::path export_dir = unique_test_dir("editor_brush_colors_roundtrip");
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
-    const std::filesystem::path exported_textures_dir = export_dir / "textures";
-    std::filesystem::create_directories(exported_textures_dir);
-    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
-    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
-                                     "lava.jpg", "radioactive-crate.png"})
-    {
-        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
-                                   std::filesystem::copy_options::overwrite_existing);
-    }
+    copy_slayer3d_editor_default_material_assets(dojo_path.parent_path(), export_dir);
     write_text(export_dir / "world.fragment.json", roundtrip_fragment_json);
     write_text(export_dir / "roundtrip.game.json",
                R"json({

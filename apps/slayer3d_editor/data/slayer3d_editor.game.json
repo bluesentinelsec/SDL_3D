@@ -690,6 +690,17 @@
     "signal.editor.sky.scroll.down",
     "signal.editor.sky.apply.selected",
     "signal.editor.sky.reset",
+    "signal.editor.liquid.panel.toggle",
+    "signal.editor.liquid.close",
+    "signal.editor.liquid.type.clean_water",
+    "signal.editor.liquid.type.dirty_water",
+    "signal.editor.liquid.type.purple_poison",
+    "signal.editor.liquid.type.green_nukage",
+    "signal.editor.liquid.type.lava",
+    "signal.editor.liquid.shape.rectangle",
+    "signal.editor.liquid.shape.spheroid",
+    "signal.editor.liquid.depth.increase",
+    "signal.editor.liquid.depth.decrease",
     "signal.editor.actor.select.player_capsule",
     "signal.editor.actor.select.opponent_rectangle",
     "signal.editor.actor.select.simple_robot",
@@ -1017,6 +1028,15 @@
           { "type": "scene_state.set", "key": "editor.shape.index", "value": 0 },
           { "type": "scene_state.set", "key": "editor.shape.id", "value": "cuboid" },
           { "type": "scene_state.set", "key": "editor.shape.label", "value": "Cuboid" },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.x", "value": 870.0 },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.y", "value": 112.0 },
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "clean_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Clean Water" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.clean_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.liquid.shape.id", "value": "cuboid" },
+          { "type": "scene_state.set", "key": "editor.liquid.shape.label", "value": "Rectangle" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
@@ -2029,6 +2049,191 @@
           { "type": "scene_state.set", "key": "editor.sky.selected_index", "value": -1 },
           { "type": "scene_state.set", "key": "editor.sky.selected_slot", "value": -1 },
           { "type": "editor.sky.apply" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.panel.toggle",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "liquid" },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "liquid tool" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "editor.tool.set_mode", "mode": "select" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.type.clean_water",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "clean_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Clean Water" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.clean_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "clean water selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.type.dirty_water",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "dirty_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Dirty Water" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.dirty_water" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "dirty water selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.type.purple_poison",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "purple_poison" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Purple Poison" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.purple_poison" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "purple poison selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.type.green_nukage",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "green_nukage" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Green Nukage" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.green_nukage" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "green nukage selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.type.lava",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.type", "value": "lava" },
+          { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Lava" },
+          { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.lava" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "lava selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.shape.rectangle",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.shape.id", "value": "cuboid" },
+          { "type": "scene_state.set", "key": "editor.liquid.shape.label", "value": "Rectangle" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "rectangle liquid shape selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.shape.spheroid",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.liquid.shape.id", "value": "spheroid_uv" },
+          { "type": "scene_state.set", "key": "editor.liquid.shape.label", "value": "Spheroid" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "spheroid liquid shape selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.depth.increase",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [
+              {
+                "type": "editor.selection.resize_y",
+                "direction": 1,
+                "grid_key": "editor.grid.size",
+                "default_distance": 0.25,
+                "min_height": 0.25,
+                "min_elevation": -4096.0,
+                "max_elevation": 4096.0,
+                "invalid_message": "selected liquid cannot be deepened",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "element_stable_id_key": "editor.transaction.element_stable_id",
+                  "face_stable_id_key": "editor.transaction.face_stable_id",
+                  "face_index_key": "editor.transaction.face_index",
+                  "bounds_min_key": "editor.transaction.bounds_min",
+                  "bounds_max_key": "editor.transaction.bounds_max",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor_transaction_message}" }
+                ],
+                "else": [
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected liquid cannot be deepened" }
+                ]
+              }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select a liquid before changing depth" }
+            ]
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.liquid.depth.decrease",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [
+              {
+                "type": "editor.selection.resize_y",
+                "direction": -1,
+                "grid_key": "editor.grid.size",
+                "default_distance": 0.25,
+                "min_height": 0.25,
+                "min_elevation": -4096.0,
+                "max_elevation": 4096.0,
+                "invalid_message": "selected liquid cannot be made shallower",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "element_stable_id_key": "editor.transaction.element_stable_id",
+                  "face_stable_id_key": "editor.transaction.face_stable_id",
+                  "face_index_key": "editor.transaction.face_index",
+                  "bounds_min_key": "editor.transaction.bounds_min",
+                  "bounds_max_key": "editor.transaction.bounds_max",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "{editor_transaction_message}" }
+                ],
+                "else": [
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selected liquid cannot be made shallower" }
+                ]
+              }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select a liquid before changing depth" }
+            ]
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -5602,7 +5807,7 @@
             "type": "editor.map.new",
             "world": "brush.editor_shell.target",
             "message": "new document",
-            "fragment": "{\"schema\":\"slayer3d.fragment.v0\",\"brush_worlds\":[{\"name\":\"brush.editor_shell.target\",\"materials\":[{\"name\":\"mat.editor.wall\",\"albedo\":[0.50,0.52,0.56,1.0]},{\"name\":\"mat.editor.floor\",\"albedo\":[0.30,0.31,0.33,1.0]},{\"name\":\"mat.editor.ceiling\",\"albedo\":[0.68,0.69,0.71,1.0]},{\"name\":\"mat.editor.sky\",\"albedo\":[0.20,0.42,0.78,1.0]}],\"brushes\":[]}],\"editor_brush_sources\":[{\"world\":\"brush.editor_shell.target\",\"coordinate_system\":\"fixed_millimeters\",\"meters_per_unit\":0.001,\"snap_units\":1,\"boxes\":[]}],\"editor_player_starts\":[],\"editor_actors\":[],\"editor_prefabs\":[],\"editor_connections\":[]}",
+            "fragment": "{\"schema\":\"slayer3d.fragment.v0\",\"brush_worlds\":[{\"name\":\"brush.editor_shell.target\",\"materials\":[{\"name\":\"mat.editor.wall\",\"albedo\":[0.50,0.52,0.56,1.0]},{\"name\":\"mat.editor.floor\",\"albedo\":[0.30,0.31,0.33,1.0]},{\"name\":\"mat.editor.ceiling\",\"albedo\":[0.68,0.69,0.71,1.0]},{\"name\":\"mat.editor.sky\",\"albedo\":[0.20,0.42,0.78,1.0]},{\"name\":\"mat.editor.liquid.clean_water\",\"texture\":\"asset://liquids/clean_water.png\",\"albedo\":[0.74,0.92,1.0,0.72],\"roughness\":0.18,\"tex_scale\":1.0},{\"name\":\"mat.editor.liquid.dirty_water\",\"texture\":\"asset://liquids/dirty_water.png\",\"albedo\":[0.55,0.48,0.30,0.78],\"roughness\":0.35,\"tex_scale\":1.0},{\"name\":\"mat.editor.liquid.purple_poison\",\"texture\":\"asset://liquids/purple_poison.png\",\"albedo\":[0.70,0.20,0.95,0.82],\"roughness\":0.22,\"emissive\":[0.08,0.02,0.12],\"tex_scale\":1.0},{\"name\":\"mat.editor.liquid.green_nukage\",\"texture\":\"asset://liquids/green_nukage.png\",\"albedo\":[0.28,0.95,0.22,0.84],\"roughness\":0.24,\"emissive\":[0.03,0.16,0.02],\"tex_scale\":1.0},{\"name\":\"mat.editor.liquid.lava\",\"texture\":\"asset://liquids/lava.png\",\"albedo\":[1.0,0.52,0.18,0.92],\"roughness\":0.48,\"emissive\":[0.75,0.18,0.03],\"tex_scale\":1.0}],\"brushes\":[]}],\"editor_brush_sources\":[{\"world\":\"brush.editor_shell.target\",\"coordinate_system\":\"fixed_millimeters\",\"meters_per_unit\":0.001,\"snap_units\":1,\"boxes\":[]}],\"editor_player_starts\":[],\"editor_actors\":[],\"editor_prefabs\":[],\"editor_connections\":[]}",
             "outputs": {
               "valid_key": "editor.new.valid",
               "message_key": "editor.new.message",
@@ -6268,6 +6473,69 @@
             "display_name": "Radioactive Crate",
             "tags": ["texture", "crate", "hazard"]
           }
+        },
+        {
+          "name": "mat.editor.liquid.clean_water",
+          "texture": "asset://liquids/clean_water.png",
+          "albedo": [0.74, 0.92, 1.0, 0.72],
+          "roughness": 0.18,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.liquid.clean_water",
+            "display_name": "Clean Water",
+            "tags": ["liquid", "water"]
+          }
+        },
+        {
+          "name": "mat.editor.liquid.dirty_water",
+          "texture": "asset://liquids/dirty_water.png",
+          "albedo": [0.55, 0.48, 0.30, 0.78],
+          "roughness": 0.35,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.liquid.dirty_water",
+            "display_name": "Dirty Water",
+            "tags": ["liquid", "water", "dirty"]
+          }
+        },
+        {
+          "name": "mat.editor.liquid.purple_poison",
+          "texture": "asset://liquids/purple_poison.png",
+          "albedo": [0.70, 0.20, 0.95, 0.82],
+          "roughness": 0.22,
+          "emissive": [0.08, 0.02, 0.12],
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.liquid.purple_poison",
+            "display_name": "Purple Poison",
+            "tags": ["liquid", "hazard", "poison"]
+          }
+        },
+        {
+          "name": "mat.editor.liquid.green_nukage",
+          "texture": "asset://liquids/green_nukage.png",
+          "albedo": [0.28, 0.95, 0.22, 0.84],
+          "roughness": 0.24,
+          "emissive": [0.03, 0.16, 0.02],
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.liquid.green_nukage",
+            "display_name": "Green Nukage",
+            "tags": ["liquid", "hazard", "nukage"]
+          }
+        },
+        {
+          "name": "mat.editor.liquid.lava",
+          "texture": "asset://liquids/lava.png",
+          "albedo": [1.0, 0.52, 0.18, 0.92],
+          "roughness": 0.48,
+          "emissive": [0.75, 0.18, 0.03],
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.liquid.lava",
+            "display_name": "Lava",
+            "tags": ["liquid", "hazard", "lava", "emissive"]
+          }
         }
       ],
       "brushes": []
@@ -6352,6 +6620,11 @@
       { "id": "image.editor_shell.texture.door_hatch", "path": "asset://textures/door-hatch.png" },
       { "id": "image.editor_shell.texture.lava", "path": "asset://textures/lava.jpg" },
       { "id": "image.editor_shell.texture.radioactive_crate", "path": "asset://textures/radioactive-crate.png" },
+      { "id": "image.editor_shell.liquid.clean_water", "path": "asset://liquids/clean_water.png" },
+      { "id": "image.editor_shell.liquid.dirty_water", "path": "asset://liquids/dirty_water.png" },
+      { "id": "image.editor_shell.liquid.purple_poison", "path": "asset://liquids/purple_poison.png" },
+      { "id": "image.editor_shell.liquid.green_nukage", "path": "asset://liquids/green_nukage.png" },
+      { "id": "image.editor_shell.liquid.lava", "path": "asset://liquids/lava.png" },
       { "id": "image.editor_shell.sky.slot_0", "path": "asset://skyboxes/sky_17/pz.png" },
       { "id": "image.editor_shell.sky.slot_1", "path": "asset://skyboxes/sky_17/pz.png" },
       { "id": "image.editor_shell.sky.slot_2", "path": "asset://skyboxes/sky_17/pz.png" },
