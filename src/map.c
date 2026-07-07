@@ -3961,6 +3961,14 @@ static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *worl
     {
         return false;
     }
+    if (sky.preset != NULL)
+    {
+        /* Preset skies resolve against the runtime media directory. The map's
+         * face/layer references point into the authoring project and are not
+         * resolvable from the generated playable directory, so the preset id
+         * is the portable form for the runner. */
+        return true;
+    }
     if (sky.has_faces)
     {
         static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};

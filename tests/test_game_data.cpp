@@ -18000,6 +18000,85 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    /* The canonical editor project bundles the built-in animated presets
+     * plus the static sky_17 skybox under data/skyboxes. */
+    emit_signal("signal.editor.sky.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 8);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "afternoon");
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.sky.slot.0.layer_count", 0), 0);
+
+    emit_signal("signal.editor.sky.select_slot.0");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.selected.name", ""), "afternoon");
+
+    emit_signal("signal.editor.sky.apply.selected");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "afternoon");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.mode", ""), "layers");
+    slayer3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.preset, "afternoon");
+    EXPECT_STREQ(skybox.mode, "layers");
+    EXPECT_TRUE(skybox.has_faces);
+    ASSERT_EQ(skybox.layer_count, 2);
+
+    /* Scrolling steps one row and clamps at the end of the list. */
+    emit_signal("signal.editor.sky.scroll.down");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.scroll", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.5.name", ""), "sunset");
+    emit_signal("signal.editor.sky.scroll.down");
+    emit_signal("signal.editor.sky.scroll.down");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.scroll", 0), 2);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.5.name", ""), "under_the_sea");
+
+    /* Reset clears the override; the editor shell authors no scene sky, so
+     * the runtime reports no active skybox again. */
+    emit_signal("signal.editor.sky.reset");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "default");
+    EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+
+    /* Nested subdirectories are scanned recursively. */
+    const std::filesystem::path nested_root = unique_test_dir("sky_nested_scan");
+    const std::filesystem::path nested_sky = nested_root / "packs" / "deep" / "my_sunset";
+    std::filesystem::create_directories(nested_sky);
+    for (const char *leaf : {"px.png", "nx.png", "py.png", "ny.png", "pz.png", "nz.png"})
+    {
+        std::filesystem::copy_file(slayer3d_editor_data_path().parent_path() / "skyboxes" / "sunset" / leaf,
+                                   nested_sky / leaf);
+    }
+    slayer3d_properties *mutable_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_state, nullptr);
+    slayer3d_properties_set_string(mutable_state, "editor.asset_source.skyboxes.path",
+                                   nested_root.string().c_str());
+    emit_signal("signal.editor.sky.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "packs/deep/my_sunset");
+    remove_test_dir(nested_root);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
@@ -45497,7 +45576,42 @@ TEST(GameDataRuntime, SlayerMapPlayableExportIncludesSkyConfiguration)
     EXPECT_NE(scene_json.find("\"skybox\""), std::string::npos);
     EXPECT_NE(scene_json.find("\"mode\": \"layers\""), std::string::npos);
     EXPECT_NE(scene_json.find("\"preset\": \"sunset\""), std::string::npos);
-    EXPECT_NE(scene_json.find("skyboxes/sunset/layer_outer.png"), std::string::npos);
+    /* Preset skies stay preset-only in the generated scene: the map's own
+     * face/layer references are not resolvable from the playable directory. */
+    EXPECT_EQ(scene_json.find("layer_outer.png"), std::string::npos);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 0.25, 4] } }
+  ],
+  "actors": [
+    { "id": "actor.player", "primitive": "capsule", "properties": { "type": "player-character" } }
+  ],
+  "skybox": {
+    "mode": "layers",
+    "layers": [
+      { "texture": "skyboxes/custom/layer_outer.png", "scroll": [0.01, 0.0] }
+    ]
+  }
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
+
+    const std::filesystem::path dir = unique_test_dir("playable_sky_explicit");
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(map, dir.string().c_str(), error, sizeof(error))) << error;
+    slayer3d_map_destroy(map);
+
+    const std::string scene_json = read_text(dir / "scenes" / "play.scene.json");
+    EXPECT_NE(scene_json.find("\"mode\": \"layers\""), std::string::npos);
+    EXPECT_NE(scene_json.find("skyboxes/custom/layer_outer.png"), std::string::npos);
     remove_test_dir(dir);
 }
 
