@@ -1,0 +1,41 @@
+{
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "map.animated_sky",
+    "name": "Animated Sky Demo",
+    "author": "Slayer3D"
+  },
+  "units": "meters",
+  "coordinate_system": "y_up",
+  "global": {
+    "ambient_light": [70, 66, 84, 255],
+    "clear_color": [24, 12, 20, 255]
+  },
+  "brushes": [
+    {
+      "id": "brush.floor",
+      "geometry": { "kind": "box", "min": [-12, -0.5, -12], "max": [12, 0, 12] },
+      "color": [96, 88, 104, 255]
+    },
+    {
+      "id": "brush.pillar",
+      "geometry": { "kind": "box", "min": [-1, 0, -1], "max": [1, 3, 1] },
+      "color": [140, 120, 110, 255]
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.player",
+      "primitive": "capsule",
+      "transform": { "position": [0, 0, 6] },
+      "properties": { "type": "player-character" }
+    }
+  ],
+  "skybox": {
+    "id": "sunset",
+    "mode": "layers",
+    "preset": "sunset",
+    "size": 400
+  }
+}

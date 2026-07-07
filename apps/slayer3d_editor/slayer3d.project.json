@@ -8,7 +8,7 @@
     "textures": "data/textures",
     "models": "data/models",
     "sprites": "../../media/sprites",
-    "skyboxes": "data/skyboxes",
+    "skyboxes": "../../media/skyboxes",
     "effects": "data/effects"
   },
   "test_run_output": "../../build/slayer3d_editor/test-run.json"

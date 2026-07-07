@@ -1549,6 +1549,511 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
     return true;
 }
 
+/* ------------------------------------------------------------------ */
+/* Editor skybox panel actions                                         */
+/* ------------------------------------------------------------------ */
+
+#define EDITOR_SKY_ITEM_CAP 32
+#define EDITOR_SKY_SLOT_COUNT 6
+#define EDITOR_SKY_SCAN_MAX_DEPTH 4
+
+typedef struct editor_sky_scan_item
+{
+    char name[96];
+    char base[512];
+    bool has_faces;
+    int layer_count;
+} editor_sky_scan_item;
+
+typedef struct editor_sky_scan_list
+{
+    editor_sky_scan_item items[EDITOR_SKY_ITEM_CAP];
+    int count;
+} editor_sky_scan_list;
+
+static const char *const editor_sky_face_files[6] = {"px.png", "nx.png", "py.png", "ny.png", "pz.png", "nz.png"};
+
+static void editor_sky_child_name(const char *parent, const char *leaf, char *buffer, size_t buffer_size)
+{
+    if (parent == NULL || parent[0] == '\0')
+        SDL_strlcpy(buffer, leaf != NULL ? leaf : "", buffer_size);
+    else
+        SDL_snprintf(buffer, buffer_size, "%s/%s", parent, leaf != NULL ? leaf : "");
+}
+
+static void editor_sky_scan_add_item(editor_sky_scan_list *list, const char *name, const char *base, bool has_faces,
+                                     int layer_count)
+{
+    if (list == NULL || list->count >= EDITOR_SKY_ITEM_CAP || name == NULL || name[0] == '\0' || base == NULL ||
+        base[0] == '\0' || (!has_faces && layer_count == 0))
+    {
+        return;
+    }
+    editor_sky_scan_item *item = &list->items[list->count++];
+    SDL_strlcpy(item->name, name, sizeof(item->name));
+    SDL_strlcpy(item->base, base, sizeof(item->base));
+    item->has_faces = has_faces;
+    item->layer_count = layer_count;
+}
+
+static int SDLCALL editor_sky_scan_item_compare(const void *a, const void *b)
+{
+    return SDL_strcmp(((const editor_sky_scan_item *)a)->name, ((const editor_sky_scan_item *)b)->name);
+}
+
+static bool editor_sky_fs_file_exists(const char *directory, const char *leaf)
+{
+    char *path = editor_path_join(directory, leaf);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool exists = path != NULL && SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_FILE;
+    SDL_free(path);
+    return exists;
+}
+
+static bool editor_sky_fs_directory_flags(const char *directory, bool *out_has_faces, int *out_layer_count)
+{
+    bool has_faces = true;
+    for (size_t i = 0; i < SDL_arraysize(editor_sky_face_files); ++i)
+        has_faces = has_faces && editor_sky_fs_file_exists(directory, editor_sky_face_files[i]);
+    int layer_count = 0;
+    if (editor_sky_fs_file_exists(directory, "layer_outer.png"))
+        layer_count = editor_sky_fs_file_exists(directory, "layer_inner.png") ? 2 : 1;
+    *out_has_faces = has_faces;
+    *out_layer_count = layer_count;
+    return has_faces || layer_count > 0;
+}
+
+static void editor_sky_scan_fs_directory(const char *directory, const char *relative_name, editor_sky_scan_list *list,
+                                         int depth);
+
+typedef struct editor_sky_fs_enum_context
+{
+    editor_sky_scan_list *list;
+    const char *relative_name;
+    int depth;
+} editor_sky_fs_enum_context;
+
+static SDL_EnumerationResult SDLCALL editor_sky_fs_enumerate_entry(void *userdata, const char *dirname,
+                                                                   const char *fname)
+{
+    editor_sky_fs_enum_context *ctx = (editor_sky_fs_enum_context *)userdata;
+    if (ctx == NULL || ctx->list == NULL || ctx->list->count >= EDITOR_SKY_ITEM_CAP)
+        return SDL_ENUM_SUCCESS;
+
+    char *path = editor_path_join(dirname, fname);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (path == NULL || !SDL_GetPathInfo(path, &info) || info.type != SDL_PATHTYPE_DIRECTORY)
+    {
+        SDL_free(path);
+        return SDL_ENUM_CONTINUE;
+    }
+
+    char child_name[96];
+    editor_sky_child_name(ctx->relative_name, fname, child_name, sizeof(child_name));
+    editor_sky_scan_fs_directory(path, child_name, ctx->list, ctx->depth + 1);
+    SDL_free(path);
+    return SDL_ENUM_CONTINUE;
+}
+
+static void editor_sky_scan_fs_directory(const char *directory, const char *relative_name, editor_sky_scan_list *list,
+                                         int depth)
+{
+    if (directory == NULL || directory[0] == '\0' || list == NULL || depth > EDITOR_SKY_SCAN_MAX_DEPTH ||
+        list->count >= EDITOR_SKY_ITEM_CAP)
+    {
+        return;
+    }
+    if (relative_name != NULL && relative_name[0] != '\0')
+    {
+        bool has_faces = false;
+        int layer_count = 0;
+        if (editor_sky_fs_directory_flags(directory, &has_faces, &layer_count))
+        {
+            editor_sky_scan_add_item(list, relative_name, directory, has_faces, layer_count);
+            return;
+        }
+    }
+    editor_sky_fs_enum_context enumerate_ctx = {list, relative_name != NULL ? relative_name : "", depth};
+    (void)SDL_EnumerateDirectory(directory, editor_sky_fs_enumerate_entry, &enumerate_ctx);
+}
+
+static void editor_sky_scan_asset_directory(slayer3d_game_data_runtime *runtime, const char *asset_directory,
+                                            const char *relative_name, editor_sky_scan_list *list, int depth);
+
+typedef struct editor_sky_asset_enum_context
+{
+    slayer3d_game_data_runtime *runtime;
+    editor_sky_scan_list *list;
+    const char *asset_directory;
+    const char *relative_name;
+    int depth;
+    bool face_seen[6];
+    bool layer_outer;
+    bool layer_inner;
+} editor_sky_asset_enum_context;
+
+static slayer3d_asset_enumeration_result editor_sky_asset_enumerate_entry(void *userdata, const char *directory,
+                                                                          const char *name,
+                                                                          slayer3d_asset_entry_type type)
+{
+    editor_sky_asset_enum_context *ctx = (editor_sky_asset_enum_context *)userdata;
+    if (ctx == NULL || ctx->list == NULL)
+        return SLAYER3D_ASSET_ENUM_FAILURE;
+    (void)directory;
+
+    if (type == SLAYER3D_ASSET_ENTRY_FILE)
+    {
+        for (size_t i = 0; i < SDL_arraysize(editor_sky_face_files); ++i)
+        {
+            if (SDL_strcmp(name, editor_sky_face_files[i]) == 0)
+                ctx->face_seen[i] = true;
+        }
+        if (SDL_strcmp(name, "layer_outer.png") == 0)
+            ctx->layer_outer = true;
+        if (SDL_strcmp(name, "layer_inner.png") == 0)
+            ctx->layer_inner = true;
+        return SLAYER3D_ASSET_ENUM_CONTINUE;
+    }
+
+    if (type == SLAYER3D_ASSET_ENTRY_DIRECTORY && ctx->depth < EDITOR_SKY_SCAN_MAX_DEPTH)
+    {
+        char *child_path = editor_asset_path_join(ctx->asset_directory, name);
+        char child_name[96];
+        editor_sky_child_name(ctx->relative_name, name, child_name, sizeof(child_name));
+        if (child_path != NULL)
+            editor_sky_scan_asset_directory(ctx->runtime, child_path, child_name, ctx->list, ctx->depth + 1);
+        SDL_free(child_path);
+    }
+    return SLAYER3D_ASSET_ENUM_CONTINUE;
+}
+
+static void editor_sky_scan_asset_directory(slayer3d_game_data_runtime *runtime, const char *asset_directory,
+                                            const char *relative_name, editor_sky_scan_list *list, int depth)
+{
+    if (runtime == NULL || runtime->assets == NULL || asset_directory == NULL || asset_directory[0] == '\0' ||
+        list == NULL || depth > EDITOR_SKY_SCAN_MAX_DEPTH || list->count >= EDITOR_SKY_ITEM_CAP)
+    {
+        return;
+    }
+    editor_sky_asset_enum_context enumerate_ctx;
+    SDL_zero(enumerate_ctx);
+    enumerate_ctx.runtime = runtime;
+    enumerate_ctx.list = list;
+    enumerate_ctx.asset_directory = asset_directory;
+    enumerate_ctx.relative_name = relative_name != NULL ? relative_name : "";
+    enumerate_ctx.depth = depth;
+    char error[256];
+    error[0] = '\0';
+    if (!slayer3d_asset_resolver_enumerate(runtime->assets, asset_directory, editor_sky_asset_enumerate_entry,
+                                           &enumerate_ctx, error, (int)sizeof(error)))
+    {
+        return;
+    }
+    if (relative_name == NULL || relative_name[0] == '\0')
+        return;
+    bool has_faces = true;
+    for (size_t i = 0; i < SDL_arraysize(enumerate_ctx.face_seen); ++i)
+        has_faces = has_faces && enumerate_ctx.face_seen[i];
+    const int layer_count = enumerate_ctx.layer_outer ? (enumerate_ctx.layer_inner ? 2 : 1) : 0;
+    editor_sky_scan_add_item(list, relative_name, asset_directory, has_faces, layer_count);
+}
+
+static void editor_sky_item_key(char *buffer, size_t buffer_size, int index, const char *field)
+{
+    SDL_snprintf(buffer, buffer_size, "editor.sky.item.%d.%s", index, field);
+}
+
+static void editor_sky_slot_key(char *buffer, size_t buffer_size, int slot, const char *field)
+{
+    SDL_snprintf(buffer, buffer_size, "editor.sky.slot.%d.%s", slot, field);
+}
+
+static void editor_sky_preview_path(char *buffer, size_t buffer_size, const char *base, bool has_faces)
+{
+    SDL_snprintf(buffer, buffer_size, "%s/%s", base, has_faces ? "pz.png" : "layer_outer.png");
+}
+
+static void editor_sky_publish_slots(slayer3d_game_data_runtime *runtime)
+{
+    slayer3d_properties *state = runtime->scene_state;
+    const int count = SDL_clamp(slayer3d_properties_get_int(state, "editor.sky.count", 0), 0, EDITOR_SKY_ITEM_CAP);
+    const int max_scroll = count > EDITOR_SKY_SLOT_COUNT ? count - EDITOR_SKY_SLOT_COUNT : 0;
+    const int scroll = SDL_clamp(slayer3d_properties_get_int(state, "editor.sky.scroll", 0), 0, max_scroll);
+    slayer3d_properties_set_int(state, "editor.sky.scroll", scroll);
+
+    const int selected_index = slayer3d_properties_get_int(state, "editor.sky.selected_index", -1);
+    const bool selected_visible = selected_index >= scroll && selected_index < scroll + EDITOR_SKY_SLOT_COUNT;
+    slayer3d_properties_set_int(state, "editor.sky.selected_slot", selected_visible ? selected_index - scroll : -1);
+
+    for (int slot = 0; slot < EDITOR_SKY_SLOT_COUNT; ++slot)
+    {
+        const int index = scroll + slot;
+        char item_key[96];
+        char slot_key[96];
+        const char *name = "";
+        const char *base = "";
+        bool has_faces = false;
+        int layer_count = 0;
+        if (index < count)
+        {
+            editor_sky_item_key(item_key, sizeof(item_key), index, "name");
+            name = slayer3d_properties_get_string(state, item_key, "");
+            editor_sky_item_key(item_key, sizeof(item_key), index, "base");
+            base = slayer3d_properties_get_string(state, item_key, "");
+            editor_sky_item_key(item_key, sizeof(item_key), index, "faces");
+            has_faces = slayer3d_properties_get_bool(state, item_key, false);
+            editor_sky_item_key(item_key, sizeof(item_key), index, "layer_count");
+            layer_count = slayer3d_properties_get_int(state, item_key, 0);
+        }
+        const bool available = name[0] != '\0' && base[0] != '\0';
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "name");
+        slayer3d_properties_set_string(state, slot_key, name);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "base");
+        slayer3d_properties_set_string(state, slot_key, base);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "faces");
+        slayer3d_properties_set_bool(state, slot_key, has_faces);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "layer_count");
+        slayer3d_properties_set_int(state, slot_key, layer_count);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "available");
+        slayer3d_properties_set_bool(state, slot_key, available);
+        char preview[640] = "";
+        if (available)
+            editor_sky_preview_path(preview, sizeof(preview), base, has_faces);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "path");
+        slayer3d_properties_set_string(state, slot_key, preview);
+    }
+}
+
+static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties *state = runtime->scene_state;
+
+    const int scroll_delta = json_int(action, "scroll_delta", 0);
+    if (scroll_delta != 0)
+    {
+        const int scroll = slayer3d_properties_get_int(state, "editor.sky.scroll", 0);
+        slayer3d_properties_set_int(state, "editor.sky.scroll", scroll + scroll_delta);
+        editor_sky_publish_slots(runtime);
+        return true;
+    }
+
+    const char *directory = slayer3d_properties_get_string(state, "editor.asset_source.skyboxes.path", "");
+    char *resolved_fallback = NULL;
+    if (directory == NULL || directory[0] == '\0')
+    {
+        resolved_fallback = editor_resolve_directory(runtime, "skyboxes");
+        directory = resolved_fallback != NULL ? resolved_fallback : "";
+    }
+
+    editor_sky_scan_list list;
+    SDL_zero(list);
+    if (directory[0] != '\0')
+    {
+        if (editor_path_asset_uri(directory))
+            editor_sky_scan_asset_directory(runtime, directory, "", &list, 0);
+        else
+            editor_sky_scan_fs_directory(directory, "", &list, 0);
+    }
+    SDL_free(resolved_fallback);
+    if (list.count > 1)
+        SDL_qsort(list.items, (size_t)list.count, sizeof(list.items[0]), editor_sky_scan_item_compare);
+
+    slayer3d_properties_set_int(state, "editor.sky.count", list.count);
+    for (int i = 0; i < EDITOR_SKY_ITEM_CAP; ++i)
+    {
+        char item_key[96];
+        const editor_sky_scan_item *item = i < list.count ? &list.items[i] : NULL;
+        editor_sky_item_key(item_key, sizeof(item_key), i, "name");
+        slayer3d_properties_set_string(state, item_key, item != NULL ? item->name : "");
+        editor_sky_item_key(item_key, sizeof(item_key), i, "base");
+        slayer3d_properties_set_string(state, item_key, item != NULL ? item->base : "");
+        editor_sky_item_key(item_key, sizeof(item_key), i, "faces");
+        slayer3d_properties_set_bool(state, item_key, item != NULL && item->has_faces);
+        editor_sky_item_key(item_key, sizeof(item_key), i, "layer_count");
+        slayer3d_properties_set_int(state, item_key, item != NULL ? item->layer_count : 0);
+    }
+    editor_sky_publish_slots(runtime);
+
+    char status[96];
+    SDL_snprintf(status, sizeof(status), "%d skybox%s found", list.count, list.count == 1 ? "" : "es");
+    slayer3d_properties_set_string(state, "editor.sky.status", status);
+    slayer3d_properties_set_string(state, "editor.tool.last_action", status);
+    return true;
+}
+
+static bool execute_editor_sky_select_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties *state = runtime->scene_state;
+    const int slot = json_int(action, "slot", -1);
+    if (slot < 0 || slot >= EDITOR_SKY_SLOT_COUNT)
+        return false;
+
+    char slot_key[96];
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "available");
+    if (!slayer3d_properties_get_bool(state, slot_key, false))
+    {
+        slayer3d_properties_set_string(state, "editor.tool.last_action", "skybox slot is empty");
+        return true;
+    }
+
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "name");
+    const char *name = slayer3d_properties_get_string(state, slot_key, "");
+    slayer3d_properties_set_string(state, "editor.sky.selected.name", name);
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "base");
+    slayer3d_properties_set_string(state, "editor.sky.selected.base",
+                                   slayer3d_properties_get_string(state, slot_key, ""));
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "faces");
+    slayer3d_properties_set_bool(state, "editor.sky.selected.faces",
+                                 slayer3d_properties_get_bool(state, slot_key, false));
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "layer_count");
+    slayer3d_properties_set_int(state, "editor.sky.selected.layer_count",
+                                slayer3d_properties_get_int(state, slot_key, 0));
+
+    const int scroll = slayer3d_properties_get_int(state, "editor.sky.scroll", 0);
+    slayer3d_properties_set_int(state, "editor.sky.selected_index", scroll + slot);
+    slayer3d_properties_set_int(state, "editor.sky.selected_slot", slot);
+
+    char message[160];
+    SDL_snprintf(message, sizeof(message), "selected skybox %s", name);
+    slayer3d_properties_set_string(state, "editor.tool.last_action", message);
+    return true;
+}
+
+static const char *editor_sky_preset_leaf(const char *name)
+{
+    const char *leaf = name;
+    for (const char *p = name; p != NULL && *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            leaf = p + 1;
+    }
+    return leaf;
+}
+
+static char *editor_sky_build_override_json(const char *base, const char *preset, bool has_faces, int layer_count)
+{
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *obj = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    bool ok = doc != NULL && obj != NULL;
+    if (ok)
+    {
+        yyjson_mut_doc_set_root(doc, obj);
+        ok = yyjson_mut_obj_add_strcpy(doc, obj, "mode", layer_count > 0 ? "layers" : "cubemap") &&
+             yyjson_mut_obj_add_strcpy(doc, obj, "preset", preset) && yyjson_mut_obj_add_real(doc, obj, "size", 400.0);
+    }
+    char face_path[640];
+    if (ok && has_faces)
+    {
+        static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+        for (int i = 0; ok && i < 6; ++i)
+        {
+            SDL_snprintf(face_path, sizeof(face_path), "%s/%s", base, editor_sky_face_files[i]);
+            ok = yyjson_mut_obj_add_strcpy(doc, obj, face_keys[i], face_path);
+        }
+    }
+    if (ok && layer_count > 0)
+    {
+        yyjson_mut_val *layers = yyjson_mut_arr(doc);
+        ok = layers != NULL && yyjson_mut_obj_add_val(doc, obj, "layers", layers);
+        for (int i = 0; ok && i < layer_count && i < 2; ++i)
+        {
+            const bool outer = i == 0;
+            SDL_snprintf(face_path, sizeof(face_path), "%s/%s", base, outer ? "layer_outer.png" : "layer_inner.png");
+            yyjson_mut_val *entry = yyjson_mut_obj(doc);
+            yyjson_mut_val *scroll = yyjson_mut_arr(doc);
+            ok = entry != NULL && scroll != NULL && yyjson_mut_arr_add_val(layers, entry) &&
+                 yyjson_mut_obj_add_strcpy(doc, entry, "texture", face_path) &&
+                 yyjson_mut_obj_add_val(doc, entry, "scroll", scroll) &&
+                 yyjson_mut_arr_add_real(doc, scroll, outer ? 0.01 : -0.025) &&
+                 yyjson_mut_arr_add_real(doc, scroll, outer ? 0.0 : 0.006) &&
+                 yyjson_mut_obj_add_real(doc, entry, "scale", outer ? 1.0 : 2.0) &&
+                 yyjson_mut_obj_add_real(doc, entry, "opacity", outer ? 1.0 : 0.65) &&
+                 yyjson_mut_obj_add_real(doc, entry, "depth", outer ? 1.0 : 0.55);
+        }
+    }
+    char *json = ok ? yyjson_mut_write(doc, 0, NULL) : NULL;
+    yyjson_mut_doc_free(doc);
+    return json;
+}
+
+static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    (void)action;
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties *state = runtime->scene_state;
+
+    const char *name = slayer3d_properties_get_string(state, "editor.sky.selected.name", "");
+    if (name == NULL || name[0] == '\0' || SDL_strcmp(name, "default") == 0)
+    {
+        (void)slayer3d_game_data_set_scene_sky_override_json(runtime, NULL);
+        slayer3d_properties_set_string(state, "editor.sky.active", "default");
+        slayer3d_properties_set_string(state, "editor.sky.mode", "");
+        editor_publish_console_message(runtime, "Skybox reset to editor default");
+        return true;
+    }
+
+    const char *base = slayer3d_properties_get_string(state, "editor.sky.selected.base", "");
+    const bool has_faces = slayer3d_properties_get_bool(state, "editor.sky.selected.faces", false);
+    const int layer_count = slayer3d_properties_get_int(state, "editor.sky.selected.layer_count", 0);
+    if (base == NULL || base[0] == '\0' || (!has_faces && layer_count == 0))
+    {
+        editor_publish_console_message(runtime, "Skybox apply failed: selection is not a usable skybox");
+        return true;
+    }
+
+    char *json = editor_sky_build_override_json(base, editor_sky_preset_leaf(name), has_faces, layer_count);
+    if (json == NULL || !slayer3d_game_data_set_scene_sky_override_json(runtime, json))
+    {
+        free(json);
+        editor_publish_console_message(runtime, "Skybox apply failed: could not build sky configuration");
+        return true;
+    }
+    free(json);
+
+    slayer3d_properties_set_string(state, "editor.sky.active", name);
+    slayer3d_properties_set_string(state, "editor.sky.mode", layer_count > 0 ? "layers" : "cubemap");
+    char message[192];
+    SDL_snprintf(message, sizeof(message), "Skybox applied: %s%s", name, layer_count > 0 ? " (animated)" : "");
+    editor_publish_console_message(runtime, message);
+    return true;
+}
+
+static bool execute_editor_sky_path_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_properties *state = runtime->scene_state;
+    const char *path = slayer3d_properties_get_string(state, "editor.sky.path.input", "");
+    char *absolute_path = editor_path_make_absolute_from_cwd(path);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
+                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    if (!valid_directory)
+    {
+        slayer3d_properties_set_string(state, "editor.sky.status", "skybox path is not a directory");
+        editor_publish_console_message(runtime, "Skybox path is not a directory");
+        SDL_free(absolute_path);
+        return true;
+    }
+
+    slayer3d_properties_set_string(state, "editor.asset_source.skyboxes.path", absolute_path);
+    slayer3d_properties_set_bool(state, "editor.asset_source.skyboxes.available", true);
+    slayer3d_properties_set_int(state, "editor.sky.scroll", 0);
+    slayer3d_properties_set_int(state, "editor.sky.selected_index", -1);
+    slayer3d_properties_set_string(state, "editor.sky.selected.name", "");
+    SDL_free(absolute_path);
+    editor_publish_console_message(runtime, "Skybox path updated");
+    return execute_editor_sky_scan_action(runtime, action);
+}
+
 static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -3814,13 +4319,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
             return false;
         if (editor_mode_is_paint(runtime) ||
             slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.viewer.active", false) ||
-            slayer3d_properties_get_bool(runtime->scene_state, "editor.actor.viewer.active", false))
+            slayer3d_properties_get_bool(runtime->scene_state, "editor.actor.viewer.active", false) ||
+            slayer3d_properties_get_bool(runtime->scene_state, "editor.sky.panel.active", false))
         {
             slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.collapsed", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.sky.panel.active", false);
             (void)slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);
             return true;
         }
@@ -4026,6 +4533,18 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.texture.select_index") == 0)
         return execute_editor_texture_select_index_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.sky.scan") == 0)
+        return execute_editor_sky_scan_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.sky.select") == 0)
+        return execute_editor_sky_select_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.sky.apply") == 0)
+        return execute_editor_sky_apply_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.sky.path.apply") == 0)
+        return execute_editor_sky_path_apply_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.actor.scan") == 0)
         return execute_editor_actor_scan_action(runtime, action);

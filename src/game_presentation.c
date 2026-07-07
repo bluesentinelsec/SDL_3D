@@ -13,6 +13,7 @@
 #include "slayer3d/lighting.h"
 #include "slayer3d/math.h"
 #include "slayer3d/shapes.h"
+#include "slayer3d/time.h"
 
 #include "game_data_internal.h"
 #include "game_presentation_internal.h"
@@ -166,19 +167,111 @@ static void queue_skybox_image(slayer3d_game_data_asset_warmup_queue *queue, con
     (void)slayer3d_game_data_asset_warmup_request_ui_image(queue, image_id);
 }
 
-static void queue_active_scene_skybox_images(const slayer3d_game_data_runtime *runtime,
-                                             slayer3d_game_data_asset_warmup_queue *queue)
+#define SCENE_SKY_PATH_MAX 512
+#define SCENE_SKY_PRESET_LAYER_COUNT 2
+
+/* Active-scene sky with preset references resolved to media skybox paths. */
+typedef struct scene_sky_resolved
 {
-    slayer3d_game_data_scene_skybox skybox;
-    if (runtime == NULL || queue == NULL || !slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
+    slayer3d_game_data_scene_skybox desc;
+    char face_paths[6][SCENE_SKY_PATH_MAX];
+    char layer_paths[SCENE_SKY_PRESET_LAYER_COUNT][SCENE_SKY_PATH_MAX];
+    const char *faces[6];
+    bool has_faces;
+    slayer3d_game_data_scene_sky_layer layers[SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS];
+    int layer_count;
+} scene_sky_resolved;
+
+static bool scene_sky_resolve_preset(scene_sky_resolved *sky, const char *media_dir)
+{
+    static const char *const face_files[6] = {"px.png", "nx.png", "py.png", "ny.png", "pz.png", "nz.png"};
+    if (sky->desc.preset == NULL || sky->desc.preset[0] == '\0' || media_dir == NULL || media_dir[0] == '\0')
+        return false;
+    for (int i = 0; i < 6; ++i)
+    {
+        SDL_snprintf(sky->face_paths[i], sizeof(sky->face_paths[i]), "%s/skyboxes/%s/%s", media_dir, sky->desc.preset,
+                     face_files[i]);
+        sky->faces[i] = sky->face_paths[i];
+    }
+    return true;
+}
+
+/* Presets author only textures, so layered presets scroll a slow outer
+ * cloud deck under a faster, denser inner deck for a Quake-style sky. */
+static void scene_sky_resolve_preset_layers(scene_sky_resolved *sky, const char *media_dir)
+{
+    static const char *const layer_files[SCENE_SKY_PRESET_LAYER_COUNT] = {"layer_outer.png", "layer_inner.png"};
+    if (sky->desc.preset == NULL || sky->desc.preset[0] == '\0' || media_dir == NULL || media_dir[0] == '\0')
+        return;
+    for (int i = 0; i < SCENE_SKY_PRESET_LAYER_COUNT; ++i)
+    {
+        SDL_snprintf(sky->layer_paths[i], sizeof(sky->layer_paths[i]), "%s/skyboxes/%s/%s", media_dir, sky->desc.preset,
+                     layer_files[i]);
+    }
+    sky->layers[0] = (slayer3d_game_data_scene_sky_layer){.texture = sky->layer_paths[0],
+                                                          .scroll_x = 0.01f,
+                                                          .scroll_y = 0.0f,
+                                                          .scale = 1.0f,
+                                                          .opacity = 1.0f,
+                                                          .depth = 1.0f};
+    sky->layers[1] = (slayer3d_game_data_scene_sky_layer){.texture = sky->layer_paths[1],
+                                                          .scroll_x = -0.025f,
+                                                          .scroll_y = 0.006f,
+                                                          .scale = 2.0f,
+                                                          .opacity = 0.65f,
+                                                          .depth = 0.55f};
+    sky->layer_count = SCENE_SKY_PRESET_LAYER_COUNT;
+}
+
+static bool resolve_active_scene_sky(const slayer3d_game_data_runtime *runtime, const char *media_dir,
+                                     scene_sky_resolved *sky)
+{
+    SDL_zero(*sky);
+    if (runtime == NULL || !slayer3d_game_data_get_active_scene_skybox(runtime, &sky->desc))
+        return false;
+
+    if (sky->desc.has_faces)
+    {
+        sky->faces[0] = sky->desc.pos_x;
+        sky->faces[1] = sky->desc.neg_x;
+        sky->faces[2] = sky->desc.pos_y;
+        sky->faces[3] = sky->desc.neg_y;
+        sky->faces[4] = sky->desc.pos_z;
+        sky->faces[5] = sky->desc.neg_z;
+        sky->has_faces = true;
+    }
+    else
+    {
+        sky->has_faces = scene_sky_resolve_preset(sky, media_dir);
+    }
+
+    if (sky->desc.layer_count > 0)
+    {
+        sky->layer_count = sky->desc.layer_count;
+        SDL_memcpy(sky->layers, sky->desc.layers, sizeof(sky->desc.layers));
+    }
+    else if (SDL_strcmp(sky->desc.mode, "layers") == 0)
+    {
+        scene_sky_resolve_preset_layers(sky, media_dir);
+    }
+
+    return sky->has_faces || sky->layer_count > 0;
+}
+
+static void queue_active_scene_skybox_images(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_asset_warmup_queue *queue, const char *media_dir)
+{
+    scene_sky_resolved sky;
+    if (runtime == NULL || queue == NULL || !resolve_active_scene_sky(runtime, media_dir, &sky))
         return;
 
-    queue_skybox_image(queue, skybox.pos_x);
-    queue_skybox_image(queue, skybox.neg_x);
-    queue_skybox_image(queue, skybox.pos_y);
-    queue_skybox_image(queue, skybox.neg_y);
-    queue_skybox_image(queue, skybox.pos_z);
-    queue_skybox_image(queue, skybox.neg_z);
+    if (sky.has_faces)
+    {
+        for (int i = 0; i < 6; ++i)
+            queue_skybox_image(queue, sky.faces[i]);
+    }
+    for (int i = 0; i < sky.layer_count; ++i)
+        queue_skybox_image(queue, sky.layers[i].texture);
 }
 
 static bool queue_font_asset(void *userdata, const slayer3d_game_data_font_asset *font)
@@ -287,7 +380,8 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
     context.queue = frame->asset_warmup;
     (void)slayer3d_game_data_for_each_font_asset(frame->runtime, queue_font_asset, &context);
     (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
-    queue_active_scene_skybox_images(frame->runtime, frame->asset_warmup);
+    queue_active_scene_skybox_images(frame->runtime, frame->asset_warmup,
+                                     frame->font_cache != NULL ? frame->font_cache->media_dir : NULL);
     (void)slayer3d_game_data_for_each_model_asset(frame->runtime, queue_model_browser_asset, &context);
     (void)slayer3d_game_data_for_each_sound_asset(frame->runtime, queue_sound_asset, &context);
     (void)slayer3d_game_data_for_each_music_asset(frame->runtime, queue_music_asset, &context);
@@ -600,50 +694,89 @@ static bool draw_render_primitives_evaluated_with_cache(
     return ok;
 }
 
+static bool scene_sky_image_pending(const slayer3d_game_data_asset_warmup_queue *asset_warmup, const char *image_id)
+{
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    return slayer3d_game_data_asset_warmup_request_state(asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL,
+                                                         image_id, &warmup_state) &&
+           warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
+}
+
+static bool draw_active_scene_sky_layers(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                         slayer3d_game_data_image_cache *image_cache, const scene_sky_resolved *sky)
+{
+    slayer3d_sky_layer layers[SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS];
+    int ready_count = 0;
+    for (int i = 0; i < sky->layer_count; ++i)
+    {
+        slayer3d_game_data_image_cache_entry *entry =
+            slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, sky->layers[i].texture);
+        if (entry == NULL)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sky layer texture '%s'", sky->layers[i].texture);
+            return false;
+        }
+        (void)slayer3d_set_texture_wrap(&entry->texture, SLAYER3D_TEXTURE_WRAP_REPEAT, SLAYER3D_TEXTURE_WRAP_REPEAT);
+        layers[ready_count].texture = &entry->texture;
+        layers[ready_count].scroll_x = sky->layers[i].scroll_x;
+        layers[ready_count].scroll_y = sky->layers[i].scroll_y;
+        layers[ready_count].scale = sky->layers[i].scale;
+        layers[ready_count].opacity = sky->layers[i].opacity;
+        layers[ready_count].depth = sky->layers[i].depth;
+        layers[ready_count].tint = sky->layers[i].has_tint ? sky->layers[i].tint : (slayer3d_color){255, 255, 255, 255};
+        ++ready_count;
+    }
+    if (ready_count == 0)
+        return true;
+    return slayer3d_draw_sky_layers(renderer, layers, ready_count, sky->desc.size, slayer3d_time_get_real_time());
+}
+
 static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                      slayer3d_game_data_image_cache *image_cache,
-                                     const slayer3d_game_data_asset_warmup_queue *asset_warmup)
+                                     const slayer3d_game_data_asset_warmup_queue *asset_warmup, const char *media_dir)
 {
-    slayer3d_game_data_scene_skybox skybox_desc;
+    scene_sky_resolved sky;
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return true;
-    if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox_desc))
+    if (!resolve_active_scene_sky(runtime, media_dir, &sky))
         return true;
 
-    const char *face_images[] = {skybox_desc.pos_x, skybox_desc.neg_x, skybox_desc.pos_y,
-                                 skybox_desc.neg_y, skybox_desc.pos_z, skybox_desc.neg_z};
-    for (int i = 0; i < 6; ++i)
+    if (sky.has_faces)
     {
-        slayer3d_game_data_asset_warmup_state warmup_state;
-        if (slayer3d_game_data_asset_warmup_request_state(asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL,
-                                                          face_images[i], &warmup_state) &&
-            warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+        for (int i = 0; i < 6; ++i)
         {
-            return true;
+            if (scene_sky_image_pending(asset_warmup, sky.faces[i]))
+                return true;
         }
     }
-
-    slayer3d_game_data_image_cache_entry *pos_x =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_x);
-    slayer3d_game_data_image_cache_entry *neg_x =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_x);
-    slayer3d_game_data_image_cache_entry *pos_y =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_y);
-    slayer3d_game_data_image_cache_entry *neg_y =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_y);
-    slayer3d_game_data_image_cache_entry *pos_z =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_z);
-    slayer3d_game_data_image_cache_entry *neg_z =
-        slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_z);
-    if (pos_x == NULL || neg_x == NULL || pos_y == NULL || neg_y == NULL || pos_z == NULL || neg_z == NULL)
+    for (int i = 0; i < sky.layer_count; ++i)
     {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load active scene skybox image assets");
-        return false;
+        if (scene_sky_image_pending(asset_warmup, sky.layers[i].texture))
+            return true;
     }
 
-    slayer3d_skybox_textured skybox = {&pos_x->texture, &neg_x->texture, &pos_y->texture, &neg_y->texture,
-                                       &pos_z->texture, &neg_z->texture, skybox_desc.size};
-    return slayer3d_draw_skybox_textured(renderer, &skybox);
+    if (sky.has_faces)
+    {
+        slayer3d_game_data_image_cache_entry *faces[6];
+        for (int i = 0; i < 6; ++i)
+        {
+            faces[i] = slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, sky.faces[i]);
+            if (faces[i] == NULL)
+            {
+                SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load active scene skybox image assets");
+                return false;
+            }
+        }
+        slayer3d_skybox_textured skybox = {&faces[0]->texture, &faces[1]->texture, &faces[2]->texture,
+                                           &faces[3]->texture, &faces[4]->texture, &faces[5]->texture,
+                                           sky.desc.size};
+        if (!slayer3d_draw_skybox_textured(renderer, &skybox))
+            return false;
+    }
+
+    if (sky.layer_count > 0)
+        return draw_active_scene_sky_layers(runtime, renderer, image_cache, &sky);
+    return true;
 }
 
 bool slayer3d_game_data_draw_render_primitives(const slayer3d_game_data_runtime *runtime,
@@ -887,7 +1020,9 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
     if (slayer3d_begin_mode_3d(frame->renderer, *camera))
     {
         ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup) && ok;
+        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
+                                      frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
+             ok;
         ok = slayer3d_game_data_draw_sector_levels_with_assets(
                  frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                  camera) &&

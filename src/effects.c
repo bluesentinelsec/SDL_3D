@@ -1036,6 +1036,124 @@ bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slaye
                                      slayer3d_vec3_make(c.x + s, c.y - s, c.z - s));
 }
 
+/* Sky-layer dome tessellation. A (N+1)x(N+1) vertex grid forms a shallow
+ * bowl over the camera whose rim dips below the horizon so layered clouds
+ * never expose a seam against the sky backdrop. */
+#define SLAYER3D_SKY_LAYER_GRID 12
+#define SLAYER3D_SKY_LAYER_BASE_REPEATS 3.0f
+
+static bool slayer3d_draw_sky_layer_dome(slayer3d_render_context *context, const slayer3d_sky_layer *layer, float size,
+                                         float time)
+{
+    enum
+    {
+        grid = SLAYER3D_SKY_LAYER_GRID,
+        vertex_count = (grid + 1) * (grid + 1),
+        index_count = grid * grid * 6
+    };
+    float positions[vertex_count * 3];
+    float uvs[vertex_count * 2];
+    unsigned int indices[index_count];
+
+    const slayer3d_vec3 c = slayer3d_effects_camera_position(context);
+    const float scale = layer->scale > 0.0f ? layer->scale : 1.0f;
+    const float depth = layer->depth > 0.0f ? layer->depth : 1.0f;
+    const float opacity = layer->opacity > 0.0f && layer->opacity <= 1.0f ? layer->opacity : 1.0f;
+    const float radius = size * 0.9f;
+    const float dome_height = size * 0.3f * depth;
+    const float repeats = SLAYER3D_SKY_LAYER_BASE_REPEATS * scale;
+    const float scroll_u = layer->scroll_x * time;
+    const float scroll_v = layer->scroll_y * time;
+
+    for (int row = 0; row <= grid; ++row)
+    {
+        for (int col = 0; col <= grid; ++col)
+        {
+            const int vertex = row * (grid + 1) + col;
+            const float gx = ((float)col / (float)grid) * 2.0f - 1.0f;
+            const float gz = ((float)row / (float)grid) * 2.0f - 1.0f;
+            float r2 = gx * gx + gz * gz;
+            if (r2 > 1.0f)
+                r2 = 1.0f;
+            positions[vertex * 3 + 0] = c.x + gx * radius;
+            positions[vertex * 3 + 1] = c.y + dome_height * (1.0f - 1.6f * r2);
+            positions[vertex * 3 + 2] = c.z + gz * radius;
+            uvs[vertex * 2 + 0] = gx * repeats + scroll_u;
+            uvs[vertex * 2 + 1] = gz * repeats + scroll_v;
+        }
+    }
+
+    for (int row = 0; row < grid; ++row)
+    {
+        for (int col = 0; col < grid; ++col)
+        {
+            const unsigned int base = (unsigned int)(row * (grid + 1) + col);
+            unsigned int *quad = &indices[(row * grid + col) * 6];
+            /* Wound so the underside faces the camera below the dome. */
+            quad[0] = base;
+            quad[1] = base + (unsigned int)grid + 1u;
+            quad[2] = base + 1u;
+            quad[3] = base + 1u;
+            quad[4] = base + (unsigned int)grid + 1u;
+            quad[5] = base + (unsigned int)grid + 2u;
+        }
+    }
+
+    slayer3d_color tint = layer->tint;
+    if (tint.r == 0 && tint.g == 0 && tint.b == 0 && tint.a == 0)
+        tint = (slayer3d_color){255, 255, 255, 255};
+    tint.a = (Uint8)(opacity * 255.0f + 0.5f);
+
+    slayer3d_mesh mesh;
+    SDL_zero(mesh);
+    mesh.positions = positions;
+    mesh.uvs = uvs;
+    mesh.vertex_count = vertex_count;
+    mesh.indices = indices;
+    mesh.index_count = index_count;
+    return slayer3d_draw_mesh(context, &mesh, layer->texture, tint);
+}
+
+bool slayer3d_draw_sky_layers(slayer3d_render_context *context, const slayer3d_sky_layer *layers, int layer_count,
+                              float size, float time)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (layers == NULL || layer_count <= 0)
+    {
+        return SDL_InvalidParamError("layers");
+    }
+    for (int i = 0; i < layer_count; ++i)
+    {
+        if (layers[i].texture == NULL)
+        {
+            return SDL_SetError("Sky layers require a texture for every layer.");
+        }
+    }
+
+    const float dome_size = size > 1.0f ? size : 400.0f;
+    const bool culling = slayer3d_is_backface_culling_enabled(context);
+    const bool software_blend = context->color_buffer_blend;
+    if (culling)
+        slayer3d_set_backface_culling_enabled(context, false);
+    /* Software rasterization composites translucent layers only while the
+     * color buffer blend flag is raised; hardware backends always blend. */
+    context->color_buffer_blend = true;
+
+    bool ok = true;
+    for (int i = 0; i < layer_count && ok; ++i)
+    {
+        ok = slayer3d_draw_sky_layer_dome(context, &layers[i], dome_size, time);
+    }
+
+    context->color_buffer_blend = software_blend;
+    if (culling)
+        slayer3d_set_backface_culling_enabled(context, true);
+    return ok;
+}
+
 /* ------------------------------------------------------------------ */
 /* Post-process effects                                                */
 /* ------------------------------------------------------------------ */

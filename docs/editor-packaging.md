@@ -25,6 +25,20 @@ slayer3d_editor open --project path/to/project --input path/to/level.slayermap.j
 Set `SLAYER3D_EDITOR_PROJECT` to a project directory when testing another
 project as the temporary no-argument default.
 
+## Skybox Authoring
+
+The top-toolbar `Skybox` button opens a right-side Skybox panel that lists the
+skyboxes discovered under the project's skybox asset source (the built-in
+animated presets under `media/skyboxes/` for the repository editor project).
+Selecting an entry and pressing `Apply` previews the sky in the viewport and
+records it as the map's global sky, which is saved into the `.slayermap.json`
+`skybox` block and restored on open. `Default` returns to the editor's
+built-in sky. The panel's path field (or the `--skybox-path <dir>` CLI option,
+matching `--texture-path`) points the session at another skybox directory;
+nested subdirectories are scanned, and directories are recognized as skyboxes
+when they contain six cubemap faces (`px.png` ... `nz.png`) or animated layer
+images (`layer_outer.png`, optional `layer_inner.png`).
+
 ## Bundled Assets
 
 The default editor shell lives under `apps/slayer3d_editor/data` in source

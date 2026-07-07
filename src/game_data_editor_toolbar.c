@@ -69,6 +69,16 @@ static bool editor_hit_is_stair_panel(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.stair_panel.");
 }
 
+static bool editor_hit_is_skybox_panel(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.skybox_panel.");
+}
+
+static bool editor_hit_is_sky_edit_control(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.skybox_panel.path.");
+}
+
 static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
@@ -408,7 +418,7 @@ static const char *const editor_signal_action_names[] = {
 /* Action families whose members are all forwarded as "signal.<action>". */
 static const char *const editor_signal_action_prefixes[] = {
     "editor.texture.",  "editor.palette.", "editor.actor.",      "editor.things.", "editor.file.",  "editor.inspector.",
-    "editor.property.", "editor.global.",  "editor.visibility.", "editor.lock.",   "editor.stair.",
+    "editor.property.", "editor.global.",  "editor.visibility.", "editor.lock.",   "editor.stair.", "editor.sky.",
 };
 
 static bool editor_action_routes_to_signal(const char *action)
@@ -450,6 +460,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         return true;
     editor_update_texture_edit_display(runtime);
     editor_update_global_edit_display(runtime);
+    editor_update_sky_edit_display(runtime);
 
     slayer3d_input_manager *input = runtime_input(runtime);
     float mouse_x = 0.0f;
@@ -467,6 +478,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool property_focus_active = editor_property_edit_has_focus(runtime);
     const bool texture_focus_active = editor_texture_edit_has_focus(runtime);
     const bool global_focus_active = editor_global_edit_has_focus(runtime);
+    const bool sky_focus_active = editor_sky_edit_has_focus(runtime);
     if (property_focus_active && clicked && !editor_hit_is_property_control(hit))
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.property.edit.focus", "");
@@ -479,6 +491,15 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     {
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
         editor_update_texture_edit_display(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    if (sky_focus_active && clicked && !editor_hit_is_sky_edit_control(hit))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.sky.edit.focus", "");
+        editor_update_sky_edit_display(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
         slayer3d_ui_layout_destroy(layout);
@@ -504,6 +525,14 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     if (texture_focus_active && !clicked)
     {
         (void)editor_update_texture_text_edit(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    if (sky_focus_active && !clicked)
+    {
+        (void)editor_update_sky_text_edit(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
         slayer3d_ui_layout_destroy(layout);
@@ -610,8 +639,8 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
-        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_actor_viewer(hit) ||
-        editor_hit_is_left_inspector(hit) || console_event_active)
+        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_skybox_panel(hit) ||
+        editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) || console_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

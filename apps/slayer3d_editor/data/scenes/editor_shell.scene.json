@@ -612,7 +612,18 @@
           { "id": "ui.editor_shell.toolbar.view.button", "type": "button", "w": 70, "h": 28, "text": "View", "interactive": true },
           { "id": "ui.editor_shell.toolbar.run.button", "type": "button", "w": 64, "h": 28, "text": "Run", "interactive": true },
           { "id": "ui.editor_shell.toolbar.debug.button", "type": "button", "w": 80, "h": 28, "text": "Debug", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.help.button", "type": "button", "w": 70, "h": 28, "text": "Help", "interactive": true }
+          { "id": "ui.editor_shell.toolbar.help.button", "type": "button", "w": 70, "h": 28, "text": "Help", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.skybox.button",
+            "type": "button",
+            "w": 86,
+            "h": 28,
+            "text": "Skybox",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.sky.panel.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false }
+          }
         ]
       },
       {
@@ -6011,6 +6022,133 @@
         }
       },
       {
+        "id": "ui.editor_shell.skybox_panel.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 1030,
+        "y": 92,
+        "w": 238,
+        "h": 520,
+        "layer": 120,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false }
+          ]
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.skybox_panel.header",
+            "type": "panel",
+            "x": 8,
+            "y": 8,
+            "w": 222,
+            "h": 34,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.skybox_panel.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Skybox" },
+              {
+                "id": "ui.editor_shell.skybox_panel.refresh.button",
+                "type": "button",
+                "x": 116,
+                "y": 4,
+                "w": 48,
+                "h": 24,
+                "text": "reload",
+                "text_scale": 0.38,
+                "interactive": true,
+                "action": "editor.sky.refresh"
+              },
+              {
+                "id": "ui.editor_shell.skybox_panel.collapse.button",
+                "type": "button",
+                "x": 168,
+                "y": 4,
+                "w": 46,
+                "h": 24,
+                "text": "hide",
+                "text_scale": 0.42,
+                "interactive": true,
+                "action": "editor.sky.panel.toggle"
+              }
+            ]
+          },
+          { "id": "ui.editor_shell.skybox_panel.active.label", "type": "label", "x": 12, "y": 48, "w": 214, "h": 20, "format": "Active: %s", "bindings": [{ "type": "scene_state", "key": "editor.sky.active", "default": "default" }], "text_scale": 0.40, "align": "left", "layer": 121 },
+          {
+            "id": "ui.editor_shell.skybox_panel.path.field",
+            "type": "button",
+            "x": 12,
+            "y": 74,
+            "w": 156,
+            "h": 24,
+            "text_scale": 0.30,
+            "format": "Path: %s",
+            "bindings": [{ "type": "scene_state", "key": "editor.sky.path.display", "default": "" }],
+            "interactive": true,
+            "action": "editor.sky.focus.path",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.sky.edit.focus", "op": "==", "value": "path", "default": "" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.skybox_panel.path.apply",
+            "type": "button",
+            "x": 174,
+            "y": 74,
+            "w": 52,
+            "h": 24,
+            "text": "Apply",
+            "text_scale": 0.34,
+            "interactive": true,
+            "action": "editor.sky.path.apply.request",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.skybox_panel.list.panel",
+            "type": "panel",
+            "x": 10,
+            "y": 106,
+            "w": 218,
+            "h": 330,
+            "layer": 121,
+            "clip_children": true,
+            "children": [
+              { "id": "ui.editor_shell.skybox_panel.slot0.button", "type": "button", "x": 8, "y": 8, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.0", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 0, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot0.name", "type": "label", "x": 58, "y": 16, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.0.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot0.kind.animated", "type": "label", "x": 58, "y": 34, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot0.kind.static", "type": "label", "x": 58, "y": 34, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot1.button", "type": "button", "x": 8, "y": 61, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.1", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 1, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot1.name", "type": "label", "x": 58, "y": 69, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.1.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot1.kind.animated", "type": "label", "x": 58, "y": 87, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot1.kind.static", "type": "label", "x": 58, "y": 87, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot2.button", "type": "button", "x": 8, "y": 114, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.2", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 2, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot2.name", "type": "label", "x": 58, "y": 122, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.2.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot2.kind.animated", "type": "label", "x": 58, "y": 140, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot2.kind.static", "type": "label", "x": 58, "y": 140, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot3.button", "type": "button", "x": 8, "y": 167, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.3", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 3, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot3.name", "type": "label", "x": 58, "y": 175, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.3.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot3.kind.animated", "type": "label", "x": 58, "y": 193, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot3.kind.static", "type": "label", "x": 58, "y": 193, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot4.button", "type": "button", "x": 8, "y": 220, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.4", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 4, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot4.name", "type": "label", "x": 58, "y": 228, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.4.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot4.kind.animated", "type": "label", "x": 58, "y": 246, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot4.kind.static", "type": "label", "x": 58, "y": 246, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot5.button", "type": "button", "x": 8, "y": 273, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.5", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 5, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot5.name", "type": "label", "x": 58, "y": 281, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.5.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 123, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.skybox_panel.slot5.kind.animated", "type": "label", "x": 58, "y": 299, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot5.kind.static", "type": "label", "x": 58, "y": 299, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 123, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.scroll.up", "type": "button", "x": 194, "y": 8, "w": 20, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.up", "layer": 122 },
+              { "id": "ui.editor_shell.skybox_panel.scroll.down", "type": "button", "x": 194, "y": 298, "w": 20, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.down", "layer": 122 }
+            ]
+          },
+          { "id": "ui.editor_shell.skybox_panel.reset.button", "type": "button", "x": 12, "y": 444, "w": 102, "h": 30, "text": "Default", "text_scale": 0.44, "interactive": true, "action": "editor.sky.reset", "layer": 121 },
+          { "id": "ui.editor_shell.skybox_panel.apply.button", "type": "button", "x": 124, "y": 444, "w": 102, "h": 30, "text": "Apply", "text_scale": 0.44, "interactive": true, "action": "editor.sky.apply.selected", "layer": 121 },
+          { "id": "ui.editor_shell.skybox_panel.status.label", "type": "label", "x": 12, "y": 482, "w": 214, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.status", "default": "" }], "text_scale": 0.32, "align": "left", "layer": 121 }
+        ]
+      },
+      {
         "id": "ui.editor_shell.actor_viewer.panel",
         "type": "panel",
         "layout": "none",
@@ -7654,6 +7792,132 @@
 }
     ],
     "images": [
+      {
+        "name": "ui.editor_shell.skybox_panel.slot0.thumbnail",
+        "image": "image.editor_shell.sky.slot_0",
+        "layer": 123,
+        "x": 1048,
+        "y": 210,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.skybox_panel.slot1.thumbnail",
+        "image": "image.editor_shell.sky.slot_1",
+        "layer": 123,
+        "x": 1048,
+        "y": 263,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.skybox_panel.slot2.thumbnail",
+        "image": "image.editor_shell.sky.slot_2",
+        "layer": 123,
+        "x": 1048,
+        "y": 316,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.skybox_panel.slot3.thumbnail",
+        "image": "image.editor_shell.sky.slot_3",
+        "layer": 123,
+        "x": 1048,
+        "y": 369,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.skybox_panel.slot4.thumbnail",
+        "image": "image.editor_shell.sky.slot_4",
+        "layer": 123,
+        "x": 1048,
+        "y": 422,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.skybox_panel.slot5.thumbnail",
+        "image": "image.editor_shell.sky.slot_5",
+        "layer": 123,
+        "x": 1048,
+        "y": 475,
+        "w": 40,
+        "h": 40,
+        "preserve_aspect": false,
+        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
+            { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
       {
         "name": "ui.editor_shell.texture_viewer.wall_metal.thumbnail",
         "image": "image.editor_shell.texture.slot_0",

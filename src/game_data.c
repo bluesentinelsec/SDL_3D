@@ -449,6 +449,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     SDL_free(runtime->discovery_sessions);
     SDL_free(runtime->network_diagnostics);
     SDL_free(runtime->activity.periodic_elapsed);
+    yyjson_doc_free(runtime->scene_sky_override);
     yyjson_doc_free(runtime->doc);
     SDL_free(runtime);
 }

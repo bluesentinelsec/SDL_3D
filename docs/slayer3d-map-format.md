@@ -158,8 +158,68 @@ lossless path used by the editor's open/save workflow today.
 - `lights`: Optional dynamic/runtime and baked/build-time light markers.
 - `effects`: Optional particles, fog volumes, fire/smoke markers, and similar
   effect primitives.
-- `skybox`: Optional map-level skybox selection.
+- `skybox`: Optional map-level sky/environment selection. Supports static
+  cubemaps, built-in presets, and Quake-style animated layered skies; see
+  "Map Skybox" below.
 - `editor`: Optional editor-only metadata.
+
+## Map Skybox
+
+`skybox` stores the map's global sky/environment selection. It supports three
+modes:
+
+- `none`: no sky; the global clear color shows through.
+- `cubemap`: a static six-face skybox.
+- `layers`: a Quake-style animated sky built from scrolling cloud layers,
+  drawn over an optional cubemap backdrop.
+
+When `mode` is omitted it is inferred: records with `layers` report `layers`,
+records with `faces`, `asset`, or `preset` report `cubemap`.
+
+```json
+{
+  "skybox": {
+    "id": "sunset",
+    "mode": "layers",
+    "preset": "sunset",
+    "size": 400,
+    "faces": {
+      "pos_x": "skyboxes/sunset/px.png",
+      "neg_x": "skyboxes/sunset/nx.png",
+      "pos_y": "skyboxes/sunset/py.png",
+      "neg_y": "skyboxes/sunset/ny.png",
+      "pos_z": "skyboxes/sunset/pz.png",
+      "neg_z": "skyboxes/sunset/nz.png"
+    },
+    "layers": [
+      { "texture": "skyboxes/sunset/layer_outer.png", "scroll": [0.01, 0.0], "scale": 1.0, "opacity": 1.0, "depth": 1.0 },
+      { "texture": "skyboxes/sunset/layer_inner.png", "scroll": [-0.025, 0.006], "scale": 2.0, "opacity": 0.65, "depth": 0.55 }
+    ]
+  }
+}
+```
+
+- `preset`: A built-in skybox id resolved against the runtime media directory
+  (`media/skyboxes/<preset>/`). Presets ship six cubemap faces plus
+  `layer_outer.png`/`layer_inner.png` cloud decks; a preset-only record with
+  `mode: "layers"` animates with engine-default layer parameters. Built-in
+  presets: `sunrise`, `afternoon`, `sunset`, `midnight`, `matrix`,
+  `outer_space`, `under_the_sea`, and `sky_17`.
+- `faces`: Explicit cubemap faces. All six are required when authored, and
+  each must be an asset id or project-relative reference; host absolute paths
+  fail validation.
+- `layers`: One to eight animated layers drawn in order. Each layer requires a
+  portable `texture` reference and may author `scroll` (`[u, v]` texture
+  repeats per second), `scale` (tiling multiplier, > 0), `opacity`
+  (`(0, 1]`), `depth` (dome height factor, `(0, 1]`; lower layers read as
+  closer and move faster), and `tint` (`[r, g, b]`).
+- `size`: Skybox cube half-size in world units, defaults to 400.
+
+Consumers read the sky through `slayer3d_map_get_sky()` and
+`slayer3d_map_get_sky_layer()`. Playable map exports copy the sky into the
+generated scene, and the runner renders it with time-driven layer scrolling.
+See `demos/slayermap_example/maps/animated_sky.slayermap.json` for a built-in
+animated preset example.
 
 ## Global Map State
 

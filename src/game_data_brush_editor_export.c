@@ -8,6 +8,7 @@
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
@@ -1505,27 +1506,148 @@ static bool export_add_map_lights(yyjson_mut_doc *doc, yyjson_mut_val *lights,
     return true;
 }
 
+static bool export_sky_reference_is_portable(const char *reference)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return false;
+    if (reference[0] == '/' || reference[0] == '\\')
+        return false;
+    if (SDL_strlen(reference) > 2u && reference[1] == ':')
+        return false;
+    return true;
+}
+
+/* Faces and layers may reference declared image assets by id at runtime;
+ * saved maps write the underlying asset path so any map consumer can
+ * resolve the sky without the editor shell's image asset catalog. */
+static const char *export_sky_texture_reference(const slayer3d_game_data_runtime *runtime, const char *reference)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return NULL;
+    slayer3d_game_data_image_asset asset;
+    if (slayer3d_game_data_get_image_asset(runtime, reference, &asset) && asset.path != NULL && asset.path[0] != '\0')
+        reference = asset.path;
+    return export_sky_reference_is_portable(reference) ? reference : NULL;
+}
+
+static bool export_add_map_sky_layers(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                      const slayer3d_game_data_runtime *runtime,
+                                      const slayer3d_game_data_scene_skybox *skybox)
+{
+    yyjson_mut_val *layers = yyjson_mut_arr(doc);
+    if (layers == NULL || !yyjson_mut_obj_add_val(doc, obj, "layers", layers))
+        return false;
+    for (int i = 0; i < skybox->layer_count; ++i)
+    {
+        const slayer3d_game_data_scene_sky_layer *layer = &skybox->layers[i];
+        const char *texture = export_sky_texture_reference(runtime, layer->texture);
+        if (texture == NULL)
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "Skipping sky layer with non-portable texture reference '%s' during map export",
+                        layer->texture != NULL ? layer->texture : "");
+            continue;
+        }
+        yyjson_mut_val *entry = yyjson_mut_obj(doc);
+        yyjson_mut_val *scroll = yyjson_mut_arr(doc);
+        if (entry == NULL || scroll == NULL || !yyjson_mut_arr_add_val(layers, entry) ||
+            !yyjson_mut_obj_add_strcpy(doc, entry, "texture", texture) ||
+            !yyjson_mut_obj_add_val(doc, entry, "scroll", scroll) ||
+            !yyjson_mut_arr_add_real(doc, scroll, layer->scroll_x) ||
+            !yyjson_mut_arr_add_real(doc, scroll, layer->scroll_y) ||
+            !yyjson_mut_obj_add_real(doc, entry, "scale", layer->scale) ||
+            !yyjson_mut_obj_add_real(doc, entry, "opacity", layer->opacity) ||
+            !yyjson_mut_obj_add_real(doc, entry, "depth", layer->depth))
+        {
+            return false;
+        }
+        if (layer->has_tint)
+        {
+            yyjson_mut_val *tint = yyjson_mut_arr(doc);
+            if (tint == NULL || !yyjson_mut_obj_add_val(doc, entry, "tint", tint) ||
+                !yyjson_mut_arr_add_int(doc, tint, layer->tint.r) ||
+                !yyjson_mut_arr_add_int(doc, tint, layer->tint.g) || !yyjson_mut_arr_add_int(doc, tint, layer->tint.b))
+            {
+                return false;
+            }
+        }
+    }
+    if (yyjson_mut_arr_size(layers) == 0u)
+        yyjson_mut_obj_remove_key(obj, "layers");
+    return true;
+}
+
+static int export_portable_sky_layer_count(const slayer3d_game_data_runtime *runtime,
+                                           const slayer3d_game_data_scene_skybox *skybox)
+{
+    int count = 0;
+    for (int i = 0; i < skybox->layer_count; ++i)
+    {
+        if (export_sky_texture_reference(runtime, skybox->layers[i].texture) != NULL)
+            ++count;
+    }
+    return count;
+}
+
 static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_game_data_runtime *runtime)
 {
     slayer3d_game_data_scene_skybox skybox;
     if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
         return true;
 
+    const char *faces[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
+    bool faces_portable = skybox.has_faces;
+    if (skybox.has_faces)
+    {
+        const char *authored[6] = {skybox.pos_x, skybox.neg_x, skybox.pos_y, skybox.neg_y, skybox.pos_z, skybox.neg_z};
+        for (int i = 0; i < 6; ++i)
+        {
+            faces[i] = export_sky_texture_reference(runtime, authored[i]);
+            if (faces[i] == NULL)
+                faces_portable = false;
+        }
+    }
+    const bool has_preset = skybox.preset != NULL && skybox.preset[0] != '\0';
+    const int portable_layer_count = export_portable_sky_layer_count(runtime, &skybox);
+    if (!faces_portable && !has_preset && portable_layer_count == 0)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Skipping skybox export: active sky has no portable preset, face, or layer references");
+        return true;
+    }
+    if (skybox.has_faces && !faces_portable)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Skipping skybox faces with non-portable references during map export");
+    }
+
+    const char *export_mode = skybox.mode;
+    if (SDL_strcmp(export_mode, "layers") == 0 && portable_layer_count == 0 && !has_preset)
+        export_mode = "cubemap";
+
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
-    yyjson_mut_val *faces = yyjson_mut_obj(doc);
-    if (obj == NULL || faces == NULL || !yyjson_mut_obj_add_val(doc, root, "skybox", obj) ||
-        !yyjson_mut_obj_add_strcpy(doc, obj, "id", "active_scene_skybox") ||
-        !yyjson_mut_obj_add_val(doc, obj, "faces", faces) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_x", skybox.pos_x) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_x", skybox.neg_x) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_y", skybox.pos_y) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_y", skybox.neg_y) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "pos_z", skybox.pos_z) ||
-        !yyjson_mut_obj_add_strcpy(doc, faces, "neg_z", skybox.neg_z) ||
+    if (obj == NULL || !yyjson_mut_obj_add_val(doc, root, "skybox", obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "id", has_preset ? skybox.preset : "active_scene_skybox") ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "mode", export_mode) ||
+        (has_preset && !yyjson_mut_obj_add_strcpy(doc, obj, "preset", skybox.preset)) ||
         !yyjson_mut_obj_add_real(doc, obj, "size", skybox.size))
     {
         return false;
     }
+    if (faces_portable)
+    {
+        static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+        yyjson_mut_val *faces_obj = yyjson_mut_obj(doc);
+        if (faces_obj == NULL || !yyjson_mut_obj_add_val(doc, obj, "faces", faces_obj))
+            return false;
+        for (int i = 0; i < 6; ++i)
+        {
+            if (!yyjson_mut_obj_add_strcpy(doc, faces_obj, face_keys[i], faces[i]))
+                return false;
+        }
+    }
+    if (skybox.layer_count > 0 && !export_add_map_sky_layers(doc, obj, runtime, &skybox))
+        return false;
     return true;
 }
 

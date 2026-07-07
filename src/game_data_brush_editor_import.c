@@ -7,6 +7,7 @@
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <math.h>
@@ -276,6 +277,80 @@ static void import_apply_map_global_properties(slayer3d_properties *scene_state,
     slayer3d_properties_set_int(scene_state, "editor.global.data.edit.selected_slot", -1);
 }
 
+/* Restore the saved map's global sky as the runtime sky override so the
+ * reopened map previews and re-exports the sky it was saved with. */
+static void import_apply_map_sky(slayer3d_game_data_runtime *runtime, const slayer3d_map_document *map)
+{
+    slayer3d_properties *scene_state = runtime->scene_state;
+    slayer3d_map_sky sky;
+    if (!slayer3d_map_get_sky(map, &sky) || SDL_strcmp(sky.mode, "none") == 0)
+    {
+        (void)slayer3d_game_data_set_scene_sky_override_json(runtime, NULL);
+        slayer3d_properties_set_string(scene_state, "editor.sky.active", "default");
+        slayer3d_properties_set_string(scene_state, "editor.sky.mode", "none");
+        return;
+    }
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *obj = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    bool ok = doc != NULL && obj != NULL;
+    if (ok)
+    {
+        yyjson_mut_doc_set_root(doc, obj);
+        ok = yyjson_mut_obj_add_strcpy(doc, obj, "mode", sky.mode) &&
+             (sky.preset == NULL || yyjson_mut_obj_add_strcpy(doc, obj, "preset", sky.preset)) &&
+             yyjson_mut_obj_add_real(doc, obj, "size", sky.size);
+    }
+    if (ok && sky.has_faces)
+    {
+        static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+        for (int i = 0; ok && i < 6; ++i)
+            ok = yyjson_mut_obj_add_strcpy(doc, obj, face_keys[i], sky.faces[i]);
+    }
+    if (ok && sky.layer_count > 0u)
+    {
+        yyjson_mut_val *layers = yyjson_mut_arr(doc);
+        ok = layers != NULL && yyjson_mut_obj_add_val(doc, obj, "layers", layers);
+        for (size_t i = 0; ok && i < sky.layer_count; ++i)
+        {
+            slayer3d_map_sky_layer layer;
+            if (!slayer3d_map_get_sky_layer(map, i, &layer))
+                continue;
+            yyjson_mut_val *entry = yyjson_mut_obj(doc);
+            yyjson_mut_val *scroll = yyjson_mut_arr(doc);
+            ok = entry != NULL && scroll != NULL && yyjson_mut_arr_add_val(layers, entry) &&
+                 yyjson_mut_obj_add_strcpy(doc, entry, "texture", layer.texture) &&
+                 yyjson_mut_obj_add_val(doc, entry, "scroll", scroll) &&
+                 yyjson_mut_arr_add_real(doc, scroll, layer.scroll_x) &&
+                 yyjson_mut_arr_add_real(doc, scroll, layer.scroll_y) &&
+                 yyjson_mut_obj_add_real(doc, entry, "scale", layer.scale) &&
+                 yyjson_mut_obj_add_real(doc, entry, "opacity", layer.opacity) &&
+                 yyjson_mut_obj_add_real(doc, entry, "depth", layer.depth);
+            if (ok && layer.has_tint)
+            {
+                yyjson_mut_val *tint = yyjson_mut_arr(doc);
+                ok = tint != NULL && yyjson_mut_obj_add_val(doc, entry, "tint", tint) &&
+                     yyjson_mut_arr_add_int(doc, tint, layer.tint.r) &&
+                     yyjson_mut_arr_add_int(doc, tint, layer.tint.g) && yyjson_mut_arr_add_int(doc, tint, layer.tint.b);
+            }
+        }
+    }
+
+    char *json = ok ? yyjson_mut_write(doc, 0, NULL) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (json == NULL || !slayer3d_game_data_set_scene_sky_override_json(runtime, json))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to restore saved map skybox");
+        free(json);
+        return;
+    }
+    free(json);
+
+    const char *label = sky.preset != NULL ? sky.preset : "imported";
+    slayer3d_properties_set_string(scene_state, "editor.sky.active", label);
+    slayer3d_properties_set_string(scene_state, "editor.sky.mode", sky.mode);
+}
+
 static void import_apply_map_global_state(slayer3d_game_data_runtime *runtime, const slayer3d_map_document *map)
 {
     if (runtime == NULL || runtime->scene_state == NULL || map == NULL)
@@ -363,6 +438,7 @@ static void import_apply_map_global_state(slayer3d_game_data_runtime *runtime, c
         directional_enabled && directional_light.has_casts_shadow ? directional_light.casts_shadow : true);
 
     import_apply_map_global_properties(scene_state, map);
+    import_apply_map_sky(runtime, map);
 }
 
 bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_runtime *runtime, const char *world_name,

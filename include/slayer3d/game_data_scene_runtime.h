@@ -142,10 +142,24 @@ extern "C"
      * @brief Read the active scene's optional skybox descriptor.
      *
      * Scene skyboxes are authored under `world.skybox` and reference image
-     * assets by id. Returns false when the active scene has no skybox.
+     * assets by id or by asset path. A runtime sky override installed with
+     * slayer3d_game_data_set_scene_sky_override_json() takes precedence over
+     * the authored scene sky. Returns false when the active scene has no
+     * skybox or its effective mode is "none".
      */
     bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime *runtime,
                                                     slayer3d_game_data_scene_skybox *out_skybox);
+
+    /**
+     * @brief Install or clear a runtime sky override for the active scene.
+     *
+     * The JSON object uses the same shape as authored `world.skybox` data and
+     * replaces it for every scene until cleared. Editors use this to preview
+     * a selected skybox without mutating authored scene data. Passing NULL or
+     * an empty string clears the override. Returns false when @p json_text is
+     * not a valid JSON object.
+     */
+    bool slayer3d_game_data_set_scene_sky_override_json(slayer3d_game_data_runtime *runtime, const char *json_text);
 
     /**
      * @brief Return whether an entity belongs to the active scene.

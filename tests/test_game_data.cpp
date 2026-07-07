@@ -45326,6 +45326,181 @@ TEST(GameDataRuntime, SlayerMapWarnsOnAbsoluteAssetPaths)
     EXPECT_NE(std::string(error).find("project-relative path"), std::string::npos);
 }
 
+TEST(GameDataRuntime, SlayerMapValidatesSkyModesAndLayers)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "skybox": {
+    "id": "sunset",
+    "mode": "layers",
+    "preset": "sunset",
+    "size": 480,
+    "faces": {
+      "pos_x": "skyboxes/sunset/px.png",
+      "neg_x": "skyboxes/sunset/nx.png",
+      "pos_y": "skyboxes/sunset/py.png",
+      "neg_y": "skyboxes/sunset/ny.png",
+      "pos_z": "skyboxes/sunset/pz.png",
+      "neg_z": "skyboxes/sunset/nz.png"
+    },
+    "layers": [
+      { "texture": "skyboxes/sunset/layer_outer.png", "scroll": [0.01, 0.0], "scale": 1.0, "opacity": 1.0, "depth": 1.0 },
+      {
+        "texture": "skyboxes/sunset/layer_inner.png",
+        "scroll": [-0.025, 0.006],
+        "scale": 2.0,
+        "opacity": 0.65,
+        "depth": 0.55,
+        "tint": [255, 200, 160]
+      }
+    ]
+  }
+})json";
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_map_validate_json(map_json, SDL_strlen(map_json), nullptr, error, sizeof(error))) << error;
+
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
+
+    slayer3d_map_sky sky{};
+    ASSERT_TRUE(slayer3d_map_get_sky(map, &sky));
+    EXPECT_STREQ(sky.mode, "layers");
+    EXPECT_STREQ(sky.preset, "sunset");
+    EXPECT_TRUE(sky.has_faces);
+    EXPECT_STREQ(sky.faces[0], "skyboxes/sunset/px.png");
+    EXPECT_STREQ(sky.faces[5], "skyboxes/sunset/nz.png");
+    EXPECT_FLOAT_EQ(sky.size, 480.0f);
+    ASSERT_EQ(sky.layer_count, 2u);
+
+    slayer3d_map_sky_layer layer{};
+    ASSERT_TRUE(slayer3d_map_get_sky_layer(map, 0, &layer));
+    EXPECT_STREQ(layer.texture, "skyboxes/sunset/layer_outer.png");
+    EXPECT_FLOAT_EQ(layer.scroll_x, 0.01f);
+    EXPECT_FLOAT_EQ(layer.scroll_y, 0.0f);
+    EXPECT_FLOAT_EQ(layer.scale, 1.0f);
+    EXPECT_FLOAT_EQ(layer.opacity, 1.0f);
+    EXPECT_FLOAT_EQ(layer.depth, 1.0f);
+    EXPECT_FALSE(layer.has_tint);
+
+    ASSERT_TRUE(slayer3d_map_get_sky_layer(map, 1, &layer));
+    EXPECT_STREQ(layer.texture, "skyboxes/sunset/layer_inner.png");
+    EXPECT_FLOAT_EQ(layer.scroll_x, -0.025f);
+    EXPECT_FLOAT_EQ(layer.scroll_y, 0.006f);
+    EXPECT_FLOAT_EQ(layer.scale, 2.0f);
+    EXPECT_FLOAT_EQ(layer.opacity, 0.65f);
+    EXPECT_FLOAT_EQ(layer.depth, 0.55f);
+    EXPECT_TRUE(layer.has_tint);
+    EXPECT_EQ(layer.tint.r, 255);
+    EXPECT_EQ(layer.tint.g, 200);
+    EXPECT_EQ(layer.tint.b, 160);
+    EXPECT_FALSE(slayer3d_map_get_sky_layer(map, 2, &layer));
+
+    slayer3d_map_destroy(map);
+}
+
+TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsCubemap)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "skybox": { "preset": "midnight" }
+})json";
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_map_validate_json(map_json, SDL_strlen(map_json), nullptr, error, sizeof(error))) << error;
+
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
+    slayer3d_map_sky sky{};
+    ASSERT_TRUE(slayer3d_map_get_sky(map, &sky));
+    EXPECT_STREQ(sky.mode, "cubemap");
+    EXPECT_STREQ(sky.preset, "midnight");
+    EXPECT_FALSE(sky.has_faces);
+    EXPECT_EQ(sky.layer_count, 0u);
+    slayer3d_map_destroy(map);
+}
+
+TEST(GameDataRuntime, SlayerMapRejectsInvalidSkyRecords)
+{
+    struct Case
+    {
+        const char *name;
+        const char *skybox_json;
+        const char *expected;
+    };
+    const Case cases[] = {
+        {"bad_mode", R"json({ "mode": "volumetric", "preset": "sunset" })json",
+         "skybox mode must be one of none, cubemap, or layers"},
+        {"empty_layers", R"json({ "mode": "layers", "layers": [] })json",
+         "skybox layers must contain at least one layer"},
+        {"layer_missing_texture", R"json({ "layers": [ { "opacity": 0.5 } ] })json",
+         "sky layer requires a texture reference"},
+        {"layer_bad_opacity", R"json({ "layers": [ { "texture": "sky/clouds.png", "opacity": 1.5 } ] })json",
+         "sky layer opacity must be a number in (0, 1]"},
+        {"layer_bad_depth", R"json({ "layers": [ { "texture": "sky/clouds.png", "depth": 0 } ] })json",
+         "sky layer depth must be a number in (0, 1]"},
+        {"layer_bad_scroll", R"json({ "layers": [ { "texture": "sky/clouds.png", "scroll": [0.01] } ] })json",
+         "sky layer scroll must be a [u, v] number pair"},
+        {"layer_bad_tint", R"json({ "layers": [ { "texture": "sky/clouds.png", "tint": [300, 0, 0] } ] })json",
+         "sky layer tint channels must be integers in [0, 255]"},
+        {"layers_mode_without_layers", R"json({ "mode": "layers", "size": 400 })json",
+         "layered skybox requires preset or layers"},
+        {"no_sky_sources", R"json({ "size": 400 })json", "skybox requires preset, asset, faces, or layers"},
+    };
+
+    for (const Case &test_case : cases)
+    {
+        std::string map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "skybox": )json";
+        map_json += test_case.skybox_json;
+        map_json += "\n}";
+        char error[512]{};
+        EXPECT_FALSE(slayer3d_map_validate_json(map_json.c_str(), map_json.size(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected), std::string::npos) << test_case.name << ": " << error;
+    }
+}
+
+TEST(GameDataRuntime, SlayerMapPlayableExportIncludesSkyConfiguration)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    { "id": "brush.floor", "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 0.25, 4] } }
+  ],
+  "actors": [
+    { "id": "actor.player", "primitive": "capsule", "properties": { "type": "player-character" } }
+  ],
+  "skybox": {
+    "mode": "layers",
+    "preset": "sunset",
+    "layers": [
+      { "texture": "skyboxes/sunset/layer_outer.png", "scroll": [0.01, 0.0] }
+    ]
+  }
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
+
+    const std::filesystem::path dir = unique_test_dir("playable_sky");
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(map, dir.string().c_str(), error, sizeof(error))) << error;
+    slayer3d_map_destroy(map);
+
+    const std::string scene_json = read_text(dir / "scenes" / "play.scene.json");
+    EXPECT_NE(scene_json.find("\"skybox\""), std::string::npos);
+    EXPECT_NE(scene_json.find("\"mode\": \"layers\""), std::string::npos);
+    EXPECT_NE(scene_json.find("\"preset\": \"sunset\""), std::string::npos);
+    EXPECT_NE(scene_json.find("skyboxes/sunset/layer_outer.png"), std::string::npos);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, SlayerMapWarnsWhenRuntimeLightBudgetIsExceeded)
 {
     std::string map_json = R"json({

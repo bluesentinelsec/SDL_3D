@@ -1210,6 +1210,94 @@ static bool map_validate_skybox_faces(map_validation_context *ctx, yyjson_val *f
     return true;
 }
 
+static bool map_validate_sky_layer_scroll(map_validation_context *ctx, yyjson_val *layer, const char *path)
+{
+    yyjson_val *scroll = map_obj_get(layer, "scroll");
+    if (scroll == NULL)
+        return true;
+    if (!yyjson_is_arr(scroll) || yyjson_arr_size(scroll) != 2u || !yyjson_is_num(yyjson_arr_get(scroll, 0)) ||
+        !yyjson_is_num(yyjson_arr_get(scroll, 1)))
+    {
+        return map_error(ctx, path, "sky layer scroll must be a [u, v] number pair");
+    }
+    return true;
+}
+
+static bool map_validate_sky_layer_tint(map_validation_context *ctx, yyjson_val *layer, const char *path)
+{
+    yyjson_val *tint = map_obj_get(layer, "tint");
+    if (tint == NULL)
+        return true;
+    if (!yyjson_is_arr(tint) || yyjson_arr_size(tint) != 3u)
+        return map_error(ctx, path, "sky layer tint must be an [r, g, b] array");
+    for (size_t i = 0; i < 3u; ++i)
+    {
+        yyjson_val *channel = yyjson_arr_get(tint, i);
+        if (!yyjson_is_int(channel) || yyjson_get_int(channel) < 0 || yyjson_get_int(channel) > 255)
+            return map_error(ctx, path, "sky layer tint channels must be integers in [0, 255]");
+    }
+    return true;
+}
+
+static bool map_validate_sky_layer_unit_number(map_validation_context *ctx, yyjson_val *layer, const char *key,
+                                               const char *path, const char *description)
+{
+    yyjson_val *value = map_obj_get(layer, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0 || yyjson_get_num(value) > 1.0)
+        return map_error(ctx, path, "%s must be a number in (0, 1]", description);
+    return true;
+}
+
+static bool map_validate_sky_layers(map_validation_context *ctx, yyjson_val *layers, const char *path)
+{
+    if (!yyjson_is_arr(layers))
+        return map_error(ctx, path, "skybox layers must be an array");
+    const size_t count = yyjson_arr_size(layers);
+    if (count == 0u)
+        return map_error(ctx, path, "skybox layers must contain at least one layer");
+    if (count > SLAYER3D_MAP_SKY_MAX_LAYERS)
+        return map_error(ctx, path, "skybox layers supports at most %d layers", SLAYER3D_MAP_SKY_MAX_LAYERS);
+    for (size_t i = 0; i < count; ++i)
+    {
+        char layer_path[MAP_PATH_MAX];
+        char texture_path[MAP_PATH_MAX];
+        char scroll_path[MAP_PATH_MAX];
+        char scale_path[MAP_PATH_MAX];
+        char opacity_path[MAP_PATH_MAX];
+        char depth_path[MAP_PATH_MAX];
+        char tint_path[MAP_PATH_MAX];
+        map_format_path(layer_path, sizeof(layer_path), "%s[%zu]", path, i);
+        map_format_path(texture_path, sizeof(texture_path), "%s.texture", layer_path);
+        map_format_path(scroll_path, sizeof(scroll_path), "%s.scroll", layer_path);
+        map_format_path(scale_path, sizeof(scale_path), "%s.scale", layer_path);
+        map_format_path(opacity_path, sizeof(opacity_path), "%s.opacity", layer_path);
+        map_format_path(depth_path, sizeof(depth_path), "%s.depth", layer_path);
+        map_format_path(tint_path, sizeof(tint_path), "%s.tint", layer_path);
+        yyjson_val *layer = yyjson_arr_get(layers, i);
+        if (!yyjson_is_obj(layer))
+            return map_error(ctx, layer_path, "sky layer must be an object");
+        if (map_obj_get(layer, "texture") == NULL)
+            return map_error(ctx, texture_path, "sky layer requires a texture reference");
+        if (!map_validate_asset_reference(ctx, layer, "texture", texture_path, "sky layer texture") ||
+            !map_validate_sky_layer_scroll(ctx, layer, scroll_path) ||
+            !map_validate_optional_positive_number(ctx, layer, "scale", scale_path, "sky layer scale") ||
+            !map_validate_sky_layer_unit_number(ctx, layer, "opacity", opacity_path, "sky layer opacity") ||
+            !map_validate_sky_layer_unit_number(ctx, layer, "depth", depth_path, "sky layer depth") ||
+            !map_validate_sky_layer_tint(ctx, layer, tint_path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool map_sky_mode_is_known(const char *mode)
+{
+    return SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "cubemap") == 0 || SDL_strcmp(mode, "layers") == 0;
+}
+
 static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *skybox = map_obj_get(root, "skybox");
@@ -1221,17 +1309,37 @@ static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
         return map_error(ctx, "$.skybox", "skybox must be an object or non-empty asset id/path");
     yyjson_val *size = map_obj_get(skybox, "size");
     yyjson_val *faces = map_obj_get(skybox, "faces");
-    if (!map_optional_non_empty_string(ctx, skybox, "id", "$.skybox.id", "skybox id") ||
+    yyjson_val *layers = map_obj_get(skybox, "layers");
+    const char *mode = map_json_string(skybox, "mode");
+    if (!map_optional_non_empty_string(ctx, skybox, "mode", "$.skybox.mode", "skybox mode") ||
+        (mode != NULL && !map_sky_mode_is_known(mode) &&
+         !map_error(ctx, "$.skybox.mode", "skybox mode must be one of none, cubemap, or layers")) ||
+        !map_optional_non_empty_string(ctx, skybox, "id", "$.skybox.id", "skybox id") ||
+        !map_optional_non_empty_string(ctx, skybox, "preset", "$.skybox.preset", "skybox preset") ||
         !map_validate_asset_reference(ctx, skybox, "asset", "$.skybox.asset", "skybox asset") ||
         (faces != NULL && !map_validate_skybox_faces(ctx, faces, "$.skybox.faces")) ||
+        (layers != NULL && !map_validate_sky_layers(ctx, layers, "$.skybox.layers")) ||
         (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 1.0) &&
          !map_error(ctx, "$.skybox.size", "skybox size must be greater than 1")) ||
         !map_validate_properties(ctx, map_obj_get(skybox, "properties"), "$.skybox"))
     {
         return false;
     }
-    if (faces == NULL && map_obj_get(skybox, "asset") == NULL)
-        return map_error(ctx, "$.skybox", "skybox requires either asset or faces");
+    const bool sky_disabled = mode != NULL && SDL_strcmp(mode, "none") == 0;
+    if (sky_disabled)
+        return true;
+    if (mode != NULL && SDL_strcmp(mode, "cubemap") == 0 && faces == NULL && map_obj_get(skybox, "asset") == NULL &&
+        map_json_string(skybox, "preset") == NULL)
+    {
+        return map_error(ctx, "$.skybox", "cubemap skybox requires preset, asset, or faces");
+    }
+    if (mode != NULL && SDL_strcmp(mode, "layers") == 0 && layers == NULL && map_json_string(skybox, "preset") == NULL)
+        return map_error(ctx, "$.skybox", "layered skybox requires preset or layers");
+    if (faces == NULL && layers == NULL && map_obj_get(skybox, "asset") == NULL &&
+        map_json_string(skybox, "preset") == NULL)
+    {
+        return map_error(ctx, "$.skybox", "skybox requires preset, asset, faces, or layers");
+    }
     return true;
 }
 
@@ -1645,6 +1753,123 @@ bool slayer3d_map_has_skybox(const slayer3d_map_document *document)
         return false;
     yyjson_val *root = yyjson_doc_get_root(document->doc);
     return map_obj_get(root, "skybox") != NULL;
+}
+
+static yyjson_val *map_sky_object(const slayer3d_map_document *document)
+{
+    if (document == NULL || document->doc == NULL)
+        return NULL;
+    yyjson_val *skybox = map_obj_get(yyjson_doc_get_root(document->doc), "skybox");
+    return yyjson_is_obj(skybox) ? skybox : NULL;
+}
+
+static bool map_sky_faces_read(yyjson_val *faces, const char *out_faces[6])
+{
+    static const char *const keys[] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+    bool complete = yyjson_is_obj(faces);
+    for (size_t i = 0; i < SDL_arraysize(keys); ++i)
+    {
+        out_faces[i] = complete ? map_json_string(faces, keys[i]) : NULL;
+        if (out_faces[i] == NULL || out_faces[i][0] == '\0')
+            complete = false;
+    }
+    return complete;
+}
+
+bool slayer3d_map_get_sky(const slayer3d_map_document *document, slayer3d_map_sky *out_sky)
+{
+    if (out_sky != NULL)
+    {
+        SDL_zero(*out_sky);
+        out_sky->mode = "none";
+        out_sky->size = 400.0f;
+    }
+    if (out_sky == NULL)
+        return false;
+
+    if (document != NULL && document->doc != NULL)
+    {
+        yyjson_val *skybox_value = map_obj_get(yyjson_doc_get_root(document->doc), "skybox");
+        if (yyjson_is_str(skybox_value) && yyjson_get_str(skybox_value)[0] != '\0')
+        {
+            out_sky->mode = "cubemap";
+            out_sky->asset = yyjson_get_str(skybox_value);
+            return true;
+        }
+    }
+
+    yyjson_val *skybox = map_sky_object(document);
+    if (skybox == NULL)
+        return false;
+
+    out_sky->preset = map_json_string(skybox, "preset");
+    out_sky->asset = map_json_string(skybox, "asset");
+    out_sky->has_faces = map_sky_faces_read(map_obj_get(skybox, "faces"), out_sky->faces);
+    yyjson_val *size = map_obj_get(skybox, "size");
+    if (yyjson_is_num(size) && yyjson_get_num(size) > 1.0)
+        out_sky->size = (float)yyjson_get_num(size);
+    yyjson_val *layers = map_obj_get(skybox, "layers");
+    if (yyjson_is_arr(layers))
+    {
+        const size_t count = yyjson_arr_size(layers);
+        out_sky->layer_count = count < SLAYER3D_MAP_SKY_MAX_LAYERS ? count : SLAYER3D_MAP_SKY_MAX_LAYERS;
+    }
+
+    const char *mode = map_json_string(skybox, "mode");
+    if (mode != NULL && map_sky_mode_is_known(mode))
+        out_sky->mode = mode;
+    else if (out_sky->layer_count > 0u)
+        out_sky->mode = "layers";
+    else if (out_sky->has_faces || out_sky->asset != NULL || out_sky->preset != NULL)
+        out_sky->mode = "cubemap";
+    return SDL_strcmp(out_sky->mode, "none") != 0 || mode != NULL;
+}
+
+bool slayer3d_map_get_sky_layer(const slayer3d_map_document *document, size_t index, slayer3d_map_sky_layer *out_layer)
+{
+    if (out_layer != NULL)
+    {
+        SDL_zero(*out_layer);
+        out_layer->scale = 1.0f;
+        out_layer->opacity = 1.0f;
+        out_layer->depth = 1.0f;
+        out_layer->tint = (slayer3d_color){255, 255, 255, 255};
+    }
+    if (out_layer == NULL)
+        return false;
+
+    yyjson_val *skybox = map_sky_object(document);
+    yyjson_val *layers = skybox != NULL ? map_obj_get(skybox, "layers") : NULL;
+    yyjson_val *layer = yyjson_is_arr(layers) ? yyjson_arr_get(layers, index) : NULL;
+    if (!yyjson_is_obj(layer) || index >= SLAYER3D_MAP_SKY_MAX_LAYERS)
+        return false;
+
+    out_layer->texture = map_json_string(layer, "texture");
+    yyjson_val *scroll = map_obj_get(layer, "scroll");
+    if (yyjson_is_arr(scroll) && yyjson_arr_size(scroll) == 2u)
+    {
+        out_layer->scroll_x = (float)yyjson_get_num(yyjson_arr_get(scroll, 0));
+        out_layer->scroll_y = (float)yyjson_get_num(yyjson_arr_get(scroll, 1));
+    }
+    yyjson_val *scale = map_obj_get(layer, "scale");
+    if (yyjson_is_num(scale) && yyjson_get_num(scale) > 0.0)
+        out_layer->scale = (float)yyjson_get_num(scale);
+    yyjson_val *opacity = map_obj_get(layer, "opacity");
+    if (yyjson_is_num(opacity) && yyjson_get_num(opacity) > 0.0 && yyjson_get_num(opacity) <= 1.0)
+        out_layer->opacity = (float)yyjson_get_num(opacity);
+    yyjson_val *depth = map_obj_get(layer, "depth");
+    if (yyjson_is_num(depth) && yyjson_get_num(depth) > 0.0 && yyjson_get_num(depth) <= 1.0)
+        out_layer->depth = (float)yyjson_get_num(depth);
+    yyjson_val *tint = map_obj_get(layer, "tint");
+    if (yyjson_is_arr(tint) && yyjson_arr_size(tint) == 3u)
+    {
+        out_layer->has_tint = true;
+        out_layer->tint.r = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 0)), 0, 255);
+        out_layer->tint.g = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 1)), 0, 255);
+        out_layer->tint.b = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 2)), 0, 255);
+        out_layer->tint.a = 255;
+    }
+    return out_layer->texture != NULL && out_layer->texture[0] != '\0';
 }
 
 size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document)
@@ -3719,7 +3944,72 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     return json;
 }
 
-static char *map_build_playable_scene_json(const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
+/* Copy the map's global sky into the generated scene's world.skybox using
+ * the scene schema's flat face keys so the runner renders the authored sky. */
+static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *world,
+                                       const slayer3d_map_document *document)
+{
+    slayer3d_map_sky sky;
+    if (!slayer3d_map_get_sky(document, &sky) || SDL_strcmp(sky.mode, "none") == 0)
+        return true;
+
+    yyjson_mut_val *skybox = yyjson_mut_obj(doc);
+    if (skybox == NULL || !yyjson_mut_obj_add_val(doc, world, "skybox", skybox) ||
+        !yyjson_mut_obj_add_strcpy(doc, skybox, "mode", sky.mode) ||
+        (sky.preset != NULL && !yyjson_mut_obj_add_strcpy(doc, skybox, "preset", sky.preset)) ||
+        !yyjson_mut_obj_add_real(doc, skybox, "size", sky.size))
+    {
+        return false;
+    }
+    if (sky.has_faces)
+    {
+        static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+        for (int i = 0; i < 6; ++i)
+        {
+            if (!yyjson_mut_obj_add_strcpy(doc, skybox, face_keys[i], sky.faces[i]))
+                return false;
+        }
+    }
+    if (sky.layer_count == 0u)
+        return true;
+
+    yyjson_mut_val *layers = yyjson_mut_arr(doc);
+    if (layers == NULL || !yyjson_mut_obj_add_val(doc, skybox, "layers", layers))
+        return false;
+    for (size_t i = 0; i < sky.layer_count; ++i)
+    {
+        slayer3d_map_sky_layer layer;
+        if (!slayer3d_map_get_sky_layer(document, i, &layer))
+            continue;
+        yyjson_mut_val *entry = yyjson_mut_obj(doc);
+        yyjson_mut_val *scroll = yyjson_mut_arr(doc);
+        if (entry == NULL || scroll == NULL || !yyjson_mut_arr_add_val(layers, entry) ||
+            !yyjson_mut_obj_add_strcpy(doc, entry, "texture", layer.texture) ||
+            !yyjson_mut_obj_add_val(doc, entry, "scroll", scroll) ||
+            !yyjson_mut_arr_add_real(doc, scroll, layer.scroll_x) ||
+            !yyjson_mut_arr_add_real(doc, scroll, layer.scroll_y) ||
+            !yyjson_mut_obj_add_real(doc, entry, "scale", layer.scale) ||
+            !yyjson_mut_obj_add_real(doc, entry, "opacity", layer.opacity) ||
+            !yyjson_mut_obj_add_real(doc, entry, "depth", layer.depth))
+        {
+            return false;
+        }
+        if (layer.has_tint)
+        {
+            yyjson_mut_val *tint = yyjson_mut_arr(doc);
+            if (tint == NULL || !yyjson_mut_obj_add_val(doc, entry, "tint", tint) ||
+                !yyjson_mut_arr_add_int(doc, tint, layer.tint.r) || !yyjson_mut_arr_add_int(doc, tint, layer.tint.g) ||
+                !yyjson_mut_arr_add_int(doc, tint, layer.tint.b))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static char *map_build_playable_scene_json(const slayer3d_map_document *document,
+                                           const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
                                            char *error_buffer, int error_buffer_size)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
@@ -3754,7 +4044,7 @@ static char *map_build_playable_scene_json(const slayer3d_map_lighting_build_pla
               map_game_add_string_array_entry(doc, actions, "action.move.right") &&
               map_game_add_string_array_entry(doc, actions, "action.jump") &&
               map_game_add_string_array_entry(doc, actions, "action.exit") &&
-              yyjson_mut_obj_add_val(doc, root, "world", world) &&
+              yyjson_mut_obj_add_val(doc, root, "world", world) && map_scene_add_world_skybox(doc, world, document) &&
               yyjson_mut_obj_add_val(doc, world, "brush_worlds", worlds) &&
               yyjson_mut_arr_add_val(worlds, brush_world) &&
               yyjson_mut_obj_add_strcpy(doc, brush_world, "world", "brush.slayermap") &&
@@ -3832,9 +4122,9 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
     size_t scene_size = 0u;
     char *game_json =
         map_build_playable_game_json(document, &scene, &lighting_plan, &game_size, error_buffer, error_buffer_size);
-    char *scene_json = game_json != NULL
-                           ? map_build_playable_scene_json(&lighting_plan, &scene_size, error_buffer, error_buffer_size)
-                           : NULL;
+    char *scene_json = game_json != NULL ? map_build_playable_scene_json(document, &lighting_plan, &scene_size,
+                                                                         error_buffer, error_buffer_size)
+                                         : NULL;
     size_t static_lighting_size = 0u;
     char *static_lighting_json = NULL;
     if (game_json != NULL && scene_json != NULL && lighting_plan.requires_static_bake &&

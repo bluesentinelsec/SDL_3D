@@ -166,6 +166,16 @@ static bool runner_prepare_playable_map(runner_state *state, char *error_buffer,
     }
 
     const bool ok = slayer3d_map_write_playable_game_files(map, output_dir, error_buffer, error_buffer_size);
+    /* scene_desc strings are borrowed from the map document, so log before
+     * the document is destroyed. */
+    if (ok)
+    {
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "SLAYER3D runner materialized map '%s' to '%s' (%llu playable brushes, %llu actors, player=%s)",
+                    state->args.map_path, output_dir, (unsigned long long)scene_desc.playable_brush_count,
+                    (unsigned long long)scene_desc.actor_count,
+                    scene_desc.player_actor_id != NULL ? scene_desc.player_actor_id : "<none>");
+    }
     slayer3d_map_destroy(map);
     if (!ok)
     {
@@ -179,11 +189,6 @@ static bool runner_prepare_playable_map(runner_state *state, char *error_buffer,
     state->args.data_asset_path = "asset://playable_map.game.json";
     state->args.scene = NULL;
     state->args.player_start = NULL;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SLAYER3D runner materialized map '%s' to '%s' (%llu playable brushes, %llu actors, player=%s)",
-                state->args.map_path, state->generated_map_output_dir,
-                (unsigned long long)scene_desc.playable_brush_count, (unsigned long long)scene_desc.actor_count,
-                scene_desc.player_actor_id != NULL ? scene_desc.player_actor_id : "<none>");
     return true;
 }
 
