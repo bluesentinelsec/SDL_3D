@@ -10,6 +10,7 @@
 
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "yyjson.h"
@@ -3429,6 +3430,134 @@ static bool map_material_is_used_by_playable_brushes(const slayer3d_map_document
     return false;
 }
 
+/* Playable exports materialize referenced asset files next to the generated
+ * game data so the output directory is a self-contained asset root. */
+#define MAP_PLAYABLE_ASSET_CAP 64
+
+typedef struct map_playable_asset_manifest
+{
+    const char *refs[MAP_PLAYABLE_ASSET_CAP];
+    size_t count;
+} map_playable_asset_manifest;
+
+static void map_playable_manifest_add(map_playable_asset_manifest *manifest, const char *reference)
+{
+    if (manifest == NULL || reference == NULL || reference[0] == '\0')
+        return;
+    for (size_t i = 0; i < manifest->count; ++i)
+    {
+        if (SDL_strcmp(manifest->refs[i], reference) == 0)
+            return;
+    }
+    if (manifest->count < MAP_PLAYABLE_ASSET_CAP)
+        manifest->refs[manifest->count++] = reference;
+}
+
+static char *map_path_dirname(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    const char *last = NULL;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            last = p;
+    }
+    if (last == NULL)
+        return SDL_strdup(".");
+    const size_t length = last == path ? 1u : (size_t)(last - path);
+    char *dir = (char *)SDL_malloc(length + 1u);
+    if (dir == NULL)
+        return NULL;
+    SDL_memcpy(dir, path, length);
+    dir[length] = '\0';
+    return dir;
+}
+
+static char *map_document_base_dir(const slayer3d_map_document *document)
+{
+    return map_path_dirname(document != NULL ? document->source_path : NULL);
+}
+
+/* Resolve a map texture/sky reference to a map-relative source path:
+ * asset catalog ids resolve to their authored path, and legacy
+ * "asset://" references from older editor saves drop the scheme. */
+static const char *map_playable_asset_reference(const slayer3d_map_document *document, const char *reference)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return NULL;
+    static const slayer3d_map_asset_kind kinds[] = {SLAYER3D_MAP_ASSET_TEXTURE, SLAYER3D_MAP_ASSET_SKYBOX};
+    for (size_t kind = 0; kind < SDL_arraysize(kinds); ++kind)
+    {
+        const size_t count = slayer3d_map_get_asset_count(document, kinds[kind]);
+        for (size_t i = 0; i < count; ++i)
+        {
+            slayer3d_map_asset asset;
+            if (slayer3d_map_get_asset(document, kinds[kind], i, &asset) && asset.id != NULL &&
+                SDL_strcmp(asset.id, reference) == 0)
+            {
+                reference = asset.path;
+                break;
+            }
+        }
+    }
+    if (reference != NULL && SDL_strncmp(reference, "asset://", 8u) == 0)
+        reference += 8u;
+    return reference != NULL && reference[0] != '\0' ? reference : NULL;
+}
+
+static bool map_playable_asset_source_exists(const char *base_dir, const char *reference)
+{
+    if (base_dir == NULL || reference == NULL)
+        return false;
+    char *path = map_join_path(base_dir, reference);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool exists = path != NULL && SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_FILE;
+    SDL_free(path);
+    return exists;
+}
+
+static bool map_reference_is_absolute(const char *reference)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return false;
+    if (reference[0] == '/' || reference[0] == '\\')
+        return true;
+    return SDL_strlen(reference) > 2u && reference[1] == ':';
+}
+
+/* Resolve a map asset reference to the string to emit in the playable game
+ * data, recording map-relative sources for copying. Absolute paths pass
+ * through verbatim (they already resolve for any consumer on this host).
+ * asset:// and project-relative references are materialized next to the
+ * generated data and re-emitted as asset:// paths. Returns NULL, with a
+ * warning, when the source cannot be found so callers degrade gracefully. */
+static const char *map_playable_claim_asset(const slayer3d_map_document *document, const char *base_dir,
+                                            map_playable_asset_manifest *manifest, const char *reference,
+                                            const char *description, char *buffer, size_t buffer_size)
+{
+    const char *resolved = map_playable_asset_reference(document, reference);
+    if (resolved == NULL)
+        return NULL;
+    if (map_reference_is_absolute(resolved))
+    {
+        /* Absolute sources are not materialized but still resolve as-is. */
+        SDL_strlcpy(buffer, resolved, buffer_size);
+        return buffer;
+    }
+    if (!map_playable_asset_source_exists(base_dir, resolved))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Slayer3D playable export: %s '%s' does not exist next to the map; continuing without it",
+                    description, resolved);
+        return NULL;
+    }
+    map_playable_manifest_add(manifest, resolved);
+    SDL_snprintf(buffer, buffer_size, "asset://%s", resolved);
+    return buffer;
+}
+
 static bool map_game_add_default_material(yyjson_mut_doc *doc, yyjson_mut_val *materials)
 {
     yyjson_mut_val *material = yyjson_mut_obj(doc);
@@ -3438,7 +3567,8 @@ static bool map_game_add_default_material(yyjson_mut_doc *doc, yyjson_mut_val *m
 }
 
 static bool map_game_add_materials(yyjson_mut_doc *doc, yyjson_mut_val *materials,
-                                   const slayer3d_map_document *document)
+                                   const slayer3d_map_document *document, const char *base_dir,
+                                   map_playable_asset_manifest *manifest)
 {
     const size_t count = slayer3d_map_get_material_count(document);
     if (count == 0u)
@@ -3462,17 +3592,21 @@ static bool map_game_add_materials(yyjson_mut_doc *doc, yyjson_mut_val *material
         {
             return false;
         }
-        if (map_material.texture != NULL && map_material.texture[0] != '\0' &&
-            !yyjson_mut_obj_add_strcpy(doc, material, "texture", map_material.texture))
+        if (map_material.texture != NULL && map_material.texture[0] != '\0')
         {
-            return false;
+            char texture_buffer[1024];
+            const char *texture = map_playable_claim_asset(document, base_dir, manifest, map_material.texture,
+                                                           "material texture", texture_buffer, sizeof(texture_buffer));
+            if (texture != NULL && !yyjson_mut_obj_add_strcpy(doc, material, "texture", texture))
+                return false;
         }
         ++emitted;
     }
     return emitted > 0u || map_game_add_default_material(doc, materials);
 }
 
-static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_document *document)
+static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_map_document *document,
+                                     const char *base_dir, map_playable_asset_manifest *manifest)
 {
     yyjson_mut_val *worlds = yyjson_mut_arr(doc);
     yyjson_mut_val *world = yyjson_mut_obj(doc);
@@ -3485,7 +3619,8 @@ static bool map_game_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *root, 
         !yyjson_mut_obj_add_real(doc, world, "meters_per_unit", 1.0) ||
         !yyjson_mut_obj_add_real(doc, world, "visibility_cell_size", 2.0) ||
         !yyjson_mut_obj_add_val(doc, world, "materials", materials) ||
-        !map_game_add_materials(doc, materials, document) || !yyjson_mut_obj_add_val(doc, world, "brushes", brushes))
+        !map_game_add_materials(doc, materials, document, base_dir, manifest) ||
+        !yyjson_mut_obj_add_val(doc, world, "brushes", brushes))
     {
         return false;
     }
@@ -3901,7 +4036,8 @@ static bool map_game_add_app(yyjson_mut_doc *doc, yyjson_mut_val *root)
 }
 
 static char *map_build_playable_game_json(const slayer3d_map_document *document,
-                                          const slayer3d_map_playable_scene_desc *scene,
+                                          const slayer3d_map_playable_scene_desc *scene, const char *base_dir,
+                                          map_playable_asset_manifest *manifest,
                                           const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
                                           char *error_buffer, int error_buffer_size)
 {
@@ -3924,13 +4060,13 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
         yyjson_mut_doc_free(doc);
         return NULL;
     }
-    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.game.v0") &&
-              yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
-              yyjson_mut_obj_add_strcpy(doc, metadata, "name", "SlayerMap Playable") && map_game_add_app(doc, root) &&
-              map_game_add_world(doc, root, document, &global, lighting_plan) &&
-              map_game_add_render(doc, root, &global) && map_game_add_input(doc, root) &&
-              map_game_add_player_entity(doc, root, scene) && map_game_add_brush_world(doc, root, document) &&
-              map_game_add_scenes_section(doc, root);
+    bool ok =
+        yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.game.v0") &&
+        yyjson_mut_obj_add_val(doc, root, "metadata", metadata) &&
+        yyjson_mut_obj_add_strcpy(doc, metadata, "name", "SlayerMap Playable") && map_game_add_app(doc, root) &&
+        map_game_add_world(doc, root, document, &global, lighting_plan) && map_game_add_render(doc, root, &global) &&
+        map_game_add_input(doc, root) && map_game_add_player_entity(doc, root, scene) &&
+        map_game_add_brush_world(doc, root, document, base_dir, manifest) && map_game_add_scenes_section(doc, root);
     size_t size = 0u;
     char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
     yyjson_mut_doc_free(doc);
@@ -3947,7 +4083,8 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
 /* Copy the map's global sky into the generated scene's world.skybox using
  * the scene schema's flat face keys so the runner renders the authored sky. */
 static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *world,
-                                       const slayer3d_map_document *document)
+                                       const slayer3d_map_document *document, const char *base_dir,
+                                       map_playable_asset_manifest *manifest)
 {
     slayer3d_map_sky sky;
     if (!slayer3d_map_get_sky(document, &sky) || SDL_strcmp(sky.mode, "none") == 0)
@@ -3972,9 +4109,17 @@ static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *worl
     if (sky.has_faces)
     {
         static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+        char face_buffers[6][1024];
+        bool complete = true;
         for (int i = 0; i < 6; ++i)
         {
-            if (!yyjson_mut_obj_add_strcpy(doc, skybox, face_keys[i], sky.faces[i]))
+            const char *face = map_playable_claim_asset(document, base_dir, manifest, sky.faces[i], "skybox face",
+                                                        face_buffers[i], sizeof(face_buffers[i]));
+            complete = complete && face != NULL;
+        }
+        for (int i = 0; complete && i < 6; ++i)
+        {
+            if (!yyjson_mut_obj_add_strcpy(doc, skybox, face_keys[i], face_buffers[i]))
                 return false;
         }
     }
@@ -3989,10 +4134,15 @@ static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *worl
         slayer3d_map_sky_layer layer;
         if (!slayer3d_map_get_sky_layer(document, i, &layer))
             continue;
+        char texture_buffer[1024];
+        const char *texture = map_playable_claim_asset(document, base_dir, manifest, layer.texture, "sky layer texture",
+                                                       texture_buffer, sizeof(texture_buffer));
+        if (texture == NULL)
+            continue;
         yyjson_mut_val *entry = yyjson_mut_obj(doc);
         yyjson_mut_val *scroll = yyjson_mut_arr(doc);
         if (entry == NULL || scroll == NULL || !yyjson_mut_arr_add_val(layers, entry) ||
-            !yyjson_mut_obj_add_strcpy(doc, entry, "texture", layer.texture) ||
+            !yyjson_mut_obj_add_strcpy(doc, entry, "texture", texture) ||
             !yyjson_mut_obj_add_val(doc, entry, "scroll", scroll) ||
             !yyjson_mut_arr_add_real(doc, scroll, layer.scroll_x) ||
             !yyjson_mut_arr_add_real(doc, scroll, layer.scroll_y) ||
@@ -4016,7 +4166,8 @@ static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *worl
     return true;
 }
 
-static char *map_build_playable_scene_json(const slayer3d_map_document *document,
+static char *map_build_playable_scene_json(const slayer3d_map_document *document, const char *base_dir,
+                                           map_playable_asset_manifest *manifest,
                                            const slayer3d_map_lighting_build_plan *lighting_plan, size_t *out_size,
                                            char *error_buffer, int error_buffer_size)
 {
@@ -4052,7 +4203,8 @@ static char *map_build_playable_scene_json(const slayer3d_map_document *document
               map_game_add_string_array_entry(doc, actions, "action.move.right") &&
               map_game_add_string_array_entry(doc, actions, "action.jump") &&
               map_game_add_string_array_entry(doc, actions, "action.exit") &&
-              yyjson_mut_obj_add_val(doc, root, "world", world) && map_scene_add_world_skybox(doc, world, document) &&
+              yyjson_mut_obj_add_val(doc, root, "world", world) &&
+              map_scene_add_world_skybox(doc, world, document, base_dir, manifest) &&
               yyjson_mut_obj_add_val(doc, world, "brush_worlds", worlds) &&
               yyjson_mut_arr_add_val(worlds, brush_world) &&
               yyjson_mut_obj_add_strcpy(doc, brush_world, "world", "brush.slayermap") &&
@@ -4071,6 +4223,44 @@ static char *map_build_playable_scene_json(const slayer3d_map_document *document
     if (out_size != NULL)
         *out_size = size;
     return json;
+}
+
+static bool map_playable_copy_asset_file(const char *source_path, const char *target_path, char *error_buffer,
+                                         int error_buffer_size)
+{
+    size_t size = 0u;
+    void *bytes = SDL_LoadFile(source_path, &size);
+    if (bytes == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "failed to read playable asset '%s'", source_path);
+        return false;
+    }
+    const bool ok = map_write_text_file(target_path, (const char *)bytes, size, error_buffer, error_buffer_size);
+    SDL_free(bytes);
+    return ok;
+}
+
+static bool map_playable_copy_assets(const char *base_dir, const char *output_dir,
+                                     const map_playable_asset_manifest *manifest, char *error_buffer,
+                                     int error_buffer_size)
+{
+    for (size_t i = 0; i < manifest->count; ++i)
+    {
+        char *source_path = map_join_path(base_dir, manifest->refs[i]);
+        char *target_path = map_join_path(output_dir, manifest->refs[i]);
+        char *target_dir = target_path != NULL ? map_path_dirname(target_path) : NULL;
+        bool ok = source_path != NULL && target_path != NULL && target_dir != NULL;
+        if (ok)
+            ok = map_make_directory_recursive(target_dir);
+        if (ok)
+            ok = map_playable_copy_asset_file(source_path, target_path, error_buffer, error_buffer_size);
+        SDL_free(source_path);
+        SDL_free(target_path);
+        SDL_free(target_dir);
+        if (!ok)
+            return false;
+    }
+    return true;
 }
 
 bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *document, const char *output_dir,
@@ -4126,12 +4316,27 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
         return false;
     }
 
+    char *base_dir = map_document_base_dir(document);
+    map_playable_asset_manifest *manifest =
+        (map_playable_asset_manifest *)SDL_calloc(1u, sizeof(map_playable_asset_manifest));
+    if (manifest == NULL)
+    {
+        SDL_free(base_dir);
+        SDL_free(scenes_dir);
+        SDL_free(lighting_dir);
+        SDL_free(game_path);
+        SDL_free(scene_path);
+        SDL_free(static_lighting_path);
+        map_set_error(error_buffer, error_buffer_size, "failed to allocate playable asset manifest");
+        return false;
+    }
+
     size_t game_size = 0u;
     size_t scene_size = 0u;
-    char *game_json =
-        map_build_playable_game_json(document, &scene, &lighting_plan, &game_size, error_buffer, error_buffer_size);
-    char *scene_json = game_json != NULL ? map_build_playable_scene_json(document, &lighting_plan, &scene_size,
-                                                                         error_buffer, error_buffer_size)
+    char *game_json = map_build_playable_game_json(document, &scene, base_dir, manifest, &lighting_plan, &game_size,
+                                                   error_buffer, error_buffer_size);
+    char *scene_json = game_json != NULL ? map_build_playable_scene_json(document, base_dir, manifest, &lighting_plan,
+                                                                         &scene_size, error_buffer, error_buffer_size)
                                          : NULL;
     size_t static_lighting_size = 0u;
     char *static_lighting_json = NULL;
@@ -4157,9 +4362,13 @@ bool slayer3d_map_write_playable_game_files(const slayer3d_map_document *documen
          (static_lighting_json != NULL && map_write_text_file(static_lighting_path, static_lighting_json,
                                                               static_lighting_size, error_buffer, error_buffer_size)));
 
+    ok = ok && map_playable_copy_assets(base_dir, output_dir, manifest, error_buffer, error_buffer_size);
+
     free(game_json);
     free(scene_json);
     free(static_lighting_json);
+    SDL_free(base_dir);
+    SDL_free(manifest);
     SDL_free(scenes_dir);
     SDL_free(lighting_dir);
     SDL_free(game_path);

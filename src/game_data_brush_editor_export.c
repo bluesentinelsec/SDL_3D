@@ -1068,8 +1068,90 @@ static bool export_add_map_color(yyjson_mut_doc *doc, yyjson_mut_val *obj, const
            yyjson_mut_arr_add_real(doc, arr, map_color_channel(value.w)) && yyjson_mut_obj_add_val(doc, obj, key, arr);
 }
 
+/* Saved maps are self-contained: exported asset references are rewritten to
+ * map-relative paths and the referenced files are copied next to the map. */
+#define EXPORT_ASSET_COPY_CAP 96
+
+typedef struct export_asset_copy
+{
+    char relative[512];
+    char source[1024];
+} export_asset_copy;
+
+typedef struct export_asset_copies
+{
+    export_asset_copy entries[EXPORT_ASSET_COPY_CAP];
+    int count;
+} export_asset_copies;
+
+static void export_asset_copies_add(export_asset_copies *copies, const char *relative, const char *source)
+{
+    if (copies == NULL || relative == NULL || relative[0] == '\0' || source == NULL || source[0] == '\0')
+        return;
+    for (int i = 0; i < copies->count; ++i)
+    {
+        if (SDL_strcmp(copies->entries[i].relative, relative) == 0)
+            return;
+    }
+    if (copies->count >= EXPORT_ASSET_COPY_CAP)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Map export asset copy list is full; skipping '%s'", relative);
+        return;
+    }
+    export_asset_copy *entry = &copies->entries[copies->count++];
+    SDL_strlcpy(entry->relative, relative, sizeof(entry->relative));
+    SDL_strlcpy(entry->source, source, sizeof(entry->source));
+}
+
+static bool export_reference_is_absolute(const char *reference)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return false;
+    if (reference[0] == '/' || reference[0] == '\\')
+        return true;
+    return SDL_strlen(reference) > 2u && reference[1] == ':';
+}
+
+static const char *export_reference_basename(const char *reference)
+{
+    const char *base = reference;
+    for (const char *p = reference; p != NULL && *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    }
+    return base;
+}
+
+/* Rewrite an editor asset reference to a map-relative path and record the
+ * file for copying beside the saved map. Absolute sources are placed under
+ * @p fallback_dir using their file name. Returns NULL for empty references. */
+static const char *export_map_asset_reference(const char *reference, const char *fallback_dir,
+                                              export_asset_copies *copies, char *buffer, size_t buffer_size)
+{
+    if (reference == NULL || reference[0] == '\0')
+        return NULL;
+    if (SDL_strncmp(reference, "asset://", 8u) == 0)
+    {
+        SDL_strlcpy(buffer, reference + 8u, buffer_size);
+        export_asset_copies_add(copies, buffer, reference);
+        return buffer[0] != '\0' ? buffer : NULL;
+    }
+    if (export_reference_is_absolute(reference))
+    {
+        SDL_snprintf(buffer, buffer_size, "%s/%s", fallback_dir, export_reference_basename(reference));
+        export_asset_copies_add(copies, buffer, reference);
+        return buffer;
+    }
+    char source[1024];
+    SDL_snprintf(source, sizeof(source), "asset://%s", reference);
+    SDL_strlcpy(buffer, reference, buffer_size);
+    export_asset_copies_add(copies, buffer, source);
+    return buffer;
+}
+
 static bool export_add_map_materials(yyjson_mut_doc *doc, yyjson_mut_val *materials,
-                                     const slayer3d_game_data_brush_world *world)
+                                     const slayer3d_game_data_brush_world *world, export_asset_copies *copies)
 {
     if (doc == NULL || materials == NULL || world == NULL)
         return false;
@@ -1078,10 +1160,13 @@ static bool export_add_map_materials(yyjson_mut_doc *doc, yyjson_mut_val *materi
         const slayer3d_game_data_brush_material *material = &world->materials[i];
         if (material->name == NULL || material->name[0] == '\0')
             continue;
+        char texture_buffer[512];
+        const char *texture =
+            export_map_asset_reference(material->texture, "textures", copies, texture_buffer, sizeof(texture_buffer));
         yyjson_mut_val *obj = yyjson_mut_obj(doc);
         if (obj == NULL || !yyjson_mut_arr_add_val(materials, obj) ||
             !yyjson_mut_obj_add_strcpy(doc, obj, "id", material->name) ||
-            !export_add_optional_string(doc, obj, "texture", material->texture) ||
+            !export_add_optional_string(doc, obj, "texture", texture) ||
             !export_add_map_color(doc, obj, "color", material->albedo))
         {
             return false;
@@ -1506,33 +1591,40 @@ static bool export_add_map_lights(yyjson_mut_doc *doc, yyjson_mut_val *lights,
     return true;
 }
 
-static bool export_sky_reference_is_portable(const char *reference)
-{
-    if (reference == NULL || reference[0] == '\0')
-        return false;
-    if (reference[0] == '/' || reference[0] == '\\')
-        return false;
-    if (SDL_strlen(reference) > 2u && reference[1] == ':')
-        return false;
-    return true;
-}
-
 /* Faces and layers may reference declared image assets by id at runtime;
- * saved maps write the underlying asset path so any map consumer can
- * resolve the sky without the editor shell's image asset catalog. */
-static const char *export_sky_texture_reference(const slayer3d_game_data_runtime *runtime, const char *reference)
+ * saved maps write the underlying asset path, rewritten map-relative, so
+ * any map consumer can resolve the sky without the editor shell. Absolute
+ * sources land under skyboxes/<directory>/<file> beside the map. */
+static const char *export_sky_texture_reference(const slayer3d_game_data_runtime *runtime, const char *reference,
+                                                export_asset_copies *copies, char *buffer, size_t buffer_size)
 {
     if (reference == NULL || reference[0] == '\0')
         return NULL;
     slayer3d_game_data_image_asset asset;
     if (slayer3d_game_data_get_image_asset(runtime, reference, &asset) && asset.path != NULL && asset.path[0] != '\0')
         reference = asset.path;
-    return export_sky_reference_is_portable(reference) ? reference : NULL;
+    char fallback_dir[512] = "skyboxes";
+    if (export_reference_is_absolute(reference))
+    {
+        /* Keep the skybox's directory name so faces from one skybox stay
+         * grouped under skyboxes/<name>/ next to the map. */
+        char parent[512];
+        SDL_strlcpy(parent, reference, sizeof(parent));
+        char *leaf_split = SDL_strrchr(parent, '/');
+        if (leaf_split == NULL)
+            leaf_split = SDL_strrchr(parent, '\\');
+        if (leaf_split != NULL)
+        {
+            *leaf_split = '\0';
+            SDL_snprintf(fallback_dir, sizeof(fallback_dir), "skyboxes/%s", export_reference_basename(parent));
+        }
+    }
+    return export_map_asset_reference(reference, fallback_dir, copies, buffer, buffer_size);
 }
 
 static bool export_add_map_sky_layers(yyjson_mut_doc *doc, yyjson_mut_val *obj,
                                       const slayer3d_game_data_runtime *runtime,
-                                      const slayer3d_game_data_scene_skybox *skybox)
+                                      const slayer3d_game_data_scene_skybox *skybox, export_asset_copies *copies)
 {
     yyjson_mut_val *layers = yyjson_mut_arr(doc);
     if (layers == NULL || !yyjson_mut_obj_add_val(doc, obj, "layers", layers))
@@ -1540,7 +1632,9 @@ static bool export_add_map_sky_layers(yyjson_mut_doc *doc, yyjson_mut_val *obj,
     for (int i = 0; i < skybox->layer_count; ++i)
     {
         const slayer3d_game_data_scene_sky_layer *layer = &skybox->layers[i];
-        const char *texture = export_sky_texture_reference(runtime, layer->texture);
+        char texture_buffer[512];
+        const char *texture =
+            export_sky_texture_reference(runtime, layer->texture, copies, texture_buffer, sizeof(texture_buffer));
         if (texture == NULL)
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
@@ -1583,18 +1677,21 @@ static int export_portable_sky_layer_count(const slayer3d_game_data_runtime *run
     int count = 0;
     for (int i = 0; i < skybox->layer_count; ++i)
     {
-        if (export_sky_texture_reference(runtime, skybox->layers[i].texture) != NULL)
+        char probe[512];
+        if (export_sky_texture_reference(runtime, skybox->layers[i].texture, NULL, probe, sizeof(probe)) != NULL)
             ++count;
     }
     return count;
 }
 
-static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_game_data_runtime *runtime)
+static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, const slayer3d_game_data_runtime *runtime,
+                                  export_asset_copies *copies)
 {
     slayer3d_game_data_scene_skybox skybox;
     if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
         return true;
 
+    char face_buffers[6][512];
     const char *faces[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
     bool faces_portable = skybox.has_faces;
     if (skybox.has_faces)
@@ -1602,7 +1699,8 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
         const char *authored[6] = {skybox.pos_x, skybox.neg_x, skybox.pos_y, skybox.neg_y, skybox.pos_z, skybox.neg_z};
         for (int i = 0; i < 6; ++i)
         {
-            faces[i] = export_sky_texture_reference(runtime, authored[i]);
+            faces[i] =
+                export_sky_texture_reference(runtime, authored[i], copies, face_buffers[i], sizeof(face_buffers[i]));
             if (faces[i] == NULL)
                 faces_portable = false;
         }
@@ -1646,7 +1744,7 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
                 return false;
         }
     }
-    if (skybox.layer_count > 0 && !export_add_map_sky_layers(doc, obj, runtime, &skybox))
+    if (skybox.layer_count > 0 && !export_add_map_sky_layers(doc, obj, runtime, &skybox, copies))
         return false;
     return true;
 }
@@ -1809,9 +1907,10 @@ static bool export_add_map_prefabs(yyjson_mut_doc *doc, yyjson_mut_val *prefabs,
     return true;
 }
 
-bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_runtime *runtime,
+static bool export_editable_level_map_json_with_assets(const slayer3d_game_data_runtime *runtime,
                                                        const char *world_name, char **out_json, size_t *out_size,
-                                                       char *error_buffer, int error_buffer_size)
+                                                       export_asset_copies *copies, char *error_buffer,
+                                                       int error_buffer_size)
 {
     if (out_json != NULL)
         *out_json = NULL;
@@ -1872,7 +1971,7 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
         yyjson_mut_obj_add_strcpy(doc, metadata, "name", world_name != NULL ? world_name : "Untitled Map") &&
         yyjson_mut_obj_add_strcpy(doc, root, "coordinate_system", "y_up") &&
         export_add_map_global_state(doc, root, runtime) && yyjson_mut_obj_add_val(doc, root, "materials", materials) &&
-        export_add_map_materials(doc, materials, &world_runtime->desc) &&
+        export_add_map_materials(doc, materials, &world_runtime->desc, copies) &&
         yyjson_mut_obj_add_val(doc, root, "brushes", brushes) &&
         (world_runtime->editor_has_source_model
              ? export_add_map_brushes_from_source(doc, brushes, world_runtime, error_buffer, error_buffer_size)
@@ -1880,7 +1979,7 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
         yyjson_mut_obj_add_val(doc, root, "actors", actors) &&
         export_add_map_player_start_actors(doc, actors, runtime) &&
         export_add_map_editor_actors(doc, actors, runtime) && yyjson_mut_obj_add_val(doc, root, "lights", lights) &&
-        export_add_map_lights(doc, lights, runtime) && export_add_map_skybox(doc, root, runtime) &&
+        export_add_map_lights(doc, lights, runtime) && export_add_map_skybox(doc, root, runtime, copies) &&
         yyjson_mut_obj_add_val(doc, root, "effects", effects) && export_add_map_effects(doc, effects, runtime) &&
         yyjson_mut_obj_add_val(doc, root, "connections", connections) &&
         export_add_map_connections(doc, connections, runtime) &&
@@ -1921,6 +2020,89 @@ bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_
     return true;
 }
 
+bool slayer3d_game_data_export_editable_level_map_json(const slayer3d_game_data_runtime *runtime,
+                                                       const char *world_name, char **out_json, size_t *out_size,
+                                                       char *error_buffer, int error_buffer_size)
+{
+    return export_editable_level_map_json_with_assets(runtime, world_name, out_json, out_size, NULL, error_buffer,
+                                                      error_buffer_size);
+}
+
+static bool export_copy_asset_bytes(const slayer3d_game_data_runtime *runtime, const char *source, void **out_bytes,
+                                    size_t *out_size)
+{
+    *out_bytes = NULL;
+    *out_size = 0u;
+    if (SDL_strncmp(source, "asset://", 8u) == 0)
+    {
+        if (runtime->assets == NULL)
+            return false;
+        slayer3d_asset_buffer buffer;
+        SDL_zero(buffer);
+        char error[256];
+        error[0] = '\0';
+        if (!slayer3d_asset_resolver_read_file(runtime->assets, source, &buffer, error, (int)sizeof(error)))
+            return false;
+        void *bytes = SDL_malloc(buffer.size > 0u ? buffer.size : 1u);
+        if (bytes == NULL)
+        {
+            slayer3d_asset_buffer_free(&buffer);
+            return false;
+        }
+        SDL_memcpy(bytes, buffer.data, buffer.size);
+        *out_bytes = bytes;
+        *out_size = buffer.size;
+        slayer3d_asset_buffer_free(&buffer);
+        return true;
+    }
+    *out_bytes = SDL_LoadFile(source, out_size);
+    return *out_bytes != NULL;
+}
+
+/* Copy the referenced asset files next to the saved map so the map's
+ * project-relative references resolve for any consumer. Copy failures warn
+ * and continue: the map itself saved successfully. */
+static int export_materialize_assets(slayer3d_game_data_runtime *runtime, const char *map_path,
+                                     const export_asset_copies *copies)
+{
+    char *map_dir = editor_save_parent_directory(map_path);
+    if (map_dir == NULL)
+        return 0;
+
+    int copied = 0;
+    for (int i = 0; i < copies->count; ++i)
+    {
+        const export_asset_copy *entry = &copies->entries[i];
+        void *bytes = NULL;
+        size_t size = 0u;
+        char target[1024];
+        SDL_snprintf(target, sizeof(target), "%s/%s", map_dir, entry->relative);
+        if (!export_copy_asset_bytes(runtime, entry->source, &bytes, &size))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Map save could not read asset '%s' for '%s'", entry->source,
+                        entry->relative);
+            continue;
+        }
+        char *target_dir = editor_save_parent_directory(target);
+        bool ok = target_dir != NULL && editor_save_make_directory_recursive(target_dir);
+        if (ok)
+        {
+            SDL_IOStream *stream = SDL_IOFromFile(target, "wb");
+            ok = stream != NULL && SDL_WriteIO(stream, bytes, size) == size;
+            if (stream != NULL)
+                SDL_CloseIO(stream);
+        }
+        if (ok)
+            ++copied;
+        else
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Map save could not copy asset '%s'", entry->relative);
+        SDL_free(target_dir);
+        SDL_free(bytes);
+    }
+    SDL_free(map_dir);
+    return copied;
+}
+
 bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                      const char *path, size_t *out_size, char *error_buffer,
                                                      int error_buffer_size)
@@ -1930,16 +2112,31 @@ bool slayer3d_game_data_save_editable_level_map_file(slayer3d_game_data_runtime 
 
     char *json = NULL;
     size_t size = 0u;
-    if (!slayer3d_game_data_export_editable_level_map_json(runtime, world_name, &json, &size, error_buffer,
-                                                           error_buffer_size))
+    export_asset_copies *copies = (export_asset_copies *)SDL_calloc(1u, sizeof(export_asset_copies));
+    if (copies == NULL)
     {
+        set_error(error_buffer, error_buffer_size, "failed to allocate map save asset list");
+        return false;
+    }
+    if (!export_editable_level_map_json_with_assets(runtime, world_name, &json, &size, copies, error_buffer,
+                                                    error_buffer_size))
+    {
+        SDL_free(copies);
         return false;
     }
 
     const bool ok = editor_save_bytes_atomic(path, json, size, "Slayer3D map", error_buffer, error_buffer_size);
     SDL_free(json);
     if (!ok)
+    {
+        SDL_free(copies);
         return false;
+    }
+    const int copied = export_materialize_assets(runtime, path, copies);
+    if (copied > 0)
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Map save copied %d asset file%s next to '%s'", copied,
+                    copied == 1 ? "" : "s", path);
+    SDL_free(copies);
     if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
         return false;
     if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
