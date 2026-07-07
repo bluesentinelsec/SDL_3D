@@ -4,6 +4,8 @@
 
 #include "slayer3d/font.h"
 
+#include "texture_internal.h"
+
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
@@ -25,7 +27,6 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
-    Uint32 prev_generation = 0;
 
     /* Scale the atlas so all 95 ASCII glyphs fit at any pixel size.
      * With 2× oversampling each glyph cell is roughly (pixel_size*2)².
@@ -50,7 +51,6 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
         return SDL_InvalidParamError("data");
     }
 
-    prev_generation = out->atlas_texture.generation;
     SDL_zerop(out);
 
     if (!stbtt_InitFont(&info, (const unsigned char *)data, 0))
@@ -128,7 +128,7 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
     out->atlas_texture.filter = SLAYER3D_TEXTURE_FILTER_BILINEAR;
     out->atlas_texture.wrap_u = SLAYER3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.wrap_v = SLAYER3D_TEXTURE_WRAP_CLAMP;
-    out->atlas_texture.generation = prev_generation ? prev_generation + 1U : 1U;
+    out->atlas_texture.generation = slayer3d_texture_next_generation();
 
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w,
                  atlas_h, SLAYER3D_FONT_CHAR_COUNT);

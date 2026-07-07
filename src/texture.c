@@ -3,10 +3,21 @@
 #include <stddef.h>
 
 #include <SDL3/SDL_assert.h>
+#include <SDL3/SDL_atomic.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "slayer3d/asset.h"
+
+/* Texture generations are process-unique, not per-struct counters. Cached
+ * renderer state is keyed by texture address plus generation, and texture
+ * structs live by value inside caches that recycle slots, so a recycled
+ * address must never repeat a generation the renderer may have cached. */
+Uint32 slayer3d_texture_next_generation(void)
+{
+    static SDL_AtomicInt counter;
+    return (Uint32)SDL_AddAtomicInt(&counter, 1) + 1u;
+}
 #include "texture_internal.h"
 
 static bool slayer3d_texture_filter_valid(slayer3d_texture_filter filter)
@@ -188,7 +199,7 @@ bool slayer3d_create_texture_from_image(const slayer3d_image *image, slayer3d_te
     SDL_memcpy(out->pixels, image->pixels, bytes);
     out->width = image->width;
     out->height = image->height;
-    out->generation++;
+    out->generation = slayer3d_texture_next_generation();
     return true;
 }
 
@@ -224,11 +235,10 @@ void slayer3d_free_texture(slayer3d_texture2d *texture)
         return;
     }
 
-    Uint32 next_gen = texture->generation + 1;
     slayer3d_texture_free_mips(texture);
     SDL_free(texture->pixels);
     SDL_zerop(texture);
-    texture->generation = next_gen;
+    texture->generation = slayer3d_texture_next_generation();
 }
 
 bool slayer3d_set_texture_filter(slayer3d_texture2d *texture, slayer3d_texture_filter filter)
@@ -243,7 +253,7 @@ bool slayer3d_set_texture_filter(slayer3d_texture2d *texture, slayer3d_texture_f
     }
 
     texture->filter = filter;
-    texture->generation++;
+    texture->generation = slayer3d_texture_next_generation();
 
     if (filter == SLAYER3D_TEXTURE_FILTER_TRILINEAR && texture->mip_levels == NULL && texture->pixels != NULL)
     {
@@ -273,7 +283,7 @@ bool slayer3d_set_texture_wrap(slayer3d_texture2d *texture, slayer3d_texture_wra
 
     texture->wrap_u = wrap_u;
     texture->wrap_v = wrap_v;
-    texture->generation++;
+    texture->generation = slayer3d_texture_next_generation();
     return true;
 }
 
