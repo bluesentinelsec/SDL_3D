@@ -491,6 +491,10 @@ int slayer3d_runner_main(int argc, char **argv)
         return 1;
     }
 
+    /* Runner-hosted games are interactive apps: browser builds must yield to
+     * the browser between frames instead of blocking the tab. */
+    state.config.browser_main_loop = true;
+
     slayer3d_game_callbacks callbacks;
     SDL_zero(callbacks);
     callbacks.init = runner_init;

@@ -1685,6 +1685,10 @@ bool slayer3d_data_game_runtime_process_event(slayer3d_data_game_runtime *runtim
 
     if (request->failed)
     {
+        char console_message[512];
+        SDL_snprintf(console_message, sizeof(console_message), "File dialog failed: %s",
+                     message[0] != '\0' ? message : "unknown error");
+        slayer3d_game_data_editor_publish_console_message(runtime->data, console_message);
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D file dialog failed: %s",
                     message[0] != '\0' ? message : "unknown error");
     }

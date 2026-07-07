@@ -552,6 +552,56 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     slayer3d_copy_runtime_dlls(slayer3d_editor)
 endif()
 
+if(EMSCRIPTEN)
+    # Browser build of the editor. Embedded asset packs require the native
+    # slayer3d_pack tool, so the web editor instead preloads the canonical
+    # editor project and the built-in media it references into the Emscripten
+    # virtual filesystem and resolves the default project from there.
+    add_executable(
+        slayer3d_editor_web
+        tools/slayer3d_editor.c
+        tools/slayer3d_editor_cli.c
+        tools/slayer3d_runner.c
+        tools/slayer3d_runner_cli.c
+        tools/slayer3d_runner_manifest.c
+        tools/slayer3d_runner_state.c
+        tools/slayer3d_fused.c
+    )
+    target_link_libraries(slayer3d_editor_web PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
+    target_compile_features(slayer3d_editor_web PRIVATE c_std_17)
+    target_include_directories(slayer3d_editor_web PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    target_compile_definitions(
+        slayer3d_editor_web
+        PRIVATE
+            SLAYER3D_MEDIA_DIR="/media"
+            SLAYER3D_EDITOR_DEFAULT_PROJECT="/apps/slayer3d_editor"
+            SLAYER3D_RUNNER_NO_MAIN
+    )
+    set_target_properties(slayer3d_editor_web PROPERTIES SUFFIX ".html")
+    target_link_options(
+        slayer3d_editor_web
+        PRIVATE
+            "-sALLOW_MEMORY_GROWTH=1"
+            # Data-action validation recurses through the authored editor
+            # shell, so keep the wasm stack explicit like the game-data test
+            # target does to avoid stack exhaustion before startup completes.
+            "-sSTACK_SIZE=8388608"
+            # The bundled editor textures include 8K sources that decode to
+            # ~170MB of RGBA each, so give the heap room to grow.
+            "-sINITIAL_MEMORY=268435456"
+            "-sMAXIMUM_MEMORY=2147483648"
+    )
+    slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/apps/slayer3d_editor"
+                                            "/apps/slayer3d_editor")
+    slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/audio"
+                                            "/media/audio")
+    slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/fonts"
+                                            "/media/fonts")
+    slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/sprites"
+                                            "/media/sprites")
+    slayer3d_enable_warnings(slayer3d_editor_web)
+endif()
+
 if(SLAYER3D_BUILD_TESTS)
     add_subdirectory(tests)
 endif()

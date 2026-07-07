@@ -1,3 +1,4 @@
+#include "game_data_editor_dialog_internal.h"
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_log.h>
@@ -123,6 +124,11 @@ void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const c
     editor_clear_console_selection_state(runtime->scene_state);
     editor_refresh_console_lines(runtime);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+}
+
+void slayer3d_game_data_editor_publish_console_message(struct slayer3d_game_data_runtime *runtime, const char *message)
+{
+    editor_publish_console_message(runtime, message);
 }
 
 void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime)

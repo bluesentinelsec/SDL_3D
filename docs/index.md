@@ -19,7 +19,7 @@ data-authored games running on a generic SDL-powered runtime.
 - [Slayer3D Map Format](slayer3d-map-format.md): standalone brush level map
   structure, assets, materials, actors, properties, and editor metadata.
 - [Standalone Editor Packaging](editor-packaging.md): no-argument editor launch,
-  static desktop builds, and install layout.
+  static desktop builds, install layout, and the Docker-based browser editor.
 - [Retained UI Widgets](ui-widgets.md): data-authored UI layout, styling,
   dropdowns, dynamic text, and editor/game UI guidance.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper
