@@ -440,6 +440,52 @@ extern "C"
     /** @brief Return true when the loaded map authors a skybox selection. */
     bool slayer3d_map_has_skybox(const slayer3d_map_document *document);
 
+/** @brief Maximum number of animated sky layers a map skybox may author. */
+#define SLAYER3D_MAP_SKY_MAX_LAYERS 8
+
+    /** @brief One animated sky layer view. String pointers are owned by the map document. */
+    typedef struct slayer3d_map_sky_layer
+    {
+        const char *texture; /**< Asset id or project-relative texture reference. */
+        float scroll_x;      /**< UV scroll speed along U in texture repeats per second. */
+        float scroll_y;      /**< UV scroll speed along V in texture repeats per second. */
+        float scale;         /**< Texture tiling multiplier, defaults to 1. */
+        float opacity;       /**< Layer opacity in (0, 1], defaults to 1. */
+        float depth;         /**< Sky dome depth factor in (0, 1], defaults to 1. */
+        bool has_tint;       /**< True when the layer authors an RGB tint. */
+        slayer3d_color tint; /**< Layer tint, white when has_tint is false. */
+    } slayer3d_map_sky_layer;
+
+    /**
+     * @brief Global map sky/environment view. String pointers are owned by the map document.
+     *
+     * The mode is the authored mode string when present, otherwise it is
+     * inferred: maps with layers report "layers", maps with faces/asset/preset
+     * report "cubemap", and maps without sky data report "none".
+     */
+    typedef struct slayer3d_map_sky
+    {
+        const char *mode;     /**< Effective sky mode: "none", "cubemap", or "layers". */
+        const char *preset;   /**< Optional built-in preset id such as "sunset". */
+        const char *asset;    /**< Optional single skybox asset reference. */
+        const char *faces[6]; /**< Cubemap faces (+X, -X, +Y, -Y, +Z, -Z) or NULLs. */
+        bool has_faces;       /**< True when all six cubemap faces are authored. */
+        float size;           /**< Skybox size, defaults to 400. */
+        size_t layer_count;   /**< Number of authored animated layers. */
+    } slayer3d_map_sky;
+
+    /**
+     * @brief Read the global map sky configuration.
+     *
+     * Returns false when @p document has no skybox data; @p out_sky is then
+     * zeroed with mode "none".
+     */
+    bool slayer3d_map_get_sky(const slayer3d_map_document *document, slayer3d_map_sky *out_sky);
+
+    /** @brief Read one animated sky layer by index. Defaults are applied to omitted fields. */
+    bool slayer3d_map_get_sky_layer(const slayer3d_map_document *document, size_t index,
+                                    slayer3d_map_sky_layer *out_layer);
+
     /** @brief Return the number of connection entries in a loaded map. */
     size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document);
 

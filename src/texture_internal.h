@@ -11,6 +11,12 @@ typedef struct slayer3d_texture_cache_entry
     struct slayer3d_texture_cache_entry *next;
 } slayer3d_texture_cache_entry;
 
+/* Reserve the next process-unique texture generation value. All texture
+ * content/parameter changes must stamp generations from this counter so
+ * renderer caches keyed by texture address plus generation never alias
+ * recycled texture storage. */
+Uint32 slayer3d_texture_next_generation(void);
+
 void slayer3d_texture_sample_rgba(const slayer3d_texture2d *texture, float u, float v, float lod, float *out_r,
                                   float *out_g, float *out_b, float *out_a);
 void slayer3d_texture_cache_destroy(slayer3d_texture_cache_entry *cache);

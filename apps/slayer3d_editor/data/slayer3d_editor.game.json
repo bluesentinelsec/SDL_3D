@@ -675,6 +675,21 @@
     "signal.editor.texture.paint.mode.brush",
     "signal.editor.texture.paint.mode.face",
     "signal.editor.texture.viewer.toggle",
+    "signal.editor.sky.panel.toggle",
+    "signal.editor.sky.refresh",
+    "signal.editor.sky.focus.path",
+    "signal.editor.sky.path.apply",
+    "signal.editor.sky.path.apply.request",
+    "signal.editor.sky.select_slot.0",
+    "signal.editor.sky.select_slot.1",
+    "signal.editor.sky.select_slot.2",
+    "signal.editor.sky.select_slot.3",
+    "signal.editor.sky.select_slot.4",
+    "signal.editor.sky.select_slot.5",
+    "signal.editor.sky.scroll.up",
+    "signal.editor.sky.scroll.down",
+    "signal.editor.sky.apply.selected",
+    "signal.editor.sky.reset",
     "signal.editor.actor.select.player_capsule",
     "signal.editor.actor.select.opponent_rectangle",
     "signal.editor.actor.select.simple_robot",
@@ -1910,6 +1925,110 @@
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.texture.viewer.collapsed", "default": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture viewer toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.panel.toggle",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "select" },
+          { "type": "scene_state.toggle", "key": "editor.sky.panel.active", "default": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.collapsed", "value": false },
+          { "type": "editor.sky.scan" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "skybox panel toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.refresh",
+        "actions": [
+          { "type": "editor.sky.scan" },
+          { "type": "console.write", "message_from_state": "editor.sky.status" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.focus.path",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.sky.edit.focus", "value": "path" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.path.apply",
+        "actions": [
+          { "type": "editor.sky.path.apply" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.path.apply.request",
+        "actions": [
+          { "type": "editor.sky.path.apply" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.0",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 0 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.1",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 1 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.2",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 2 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.3",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 3 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.4",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 4 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.select_slot.5",
+        "actions": [
+          { "type": "editor.sky.select", "slot": 5 },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.scroll.up",
+        "actions": [
+          { "type": "editor.sky.scan", "scroll_delta": -1 }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.scroll.down",
+        "actions": [
+          { "type": "editor.sky.scan", "scroll_delta": 1 }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.apply.selected",
+        "actions": [
+          { "type": "editor.sky.apply" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.reset",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.sky.selected.name", "value": "" },
+          { "type": "scene_state.set", "key": "editor.sky.selected_index", "value": -1 },
+          { "type": "scene_state.set", "key": "editor.sky.selected_slot", "value": -1 },
+          { "type": "editor.sky.apply" }
         ]
       },
       {
@@ -6233,6 +6352,12 @@
       { "id": "image.editor_shell.texture.door_hatch", "path": "asset://textures/door-hatch.png" },
       { "id": "image.editor_shell.texture.lava", "path": "asset://textures/lava.jpg" },
       { "id": "image.editor_shell.texture.radioactive_crate", "path": "asset://textures/radioactive-crate.png" },
+      { "id": "image.editor_shell.sky.slot_0", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.sky.slot_1", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.sky.slot_2", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.sky.slot_3", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.sky.slot_4", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.sky.slot_5", "path": "asset://skyboxes/sky_17/pz.png" },
       { "id": "image.editor_shell.texture.slot_0", "path": "asset://textures/wall_metal.jpg" },
       { "id": "image.editor_shell.texture.slot_1", "path": "asset://textures/rock_floor.jpg" },
       { "id": "image.editor_shell.texture.slot_2", "path": "asset://textures/ceiling_metal.jpg" },

@@ -599,6 +599,8 @@ if(EMSCRIPTEN)
                                             "/media/fonts")
     slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/sprites"
                                             "/media/sprites")
+    slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/skyboxes"
+                                            "/media/skyboxes")
     slayer3d_enable_warnings(slayer3d_editor_web)
 endif()
 

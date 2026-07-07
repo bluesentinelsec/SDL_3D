@@ -268,16 +268,90 @@ bool slayer3d_game_data_active_scene_renders_world(const slayer3d_game_data_runt
     return scene != NULL ? json_bool(scene->root, "renders_world", true) : true;
 }
 
+static void scene_sky_read_layers(yyjson_val *skybox, slayer3d_game_data_scene_skybox *out_skybox)
+{
+    yyjson_val *layers = obj_get(skybox, "layers");
+    if (!yyjson_is_arr(layers))
+        return;
+
+    size_t index = 0;
+    yyjson_val *layer = NULL;
+    yyjson_arr_iter iter = yyjson_arr_iter_with(layers);
+    while ((layer = yyjson_arr_iter_next(&iter)) != NULL && index < SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS)
+    {
+        if (!yyjson_is_obj(layer))
+            continue;
+        const char *texture = json_string(layer, "texture", NULL);
+        if (texture == NULL || texture[0] == '\0')
+            continue;
+        slayer3d_game_data_scene_sky_layer *out_layer = &out_skybox->layers[index];
+        out_layer->texture = texture;
+        yyjson_val *scroll = obj_get(layer, "scroll");
+        if (yyjson_is_arr(scroll) && yyjson_arr_size(scroll) == 2u)
+        {
+            out_layer->scroll_x = (float)yyjson_get_num(yyjson_arr_get(scroll, 0));
+            out_layer->scroll_y = (float)yyjson_get_num(yyjson_arr_get(scroll, 1));
+        }
+        out_layer->scale = json_float(layer, "scale", 1.0f);
+        out_layer->opacity = json_float(layer, "opacity", 1.0f);
+        out_layer->depth = json_float(layer, "depth", 1.0f);
+        out_layer->tint = (slayer3d_color){255, 255, 255, 255};
+        yyjson_val *tint = obj_get(layer, "tint");
+        if (yyjson_is_arr(tint) && yyjson_arr_size(tint) == 3u)
+        {
+            out_layer->has_tint = true;
+            out_layer->tint.r = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 0)), 0, 255);
+            out_layer->tint.g = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 1)), 0, 255);
+            out_layer->tint.b = (Uint8)SDL_clamp(yyjson_get_int(yyjson_arr_get(tint, 2)), 0, 255);
+        }
+        ++index;
+    }
+    out_skybox->layer_count = (int)index;
+}
+
+bool slayer3d_game_data_set_scene_sky_override_json(slayer3d_game_data_runtime *runtime, const char *json_text)
+{
+    if (runtime == NULL)
+        return false;
+
+    yyjson_doc *doc = NULL;
+    if (json_text != NULL && json_text[0] != '\0')
+    {
+        doc = yyjson_read(json_text, SDL_strlen(json_text), 0);
+        if (doc == NULL || !yyjson_is_obj(yyjson_doc_get_root(doc)))
+        {
+            yyjson_doc_free(doc);
+            return false;
+        }
+    }
+
+    yyjson_doc_free(runtime->scene_sky_override);
+    runtime->scene_sky_override = doc;
+    return true;
+}
+
 bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime *runtime,
                                                 slayer3d_game_data_scene_skybox *out_skybox)
 {
     if (out_skybox != NULL)
+    {
         SDL_zero(*out_skybox);
+        out_skybox->mode = "none";
+        out_skybox->size = 400.0f;
+    }
     if (runtime == NULL || out_skybox == NULL)
         return false;
 
-    const scene_entry *scene = active_scene_entry_const(runtime);
-    yyjson_val *skybox = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "skybox");
+    yyjson_val *skybox = NULL;
+    if (runtime->scene_sky_override != NULL)
+    {
+        skybox = yyjson_doc_get_root(runtime->scene_sky_override);
+    }
+    else
+    {
+        const scene_entry *scene = active_scene_entry_const(runtime);
+        skybox = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "skybox");
+    }
     if (!yyjson_is_obj(skybox))
         return false;
 
@@ -288,8 +362,29 @@ bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime
     out_skybox->pos_z = json_string(skybox, "pos_z", NULL);
     out_skybox->neg_z = json_string(skybox, "neg_z", NULL);
     out_skybox->size = json_float(skybox, "size", 400.0f);
-    return out_skybox->pos_x != NULL && out_skybox->neg_x != NULL && out_skybox->pos_y != NULL &&
-           out_skybox->neg_y != NULL && out_skybox->pos_z != NULL && out_skybox->neg_z != NULL;
+    out_skybox->preset = json_string(skybox, "preset", NULL);
+    out_skybox->has_faces = out_skybox->pos_x != NULL && out_skybox->neg_x != NULL && out_skybox->pos_y != NULL &&
+                            out_skybox->neg_y != NULL && out_skybox->pos_z != NULL && out_skybox->neg_z != NULL;
+    scene_sky_read_layers(skybox, out_skybox);
+
+    const char *mode = json_string(skybox, "mode", NULL);
+    if (mode != NULL &&
+        (SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "cubemap") == 0 || SDL_strcmp(mode, "layers") == 0))
+    {
+        out_skybox->mode = mode;
+    }
+    else if (out_skybox->layer_count > 0)
+    {
+        out_skybox->mode = "layers";
+    }
+    else if (out_skybox->has_faces || out_skybox->preset != NULL)
+    {
+        out_skybox->mode = "cubemap";
+    }
+
+    if (SDL_strcmp(out_skybox->mode, "none") == 0)
+        return false;
+    return out_skybox->has_faces || out_skybox->preset != NULL || out_skybox->layer_count > 0;
 }
 
 bool slayer3d_game_data_active_scene_has_entity(const slayer3d_game_data_runtime *runtime, const char *entity_name)

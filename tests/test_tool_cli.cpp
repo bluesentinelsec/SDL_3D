@@ -420,6 +420,54 @@ TEST(ToolCli, EditorDefaultLaunchAcceptsTexturePathOverride)
     std::filesystem::remove_all(textures_dir);
 }
 
+TEST(ToolCli, EditorDefaultLaunchAcceptsSkyboxPathOverride)
+{
+    const std::filesystem::path skyboxes_dir = unique_cli_test_dir("editor_default_skybox_override");
+    std::filesystem::create_directories(skyboxes_dir);
+
+    const std::string skyboxes = skyboxes_dir.string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "--skybox-path", skyboxes.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
+    ASSERT_NE(args.project, nullptr);
+    ASSERT_NE(args.output_path, nullptr);
+    EXPECT_STREQ(args.skybox_path, skyboxes.c_str());
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    ASSERT_NE(launch.asset_sources, nullptr);
+    ASSERT_STREQ(launch.asset_sources->skyboxes.path, skyboxes.c_str());
+
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(skyboxes_dir);
+}
+
+TEST(ToolCli, EditorSkyboxPathOverrideRequiresExistingDirectory)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "--skybox-path", "/does/not/exist/skyboxes"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    EXPECT_FALSE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("skybox path"), std::string::npos);
+
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+}
+
 TEST(ToolCli, EditorModelPathOverrideBecomesAuthoritativeModelSource)
 {
     const std::filesystem::path project_dir = unique_cli_test_dir("editor_model_override");

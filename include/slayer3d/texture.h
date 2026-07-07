@@ -56,8 +56,10 @@ extern "C"
         slayer3d_texture_wrap wrap_v;
         slayer3d_texture_mip_level *mip_levels;
         int mip_count;
-        Uint32 generation; /* incremented on every content/parameter change;
-                              backends use this to detect stale cached state */
+        Uint32 generation; /* process-unique value refreshed on every content or
+                              parameter change; backends key cached state by
+                              texture address plus generation, and unique values
+                              keep recycled texture storage from aliasing */
     } slayer3d_texture2d;
 
     /*

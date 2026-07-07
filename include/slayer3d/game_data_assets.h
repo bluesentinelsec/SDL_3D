@@ -11,6 +11,7 @@
 #include "slayer3d/audio.h"
 #include "slayer3d/font.h"
 #include "slayer3d/sprite_asset.h"
+#include "slayer3d/types.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -58,7 +59,38 @@ extern "C"
     /** @brief Callback for authored 3D model asset descriptors. */
     typedef bool (*slayer3d_game_data_model_asset_fn)(void *userdata, const slayer3d_game_data_model_asset *model);
 
-    /** @brief Authored scene skybox descriptor using six image asset ids. */
+/** @brief Maximum number of animated sky layers a scene skybox may author. */
+#define SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS 8
+
+    /** @brief One authored animated sky layer referencing an image asset id or asset path. */
+    typedef struct slayer3d_game_data_scene_sky_layer
+    {
+        /** @brief Layer texture image asset id or asset path. */
+        const char *texture;
+        /** @brief UV scroll speed along U in texture repeats per second. */
+        float scroll_x;
+        /** @brief UV scroll speed along V in texture repeats per second. */
+        float scroll_y;
+        /** @brief Texture tiling multiplier, defaults to 1. */
+        float scale;
+        /** @brief Layer opacity in (0, 1], defaults to 1. */
+        float opacity;
+        /** @brief Sky dome depth factor in (0, 1], defaults to 1. */
+        float depth;
+        /** @brief True when the layer authors an RGB tint. */
+        bool has_tint;
+        /** @brief Layer tint, white when has_tint is false. */
+        slayer3d_color tint;
+    } slayer3d_game_data_scene_sky_layer;
+
+    /**
+     * @brief Authored scene skybox descriptor.
+     *
+     * Face references are image asset ids or asset paths. The mode is the
+     * authored mode string when present, otherwise it is inferred from the
+     * authored data: layered records report "layers", face/preset records
+     * report "cubemap".
+     */
     typedef struct slayer3d_game_data_scene_skybox
     {
         /** @brief +X face image asset id. */
@@ -75,6 +107,16 @@ extern "C"
         const char *neg_z;
         /** @brief Skybox cube half-size in world units. */
         float size;
+        /** @brief Effective sky mode: "none", "cubemap", or "layers". */
+        const char *mode;
+        /** @brief Optional built-in preset id resolved against the media skybox directory. */
+        const char *preset;
+        /** @brief True when all six cubemap faces are authored. */
+        bool has_faces;
+        /** @brief Number of authored animated layers. */
+        int layer_count;
+        /** @brief Authored animated layers. */
+        slayer3d_game_data_scene_sky_layer layers[SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS];
     } slayer3d_game_data_scene_skybox;
 
     /** @brief Authored sound-effect asset descriptor. */

@@ -793,6 +793,10 @@ static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *act
                                         validation_names *names, const char *type);
 static bool validate_editor_file_dialog_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                validation_names *names, const char *type);
+static bool validate_editor_sky_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type);
+static bool validate_editor_sky_select_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type);
 static bool validate_timer_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_property_set_or_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1013,6 +1017,10 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.texture.filter", validate_editor_texture_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.path.apply", validate_editor_texture_path_apply_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.select_index", validate_editor_texture_select_index_action),
+        ACTION_RULE_EXACT_HANDLER("editor.sky.scan", validate_editor_sky_scan_action),
+        ACTION_RULE_EXACT_HANDLER("editor.sky.select", validate_editor_sky_select_action),
+        ACTION_RULE_EXACT_HANDLER("editor.sky.apply", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.sky.path.apply", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.scan", validate_editor_actor_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.select_index", validate_editor_actor_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.place_selected", validate_editor_actor_place_selected_action),
@@ -1130,6 +1138,26 @@ static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *act
 {
     (void)type;
     return require_ref(ctx, &names->signals, "signal", json_string(action, "signal"), json_path);
+}
+
+static bool validate_editor_sky_scan_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *scroll_delta = obj_get(action, "scroll_delta");
+    if (scroll_delta != NULL && !yyjson_is_int(scroll_delta))
+        return validation_error(ctx, json_path, "%s scroll_delta must be an integer", type);
+    return true;
+}
+
+static bool validate_editor_sky_select_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    (void)names;
+    yyjson_val *slot = obj_get(action, "slot");
+    if (slot == NULL || !yyjson_is_int(slot) || yyjson_get_int(slot) < 0 || yyjson_get_int(slot) > 5)
+        return validation_error(ctx, json_path, "%s requires an integer slot in [0, 5]", type);
+    return true;
 }
 
 static bool validate_editor_file_dialog_action(validation_context *ctx, yyjson_val *action, const char *json_path,

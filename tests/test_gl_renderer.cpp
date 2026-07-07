@@ -218,6 +218,80 @@ TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
     }
 }
 
+TEST_F(GLRendererTest, RecycledTextureSlotsDoNotAliasCachedUploads)
+{
+    auto make_solid_texture = [](Uint8 r, Uint8 g, Uint8 b, slayer3d_texture2d *out) {
+        Uint8 pixels[2 * 2 * 4];
+        for (int i = 0; i < 4; ++i)
+        {
+            pixels[i * 4 + 0] = r;
+            pixels[i * 4 + 1] = g;
+            pixels[i * 4 + 2] = b;
+            pixels[i * 4 + 3] = 255;
+        }
+        slayer3d_image image{};
+        image.pixels = pixels;
+        image.width = 2;
+        image.height = 2;
+        return slayer3d_create_texture_from_image(&image, out);
+    };
+
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    float positions[] = {-4, -4, 0, -4, 4, 0, 4, -4, 0, 4, 4, 0};
+    float uvs[] = {0, 0, 0, 1, 1, 0, 1, 1};
+    unsigned int indices[] = {0, 1, 2, 2, 1, 3};
+    slayer3d_mesh mesh{};
+    mesh.positions = positions;
+    mesh.uvs = uvs;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+
+    slayer3d_color clear = {0, 0, 0, 255};
+    slayer3d_color white = {255, 255, 255, 255};
+    ASSERT_TRUE(slayer3d_set_lighting_enabled(ctx, false));
+
+    /* Image caches store textures by value and recycle slots, so a slot's
+     * address can be reused by a different texture. The renderer texture
+     * cache must not serve the previous upload for the recycled slot. */
+    slayer3d_texture2d slots[2]{};
+    ASSERT_TRUE(make_solid_texture(255, 0, 0, &slots[0])) << SDL_GetError();
+    ASSERT_TRUE(make_solid_texture(0, 0, 255, &slots[1])) << SDL_GetError();
+
+    slayer3d_clear_render_context(ctx, clear);
+    slayer3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(slayer3d_draw_mesh(ctx, &mesh, &slots[0], white));
+    slayer3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    EXPECT_GE(px[0], 200) << "First slot should draw red";
+    EXPECT_LE(px[2], 30) << "First slot should draw red";
+
+    /* Recycle slot 0: free it and move the blue texture into its storage,
+     * mirroring image-cache compaction. */
+    slayer3d_free_texture(&slots[0]);
+    slots[0] = slots[1];
+    SDL_zero(slots[1]);
+
+    slayer3d_clear_render_context(ctx, clear);
+    slayer3d_begin_mode_3d(ctx, cam);
+    ASSERT_TRUE(slayer3d_draw_mesh(ctx, &mesh, &slots[0], white));
+    slayer3d_end_mode_3d(ctx);
+
+    readPixel(160, 120, px);
+    EXPECT_LE(px[0], 30) << "Recycled slot must draw the blue texture, not the stale red upload";
+    EXPECT_GE(px[2], 200) << "Recycled slot must draw the blue texture, not the stale red upload";
+
+    slayer3d_free_texture(&slots[0]);
+}
+
 TEST_F(GLRendererTest, LitCubeProducesNonClearPixels)
 {
     ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));

@@ -63,6 +63,44 @@ TEST(SLAYER3DTexture, CreateFromImageCopiesPixelsAndDefaultsSampler)
     slayer3d_free_texture(&texture);
 }
 
+TEST(SLAYER3DTexture, GenerationsAreProcessUniqueAcrossTexturesAndReloads)
+{
+    std::vector<Uint8> pixels = {
+        255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+    };
+    slayer3d_image image{};
+    image.pixels = pixels.data();
+    image.width = 2;
+    image.height = 2;
+
+    /* Renderer caches key GPU state by texture address plus generation, and
+     * texture structs live by value in caches that recycle slots. Distinct
+     * texture contents must therefore never share a generation, even when a
+     * struct or slot is reused for a different image. */
+    slayer3d_texture2d first{};
+    slayer3d_texture2d second{};
+    ASSERT_TRUE(slayer3d_create_texture_from_image(&image, &first)) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_create_texture_from_image(&image, &second)) << SDL_GetError();
+    EXPECT_NE(first.generation, second.generation);
+
+    const Uint32 first_generation = first.generation;
+    const Uint32 second_generation = second.generation;
+    slayer3d_free_texture(&first);
+    EXPECT_NE(first.generation, first_generation);
+
+    ASSERT_TRUE(slayer3d_create_texture_from_image(&image, &first)) << SDL_GetError();
+    EXPECT_NE(first.generation, first_generation);
+    EXPECT_NE(first.generation, second_generation);
+
+    const Uint32 before_wrap = first.generation;
+    ASSERT_TRUE(slayer3d_set_texture_wrap(&first, SLAYER3D_TEXTURE_WRAP_REPEAT, SLAYER3D_TEXTURE_WRAP_REPEAT));
+    EXPECT_NE(first.generation, before_wrap);
+    EXPECT_NE(first.generation, second_generation);
+
+    slayer3d_free_texture(&first);
+    slayer3d_free_texture(&second);
+}
+
 TEST(SLAYER3DTexture, LoadFromFileRoundTrip)
 {
     constexpr int w = 2;

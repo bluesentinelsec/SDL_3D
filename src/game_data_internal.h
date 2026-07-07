@@ -82,6 +82,7 @@ typedef struct slayer3d_game_data_runtime
     int scene_count;
     int active_scene_index;
     slayer3d_properties *scene_state;
+    yyjson_doc *scene_sky_override;
     ui_state_entry *ui_states;
     int ui_state_count;
     int ui_state_capacity;

@@ -204,6 +204,36 @@ extern "C"
      */
     bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slayer3d_skybox_textured *skybox);
 
+    /**
+     * @brief One Quake-style animated sky layer.
+     *
+     * Layers are scrolling repeating cloud textures drawn on a sky dome
+     * centered on the active camera. Layer textures should use repeat wrap on
+     * both axes so scrolled UVs tile seamlessly.
+     */
+    typedef struct slayer3d_sky_layer
+    {
+        const slayer3d_texture2d *texture; /**< Repeating layer texture; required. */
+        float scroll_x;                    /**< UV scroll speed along U in texture repeats per second. */
+        float scroll_y;                    /**< UV scroll speed along V in texture repeats per second. */
+        float scale;                       /**< Texture tiling multiplier; values <= 0 use 1. */
+        float opacity;                     /**< Layer opacity in (0, 1]; values <= 0 use 1. */
+        float depth;                       /**< Dome height factor in (0, 1]; values <= 0 use 1. */
+        slayer3d_color tint;               /**< Layer tint; a zeroed color is treated as opaque white. */
+    } slayer3d_sky_layer;
+
+    /**
+     * @brief Draw animated scrolling sky layers centered on the active camera.
+     *
+     * Call between begin_mode_3d and scene geometry, after any skybox
+     * backdrop. Each layer is a curved cloud dome whose UVs scroll with
+     * @p time (seconds). Layers are drawn in order, blending onto whatever
+     * sky backdrop is already present. The dome fits inside a textured
+     * skybox of the same @p size; values <= 1 use the default skybox size.
+     */
+    bool slayer3d_draw_sky_layers(slayer3d_render_context *context, const slayer3d_sky_layer *layers, int layer_count,
+                                  float size, float time);
+
     /* ============================================================== */
     /* Post-process effects                                           */
     /* ============================================================== */

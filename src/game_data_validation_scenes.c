@@ -656,14 +656,80 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
     if (!yyjson_is_obj(skybox))
         return validation_error(ctx, skybox_path, "scene world.skybox must be an object");
 
+    const char *mode = json_string(skybox, "mode");
+    if (mode != NULL && SDL_strcmp(mode, "none") != 0 && SDL_strcmp(mode, "cubemap") != 0 &&
+        SDL_strcmp(mode, "layers") != 0)
+    {
+        return validation_error(ctx, skybox_path, "scene world.skybox mode must be none, cubemap, or layers");
+    }
+    yyjson_val *preset = obj_get(skybox, "preset");
+    if (preset != NULL && (!yyjson_is_str(preset) || yyjson_get_str(preset)[0] == '\0'))
+        return validation_error(ctx, skybox_path, "scene world.skybox preset must be a non-empty string");
+
+    /* Faces reference declared image assets by id or arbitrary asset paths
+     * (which contain a path separator). All six are required when any face
+     * is authored; preset- or layer-only skies may omit them. */
     static const char *const faces[] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
+    bool any_face = false;
     for (size_t i = 0; i < SDL_arraysize(faces); ++i)
+        any_face = any_face || obj_get(skybox, faces[i]) != NULL;
+    for (size_t i = 0; any_face && i < SDL_arraysize(faces); ++i)
     {
         char face_path[PATH_BUFFER_SIZE];
         format_path(face_path, sizeof(face_path), "%s.%s", skybox_path, faces[i]);
-        if (!require_ref(ctx, &names->images, "image asset", json_string(skybox, faces[i]), face_path))
+        const char *face = json_string(skybox, faces[i]);
+        if (face != NULL && (SDL_strchr(face, '/') != NULL || SDL_strchr(face, '\\') != NULL))
+            continue;
+        if (!require_ref(ctx, &names->images, "image asset", face, face_path))
             return false;
     }
+
+    yyjson_val *layers = obj_get(skybox, "layers");
+    if (layers != NULL)
+    {
+        if (!yyjson_is_arr(layers) || yyjson_arr_size(layers) == 0u)
+            return validation_error(ctx, skybox_path, "scene world.skybox layers must be a non-empty array");
+        for (size_t i = 0; i < yyjson_arr_size(layers); ++i)
+        {
+            char layer_path[PATH_BUFFER_SIZE];
+            format_path(layer_path, sizeof(layer_path), "%s.layers[%zu]", skybox_path, i);
+            yyjson_val *layer = yyjson_arr_get(layers, i);
+            if (!yyjson_is_obj(layer))
+                return validation_error(ctx, layer_path, "sky layer must be an object");
+            const char *texture = json_string(layer, "texture");
+            if (texture == NULL || texture[0] == '\0')
+                return validation_error(ctx, layer_path, "sky layer requires a non-empty texture reference");
+            if (SDL_strchr(texture, '/') == NULL && SDL_strchr(texture, '\\') == NULL &&
+                !require_ref(ctx, &names->images, "image asset", texture, layer_path))
+            {
+                return false;
+            }
+            yyjson_val *scroll = obj_get(layer, "scroll");
+            if (scroll != NULL &&
+                (!yyjson_is_arr(scroll) || yyjson_arr_size(scroll) != 2u || !yyjson_is_num(yyjson_arr_get(scroll, 0)) ||
+                 !yyjson_is_num(yyjson_arr_get(scroll, 1))))
+            {
+                return validation_error(ctx, layer_path, "sky layer scroll must be a [u, v] number pair");
+            }
+            yyjson_val *scale = obj_get(layer, "scale");
+            if (scale != NULL && (!yyjson_is_num(scale) || yyjson_get_num(scale) <= 0.0))
+                return validation_error(ctx, layer_path, "sky layer scale must be greater than 0");
+            static const char *const unit_fields[] = {"opacity", "depth"};
+            for (size_t field = 0; field < SDL_arraysize(unit_fields); ++field)
+            {
+                yyjson_val *value = obj_get(layer, unit_fields[field]);
+                if (value != NULL &&
+                    (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0 || yyjson_get_num(value) > 1.0))
+                {
+                    return validation_error(ctx, layer_path, "sky layer %s must be a number in (0, 1]",
+                                            unit_fields[field]);
+                }
+            }
+        }
+    }
+
+    if (!any_face && preset == NULL && layers == NULL && (mode == NULL || SDL_strcmp(mode, "none") != 0))
+        return validation_error(ctx, skybox_path, "scene world.skybox requires preset, faces, or layers");
 
     yyjson_val *size = obj_get(skybox, "size");
     if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 1.0))
