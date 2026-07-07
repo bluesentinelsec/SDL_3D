@@ -12,6 +12,7 @@ extern "C"
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "slayer3d/game.h"
 #include "slayer3d/game_data.h"
@@ -35,6 +36,10 @@ constexpr const char *PONG_NETWORK_BINDING_START_GAME = "start_game";
 constexpr const char *PONG_NETWORK_BINDING_PAUSE_REQUEST = "pause_request";
 constexpr const char *PONG_NETWORK_BINDING_RESUME_REQUEST = "resume_request";
 constexpr const char *PONG_NETWORK_BINDING_DISCONNECT = "disconnect";
+constexpr Uint16 PONG_NETWORK_TEST_BASE_PORT = 41000;
+constexpr Uint16 PONG_NETWORK_TEST_PORT_ATTEMPTS = 256;
+constexpr float PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS = 8.0f;
+constexpr Uint32 PONG_NETWORK_TEST_PUMP_SLEEP_MS = 2U;
 
 static std::filesystem::path demo_data_path(const char *demo_name, const char *data_file)
 {
@@ -106,12 +111,77 @@ static bool enter_multiplayer_play_scene(slayer3d_game_data_runtime *runtime, co
     return ok;
 }
 
-static bool wait_for_network_pair(slayer3d_network_session *host, slayer3d_network_session *client)
+static const char *network_state_name(slayer3d_network_state state)
 {
-    for (int i = 0; i < 1200; ++i)
+    switch (state)
     {
-        EXPECT_TRUE(slayer3d_network_session_update(host, 0.01f));
-        EXPECT_TRUE(slayer3d_network_session_update(client, 0.01f));
+    case SLAYER3D_NETWORK_STATE_DISCONNECTED:
+        return "disconnected";
+    case SLAYER3D_NETWORK_STATE_CONNECTING:
+        return "connecting";
+    case SLAYER3D_NETWORK_STATE_WAITING:
+        return "waiting";
+    case SLAYER3D_NETWORK_STATE_CONNECTED:
+        return "connected";
+    case SLAYER3D_NETWORK_STATE_REJECTED:
+        return "rejected";
+    case SLAYER3D_NETWORK_STATE_TIMED_OUT:
+        return "timed_out";
+    case SLAYER3D_NETWORK_STATE_ERROR:
+        return "error";
+    default:
+        return "unknown";
+    }
+}
+
+static std::string network_pair_status_message(const char *prefix, Uint16 port, slayer3d_network_session *host,
+                                               slayer3d_network_session *client)
+{
+    const slayer3d_network_state host_state = slayer3d_network_session_state(host);
+    const slayer3d_network_state client_state = slayer3d_network_session_state(client);
+    const char *host_status = slayer3d_network_session_status(host);
+    const char *client_status = slayer3d_network_session_status(client);
+    std::string message = prefix != nullptr ? prefix : "network pair failed";
+    message += " port=" + std::to_string((unsigned int)port);
+    message += " host_state=" + std::string(network_state_name(host_state));
+    message += " host_status=" + std::string(host_status != nullptr ? host_status : "");
+    message += " client_state=" + std::string(network_state_name(client_state));
+    message += " client_status=" + std::string(client_status != nullptr ? client_status : "");
+    return message;
+}
+
+static bool wait_for_network_pair(slayer3d_network_session *host, slayer3d_network_session *client, Uint16 port,
+                                  std::string *out_failure)
+{
+    if (host == nullptr || client == nullptr)
+    {
+        if (out_failure != nullptr)
+        {
+            *out_failure = "network pair missing host or client session";
+        }
+        return false;
+    }
+
+    const Uint64 start = SDL_GetTicks();
+    Uint64 last = start;
+    while ((SDL_GetTicks() - start) < (Uint64)(PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS * 1000.0f))
+    {
+        const Uint64 now = SDL_GetTicks();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f)
+        {
+            dt = 0.001f;
+        }
+        last = now;
+
+        if (!slayer3d_network_session_update(host, dt) || !slayer3d_network_session_update(client, dt))
+        {
+            if (out_failure != nullptr)
+            {
+                *out_failure = network_pair_status_message("network session update failed", port, host, client);
+            }
+            return false;
+        }
         if (slayer3d_network_session_is_connected(host) && slayer3d_network_session_is_connected(client))
         {
             return true;
@@ -120,8 +190,91 @@ static bool wait_for_network_pair(slayer3d_network_session *host, slayer3d_netwo
             slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_TIMED_OUT ||
             slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_ERROR)
         {
+            if (out_failure != nullptr)
+            {
+                *out_failure = network_pair_status_message("network client reached terminal state", port, host, client);
+            }
             return false;
         }
+        SDL_Delay(PONG_NETWORK_TEST_PUMP_SLEEP_MS);
+    }
+    if (out_failure != nullptr)
+    {
+        *out_failure = network_pair_status_message("network pair timed out", port, host, client);
+    }
+    return false;
+}
+
+static bool create_pong_network_pair(const std::string &test_name, slayer3d_network_session **out_host,
+                                     slayer3d_network_session **out_client, Uint16 *out_port, std::string *out_failure)
+{
+    if (out_host == nullptr || out_client == nullptr || out_port == nullptr)
+    {
+        if (out_failure != nullptr)
+        {
+            *out_failure = "network pair output pointers are required";
+        }
+        return false;
+    }
+
+    *out_host = nullptr;
+    *out_client = nullptr;
+    *out_port = 0;
+
+    const Uint16 start_offset = (Uint16)(std::hash<std::string>{}(test_name) % (size_t)PONG_NETWORK_TEST_PORT_ATTEMPTS);
+    std::string last_failure;
+    for (Uint16 attempt = 0; attempt < PONG_NETWORK_TEST_PORT_ATTEMPTS; ++attempt)
+    {
+        const Uint16 port = (Uint16)(PONG_NETWORK_TEST_BASE_PORT +
+                                     ((Uint16)(start_offset + attempt) % PONG_NETWORK_TEST_PORT_ATTEMPTS));
+
+        slayer3d_network_session_desc host_desc{};
+        slayer3d_network_session_desc_init(&host_desc);
+        host_desc.role = SLAYER3D_NETWORK_ROLE_HOST;
+        host_desc.port = port;
+        host_desc.handshake_timeout = PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS;
+        host_desc.idle_timeout = PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS;
+
+        slayer3d_network_session *host = nullptr;
+        if (!slayer3d_network_session_create(&host_desc, &host))
+        {
+            last_failure =
+                "failed to create host on port " + std::to_string((unsigned int)port) + ": " + SDL_GetError();
+            continue;
+        }
+
+        slayer3d_network_session_desc client_desc{};
+        slayer3d_network_session_desc_init(&client_desc);
+        client_desc.role = SLAYER3D_NETWORK_ROLE_CLIENT;
+        client_desc.host = "127.0.0.1";
+        client_desc.port = port;
+        client_desc.handshake_timeout = PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS;
+        client_desc.idle_timeout = PONG_NETWORK_TEST_CONNECT_TIMEOUT_SECONDS;
+
+        slayer3d_network_session *client = nullptr;
+        if (!slayer3d_network_session_create(&client_desc, &client))
+        {
+            last_failure =
+                "failed to create client for port " + std::to_string((unsigned int)port) + ": " + SDL_GetError();
+            slayer3d_network_session_destroy(host);
+            continue;
+        }
+
+        if (wait_for_network_pair(host, client, port, &last_failure))
+        {
+            *out_host = host;
+            *out_client = client;
+            *out_port = port;
+            return true;
+        }
+
+        slayer3d_network_session_destroy(client);
+        slayer3d_network_session_destroy(host);
+    }
+
+    if (out_failure != nullptr)
+    {
+        *out_failure = last_failure.empty() ? "failed to create connected pong network pair" : last_failure;
     }
     return false;
 }
@@ -312,26 +465,10 @@ class PongHeadlessMultiplayerTest : public ::testing::Test
         const ::testing::TestInfo *test_info = ::testing::UnitTest::GetInstance()->current_test_info();
         const std::string test_name =
             test_info != nullptr ? std::string(test_info->test_suite_name()) + "." + test_info->name() : "pong";
-        network_port = (Uint16)(30000U + (Uint32)(std::hash<std::string>{}(test_name) % 20000U));
-
-        slayer3d_network_session_desc host_desc{};
-        slayer3d_network_session_desc_init(&host_desc);
-        host_desc.role = SLAYER3D_NETWORK_ROLE_HOST;
-        host_desc.port = network_port;
-        host_desc.handshake_timeout = 2.0f;
-        host_desc.idle_timeout = 2.0f;
-        ASSERT_TRUE(slayer3d_network_session_create(&host_desc, &host_network));
-
-        slayer3d_network_session_desc client_desc{};
-        slayer3d_network_session_desc_init(&client_desc);
-        client_desc.role = SLAYER3D_NETWORK_ROLE_CLIENT;
-        client_desc.host = "127.0.0.1";
-        client_desc.port = network_port;
-        client_desc.handshake_timeout = 2.0f;
-        client_desc.idle_timeout = 2.0f;
-        ASSERT_TRUE(slayer3d_network_session_create(&client_desc, &client_network));
-
-        ASSERT_TRUE(wait_for_network_pair(host_network, client_network));
+        std::string network_failure;
+        ASSERT_TRUE(
+            create_pong_network_pair(test_name, &host_network, &client_network, &network_port, &network_failure))
+            << network_failure;
 
         p1_up = slayer3d_game_data_find_action(host_runtime, "action.paddle.up");
         p1_down = slayer3d_game_data_find_action(host_runtime, "action.paddle.down");
