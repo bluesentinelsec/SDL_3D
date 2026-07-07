@@ -360,6 +360,20 @@ extern "C"
         float dynamic_world_render_max_scale; /**< Maximum adaptive 3D render scale, or 1.0 when <= 0. */
         float dynamic_world_render_target_fps; /**< Adaptive render target FPS, or 60 when <= 0. */
         bool enable_audio;                     /**< When true, create session audio before init when available. */
+
+        /**
+         * @brief Hand per-frame control to the browser on Emscripten builds.
+         *
+         * When true, browser builds register the frame callback with
+         * emscripten_set_main_loop_arg and slayer3d_run_game does not return;
+         * shutdown and engine cleanup run from the callback once quit is
+         * requested. Interactive browser apps should enable this so the page
+         * stays responsive. When false, browser builds run the same blocking
+         * loop as native, which freezes the tab until quit is requested and
+         * is only appropriate for bounded runs such as automated tests.
+         * Native builds ignore this field and always block until quit.
+         */
+        bool browser_main_loop;
     } slayer3d_game_config;
 
     /**

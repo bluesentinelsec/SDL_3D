@@ -790,13 +790,19 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
     run->last_counter = SDL_GetPerformanceCounter();
 
 #if defined(__EMSCRIPTEN__)
-    /* Browsers own the outer loop: register the per-frame callback and unwind
-     * back to the browser event loop instead of blocking. The callback runs
-     * shutdown and cleanup when quit is requested, and this call does not
-     * return, so caller code after slayer3d_run_game does not run on web. */
-    emscripten_set_main_loop_arg(slayer3d_game_emscripten_frame, run, 0, 1);
-    return 0;
-#else
+    if (config != NULL && config->browser_main_loop)
+    {
+        /* Browsers own the outer loop: register the per-frame callback and
+         * unwind back to the browser event loop instead of blocking. The
+         * callback runs shutdown and cleanup when quit is requested, and this
+         * call does not return, so caller code after slayer3d_run_game does
+         * not run on web. Bounded runs such as automated tests leave
+         * browser_main_loop false and use the blocking loop below. */
+        emscripten_set_main_loop_arg(slayer3d_game_emscripten_frame, run, 0, 1);
+        return 0;
+    }
+#endif
+
     while (!run->ctx.quit_requested)
     {
         slayer3d_game_run_frame(run);
@@ -805,5 +811,4 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
     const int result = slayer3d_game_run_shutdown(run);
     SDL_free(run);
     return result;
-#endif
 }
