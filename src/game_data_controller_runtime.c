@@ -2,6 +2,8 @@
 
 #include "game_data_internal.h"
 
+#include "slayer3d/collision.h"
+
 #define FPS_BRUSH_VIEW_SMOOTH_SPEED 12.0f
 #define FPS_BRUSH_VIEW_SMOOTH_EPSILON 0.01f
 
@@ -1075,6 +1077,64 @@ static unsigned int fps_brush_liquid_contents_at_point(const slayer3d_game_data_
     return result.contents & trace.contents_mask;
 }
 
+static slayer3d_bounding_box fps_brush_body_bounds(const slayer3d_fps_mover *mover, slayer3d_vec3 body_center)
+{
+    const slayer3d_vec3 extents = fps_brush_body_extents(mover);
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(body_center.x - extents.x, body_center.y - extents.y, body_center.z - extents.z);
+    bounds.max = slayer3d_vec3_make(body_center.x + extents.x, body_center.y + extents.y, body_center.z + extents.z);
+    return bounds;
+}
+
+static slayer3d_bounding_box fps_brush_translate_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 translation)
+{
+    bounds.min = slayer3d_vec3_add(bounds.min, translation);
+    bounds.max = slayer3d_vec3_add(bounds.max, translation);
+    return bounds;
+}
+
+typedef struct fps_brush_liquid_overlap_context
+{
+    slayer3d_bounding_box body_bounds;
+    unsigned int contents;
+} fps_brush_liquid_overlap_context;
+
+static bool fps_brush_accumulate_liquid_overlap(void *userdata, const slayer3d_game_data_brush_world_instance *instance)
+{
+    fps_brush_liquid_overlap_context *context = (fps_brush_liquid_overlap_context *)userdata;
+    if (context == NULL || instance == NULL || instance->world == NULL)
+        return true;
+
+    const unsigned int liquid_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER | SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+    for (int i = 0; i < instance->world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &instance->world->brushes[i];
+        const unsigned int liquid_contents = brush->contents & liquid_mask;
+        if (liquid_contents == 0u || !brush->has_bounds)
+            continue;
+
+        const slayer3d_bounding_box brush_bounds = fps_brush_translate_bounds(brush->bounds, instance->position);
+        if (slayer3d_check_aabb_aabb(context->body_bounds, brush_bounds))
+            context->contents |= liquid_contents;
+    }
+    return true;
+}
+
+static unsigned int fps_brush_liquid_contents_for_body_overlap(const slayer3d_game_data_runtime *runtime,
+                                                               const slayer3d_fps_mover *mover,
+                                                               slayer3d_vec3 body_center)
+{
+    if (runtime == NULL || mover == NULL)
+        return 0u;
+
+    fps_brush_liquid_overlap_context context;
+    SDL_zero(context);
+    context.body_bounds = fps_brush_body_bounds(mover, body_center);
+    context.body_bounds.min.y -= 0.08f;
+    (void)slayer3d_game_data_for_each_brush_world_instance(runtime, fps_brush_accumulate_liquid_overlap, &context);
+    return context.contents;
+}
+
 static unsigned int fps_brush_liquid_contents_for_body(const slayer3d_game_data_runtime *runtime,
                                                        const slayer3d_fps_mover *mover, slayer3d_vec3 body_center)
 {
@@ -1086,7 +1146,8 @@ static unsigned int fps_brush_liquid_contents_for_body(const slayer3d_game_data_
     const slayer3d_vec3 waist = body_center;
     const slayer3d_vec3 eye = fps_brush_body_center_to_eye(mover, body_center);
 
-    unsigned int contents = fps_brush_liquid_contents_at_point(runtime, waist);
+    unsigned int contents = fps_brush_liquid_contents_for_body_overlap(runtime, mover, body_center);
+    contents |= fps_brush_liquid_contents_at_point(runtime, waist);
     contents |= fps_brush_liquid_contents_at_point(runtime, feet);
     contents |= fps_brush_liquid_contents_at_point(runtime, eye);
     return contents;
