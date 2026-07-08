@@ -69,6 +69,11 @@ static bool editor_hit_is_stair_panel(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.stair_panel.");
 }
 
+static bool editor_hit_is_liquid_panel(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.liquid_panel.");
+}
+
 static bool editor_hit_is_skybox_panel(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.skybox_panel.");
@@ -194,6 +199,53 @@ static float editor_round_to_step(float value, float step)
     const float normalized = value / step;
     const float rounded = normalized >= 0.0f ? SDL_floorf(normalized + 0.5f) : SDL_ceilf(normalized - 0.5f);
     return rounded * step;
+}
+
+static bool editor_screen_rect_contains(float x, float y, float w, float h, float mouse_x, float mouse_y)
+{
+    return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
+}
+
+static void editor_set_liquid_panel_position(slayer3d_game_data_runtime *runtime, float x, float y)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.x", editor_clamp_float(x, 0.0f, 1048.0f));
+    slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.y", editor_clamp_float(y, 80.0f, 520.0f));
+}
+
+static bool editor_handle_liquid_panel_drag(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
+                                            bool clicked, bool left_down, bool released)
+{
+    if (runtime == NULL || runtime->scene_state == NULL ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.liquid.panel.open", false))
+    {
+        return false;
+    }
+
+    if (released || !left_down)
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.drag.active", false);
+
+    const float panel_x = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.x", 870.0f);
+    const float panel_y = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.y", 112.0f);
+    if (clicked && editor_screen_rect_contains(panel_x, panel_y, 150.0f, 24.0f, mouse_x, mouse_y))
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.drag.active", true);
+        slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.drag.offset_x", mouse_x - panel_x);
+        slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.drag.offset_y", mouse_y - panel_y);
+        return true;
+    }
+
+    if (left_down && slayer3d_properties_get_bool(runtime->scene_state, "editor.liquid.panel.drag.active", false))
+    {
+        const float offset_x =
+            slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.drag.offset_x", 0.0f);
+        const float offset_y =
+            slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.drag.offset_y", 0.0f);
+        editor_set_liquid_panel_position(runtime, mouse_x - offset_x, mouse_y - offset_y);
+        return true;
+    }
+    return false;
 }
 
 static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runtime,
@@ -329,6 +381,7 @@ static const editor_tool_mode_def editor_tool_mode_defs[] = {
     {"rotate", "rotate tool", "select a brush before rotate tool"},
     {"scale", "scale tool", "select a brush before scale tool"},
     {"shear", "shear tool", "select a brush before shear tool"},
+    {"liquid", "liquid tool", NULL},
 };
 
 static const editor_tool_mode_def *editor_find_tool_mode_def(const char *mode)
@@ -394,6 +447,10 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
+    if (SDL_strcmp(mode, "liquid") != 0)
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.open", false);
+    else
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.open", true);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.shape.menu.open", false);
     clear_editor_command_preview(runtime);
@@ -417,8 +474,9 @@ static const char *const editor_signal_action_names[] = {
 
 /* Action families whose members are all forwarded as "signal.<action>". */
 static const char *const editor_signal_action_prefixes[] = {
-    "editor.texture.",  "editor.palette.", "editor.actor.",      "editor.things.", "editor.file.",  "editor.inspector.",
-    "editor.property.", "editor.global.",  "editor.visibility.", "editor.lock.",   "editor.stair.", "editor.sky.",
+    "editor.texture.",   "editor.palette.",  "editor.actor.",  "editor.things.",     "editor.file.",
+    "editor.inspector.", "editor.property.", "editor.global.", "editor.visibility.", "editor.lock.",
+    "editor.stair.",     "editor.sky.",      "editor.liquid.",
 };
 
 static bool editor_action_routes_to_signal(const char *action)
@@ -638,9 +696,17 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     }
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
+    if (editor_handle_liquid_panel_drag(runtime, mouse_x, mouse_y, clicked, left_down, released))
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
-        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_skybox_panel(hit) ||
-        editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) || console_event_active)
+        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_liquid_panel(hit) ||
+        editor_hit_is_skybox_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
+        console_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

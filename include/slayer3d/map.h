@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "slayer3d/game_data_brush.h"
 #include "slayer3d/types.h"
 
 #ifdef __cplusplus
@@ -116,6 +117,8 @@ extern "C"
         const char *geometry_kind;
         slayer3d_map_box_geometry box;
         const char *material;
+        /** @brief SLAYER3D_GAME_DATA_BRUSH_CONTENT_* bitmask read from the brush contents field. */
+        unsigned int contents;
         bool has_color;
         slayer3d_color color;
         size_t face_count;

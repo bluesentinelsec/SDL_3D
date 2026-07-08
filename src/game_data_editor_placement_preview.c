@@ -250,7 +250,7 @@ static bool editor_drag_selection_can_start(const slayer3d_game_data_editor_sele
 
 static bool editor_drag_mode_supports_creation(const char *mode)
 {
-    return SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0;
+    return SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "liquid") == 0;
 }
 
 static bool editor_drag_selection_can_start_for_mode(const char *mode,
@@ -263,6 +263,13 @@ static bool editor_drag_selection_can_start_for_mode(const char *mode,
     {
         /* Select mode mirrors TrenchBroom's default draw-shape behavior: empty/work-plane drags
            can create a cuboid, but brush-face drags remain available for selection/move tools. */
+        return selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    }
+
+    if (SDL_strcmp(mode, "liquid") == 0)
+    {
+        /* Liquid mode paints and moves existing liquid brushes. Creation starts
+           only from empty/work-plane hits so existing volumes remain selectable. */
         return selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
     }
 
@@ -468,8 +475,10 @@ static bool editor_drag_commit_source_box(slayer3d_game_data_runtime *runtime, y
 
     drag->phase = EDITOR_DRAG_CREATE_COMMITTED;
     clear_editor_placement_preview(runtime);
-    publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL, "Brush created");
-    editor_publish_console_message(runtime, "Brush created");
+    const bool liquid_mode = SDL_strcmp(scene_state_string(runtime, "editor.mode", "select"), "liquid") == 0;
+    const char *message = liquid_mode ? "Liquid volume created" : "Brush created";
+    publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL, message);
+    editor_publish_console_message(runtime, message);
     clear_editor_drag_create(runtime);
     return true;
 }
@@ -816,18 +825,33 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
             return true;
         (void)slayer3d_game_data_clear_active_editor_selection(runtime);
         SDL_zero(*drag);
+        const bool liquid_mode = SDL_strcmp(mode, "liquid") == 0;
         drag->active = true;
-        drag->commit_on_release = SDL_strcmp(mode, "select") == 0;
+        drag->commit_on_release = SDL_strcmp(mode, "select") == 0 || liquid_mode;
         drag->phase = EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT;
         drag->scene = slayer3d_game_data_active_scene(runtime);
         drag->world_name = json_string(drag_json, "world", "brush.editor_shell.target");
-        drag->material_name =
-            scene_state_string(runtime, json_string(drag_json, "material_key", "editor.brush.material"),
-                               json_string(drag_json, "material", "mat.editor.floor"));
-        drag->shape = scene_state_string(runtime, json_string(drag_json, "shape_key", "editor.shape.id"),
-                                         json_string(drag_json, "prefab", "editor.box"));
-        drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
-                                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+        if (liquid_mode)
+        {
+            drag->material_name =
+                scene_state_string(runtime, "editor.liquid.material", "mat.editor.liquid.clean_water");
+            drag->shape = scene_state_string(runtime, "editor.liquid.shape.id", "cuboid");
+            const char *contents =
+                slayer3d_properties_get_string(runtime->scene_state, "editor.liquid.contents", "water");
+            drag->contents = brush_content_flag_from_string(contents);
+            if (drag->contents == 0)
+                drag->contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER;
+        }
+        else
+        {
+            drag->material_name =
+                scene_state_string(runtime, json_string(drag_json, "material_key", "editor.brush.material"),
+                                   json_string(drag_json, "material", "mat.editor.floor"));
+            drag->shape = scene_state_string(runtime, json_string(drag_json, "shape_key", "editor.shape.id"),
+                                             json_string(drag_json, "prefab", "editor.box"));
+            drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
+                                                   SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+        }
         drag->grid_size = grid_size;
         drag->extrusion_axis = editor_drag_extrusion_axis_from_selection(runtime, editor, drag_json, hover_selection);
         drag->depth_cells = editor_drag_initial_depth_cells(hover_selection, drag->extrusion_axis);
@@ -860,10 +884,12 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
 
     editor_brush_source_prefab_result result;
     const bool valid = editor_drag_preview_source_box(runtime, drag_json, drag, &result);
+    const bool liquid_drag = SDL_strcmp(scene_state_string(runtime, "editor.mode", "select"), "liquid") == 0;
     const char *base_message =
-        drag->phase == EDITOR_DRAG_CREATE_ADJUSTING_DEPTH     ? "Release Shift to keep depth, Enter to create brush"
-        : drag->phase == EDITOR_DRAG_CREATE_PENDING_FOOTPRINT ? "Hold Shift and move mouse to set brush depth"
-                                                              : json_string(drag_json, "message", "drag brush preview");
+        drag->phase == EDITOR_DRAG_CREATE_ADJUSTING_DEPTH ? "Release Shift to keep depth, Enter to create brush"
+        : drag->phase == EDITOR_DRAG_CREATE_PENDING_FOOTPRINT
+            ? "Hold Shift and move mouse to set brush depth"
+            : (liquid_drag ? "drag liquid volume preview" : json_string(drag_json, "message", "drag brush preview"));
     char message[256];
     if (valid && result.warning[0] != '\0')
         SDL_snprintf(message, sizeof(message), "%s; %s", base_message, result.warning);

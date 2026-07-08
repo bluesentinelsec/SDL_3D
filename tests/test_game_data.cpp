@@ -938,6 +938,30 @@ std::filesystem::path slayer3d_editor_data_path()
            "slayer3d_editor.game.json";
 }
 
+void copy_slayer3d_editor_default_material_assets(const std::filesystem::path &editor_data_root,
+                                                  const std::filesystem::path &target_root)
+{
+    const std::filesystem::path target_textures_dir = target_root / "textures";
+    std::filesystem::create_directories(target_textures_dir);
+    const std::filesystem::path editor_textures_dir = editor_data_root / "textures";
+    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
+                                     "lava.jpg", "radioactive-crate.png"})
+    {
+        std::filesystem::copy_file(editor_textures_dir / texture_name, target_textures_dir / texture_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+
+    const std::filesystem::path target_liquids_dir = target_root / "liquids";
+    std::filesystem::create_directories(target_liquids_dir);
+    const std::filesystem::path editor_liquids_dir = editor_data_root / "liquids";
+    for (const char *liquid_name :
+         {"clean_water.png", "dirty_water.png", "green_nukage.png", "lava.png", "purple_poison.png"})
+    {
+        std::filesystem::copy_file(editor_liquids_dir / liquid_name, target_liquids_dir / liquid_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
+}
+
 class ScopedCurrentPath
 {
   public:
@@ -995,6 +1019,21 @@ void seed_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, nullptr, 0, error, sizeof(error))) << error;
 }
 
+void seed_editor_shell_test_liquid(slayer3d_game_data_runtime *runtime)
+{
+    ASSERT_NE(runtime, nullptr);
+    configure_editor_shell_default_test_camera(runtime);
+    char error[512]{};
+    slayer3d_game_data_create_box_brush_desc desc{};
+    desc.world_name = "brush.editor_shell.target";
+    desc.brush_name = "brush.target.liquid";
+    desc.material_name = "mat.editor.liquid.clean_water";
+    desc.min = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    desc.max = slayer3d_vec3_make(2.0f, 2.0f, 2.0f);
+    desc.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, nullptr, 0, error, sizeof(error))) << error;
+}
+
 void seed_editor_shell_player_start(slayer3d_game_data_runtime *runtime)
 {
     ASSERT_NE(runtime, nullptr);
@@ -1034,6 +1073,11 @@ void select_editor_shell_test_brush(slayer3d_game_data_runtime *runtime, const c
 void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
 {
     select_editor_shell_test_brush(runtime, "brush.target.cube");
+}
+
+void select_editor_shell_test_liquid(slayer3d_game_data_runtime *runtime)
+{
+    select_editor_shell_test_brush(runtime, "brush.target.liquid");
 }
 
 void lasso_select_editor_shell_edges(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
@@ -10399,6 +10443,37 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, AcceptsLiquidEditorToolMode)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_liquid_tool_mode");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "liquid_tool.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Liquid Tool Mode" },
+  "world": { "name": "world.liquid_tool", "kind": "fixed_screen" },
+  "signals": ["signal.editor.liquid"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.liquid",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "liquid" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "liquid_tool.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
+        << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RetainedUIWidgetsValidate)
 {
     const std::filesystem::path dir = unique_test_dir("retained_ui_widgets");
@@ -11118,6 +11193,30 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor.selection.resize_y direction must be a non-zero integer"),
               std::string::npos)
+        << error;
+
+    write_text(dir / "bad_selection_resize_face_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Selection Resize Face Action" },
+  "world": { "name": "world.bad_editor_selection_resize_face_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.resize"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.resize",
+        "actions": [
+          { "type": "editor.selection.resize_y", "face": "side" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_selection_resize_face_action.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.selection.resize_y face must be top or bottom"), std::string::npos)
         << error;
 
     write_text(dir / "bad_selection_resize_bounds_action.game.json",
@@ -17932,15 +18031,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(std::string(editor_state.source_path), saved_path_string);
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
-    const std::filesystem::path exported_textures_dir = export_dir / "textures";
-    std::filesystem::create_directories(exported_textures_dir);
-    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
-    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
-                                     "lava.jpg", "radioactive-crate.png"})
-    {
-        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
-                                   std::filesystem::copy_options::overwrite_existing);
-    }
+    copy_slayer3d_editor_default_material_assets(dojo_path.parent_path(), export_dir);
     write_text(export_dir / "exported.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -18264,6 +18355,536 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_liquid(runtime);
+    select_editor_shell_test_liquid(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    emit_signal("signal.editor.liquid.type.lava");
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.paint.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "painted 6 faces with mat.editor.liquid.lava");
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.lava");
+
+    const float min_y_before = world.brushes[0].bounds.min.y;
+    const float max_y_before = world.brushes[0].bounds.max.y;
+    emit_signal("signal.editor.liquid.depth.increase");
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, min_y_before - 1.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+
+    emit_signal("signal.editor.liquid.type.clean_water");
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+
+    emit_signal("signal.editor.texture.select.lava");
+    emit_signal("signal.editor.texture.paint.selection");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "liquid volumes only accept liquid types");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+
+    emit_signal("signal.editor.liquid.panel.toggle");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "liquid");
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+
+    emit_signal("signal.editor.liquid.panel.toggle");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    emit_signal("signal.editor.liquid.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, FpsBrushControllerSwimsAndPublishesLiquidDamage)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_liquid_controller");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
+  "world": { "brush_worlds": [{ "world": "brush.liquid_room", "position": [0.0, 0.0, 0.0] }] }
+})json");
+    write_text(dir / "fps_brush_liquid.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "FPS Brush Liquid Controller Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.player", "type": "fps", "target_entity": "entity.player", "fov": 90.0, "active": true }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" },
+          { "name": "action.jump" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.6, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "last_damage_per_second": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.liquid_room",
+          "contents_mask": ["solid", "player_clip"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "ceiling_clearance": 0.1,
+          "walkable_normal_y": 0.65,
+          "mouse_sensitivity": 0.0,
+          "swim_up_velocity": 2.5,
+          "swim_gravity_scale": 0.1,
+          "swim_max_sink_speed": 0.75,
+          "liquid_damage_per_second": 11.0
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.liquid_room",
+      "materials": [{ "name": "mat.lava", "albedo": [1.0, 0.25, 0.1, 0.8] }],
+      "brushes": [
+        {
+          "name": "brush.lava_pool",
+          "contents": "lava",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 1, 0], "distance": 2.8 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.lava" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_brush_liquid.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    ASSERT_NE(slayer3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_liquid", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 11.0f, 0.0001f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "liquid_contents", 0), SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", -10.0f), -1.0f);
+
+    const int jump = slayer3d_game_data_find_action(runtime, "action.jump");
+    ASSERT_GE(jump, 0);
+    slayer3d_input_set_action_override(input, jump, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 1100), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, FpsBrushControllerTreatsLiquidSurfaceAsSwimmable)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_liquid_surface");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
+  "world": { "brush_worlds": [{ "world": "brush.liquid_room", "position": [0.0, 0.0, 0.0] }] }
+})json");
+    write_text(dir / "fps_brush_liquid_surface.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "FPS Brush Liquid Surface Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.player", "type": "fps", "target_entity": "entity.player", "fov": 90.0, "active": true }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" },
+          { "name": "action.jump" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.85, 0.0] },
+      "properties": {
+        "last_damage_per_second": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.liquid_room",
+          "contents_mask": ["solid", "player_clip"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "ceiling_clearance": 0.1,
+          "walkable_normal_y": 0.65,
+          "mouse_sensitivity": 0.0,
+          "swim_gravity_scale": 0.1,
+          "swim_max_sink_speed": 0.75,
+          "liquid_damage_per_second": 13.0
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.liquid_room",
+      "materials": [{ "name": "mat.lava", "albedo": [1.0, 0.25, 0.1, 0.8] }],
+      "brushes": [
+        {
+          "name": "brush.lava_pool",
+          "contents": "lava",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.25 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1.5 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.lava" }
+          ]
+        },
+        {
+          "name": "brush.pool_bottom",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 1, 0], "distance": -1.5 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1.75 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.lava" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_brush_liquid_surface.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    ASSERT_NE(slayer3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_liquid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "liquid_contents", 0), SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 13.0f, 0.0001f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+// Regression for the SlayerMap -> playable -> runner path where liquid volumes
+// were treated as solid. The editor map export dropped brush contents, so
+// water/lava brushes materialized as solid|player_clip in the playable game
+// data and the FPS controller never entered liquid/swim state. This exercises
+// the real generated-map path end to end, not only hand-authored game JSON.
+TEST(GameDataRuntime, EditorMapExportPreservesLiquidContentsThroughPlayableRunner)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    configure_editor_shell_default_test_camera(runtime);
+
+    // A solid floor plus a damaging lava pool large enough to hold the player.
+    slayer3d_game_data_create_box_brush_desc floor{};
+    floor.world_name = "brush.editor_shell.target";
+    floor.brush_name = "brush.target.floor";
+    floor.material_name = "mat.editor.wall";
+    floor.min = slayer3d_vec3_make(-4.0f, -4.0f, -4.0f);
+    floor.max = slayer3d_vec3_make(4.0f, -2.0f, 4.0f);
+    floor.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &floor, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_create_box_brush_desc lava{};
+    lava.world_name = "brush.editor_shell.target";
+    lava.brush_name = "brush.target.lava";
+    lava.material_name = "mat.editor.liquid.lava";
+    lava.min = slayer3d_vec3_make(-4.0f, -2.0f, -4.0f);
+    lava.max = slayer3d_vec3_make(4.0f, 4.0f, 4.0f);
+    lava.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &lava, nullptr, 0, error, sizeof(error))) << error;
+
+    // Spawn the player inside the lava volume so the runner starts submerged.
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.liquid";
+    start.position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    start.has_position = true;
+    start.yaw = 0.0f;
+    start.has_yaw = true;
+    start.pitch = 0.0f;
+    start.has_pitch = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    // Save through the real editor map export path.
+    const std::filesystem::path dir = unique_test_dir("liquid_playable_runner");
+    const std::filesystem::path map_path = dir / "liquid.slayermap.json";
+    size_t saved_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
+        runtime, "brush.editor_shell.target", map_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+
+    // The canonical top-level map brush must keep its lava contents rather than
+    // defaulting to solid; this is the field the exporter previously dropped.
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &map, error, sizeof(error))) << error;
+    bool saw_lava_brush = false;
+    for (size_t i = 0; i < slayer3d_map_get_brush_count(map); ++i)
+    {
+        slayer3d_map_brush brush{};
+        ASSERT_TRUE(slayer3d_map_get_brush(map, i, &brush));
+        if ((brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA) != 0u)
+        {
+            saw_lava_brush = true;
+            EXPECT_EQ(brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, 0u)
+                << "liquid brush must not carry solid contents";
+            EXPECT_EQ(brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP, 0u)
+                << "liquid brush must not carry player_clip contents";
+        }
+    }
+    EXPECT_TRUE(saw_lava_brush) << "exported map lost the lava brush contents";
+
+    // Materialize the playable game data exactly as the runner's --map path does.
+    const std::filesystem::path playable_dir = dir / "playable";
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(map, playable_dir.string().c_str(), error, sizeof(error)))
+        << error;
+    slayer3d_map_destroy(map);
+
+    // The generated playable brush keeps lava contents without solid/player_clip.
+    const std::string playable_json = read_text(playable_dir / "playable_map.game.json");
+    yyjson_doc *playable_doc = yyjson_read(playable_json.c_str(), playable_json.size(), 0);
+    ASSERT_NE(playable_doc, nullptr);
+    yyjson_val *worlds = yyjson_obj_get(yyjson_doc_get_root(playable_doc), "brush_worlds");
+    ASSERT_TRUE(yyjson_is_arr(worlds));
+    bool saw_playable_lava = false;
+    size_t world_index = 0;
+    size_t world_max = 0;
+    yyjson_val *world_val = nullptr;
+    yyjson_arr_foreach(worlds, world_index, world_max, world_val)
+    {
+        yyjson_val *brush_arr = yyjson_obj_get(world_val, "brushes");
+        size_t brush_index = 0;
+        size_t brush_max = 0;
+        yyjson_val *brush_val = nullptr;
+        yyjson_arr_foreach(brush_arr, brush_index, brush_max, brush_val)
+        {
+            yyjson_val *contents = yyjson_obj_get(brush_val, "contents");
+            if (!yyjson_is_arr(contents))
+                continue;
+            bool has_lava = false;
+            bool has_solid = false;
+            bool has_player_clip = false;
+            size_t ci = 0;
+            size_t cmax = 0;
+            yyjson_val *cval = nullptr;
+            yyjson_arr_foreach(contents, ci, cmax, cval)
+            {
+                const char *name = yyjson_get_str(cval);
+                if (name == nullptr)
+                    continue;
+                if (SDL_strcmp(name, "lava") == 0)
+                    has_lava = true;
+                else if (SDL_strcmp(name, "solid") == 0)
+                    has_solid = true;
+                else if (SDL_strcmp(name, "player_clip") == 0)
+                    has_player_clip = true;
+            }
+            if (has_lava)
+            {
+                saw_playable_lava = true;
+                EXPECT_FALSE(has_solid) << "playable lava brush must not be solid";
+                EXPECT_FALSE(has_player_clip) << "playable lava brush must not be player_clip";
+            }
+        }
+    }
+    yyjson_doc_free(playable_doc);
+    EXPECT_TRUE(saw_playable_lava) << "playable game data lost the lava brush contents";
+
+    // Load the generated playable game data and confirm the FPS controller
+    // enters liquid/swim state with a damage pulse, rather than standing solid.
+    slayer3d_game_session *play_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &play_session));
+    slayer3d_game_data_runtime *play_runtime = nullptr;
+    const std::filesystem::path playable_game = playable_dir / "playable_map.game.json";
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(playable_game.string().c_str(), play_session, &play_runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(play_runtime, "scene.play"));
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(play_runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    slayer3d_input_manager *play_input = slayer3d_game_session_get_input(play_session);
+    ASSERT_NE(play_input, nullptr);
+    for (int frame = 0; frame < 8; ++frame)
+    {
+        ASSERT_NE(slayer3d_input_update(play_input, 2000 + frame), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(play_runtime, 0.016f));
+    }
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_liquid", false))
+        << "player should be swimming in the lava volume";
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "liquid_contents", 0), SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 0.0f)
+        << "damaging liquid should drive the damage-pulse property";
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true))
+        << "liquid must not behave like a walkable floor";
+
+    slayer3d_game_data_destroy(play_runtime);
+    slayer3d_game_session_destroy(play_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
@@ -18464,15 +19085,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
     const std::filesystem::path export_dir = unique_test_dir("editor_brush_colors_roundtrip");
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
-    const std::filesystem::path exported_textures_dir = export_dir / "textures";
-    std::filesystem::create_directories(exported_textures_dir);
-    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
-    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
-                                     "lava.jpg", "radioactive-crate.png"})
-    {
-        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
-                                   std::filesystem::copy_options::overwrite_existing);
-    }
+    copy_slayer3d_editor_default_material_assets(dojo_path.parent_path(), export_dir);
     write_text(export_dir / "world.fragment.json", roundtrip_fragment_json);
     write_text(export_dir / "roundtrip.game.json",
                R"json({
@@ -46669,6 +47282,12 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
       "id": "brush.north_wall",
       "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 3, -3.5] },
       "material": "mat.wall"
+    },
+    {
+      "id": "brush.lava_pool",
+      "geometry": { "kind": "box", "min": [10, -1, 10], "max": [12, 0.25, 12] },
+      "material": "mat.floor",
+      "contents": ["lava"]
     }
   ],
   "actors": [
@@ -46736,6 +47355,9 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"key\": \"D\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"ESCAPE\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"last_damage_per_second\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"liquid_damage_per_second\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"lava\""), std::string::npos);
     EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
     EXPECT_NE(game_text.find("0.12549019607843137"), std::string::npos);
     EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
@@ -46743,7 +47365,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"type\": \"spot\""), std::string::npos);
     EXPECT_NE(game_text.find("\"effects\": ["), std::string::npos);
     EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
-    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
+    const std::string scene_text = read_text(dir / "scenes" / "play.scene.json");
+    EXPECT_NE(scene_text.find("\"lighting\": true"), std::string::npos);
+    EXPECT_NE(scene_text.find("ui.slayermap.damage_feedback.top"), std::string::npos);
+    EXPECT_NE(scene_text.find("\"alpha_source\""), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;
@@ -46755,7 +47380,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
 
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.slayermap", &world));
-    EXPECT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 3);
+    EXPECT_EQ(world.brushes[0].contents,
+              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    EXPECT_EQ(world.brushes[2].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
     ASSERT_EQ(world.material_count, 2);
     EXPECT_STREQ(world.materials[0].name, "mat.floor");
     EXPECT_FLOAT_EQ(world.materials[0].albedo.x, 128.0f / 255.0f);

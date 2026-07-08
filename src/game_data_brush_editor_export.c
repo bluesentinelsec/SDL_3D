@@ -1209,6 +1209,7 @@ static bool export_add_map_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
     const char *id = brush->name != NULL && brush->name[0] != '\0' ? brush->name : "brush";
     if (obj == NULL || geometry == NULL || planes == NULL || properties == NULL ||
         !yyjson_mut_arr_add_val(brushes, obj) || !yyjson_mut_obj_add_strcpy(doc, obj, "id", id) ||
+        !export_add_brush_contents(doc, obj, brush->contents) ||
         !yyjson_mut_obj_add_val(doc, obj, "geometry", geometry) ||
         !yyjson_mut_obj_add_strcpy(doc, geometry, "kind", "planes") ||
         !yyjson_mut_obj_add_val(doc, geometry, "planes", planes) ||
