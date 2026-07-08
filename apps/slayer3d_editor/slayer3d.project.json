@@ -5,11 +5,12 @@
   "editor_entry": "asset://slayer3d_editor.game.json",
   "media_root": "../../media",
   "asset_sources": {
-    "textures": "data/textures",
-    "models": "data/models",
+    "textures": "../../media/textures",
+    "models": "../../media/models",
     "sprites": "../../media/sprites",
-    "skyboxes": "data/skyboxes",
-    "effects": "data/effects"
+    "skyboxes": "../../media/skyboxes",
+    "liquids": "../../media/liquids",
+    "effects": "../../media/effects"
   },
   "test_run_output": "../../build/slayer3d_editor/test-run.json"
 }

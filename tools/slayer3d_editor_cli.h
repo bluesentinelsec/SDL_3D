@@ -32,6 +32,7 @@ extern "C"
         const char *project;
         const char *input_path;
         const char *output_path;
+        const char *media_path;
         const char *texture_path;
         const char *model_path;
         const char *skybox_path;
@@ -60,6 +61,7 @@ extern "C"
         slayer3d_editor_asset_source models;
         slayer3d_editor_asset_source sprites;
         slayer3d_editor_asset_source skyboxes;
+        slayer3d_editor_asset_source liquids;
         slayer3d_editor_asset_source effects;
     } slayer3d_editor_asset_sources;
 
@@ -81,6 +83,9 @@ extern "C"
         const char *root;
         const char *data_asset_path;
         const char *media_dir;
+        const char *media_relative_path;
+        char *owned_media_dir;
+        char *owned_media_relative_path;
         const char *input_path;
         const char *save_path;
         const char *test_run_path;
@@ -102,7 +107,10 @@ extern "C"
         char *owned_test_run_assignment;
         char *owned_project_dir_assignment;
         char *owned_project_data_root_assignment;
-        char *owned_asset_source_assignments[16];
+        char *owned_media_path_assignment;
+        char *owned_media_relative_assignment;
+        char *owned_media_available_assignment;
+        char *owned_asset_source_assignments[32];
     } slayer3d_editor_runner_invocation;
 
     slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args,

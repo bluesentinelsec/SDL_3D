@@ -220,6 +220,7 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     std::filesystem::create_directories(project_dir / "media" / "models");
     std::filesystem::create_directories(project_dir / "media" / "sprites");
     std::filesystem::create_directories(project_dir / "media" / "skyboxes");
+    std::filesystem::create_directories(project_dir / "media" / "liquids");
     std::filesystem::create_directories(project_dir / "media" / "effects");
     write_text(project_dir / "slayer3d.project.json",
                R"json({
@@ -242,7 +243,9 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
     EXPECT_STREQ(loaded_project.asset_sources.textures.relative_path, "media/textures");
     EXPECT_STREQ(loaded_project.asset_sources.models.relative_path, "media/models");
+    EXPECT_STREQ(loaded_project.asset_sources.liquids.relative_path, "media/liquids");
     EXPECT_TRUE(loaded_project.asset_sources.textures.available);
+    EXPECT_TRUE(loaded_project.asset_sources.liquids.available);
     EXPECT_TRUE(loaded_project.asset_sources.effects.available);
     slayer3d_editor_launch launch;
     ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
@@ -272,6 +275,8 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     EXPECT_NE(joined.find("editor.project.data_root=data"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.available=true"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.liquids.relative=media/liquids"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.liquids.available=true"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.any_missing=false"), std::string::npos);
     slayer3d_editor_runner_invocation_destroy(&invocation);
     slayer3d_editor_launch_destroy(&launch);
@@ -295,6 +300,7 @@ TEST(ToolCli, EditorProjectAssetSourcesAllowConfiguredMissingDirectories)
     "models": "content/models",
     "sprites": "content/sprites",
     "skyboxes": "content/skyboxes",
+    "liquids": "content/liquids",
     "effects": "content/effects"
   }
 })json");
@@ -305,9 +311,11 @@ TEST(ToolCli, EditorProjectAssetSourcesAllowConfiguredMissingDirectories)
         << error;
     EXPECT_STREQ(loaded_project.asset_sources.textures.relative_path, "content/textures");
     EXPECT_STREQ(loaded_project.asset_sources.models.relative_path, "content/models");
+    EXPECT_STREQ(loaded_project.asset_sources.liquids.relative_path, "content/liquids");
     EXPECT_STREQ(loaded_project.asset_sources.textures.path, (project_dir / "content" / "textures").string().c_str());
     EXPECT_TRUE(loaded_project.asset_sources.textures.available);
     EXPECT_FALSE(loaded_project.asset_sources.models.available);
+    EXPECT_FALSE(loaded_project.asset_sources.liquids.available);
 
     slayer3d_editor_args args{};
     args.command = SLAYER3D_EDITOR_COMMAND_NEW;
@@ -334,6 +342,78 @@ TEST(ToolCli, EditorProjectAssetSourcesAllowConfiguredMissingDirectories)
     std::filesystem::remove_all(project_dir);
 }
 
+TEST(ToolCli, EditorMediaPathBecomesAuthoritativeAssetSourceRoot)
+{
+    const std::filesystem::path project_dir = unique_cli_test_dir("editor_media_path");
+    const std::filesystem::path media_dir = project_dir / "external_media";
+    std::filesystem::create_directories(project_dir / "data");
+    std::filesystem::create_directories(media_dir / "textures");
+    std::filesystem::create_directories(media_dir / "models");
+    std::filesystem::create_directories(media_dir / "sprites");
+    std::filesystem::create_directories(media_dir / "skyboxes");
+    std::filesystem::create_directories(media_dir / "liquids");
+    std::filesystem::create_directories(media_dir / "effects");
+    write_text(project_dir / "slayer3d.project.json",
+               R"json({
+  "schema": "slayer3d.project.v0",
+  "data_root": "data",
+  "editor_entry": "asset://editor.game.json"
+})json");
+
+    const std::string project = project_dir.string();
+    const std::string media = media_dir.string();
+    const std::string output = (project_dir / "level.slayermap.json").string();
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "new", "--project", project.c_str(), "--output",
+                                          output.c_str(), "--media-path", media.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_STREQ(args.media_path, media.c_str());
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    ASSERT_NE(launch.asset_sources, nullptr);
+    EXPECT_STREQ(launch.media_dir, media.c_str());
+    EXPECT_STREQ(launch.asset_sources->textures.path, (media_dir / "textures").string().c_str());
+    EXPECT_STREQ(launch.asset_sources->models.path, (media_dir / "models").string().c_str());
+    EXPECT_STREQ(launch.asset_sources->liquids.path, (media_dir / "liquids").string().c_str());
+    EXPECT_TRUE(launch.asset_sources->textures.available);
+    EXPECT_TRUE(launch.asset_sources->liquids.available);
+
+    slayer3d_editor_runner_invocation invocation;
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+    std::string joined;
+    for (int i = 0; i < invocation.argc; ++i)
+    {
+        if (!joined.empty())
+            joined += "\n";
+        joined += invocation.argv[i];
+    }
+    EXPECT_NE(joined.find("editor.media.path=" + media), std::string::npos);
+    EXPECT_NE(joined.find("editor.media.available=true"), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.path=" + (media_dir / "textures").string()), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.liquids.path=" + (media_dir / "liquids").string()), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.any_missing=false"), std::string::npos);
+
+    slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(project_dir);
+}
+
+TEST(ToolCli, EditorMediaPathCannotBeCombinedWithPerToolOverrides)
+{
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "--media-path", "media", "--texture-path", "media/textures"});
+    slayer3d_editor_args args;
+    EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
+    slayer3d_editor_args_destroy(&args);
+}
+
 TEST(ToolCli, EditorTexturePathOverrideBecomesAuthoritativeTextureSource)
 {
     const std::filesystem::path project_dir = unique_cli_test_dir("editor_texture_override");
@@ -343,6 +423,7 @@ TEST(ToolCli, EditorTexturePathOverrideBecomesAuthoritativeTextureSource)
     std::filesystem::create_directories(project_dir / "media" / "models");
     std::filesystem::create_directories(project_dir / "media" / "sprites");
     std::filesystem::create_directories(project_dir / "media" / "skyboxes");
+    std::filesystem::create_directories(project_dir / "media" / "liquids");
     std::filesystem::create_directories(project_dir / "media" / "effects");
     std::filesystem::create_directories(override_dir);
     write_text(project_dir / "slayer3d.project.json",
@@ -477,6 +558,7 @@ TEST(ToolCli, EditorModelPathOverrideBecomesAuthoritativeModelSource)
     std::filesystem::create_directories(project_dir / "media" / "models");
     std::filesystem::create_directories(project_dir / "media" / "sprites");
     std::filesystem::create_directories(project_dir / "media" / "skyboxes");
+    std::filesystem::create_directories(project_dir / "media" / "liquids");
     std::filesystem::create_directories(project_dir / "media" / "effects");
     std::filesystem::create_directories(override_dir);
     write_text(project_dir / "slayer3d.project.json",

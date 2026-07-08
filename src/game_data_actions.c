@@ -91,7 +91,8 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
 
     const char *mode = json_string(action, "mode", "");
     const bool save = SDL_strcmp(mode, "save") == 0;
-    if (!save && SDL_strcmp(mode, "open") != 0)
+    const bool folder = SDL_strcmp(mode, "folder") == 0;
+    if (!save && !folder && SDL_strcmp(mode, "open") != 0)
         return false;
 
     const char *path_key = json_string(action, "path_key", NULL);
@@ -129,7 +130,7 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
     {
         if (request->status_key[0] != '\0')
             slayer3d_properties_set_string(runtime->scene_state, request->status_key,
-                                           save ? "save pending" : "open pending");
+                                           save ? "save pending" : (folder ? "folder pending" : "open pending"));
         if (request->message_key[0] != '\0')
             slayer3d_properties_set_string(runtime->scene_state, request->message_key, "");
     }
@@ -138,6 +139,10 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
     {
         SDL_ShowSaveFileDialog(editor_file_dialog_callback, request, NULL, map_filters, (int)SDL_arraysize(map_filters),
                                request->default_location);
+    }
+    else if (folder)
+    {
+        SDL_ShowOpenFolderDialog(editor_file_dialog_callback, request, NULL, request->default_location, false);
     }
     else
     {
@@ -1544,6 +1549,112 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
     slayer3d_properties_set_bool(runtime->scene_state, available_key, true);
     slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path updated");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture path updated");
+    SDL_free(relative_path);
+    SDL_free(absolute_path);
+    return true;
+}
+
+static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, const char *name, const char *media_root,
+                                          const char *leaf)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || name == NULL || media_root == NULL || leaf == NULL)
+        return false;
+    char *path = editor_path_join(media_root, leaf);
+    if (path == NULL)
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool available = SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    char key[128];
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.path", name);
+    slayer3d_properties_set_string(runtime->scene_state, key, path);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.relative", name);
+    slayer3d_properties_set_string(runtime->scene_state, key, leaf);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", name);
+    slayer3d_properties_set_bool(runtime->scene_state, key, available);
+    SDL_free(path);
+    return true;
+}
+
+static void editor_media_refresh_missing_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    static const char *const names[] = {"textures", "models", "sprites", "skyboxes", "liquids", "effects"};
+    bool any_missing = false;
+    for (size_t i = 0; i < SDL_arraysize(names); ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", names[i]);
+        any_missing = any_missing || !slayer3d_properties_get_bool(runtime->scene_state, key, false);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.asset_source.any_missing", any_missing);
+}
+
+static void editor_media_mark_child_sources_unavailable(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    static const char *const names[] = {"textures", "models", "sprites", "skyboxes", "liquids", "effects"};
+    for (size_t i = 0; i < SDL_arraysize(names); ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", names[i]);
+        slayer3d_properties_set_bool(runtime->scene_state, key, false);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.asset_source.any_missing", true);
+}
+
+static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const char *path_key = json_string(action, "path_key", "editor.media.path.input");
+    const char *status_key = json_string(action, "status_key", "editor.media.status");
+    const char *path = slayer3d_properties_get_string(runtime->scene_state, path_key, "");
+    if (path == NULL || path[0] == '\0')
+        path = slayer3d_properties_get_string(runtime->scene_state, "editor.media.path", "");
+
+    char *absolute_path = editor_path_make_absolute_from_cwd(path);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
+                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    if (!valid_directory)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.media.available", false);
+        editor_media_mark_child_sources_unavailable(runtime);
+        slayer3d_properties_set_string(runtime->scene_state, status_key, "media path is not a directory");
+        editor_publish_console_message(runtime, "Media path is not a directory");
+        SDL_free(absolute_path);
+        return true;
+    }
+
+    char *relative_path = editor_relative_directory_for_source_path(runtime, path, absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.path", absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.path.input", absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.relative",
+                                   relative_path != NULL ? relative_path : "media");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.media.available", true);
+    (void)editor_media_set_child_source(runtime, "textures", absolute_path, "textures");
+    (void)editor_media_set_child_source(runtime, "models", absolute_path, "models");
+    (void)editor_media_set_child_source(runtime, "sprites", absolute_path, "sprites");
+    (void)editor_media_set_child_source(runtime, "skyboxes", absolute_path, "skyboxes");
+    (void)editor_media_set_child_source(runtime, "liquids", absolute_path, "liquids");
+    (void)editor_media_set_child_source(runtime, "effects", absolute_path, "effects");
+    editor_media_refresh_missing_state(runtime);
+
+    char *texture_path = editor_path_join(absolute_path, "textures");
+    char *skybox_path = editor_path_join(absolute_path, "skyboxes");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.input",
+                                   texture_path != NULL ? texture_path : absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.sky.path.input",
+                                   skybox_path != NULL ? skybox_path : absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, status_key, "media path updated");
+    editor_publish_console_message(runtime, "Media path updated");
+    SDL_free(texture_path);
+    SDL_free(skybox_path);
     SDL_free(relative_path);
     SDL_free(absolute_path);
     return true;
@@ -4532,6 +4643,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.texture.path.apply") == 0)
         return execute_editor_texture_path_apply_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.media.path.apply") == 0)
+        return execute_editor_media_path_apply_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.texture.select_index") == 0)
         return execute_editor_texture_select_index_action(runtime, action);
