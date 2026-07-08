@@ -11175,6 +11175,30 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
               std::string::npos)
         << error;
 
+    write_text(dir / "bad_selection_resize_face_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Selection Resize Face Action" },
+  "world": { "name": "world.bad_editor_selection_resize_face_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.resize"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.resize",
+        "actions": [
+          { "type": "editor.selection.resize_y", "face": "side" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_selection_resize_face_action.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.selection.resize_y face must be top or bottom"), std::string::npos)
+        << error;
+
     write_text(dir / "bad_selection_resize_bounds_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -18306,6 +18330,59 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_EQ(active_selection.face_index, face_paint_index);
     EXPECT_STREQ(active_selection.material_name, "mat.editor.texture.rock_floor");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    emit_signal("signal.editor.liquid.type.lava");
+    emit_signal("signal.editor.liquid.paint.selection");
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.paint.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "painted 6 faces with mat.editor.liquid.lava");
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.lava");
+
+    const float min_y_before = world.brushes[0].bounds.min.y;
+    const float max_y_before = world.brushes[0].bounds.max.y;
+    emit_signal("signal.editor.liquid.depth.increase");
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, min_y_before - 1.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

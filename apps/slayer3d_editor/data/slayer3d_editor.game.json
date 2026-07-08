@@ -692,6 +692,7 @@
     "signal.editor.sky.reset",
     "signal.editor.liquid.panel.toggle",
     "signal.editor.liquid.close",
+    "signal.editor.liquid.paint.selection",
     "signal.editor.liquid.type.clean_water",
     "signal.editor.liquid.type.dirty_water",
     "signal.editor.liquid.type.purple_poison",
@@ -2067,6 +2068,30 @@
         ]
       },
       {
+        "signal": "signal.editor.liquid.paint.selection",
+        "actions": [
+          {
+            "type": "editor.brush.paint",
+            "target": "selection",
+            "material_key": "editor.liquid.material",
+            "contents_key": "editor.liquid.contents",
+            "invalid_message": "select a liquid volume before painting",
+            "outputs": {
+              "valid_key": "editor.liquid.paint.valid",
+              "message_key": "editor.liquid.paint.message",
+              "world_key": "editor.liquid.paint.world",
+              "element_key": "editor.liquid.paint.element",
+              "face_index_key": "editor.liquid.paint.face_index",
+              "source_path_key": "editor.brush_world.source_path",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
         "signal": "signal.editor.liquid.type.clean_water",
         "actions": [
           { "type": "scene_state.set", "key": "editor.liquid.type", "value": "clean_water" },
@@ -2141,7 +2166,8 @@
             "then": [
               {
                 "type": "editor.selection.resize_y",
-                "direction": 1,
+                "face": "bottom",
+                "direction": -1,
                 "grid_key": "editor.grid.size",
                 "default_distance": 0.25,
                 "min_height": 0.25,
@@ -2193,7 +2219,8 @@
             "then": [
               {
                 "type": "editor.selection.resize_y",
-                "direction": -1,
+                "face": "bottom",
+                "direction": 1,
                 "grid_key": "editor.grid.size",
                 "default_distance": 0.25,
                 "min_height": 0.25,
@@ -4655,6 +4682,17 @@
               "default": "select"
             },
             "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "liquid" },
+            "then": [
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+              }
+            ]
           },
           {
             "type": "branch",

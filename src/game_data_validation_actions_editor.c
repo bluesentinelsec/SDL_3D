@@ -4,6 +4,7 @@
  */
 
 #include "game_data_validation_actions_internal.h"
+#include "game_data_world_internal.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -285,6 +286,12 @@ bool validate_editor_selection_resize_y_action(validation_context *ctx, yyjson_v
     yyjson_val *direction = obj_get(action, "direction");
     if (direction != NULL && (!yyjson_is_int(direction) || yyjson_get_int(direction) == 0))
         return validation_error(ctx, json_path, "editor.selection.resize_y direction must be a non-zero integer");
+    yyjson_val *face = obj_get(action, "face");
+    if (face != NULL && (!yyjson_is_str(face) || (SDL_strcmp(yyjson_get_str(face), "top") != 0 &&
+                                                  SDL_strcmp(yyjson_get_str(face), "bottom") != 0)))
+    {
+        return validation_error(ctx, json_path, "editor.selection.resize_y face must be top or bottom");
+    }
     yyjson_val *distance = obj_get(action, "distance");
     if (distance != NULL && (!yyjson_is_num(distance) || yyjson_get_num(distance) <= 0.0))
         return validation_error(ctx, json_path, "editor.selection.resize_y distance must be positive");
@@ -506,10 +513,17 @@ bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *act
 
     yyjson_val *material = obj_get(action, "material");
     yyjson_val *material_key = obj_get(action, "material_key");
+    yyjson_val *contents = obj_get(action, "contents");
+    yyjson_val *contents_key = obj_get(action, "contents_key");
     if (material != NULL && (!yyjson_is_str(material) || yyjson_get_str(material)[0] == '\0'))
         return validation_error(ctx, json_path, "%s material must be a non-empty string", type);
     if (material_key != NULL && (!yyjson_is_str(material_key) || yyjson_get_str(material_key)[0] == '\0'))
         return validation_error(ctx, json_path, "%s material_key must be a non-empty string", type);
+    if (contents != NULL &&
+        (!yyjson_is_str(contents) || brush_content_flag_from_string(yyjson_get_str(contents)) == 0u))
+        return validation_error(ctx, json_path, "%s contents must be a valid brush content string", type);
+    if (contents_key != NULL && (!yyjson_is_str(contents_key) || yyjson_get_str(contents_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s contents_key must be a non-empty string", type);
     if (material == NULL && material_key == NULL)
         return validation_error(ctx, json_path, "%s requires material or material_key", type);
 
