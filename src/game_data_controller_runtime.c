@@ -1060,6 +1060,38 @@ static bool fps_brush_trace_body(const slayer3d_game_data_runtime *runtime, cons
     return slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, out_result);
 }
 
+static unsigned int fps_brush_liquid_contents_at_point(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 point)
+{
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.start = point;
+    trace.end = point;
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER | SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+
+    slayer3d_game_data_brush_trace_result result;
+    if (!slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, &result) || !result.hit || !result.start_solid)
+        return 0u;
+    return result.contents & trace.contents_mask;
+}
+
+static unsigned int fps_brush_liquid_contents_for_body(const slayer3d_game_data_runtime *runtime,
+                                                       const slayer3d_fps_mover *mover, slayer3d_vec3 body_center)
+{
+    if (runtime == NULL || mover == NULL)
+        return 0u;
+
+    const slayer3d_vec3 extents = fps_brush_body_extents(mover);
+    const slayer3d_vec3 feet = slayer3d_vec3_make(body_center.x, body_center.y - extents.y + 0.08f, body_center.z);
+    const slayer3d_vec3 waist = body_center;
+    const slayer3d_vec3 eye = fps_brush_body_center_to_eye(mover, body_center);
+
+    unsigned int contents = fps_brush_liquid_contents_at_point(runtime, waist);
+    contents |= fps_brush_liquid_contents_at_point(runtime, feet);
+    contents |= fps_brush_liquid_contents_at_point(runtime, eye);
+    return contents;
+}
+
 static bool fps_brush_slide_body(const slayer3d_game_data_runtime *runtime, const slayer3d_fps_mover *mover,
                                  unsigned int contents_mask, slayer3d_vec3 start, slayer3d_vec3 end,
                                  slayer3d_game_data_brush_trace_result *out_result)
@@ -1214,13 +1246,27 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     fps_brush_diagnostics diagnostics;
     fps_brush_diagnostics_init(&diagnostics);
     slayer3d_vec3 body_center = fps_brush_eye_to_body_center(mover, mover->position);
-    if (mover->on_ground)
+    const unsigned int starting_liquid_contents = fps_brush_liquid_contents_for_body(runtime, mover, body_center);
+    const bool in_liquid = starting_liquid_contents != 0u;
+    if (in_liquid)
+        mover->on_ground = false;
+    if (!in_liquid && mover->on_ground)
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
     const bool smooth_ground_height_change = mover->on_ground;
     const float smooth_start_eye_y = fps_brush_body_center_to_eye(mover, body_center).y;
 
     if (fps_controller_action_pressed(runtime, input, jump_action))
-        slayer3d_fps_mover_jump(mover);
+    {
+        if (in_liquid)
+        {
+            const float swim_up_velocity = SDL_max(json_float(component, "swim_up_velocity", 3.0f), 0.0f);
+            mover->vertical_velocity = SDL_max(mover->vertical_velocity, swim_up_velocity);
+        }
+        else
+        {
+            slayer3d_fps_mover_jump(mover);
+        }
+    }
 
     float forward = fps_controller_action_value(runtime, input, forward_action) -
                     fps_controller_action_value(runtime, input, back_action);
@@ -1238,9 +1284,11 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     const float fwd_z = -SDL_cosf(mover->yaw);
     const float right_x = SDL_cosf(mover->yaw);
     const float right_z = SDL_sinf(mover->yaw);
-    const slayer3d_vec3 horizontal_delta =
-        slayer3d_vec3_make((fwd_x * forward + right_x * side) * mover->config.move_speed * SDL_max(dt, 0.0f), 0.0f,
-                           (fwd_z * forward + right_z * side) * mover->config.move_speed * SDL_max(dt, 0.0f));
+    const float move_speed_scale =
+        in_liquid ? SDL_max(json_float(component, "swim_move_speed_scale", 0.55f), 0.0f) : 1.0f;
+    const slayer3d_vec3 horizontal_delta = slayer3d_vec3_make(
+        (fwd_x * forward + right_x * side) * mover->config.move_speed * move_speed_scale * SDL_max(dt, 0.0f), 0.0f,
+        (fwd_z * forward + right_z * side) * mover->config.move_speed * move_speed_scale * SDL_max(dt, 0.0f));
     if (slayer3d_vec3_length_squared(horizontal_delta) > 0.0000001f)
     {
         const slayer3d_vec3 horizontal_end = slayer3d_vec3_add(body_center, horizontal_delta);
@@ -1271,8 +1319,15 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
         }
     }
 
-    const bool allow_ground_snap = mover->on_ground && mover->vertical_velocity <= 0.0f;
-    mover->vertical_velocity -= mover->config.gravity * SDL_max(dt, 0.0f);
+    const bool allow_ground_snap = !in_liquid && mover->on_ground && mover->vertical_velocity <= 0.0f;
+    const float gravity_scale =
+        in_liquid ? SDL_clamp(json_float(component, "swim_gravity_scale", 0.25f), 0.0f, 1.0f) : 1.0f;
+    mover->vertical_velocity -= mover->config.gravity * gravity_scale * SDL_max(dt, 0.0f);
+    if (in_liquid)
+    {
+        const float max_sink_speed = SDL_max(json_float(component, "swim_max_sink_speed", 2.0f), 0.0f);
+        mover->vertical_velocity = SDL_max(mover->vertical_velocity, -max_sink_speed);
+    }
     const slayer3d_vec3 vertical_end =
         slayer3d_vec3_make(body_center.x, body_center.y + mover->vertical_velocity * SDL_max(dt, 0.0f), body_center.z);
     slayer3d_game_data_brush_trace_result vertical;
@@ -1304,6 +1359,16 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
+    const unsigned int final_liquid_contents = fps_brush_liquid_contents_for_body(runtime, mover, body_center);
+    const float liquid_damage = (final_liquid_contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA) != 0u
+                                    ? SDL_max(json_float(component, "liquid_damage_per_second", 18.0f), 0.0f)
+                                    : 0.0f;
+    slayer3d_properties_set_bool(actor->props, json_string(component, "in_liquid_property", "in_liquid"),
+                                 final_liquid_contents != 0u);
+    slayer3d_properties_set_int(actor->props, json_string(component, "liquid_contents_property", "liquid_contents"),
+                                (int)SDL_min(final_liquid_contents, (unsigned int)SDL_MAX_SINT32));
+    slayer3d_properties_set_float(
+        actor->props, json_string(component, "liquid_damage_property", "last_damage_per_second"), liquid_damage);
     resolve_fps_controller_sector_doors(runtime, controller);
     if (smooth_ground_height_change && mover->on_ground)
     {

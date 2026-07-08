@@ -3920,12 +3920,13 @@ static bool map_game_add_player_entity(yyjson_mut_doc *doc, yyjson_mut_val *root
     yyjson_mut_val *properties = yyjson_mut_obj(doc);
     yyjson_mut_val *yaw = yyjson_mut_obj(doc);
     yyjson_mut_val *pitch = yyjson_mut_obj(doc);
+    yyjson_mut_val *last_damage = yyjson_mut_obj(doc);
     yyjson_mut_val *components = yyjson_mut_arr(doc);
     yyjson_mut_val *controller = yyjson_mut_obj(doc);
     yyjson_mut_val *actions = yyjson_mut_obj(doc);
     yyjson_mut_val *mask = yyjson_mut_arr(doc);
     if (entities == NULL || entity == NULL || transform == NULL || properties == NULL || yaw == NULL || pitch == NULL ||
-        components == NULL || controller == NULL || actions == NULL || mask == NULL ||
+        last_damage == NULL || components == NULL || controller == NULL || actions == NULL || mask == NULL ||
         !yyjson_mut_obj_add_val(doc, root, "entities", entities) || !yyjson_mut_arr_add_val(entities, entity) ||
         !yyjson_mut_obj_add_strcpy(doc, entity, "name", "entity.player") ||
         !yyjson_mut_obj_add_bool(doc, entity, "active", true) ||
@@ -3936,6 +3937,9 @@ static bool map_game_add_player_entity(yyjson_mut_doc *doc, yyjson_mut_val *root
         !yyjson_mut_obj_add_val(doc, properties, "yaw", yaw) ||
         !yyjson_mut_obj_add_strcpy(doc, pitch, "type", "float") || !yyjson_mut_obj_add_real(doc, pitch, "value", 0.0) ||
         !yyjson_mut_obj_add_val(doc, properties, "pitch", pitch) ||
+        !yyjson_mut_obj_add_strcpy(doc, last_damage, "type", "float") ||
+        !yyjson_mut_obj_add_real(doc, last_damage, "value", 0.0) ||
+        !yyjson_mut_obj_add_val(doc, properties, "last_damage_per_second", last_damage) ||
         !yyjson_mut_obj_add_val(doc, entity, "components", components) ||
         !yyjson_mut_arr_add_val(components, controller) ||
         !yyjson_mut_obj_add_strcpy(doc, controller, "type", "controller.fps_brush") ||
@@ -3956,6 +3960,11 @@ static bool map_game_add_player_entity(yyjson_mut_doc *doc, yyjson_mut_val *root
         !yyjson_mut_obj_add_real(doc, controller, "player_radius", 0.35) ||
         !yyjson_mut_obj_add_real(doc, controller, "step_height", 0.55) ||
         !yyjson_mut_obj_add_real(doc, controller, "ceiling_clearance", 0.1) ||
+        !yyjson_mut_obj_add_real(doc, controller, "swim_move_speed_scale", 0.55) ||
+        !yyjson_mut_obj_add_real(doc, controller, "swim_gravity_scale", 0.25) ||
+        !yyjson_mut_obj_add_real(doc, controller, "swim_up_velocity", 3.0) ||
+        !yyjson_mut_obj_add_real(doc, controller, "swim_max_sink_speed", 2.0) ||
+        !yyjson_mut_obj_add_real(doc, controller, "liquid_damage_per_second", 18.0) ||
         !yyjson_mut_obj_add_real(doc, controller, "mouse_sensitivity", 0.002))
     {
         return false;
@@ -3984,13 +3993,60 @@ static bool map_scene_add_lighting_debug_line(yyjson_mut_doc *doc, yyjson_mut_va
            map_game_add_color(doc, entry, "color", color) && yyjson_mut_obj_add_real(doc, entry, "scale", scale);
 }
 
+static bool map_scene_add_damage_feedback_rect(yyjson_mut_doc *doc, yyjson_mut_val *rects, const char *name, float x,
+                                               float y, float w, float h)
+{
+    yyjson_mut_val *entry = yyjson_mut_obj(doc);
+    yyjson_mut_val *alpha_source = yyjson_mut_obj(doc);
+    yyjson_mut_val *visible_if = yyjson_mut_obj(doc);
+    if (entry == NULL || alpha_source == NULL || visible_if == NULL || !yyjson_mut_arr_add_val(rects, entry) ||
+        !yyjson_mut_obj_add_strcpy(doc, entry, "name", name) || !yyjson_mut_obj_add_real(doc, entry, "x", x) ||
+        !yyjson_mut_obj_add_real(doc, entry, "y", y) || !yyjson_mut_obj_add_real(doc, entry, "w", w) ||
+        !yyjson_mut_obj_add_real(doc, entry, "h", h) || !yyjson_mut_obj_add_bool(doc, entry, "normalized", true) ||
+        !map_game_add_color(doc, entry, "color", (slayer3d_color){220, 20, 20, 170}) ||
+        !yyjson_mut_obj_add_val(doc, entry, "alpha_source", alpha_source) ||
+        !yyjson_mut_obj_add_strcpy(doc, alpha_source, "target", "entity.player") ||
+        !yyjson_mut_obj_add_strcpy(doc, alpha_source, "key", "last_damage_per_second") ||
+        !yyjson_mut_obj_add_real(doc, alpha_source, "scale", 0.033333) ||
+        !yyjson_mut_obj_add_real(doc, alpha_source, "min", 0.35) ||
+        !yyjson_mut_obj_add_real(doc, alpha_source, "max", 1.0) ||
+        !yyjson_mut_obj_add_val(doc, entry, "visible_if", visible_if) ||
+        !yyjson_mut_obj_add_strcpy(doc, visible_if, "type", "property.compare") ||
+        !yyjson_mut_obj_add_strcpy(doc, visible_if, "target", "entity.player") ||
+        !yyjson_mut_obj_add_strcpy(doc, visible_if, "key", "last_damage_per_second") ||
+        !yyjson_mut_obj_add_strcpy(doc, visible_if, "op", ">") ||
+        !yyjson_mut_obj_add_real(doc, visible_if, "value", 0.0) ||
+        !yyjson_mut_obj_add_bool(doc, entry, "pulse_alpha", true) ||
+        !yyjson_mut_obj_add_real(doc, entry, "pulse_rate", 2.8) ||
+        !yyjson_mut_obj_add_real(doc, entry, "pulse_min", 0.45) ||
+        !yyjson_mut_obj_add_real(doc, entry, "pulse_max", 1.0))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool map_scene_add_damage_feedback_ui(yyjson_mut_doc *doc, yyjson_mut_val *ui)
+{
+    yyjson_mut_val *rects = yyjson_mut_arr(doc);
+    return rects != NULL && yyjson_mut_obj_add_val(doc, ui, "rects", rects) &&
+           map_scene_add_damage_feedback_rect(doc, rects, "ui.slayermap.damage_feedback.top", 0.0f, 0.0f, 1.0f,
+                                              0.08f) &&
+           map_scene_add_damage_feedback_rect(doc, rects, "ui.slayermap.damage_feedback.bottom", 0.0f, 0.92f, 1.0f,
+                                              0.08f) &&
+           map_scene_add_damage_feedback_rect(doc, rects, "ui.slayermap.damage_feedback.left", 0.0f, 0.08f, 0.06f,
+                                              0.84f) &&
+           map_scene_add_damage_feedback_rect(doc, rects, "ui.slayermap.damage_feedback.right", 0.94f, 0.08f, 0.06f,
+                                              0.84f);
+}
+
 static bool map_scene_add_lighting_debug_ui(yyjson_mut_doc *doc, yyjson_mut_val *root,
                                             const slayer3d_map_lighting_build_plan *plan)
 {
     yyjson_mut_val *ui = yyjson_mut_obj(doc);
     yyjson_mut_val *texts = yyjson_mut_arr(doc);
     if (ui == NULL || texts == NULL || !yyjson_mut_obj_add_val(doc, root, "ui", ui) ||
-        !yyjson_mut_obj_add_val(doc, ui, "text", texts))
+        !yyjson_mut_obj_add_val(doc, ui, "text", texts) || !map_scene_add_damage_feedback_ui(doc, ui))
     {
         return false;
     }

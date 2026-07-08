@@ -2117,7 +2117,7 @@
           { "type": "scene_state.set", "key": "editor.liquid.type", "value": "purple_poison" },
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Purple Poison" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.purple_poison" },
-          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "purple poison selected" }
         ]
       },
@@ -2127,7 +2127,7 @@
           { "type": "scene_state.set", "key": "editor.liquid.type", "value": "green_nukage" },
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Green Nukage" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.green_nukage" },
-          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
+          { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "green nukage selected" }
         ]
       },

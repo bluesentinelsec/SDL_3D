@@ -194,6 +194,11 @@ bool editor_mode_is_brush(const slayer3d_game_data_runtime *runtime)
     return editor_mode_is(runtime, "brush");
 }
 
+bool editor_mode_is_liquid(const slayer3d_game_data_runtime *runtime)
+{
+    return editor_mode_is(runtime, "liquid");
+}
+
 bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime)
 {
     return editor_mode_is(runtime, "face");

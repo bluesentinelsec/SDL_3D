@@ -18384,8 +18384,158 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
     EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
 
+    emit_signal("signal.editor.liquid.type.clean_water");
+    emit_signal("signal.editor.liquid.paint.selection");
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, FpsBrushControllerSwimsAndPublishesLiquidDamage)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_liquid_controller");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
+  "world": { "brush_worlds": [{ "world": "brush.liquid_room", "position": [0.0, 0.0, 0.0] }] }
+})json");
+    write_text(dir / "fps_brush_liquid.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "FPS Brush Liquid Controller Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.player", "type": "fps", "target_entity": "entity.player", "fov": 90.0, "active": true }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" },
+          { "name": "action.jump" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.6, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "last_damage_per_second": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.liquid_room",
+          "contents_mask": ["solid", "player_clip"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "ceiling_clearance": 0.1,
+          "walkable_normal_y": 0.65,
+          "mouse_sensitivity": 0.0,
+          "swim_up_velocity": 2.5,
+          "swim_gravity_scale": 0.1,
+          "swim_max_sink_speed": 0.75,
+          "liquid_damage_per_second": 11.0
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.liquid_room",
+      "materials": [{ "name": "mat.lava", "albedo": [1.0, 0.25, 0.1, 0.8] }],
+      "brushes": [
+        {
+          "name": "brush.lava_pool",
+          "contents": "lava",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 1, 0], "distance": 2.8 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat.lava" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.lava" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_brush_liquid.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    ASSERT_NE(slayer3d_input_update(input, 1000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_liquid", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 11.0f, 0.0001f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "liquid_contents", 0), SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", -10.0f), -1.0f);
+
+    const int jump = slayer3d_game_data_find_action(runtime, "action.jump");
+    ASSERT_GE(jump, 0);
+    slayer3d_input_set_action_override(input, jump, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 1100), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
@@ -46852,6 +47002,8 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"key\": \"D\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"SPACE\""), std::string::npos);
     EXPECT_NE(game_text.find("\"key\": \"ESCAPE\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"last_damage_per_second\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"liquid_damage_per_second\""), std::string::npos);
     EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
     EXPECT_NE(game_text.find("0.12549019607843137"), std::string::npos);
     EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
@@ -46859,7 +47011,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"type\": \"spot\""), std::string::npos);
     EXPECT_NE(game_text.find("\"effects\": ["), std::string::npos);
     EXPECT_NE(game_text.find("\"rotate_direction\""), std::string::npos);
-    EXPECT_NE(read_text(dir / "scenes" / "play.scene.json").find("\"lighting\": true"), std::string::npos);
+    const std::string scene_text = read_text(dir / "scenes" / "play.scene.json");
+    EXPECT_NE(scene_text.find("\"lighting\": true"), std::string::npos);
+    EXPECT_NE(scene_text.find("ui.slayermap.damage_feedback.top"), std::string::npos);
+    EXPECT_NE(scene_text.find("\"alpha_source\""), std::string::npos);
     slayer3d_map_destroy(document);
 
     slayer3d_game_session *session = nullptr;

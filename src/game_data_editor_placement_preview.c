@@ -266,7 +266,14 @@ static bool editor_drag_selection_can_start_for_mode(const char *mode,
         return selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
     }
 
-    if (SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "liquid") == 0)
+    if (SDL_strcmp(mode, "liquid") == 0)
+    {
+        /* Liquid mode paints and moves existing liquid brushes. Creation starts
+           only from empty/work-plane hits so existing volumes remain selectable. */
+        return selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    }
+
+    if (SDL_strcmp(mode, "brush") == 0)
     {
         /* Brush Tool mirrors TrenchBroom's assemble-brush behavior: an existing brush face is a
            valid reference surface for drawing a secondary brush footprint. Empty work-plane drags

@@ -1736,7 +1736,8 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
 {
     if (out_consumed != NULL)
         *out_consumed = false;
-    const bool movement_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime);
+    const bool movement_mode =
+        editor_mode_is_select(runtime) || editor_mode_is_brush(runtime) || editor_mode_is_liquid(runtime);
     if (runtime == NULL || runtime->scene_state == NULL || !movement_mode)
     {
         clear_editor_drag_move(runtime);
@@ -1885,8 +1886,8 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     const bool edge_mode = editor_mode_is_edge(runtime);
     const bool source_handle_mode = vertex_mode || edge_mode;
     const bool brush_transform_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime) ||
-                                      editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime) ||
-                                      editor_mode_is_shear(runtime);
+                                      editor_mode_is_liquid(runtime) || editor_mode_is_rotate(runtime) ||
+                                      editor_mode_is_scale(runtime) || editor_mode_is_shear(runtime);
     if (!brush_transform_mode && !source_handle_mode)
         return true;
 
@@ -2506,7 +2507,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_edge(runtime) ||
          editor_mode_is_vertex(runtime) || editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime) ||
-         editor_mode_is_shear(runtime)) &&
+         editor_mode_is_shear(runtime) || editor_mode_is_liquid(runtime)) &&
         hover_selection.hit)
     {
         runtime->editor_active_selection = hover_selection;
