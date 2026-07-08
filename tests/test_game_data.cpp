@@ -23413,6 +23413,62 @@ TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTex
     remove_test_dir(root_dir);
 }
 
+TEST(GameDataRuntime, EditorMediaPathApplyKeepsChildSourcesRelativeToMediaRoot)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path root_dir = unique_test_dir("editor_media_path_apply");
+    const std::filesystem::path media_dir = root_dir / "media";
+    for (const char *leaf : {"textures", "models", "sprites", "skyboxes", "liquids", "effects"})
+        std::filesystem::create_directories(media_dir / leaf);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    std::string expected_media_path;
+    {
+        ScopedCurrentPath cwd(root_dir);
+        expected_media_path = (std::filesystem::current_path() / "media").string();
+        slayer3d_properties_set_string(scene_state, "editor.media.path.input", "media");
+        emit_signal("signal.editor.media.path.apply");
+    }
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.media.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.any_missing", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.relative", ""), "media");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.path", ""), expected_media_path.c_str());
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.relative", ""),
+                 "media/textures");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.relative", ""),
+                 "media/models");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.sprites.relative", ""),
+                 "media/sprites");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.skyboxes.relative", ""),
+                 "media/skyboxes");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.liquids.relative", ""),
+                 "media/liquids");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.effects.relative", ""),
+                 "media/effects");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(root_dir);
+}
+
 TEST(GameDataRuntime, EditorTextureRefreshResolvesRelativeTextureDirectoryToAbsoluteSlotPaths)
 {
     const std::filesystem::path repo_root = std::filesystem::path(SLAYER3D_DEMOS_ROOT).parent_path();

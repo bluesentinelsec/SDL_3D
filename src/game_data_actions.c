@@ -1555,13 +1555,21 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
 }
 
 static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, const char *name, const char *media_root,
-                                          const char *leaf)
+                                          const char *media_relative_root, const char *leaf)
 {
     if (runtime == NULL || runtime->scene_state == NULL || name == NULL || media_root == NULL || leaf == NULL)
         return false;
     char *path = editor_path_join(media_root, leaf);
     if (path == NULL)
         return false;
+    char *relative_path = media_relative_root != NULL && media_relative_root[0] != '\0'
+                              ? editor_path_join(media_relative_root, leaf)
+                              : SDL_strdup(leaf);
+    if (relative_path == NULL)
+    {
+        SDL_free(path);
+        return false;
+    }
 
     SDL_PathInfo info;
     SDL_zero(info);
@@ -1570,9 +1578,10 @@ static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, c
     SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.path", name);
     slayer3d_properties_set_string(runtime->scene_state, key, path);
     SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.relative", name);
-    slayer3d_properties_set_string(runtime->scene_state, key, leaf);
+    slayer3d_properties_set_string(runtime->scene_state, key, relative_path);
     SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", name);
     slayer3d_properties_set_bool(runtime->scene_state, key, available);
+    SDL_free(relative_path);
     SDL_free(path);
     return true;
 }
@@ -1637,12 +1646,13 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
     slayer3d_properties_set_string(runtime->scene_state, "editor.media.relative",
                                    relative_path != NULL ? relative_path : "media");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.media.available", true);
-    (void)editor_media_set_child_source(runtime, "textures", absolute_path, "textures");
-    (void)editor_media_set_child_source(runtime, "models", absolute_path, "models");
-    (void)editor_media_set_child_source(runtime, "sprites", absolute_path, "sprites");
-    (void)editor_media_set_child_source(runtime, "skyboxes", absolute_path, "skyboxes");
-    (void)editor_media_set_child_source(runtime, "liquids", absolute_path, "liquids");
-    (void)editor_media_set_child_source(runtime, "effects", absolute_path, "effects");
+    const char *media_relative_root = relative_path != NULL ? relative_path : "media";
+    (void)editor_media_set_child_source(runtime, "textures", absolute_path, media_relative_root, "textures");
+    (void)editor_media_set_child_source(runtime, "models", absolute_path, media_relative_root, "models");
+    (void)editor_media_set_child_source(runtime, "sprites", absolute_path, media_relative_root, "sprites");
+    (void)editor_media_set_child_source(runtime, "skyboxes", absolute_path, media_relative_root, "skyboxes");
+    (void)editor_media_set_child_source(runtime, "liquids", absolute_path, media_relative_root, "liquids");
+    (void)editor_media_set_child_source(runtime, "effects", absolute_path, media_relative_root, "effects");
     editor_media_refresh_missing_state(runtime);
 
     char *texture_path = editor_path_join(absolute_path, "textures");

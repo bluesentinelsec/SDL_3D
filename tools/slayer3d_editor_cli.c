@@ -1116,9 +1116,11 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
 #if defined(SLAYER3D_MEDIA_DIR)
         out_project->media_dir = SLAYER3D_MEDIA_DIR;
 #endif
+        out_project->media_root_relative_path = SDL_strdup("media");
         out_project->embedded = true;
         const bool ok = out_project->project_dir != NULL && out_project->data_root != NULL &&
                         out_project->data_root_relative_path != NULL && out_project->editor_entry != NULL &&
+                        out_project->media_root_relative_path != NULL &&
                         editor_asset_source_init(&out_project->asset_sources.textures, "textures", "textures", false) &&
                         editor_asset_source_init(&out_project->asset_sources.models, "models", "models", false) &&
                         editor_asset_source_init(&out_project->asset_sources.sprites, "sprites", "sprites", false) &&
@@ -1186,6 +1188,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     char *resolved_data_root = path_join_tool(project_dir, data_root);
     char *resolved_media_root =
         media_root != NULL && media_root[0] != '\0' ? path_join_tool(project_dir, media_root) : NULL;
+    char *media_root_relative_path = media_root != NULL && media_root[0] != '\0' ? SDL_strdup(media_root) : NULL;
     char *resolved_test_run =
         test_run_output != NULL && test_run_output[0] != '\0' ? path_join_tool(project_dir, test_run_output) : NULL;
     char *entry_copy = SDL_strdup(editor_entry);
@@ -1194,12 +1197,14 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     SDL_zero(asset_sources);
     if (project_dir == NULL || resolved_data_root == NULL || entry_copy == NULL || data_root_copy == NULL ||
         (media_root != NULL && media_root[0] != '\0' && resolved_media_root == NULL) ||
+        (media_root != NULL && media_root[0] != '\0' && media_root_relative_path == NULL) ||
         (test_run_output != NULL && test_run_output[0] != '\0' && resolved_test_run == NULL))
     {
         editor_set_error(error_buffer, error_buffer_size, "failed to allocate project manifest paths");
         SDL_free(project_dir);
         SDL_free(resolved_data_root);
         SDL_free(resolved_media_root);
+        SDL_free(media_root_relative_path);
         SDL_free(resolved_test_run);
         SDL_free(entry_copy);
         SDL_free(data_root_copy);
@@ -1213,6 +1218,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
         SDL_free(project_dir);
         SDL_free(resolved_data_root);
         SDL_free(resolved_media_root);
+        SDL_free(media_root_relative_path);
         SDL_free(resolved_test_run);
         SDL_free(entry_copy);
         SDL_free(data_root_copy);
@@ -1228,6 +1234,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     out_project->editor_entry = entry_copy;
     out_project->owned_media_dir = resolved_media_root;
     out_project->media_dir = out_project->owned_media_dir;
+    out_project->media_root_relative_path = media_root_relative_path;
     out_project->test_run_path = resolved_test_run;
     out_project->asset_sources = asset_sources;
     out_project->embedded = false;
@@ -1245,6 +1252,7 @@ void slayer3d_editor_project_destroy(slayer3d_editor_project *project)
     SDL_free(project->data_root_relative_path);
     SDL_free(project->editor_entry);
     SDL_free(project->owned_media_dir);
+    SDL_free(project->media_root_relative_path);
     SDL_free(project->test_run_path);
     editor_asset_sources_destroy(&project->asset_sources);
     SDL_zero(*project);
@@ -1324,7 +1332,8 @@ static char *editor_resolve_session_media_root(const slayer3d_editor_args *args,
     if (project != NULL && !project->embedded && project->media_dir != NULL && project->media_dir[0] != '\0')
     {
         if (out_relative_path != NULL)
-            *out_relative_path = SDL_strdup("media");
+            *out_relative_path =
+                SDL_strdup(project->media_root_relative_path != NULL ? project->media_root_relative_path : "");
         return SDL_strdup(project->media_dir);
     }
     if (project != NULL && !project->embedded)
@@ -1334,6 +1343,14 @@ static char *editor_resolve_session_media_root(const slayer3d_editor_args *args,
         if (out_relative_path != NULL)
             *out_relative_path = SDL_strdup("media");
         return path_make_absolute_tool("media");
+    }
+    if (project != NULL && project->media_dir != NULL && project->media_dir[0] != '\0' &&
+        directory_exists_tool(project->media_dir))
+    {
+        if (out_relative_path != NULL)
+            *out_relative_path =
+                SDL_strdup(project->media_root_relative_path != NULL ? project->media_root_relative_path : "media");
+        return SDL_strdup(project->media_dir);
     }
     return NULL;
 }

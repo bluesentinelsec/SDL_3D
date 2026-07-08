@@ -73,6 +73,7 @@ extern "C"
         char *editor_entry;
         const char *media_dir;
         char *owned_media_dir;
+        char *media_root_relative_path;
         char *test_run_path;
         slayer3d_editor_asset_sources asset_sources;
         bool embedded;

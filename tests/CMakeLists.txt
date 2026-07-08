@@ -318,6 +318,7 @@ else()
         slayer3d_tool_cli_test
         PRIVATE
             SLAYER3D_EDITOR_DEFAULT_PROJECT="${_slayer3d_tool_cli_editor_default_project}"
+            SLAYER3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
             SLAYER3D_EDITOR_EMBEDDED_ASSETS
             SLAYER3D_RUNNER_EMBEDDED_ASSETS
     )
