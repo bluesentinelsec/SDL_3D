@@ -228,7 +228,7 @@ static bool editor_handle_liquid_panel_drag(slayer3d_game_data_runtime *runtime,
 
     const float panel_x = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.x", 870.0f);
     const float panel_y = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.y", 112.0f);
-    if (clicked && editor_screen_rect_contains(panel_x, panel_y, 232.0f, 24.0f, mouse_x, mouse_y))
+    if (clicked && editor_screen_rect_contains(panel_x, panel_y, 150.0f, 24.0f, mouse_x, mouse_y))
     {
         slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.drag.active", true);
         slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.drag.offset_x", mouse_x - panel_x);

@@ -1019,6 +1019,21 @@ void seed_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, nullptr, 0, error, sizeof(error))) << error;
 }
 
+void seed_editor_shell_test_liquid(slayer3d_game_data_runtime *runtime)
+{
+    ASSERT_NE(runtime, nullptr);
+    configure_editor_shell_default_test_camera(runtime);
+    char error[512]{};
+    slayer3d_game_data_create_box_brush_desc desc{};
+    desc.world_name = "brush.editor_shell.target";
+    desc.brush_name = "brush.target.liquid";
+    desc.material_name = "mat.editor.liquid.clean_water";
+    desc.min = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    desc.max = slayer3d_vec3_make(2.0f, 2.0f, 2.0f);
+    desc.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, nullptr, 0, error, sizeof(error))) << error;
+}
+
 void seed_editor_shell_player_start(slayer3d_game_data_runtime *runtime)
 {
     ASSERT_NE(runtime, nullptr);
@@ -1058,6 +1073,11 @@ void select_editor_shell_test_brush(slayer3d_game_data_runtime *runtime, const c
 void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
 {
     select_editor_shell_test_brush(runtime, "brush.target.cube");
+}
+
+void select_editor_shell_test_liquid(slayer3d_game_data_runtime *runtime)
+{
+    select_editor_shell_test_brush(runtime, "brush.target.liquid");
 }
 
 void lasso_select_editor_shell_edges(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
@@ -18346,8 +18366,8 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    seed_editor_shell_test_cube(runtime);
-    select_editor_shell_test_cube(runtime);
+    seed_editor_shell_test_liquid(runtime);
+    select_editor_shell_test_liquid(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -18358,7 +18378,6 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     };
 
     emit_signal("signal.editor.liquid.type.lava");
-    emit_signal("signal.editor.liquid.paint.selection");
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -18385,7 +18404,6 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
 
     emit_signal("signal.editor.liquid.type.clean_water");
-    emit_signal("signal.editor.liquid.paint.selection");
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
@@ -18393,6 +18411,28 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     ASSERT_GE(world.brushes[0].face_count, 6);
     for (int i = 0; i < world.brushes[0].face_count; ++i)
         EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+
+    emit_signal("signal.editor.texture.select.lava");
+    emit_signal("signal.editor.texture.paint.selection");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "liquid volumes only accept liquid types");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+
+    emit_signal("signal.editor.liquid.panel.toggle");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "liquid");
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+
+    emit_signal("signal.editor.liquid.panel.toggle");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    emit_signal("signal.editor.liquid.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -46935,6 +46975,12 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
       "id": "brush.north_wall",
       "geometry": { "kind": "box", "min": [-4, 0, -4], "max": [4, 3, -3.5] },
       "material": "mat.wall"
+    },
+    {
+      "id": "brush.lava_pool",
+      "geometry": { "kind": "box", "min": [10, -1, 10], "max": [12, 0.25, 12] },
+      "material": "mat.floor",
+      "contents": ["lava"]
     }
   ],
   "actors": [
@@ -47004,6 +47050,7 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
     EXPECT_NE(game_text.find("\"key\": \"ESCAPE\""), std::string::npos);
     EXPECT_NE(game_text.find("\"last_damage_per_second\""), std::string::npos);
     EXPECT_NE(game_text.find("\"liquid_damage_per_second\""), std::string::npos);
+    EXPECT_NE(game_text.find("\"lava\""), std::string::npos);
     EXPECT_NE(game_text.find("\"ambient_light\": ["), std::string::npos);
     EXPECT_NE(game_text.find("0.12549019607843137"), std::string::npos);
     EXPECT_NE(game_text.find("\"tonemap\": \"none\""), std::string::npos);
@@ -47026,7 +47073,10 @@ TEST(GameDataRuntime, SlayerMapWritesPlayableFpsBrushGamePackage)
 
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.slayermap", &world));
-    EXPECT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 3);
+    EXPECT_EQ(world.brushes[0].contents,
+              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    EXPECT_EQ(world.brushes[2].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
     ASSERT_EQ(world.material_count, 2);
     EXPECT_STREQ(world.materials[0].name, "mat.floor");
     EXPECT_FLOAT_EQ(world.materials[0].albedo.x, 128.0f / 255.0f);

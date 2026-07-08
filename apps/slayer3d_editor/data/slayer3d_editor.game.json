@@ -1274,6 +1274,7 @@
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
@@ -1291,6 +1292,7 @@
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "actor_player" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
@@ -2056,6 +2058,8 @@
         "signal": "signal.editor.liquid.panel.toggle",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "liquid" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": true },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "liquid tool" }
         ]
@@ -2098,7 +2102,12 @@
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Clean Water" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.clean_water" },
           { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "clean water selected" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "clean water selected" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+          }
         ]
       },
       {
@@ -2108,7 +2117,12 @@
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Dirty Water" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.dirty_water" },
           { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "water" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "dirty water selected" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "dirty water selected" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+          }
         ]
       },
       {
@@ -2118,7 +2132,12 @@
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Purple Poison" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.purple_poison" },
           { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "purple poison selected" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "purple poison selected" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+          }
         ]
       },
       {
@@ -2128,7 +2147,12 @@
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Green Nukage" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.green_nukage" },
           { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "green nukage selected" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "green nukage selected" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+          }
         ]
       },
       {
@@ -2138,7 +2162,12 @@
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Lava" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.lava" },
           { "type": "scene_state.set", "key": "editor.liquid.contents", "value": "lava" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "lava selected" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "lava selected" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.liquid.paint.selection" }]
+          }
         ]
       },
       {

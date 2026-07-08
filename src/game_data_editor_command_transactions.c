@@ -2997,6 +2997,23 @@ static bool editor_paint_action_contents(slayer3d_game_data_runtime *runtime, yy
     return true;
 }
 
+static bool editor_brush_contents_are_liquid(unsigned int contents)
+{
+    return (contents & (SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER | SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA)) != 0u;
+}
+
+static const char *editor_paint_liquid_guard_message(bool has_requested_contents)
+{
+    return has_requested_contents ? "select a liquid volume before painting"
+                                  : "liquid volumes only accept liquid types";
+}
+
+static bool editor_paint_action_accepts_brush_contents(bool has_requested_contents, unsigned int brush_contents)
+{
+    const bool brush_is_liquid = editor_brush_contents_are_liquid(brush_contents);
+    return has_requested_contents ? brush_is_liquid : !brush_is_liquid;
+}
+
 static bool set_editor_source_box_material(editor_brush_source_box_runtime *box, const char *material_name)
 {
     if (box == NULL || material_name == NULL || material_name[0] == '\0')
@@ -3211,6 +3228,15 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
         const int material_index = editor_brush_material_index_by_name(world_runtime, material_name);
         if (brush == NULL || material_index < 0)
             goto fail;
+        if (!editor_paint_action_accepts_brush_contents(has_requested_contents, brush->contents))
+        {
+            const char *message = editor_paint_liquid_guard_message(has_requested_contents);
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            if (runtime->scene_state != NULL)
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
 
         if (!append_editor_brush_paint_transaction(runtime, active_scene, world_runtime, &selection,
                                                    editor_metadata_stable_id(selection.element_editor), brush,
@@ -3265,6 +3291,16 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
                 editor_brush_material_index_by_name(initial_world_runtime, material_name);
             if (initial_brush == NULL || initial_material_index < 0)
                 goto fail;
+            if (!editor_paint_action_accepts_brush_contents(has_requested_contents, initial_brush->contents))
+            {
+                const char *message = editor_paint_liquid_guard_message(has_requested_contents);
+                free_editor_paint_selection_targets(selection_targets, selection_target_count);
+                publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+                if (runtime->scene_state != NULL)
+                    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+                return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                           message);
+            }
 
             if (!copy_editor_transaction_string(selection.world_name, &selection_targets[i].world_name) ||
                 !copy_editor_transaction_string(selection.element_name, &selection_targets[i].element_name) ||

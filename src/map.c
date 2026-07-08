@@ -71,6 +71,51 @@ static const char *map_json_string(yyjson_val *object, const char *key)
     return yyjson_is_str(value) ? yyjson_get_str(value) : NULL;
 }
 
+static unsigned int map_brush_content_flag_from_string(const char *contents)
+{
+    if (contents == NULL)
+        return 0u;
+    if (SDL_strcmp(contents, "solid") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    if (SDL_strcmp(contents, "player_clip") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    if (SDL_strcmp(contents, "projectile_clip") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
+    if (SDL_strcmp(contents, "trigger") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER;
+    if (SDL_strcmp(contents, "water") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER;
+    if (SDL_strcmp(contents, "lava") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+    if (SDL_strcmp(contents, "sky") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY;
+    return 0u;
+}
+
+static unsigned int map_read_brush_contents_flags(yyjson_val *brush)
+{
+    yyjson_val *contents = map_obj_get(brush, "contents");
+    unsigned int flags = 0u;
+    if (yyjson_is_str(contents))
+    {
+        flags |= map_brush_content_flag_from_string(yyjson_get_str(contents));
+    }
+    else if (yyjson_is_arr(contents))
+    {
+        size_t index = 0;
+        size_t max = 0;
+        yyjson_val *entry = NULL;
+        yyjson_arr_foreach(contents, index, max, entry)
+        {
+            if (yyjson_is_str(entry))
+                flags |= map_brush_content_flag_from_string(yyjson_get_str(entry));
+        }
+    }
+    if (flags == 0u)
+        flags = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    return flags;
+}
+
 static void map_set_first_error(map_validation_context *ctx, const char *json_path, const char *message)
 {
     if (ctx == NULL || ctx->error_buffer == NULL || ctx->error_buffer_size <= 0 || ctx->error_buffer[0] != '\0')
@@ -2113,6 +2158,7 @@ bool slayer3d_map_get_brush(const slayer3d_map_document *document, size_t index,
                                map_read_vec3_value(map_obj_get(geometry, "max"), &out_brush->box.max);
     }
     out_brush->material = map_json_string(brush, "material");
+    out_brush->contents = map_read_brush_contents_flags(brush);
     out_brush->has_color = map_read_optional_color(brush, "color", &out_brush->color);
     yyjson_val *faces = map_obj_get(brush, "faces");
     out_brush->face_count = yyjson_is_arr(faces) ? yyjson_arr_size(faces) : 0U;
@@ -3272,6 +3318,48 @@ static bool map_game_add_string_array_entry(yyjson_mut_doc *doc, yyjson_mut_val 
     return yyjson_mut_arr_add_strcpy(doc, array, value != NULL ? value : "");
 }
 
+static bool map_game_add_brush_contents(yyjson_mut_doc *doc, yyjson_mut_val *contents, unsigned int flags)
+{
+    if (flags == 0u)
+        flags = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "solid"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "player_clip"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "projectile_clip"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "trigger"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "water"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA) != 0u &&
+        !map_game_add_string_array_entry(doc, contents, "lava"))
+    {
+        return false;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u && !map_game_add_string_array_entry(doc, contents, "sky"))
+    {
+        return false;
+    }
+    return true;
+}
+
 static bool map_game_add_keyboard_action(yyjson_mut_doc *doc, yyjson_mut_val *actions, const char *name,
                                          const char *key)
 {
@@ -3314,8 +3402,7 @@ static bool map_game_add_box_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes,
         !yyjson_mut_obj_add_strcpy(doc, obj, "name",
                                    brush->id != NULL && brush->id[0] != '\0' ? brush->id : fallback_name) ||
         !yyjson_mut_obj_add_val(doc, obj, "contents", contents) ||
-        !map_game_add_string_array_entry(doc, contents, "solid") ||
-        !map_game_add_string_array_entry(doc, contents, "player_clip") ||
+        !map_game_add_brush_contents(doc, contents, brush->contents) ||
         !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
     {
         return false;
@@ -3369,8 +3456,7 @@ static bool map_game_add_planes_brush(yyjson_mut_doc *doc, yyjson_mut_val *brush
         !yyjson_mut_obj_add_strcpy(doc, obj, "name",
                                    brush.id != NULL && brush.id[0] != '\0' ? brush.id : fallback_name) ||
         !yyjson_mut_obj_add_val(doc, obj, "contents", contents) ||
-        !map_game_add_string_array_entry(doc, contents, "solid") ||
-        !map_game_add_string_array_entry(doc, contents, "player_clip") ||
+        !map_game_add_brush_contents(doc, contents, brush.contents) ||
         !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
     {
         return false;
