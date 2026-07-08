@@ -18719,6 +18719,172 @@ TEST(GameDataRuntime, FpsBrushControllerTreatsLiquidSurfaceAsSwimmable)
     remove_test_dir(dir);
 }
 
+// Regression for the SlayerMap -> playable -> runner path where liquid volumes
+// were treated as solid. The editor map export dropped brush contents, so
+// water/lava brushes materialized as solid|player_clip in the playable game
+// data and the FPS controller never entered liquid/swim state. This exercises
+// the real generated-map path end to end, not only hand-authored game JSON.
+TEST(GameDataRuntime, EditorMapExportPreservesLiquidContentsThroughPlayableRunner)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    configure_editor_shell_default_test_camera(runtime);
+
+    // A solid floor plus a damaging lava pool large enough to hold the player.
+    slayer3d_game_data_create_box_brush_desc floor{};
+    floor.world_name = "brush.editor_shell.target";
+    floor.brush_name = "brush.target.floor";
+    floor.material_name = "mat.editor.wall";
+    floor.min = slayer3d_vec3_make(-4.0f, -4.0f, -4.0f);
+    floor.max = slayer3d_vec3_make(4.0f, -2.0f, 4.0f);
+    floor.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &floor, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_create_box_brush_desc lava{};
+    lava.world_name = "brush.editor_shell.target";
+    lava.brush_name = "brush.target.lava";
+    lava.material_name = "mat.editor.liquid.lava";
+    lava.min = slayer3d_vec3_make(-4.0f, -2.0f, -4.0f);
+    lava.max = slayer3d_vec3_make(4.0f, 4.0f, 4.0f);
+    lava.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &lava, nullptr, 0, error, sizeof(error))) << error;
+
+    // Spawn the player inside the lava volume so the runner starts submerged.
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.liquid";
+    start.position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    start.has_position = true;
+    start.yaw = 0.0f;
+    start.has_yaw = true;
+    start.pitch = 0.0f;
+    start.has_pitch = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    // Save through the real editor map export path.
+    const std::filesystem::path dir = unique_test_dir("liquid_playable_runner");
+    const std::filesystem::path map_path = dir / "liquid.slayermap.json";
+    size_t saved_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_map_file(
+        runtime, "brush.editor_shell.target", map_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+
+    // The canonical top-level map brush must keep its lava contents rather than
+    // defaulting to solid; this is the field the exporter previously dropped.
+    slayer3d_map_document *map = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(map_path.string().c_str(), nullptr, &map, error, sizeof(error))) << error;
+    bool saw_lava_brush = false;
+    for (size_t i = 0; i < slayer3d_map_get_brush_count(map); ++i)
+    {
+        slayer3d_map_brush brush{};
+        ASSERT_TRUE(slayer3d_map_get_brush(map, i, &brush));
+        if ((brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA) != 0u)
+        {
+            saw_lava_brush = true;
+            EXPECT_EQ(brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, 0u)
+                << "liquid brush must not carry solid contents";
+            EXPECT_EQ(brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP, 0u)
+                << "liquid brush must not carry player_clip contents";
+        }
+    }
+    EXPECT_TRUE(saw_lava_brush) << "exported map lost the lava brush contents";
+
+    // Materialize the playable game data exactly as the runner's --map path does.
+    const std::filesystem::path playable_dir = dir / "playable";
+    ASSERT_TRUE(slayer3d_map_write_playable_game_files(map, playable_dir.string().c_str(), error, sizeof(error)))
+        << error;
+    slayer3d_map_destroy(map);
+
+    // The generated playable brush keeps lava contents without solid/player_clip.
+    const std::string playable_json = read_text(playable_dir / "playable_map.game.json");
+    yyjson_doc *playable_doc = yyjson_read(playable_json.c_str(), playable_json.size(), 0);
+    ASSERT_NE(playable_doc, nullptr);
+    yyjson_val *worlds = yyjson_obj_get(yyjson_doc_get_root(playable_doc), "brush_worlds");
+    ASSERT_TRUE(yyjson_is_arr(worlds));
+    bool saw_playable_lava = false;
+    size_t world_index = 0;
+    size_t world_max = 0;
+    yyjson_val *world_val = nullptr;
+    yyjson_arr_foreach(worlds, world_index, world_max, world_val)
+    {
+        yyjson_val *brush_arr = yyjson_obj_get(world_val, "brushes");
+        size_t brush_index = 0;
+        size_t brush_max = 0;
+        yyjson_val *brush_val = nullptr;
+        yyjson_arr_foreach(brush_arr, brush_index, brush_max, brush_val)
+        {
+            yyjson_val *contents = yyjson_obj_get(brush_val, "contents");
+            if (!yyjson_is_arr(contents))
+                continue;
+            bool has_lava = false;
+            bool has_solid = false;
+            bool has_player_clip = false;
+            size_t ci = 0;
+            size_t cmax = 0;
+            yyjson_val *cval = nullptr;
+            yyjson_arr_foreach(contents, ci, cmax, cval)
+            {
+                const char *name = yyjson_get_str(cval);
+                if (name == nullptr)
+                    continue;
+                if (SDL_strcmp(name, "lava") == 0)
+                    has_lava = true;
+                else if (SDL_strcmp(name, "solid") == 0)
+                    has_solid = true;
+                else if (SDL_strcmp(name, "player_clip") == 0)
+                    has_player_clip = true;
+            }
+            if (has_lava)
+            {
+                saw_playable_lava = true;
+                EXPECT_FALSE(has_solid) << "playable lava brush must not be solid";
+                EXPECT_FALSE(has_player_clip) << "playable lava brush must not be player_clip";
+            }
+        }
+    }
+    yyjson_doc_free(playable_doc);
+    EXPECT_TRUE(saw_playable_lava) << "playable game data lost the lava brush contents";
+
+    // Load the generated playable game data and confirm the FPS controller
+    // enters liquid/swim state with a damage pulse, rather than standing solid.
+    slayer3d_game_session *play_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &play_session));
+    slayer3d_game_data_runtime *play_runtime = nullptr;
+    const std::filesystem::path playable_game = playable_dir / "playable_map.game.json";
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(playable_game.string().c_str(), play_session, &play_runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(play_runtime, "scene.play"));
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(play_runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    slayer3d_input_manager *play_input = slayer3d_game_session_get_input(play_session);
+    ASSERT_NE(play_input, nullptr);
+    for (int frame = 0; frame < 8; ++frame)
+    {
+        ASSERT_NE(slayer3d_input_update(play_input, 2000 + frame), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(play_runtime, 0.016f));
+    }
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_liquid", false))
+        << "player should be swimming in the lava volume";
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "liquid_contents", 0), SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "last_damage_per_second", 0.0f), 0.0f)
+        << "damaging liquid should drive the damage-pulse property";
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true))
+        << "liquid must not behave like a walkable floor";
+
+    slayer3d_game_data_destroy(play_runtime);
+    slayer3d_game_session_destroy(play_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBrushColorsAndTextureTintsRoundTrip)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
