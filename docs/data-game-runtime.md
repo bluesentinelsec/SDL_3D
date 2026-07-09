@@ -57,7 +57,7 @@ The descriptor requires:
 
 The descriptor may also include:
 
-- `media_dir`: built-in font/media root
+- `media_dir`: project media root for disk-backed fonts and media assets
 - `mount_assets`: callback used to mount a directory, pack, or embedded pack
 - `mount_userdata`: user data passed to `mount_assets`
 - `enable_managed_network`: opt-in authored host/direct-connect orchestration

@@ -47,7 +47,7 @@ extern "C"
         const char **font_ids; /**< Runtime-owned authored font ids. */
         int count;             /**< Number of cached fonts. */
         int capacity;          /**< Allocated cache slots. */
-        char *media_dir;       /**< Owned SLAYER3D media directory used for built-in fonts and editor previews. */
+        char *media_dir;       /**< Owned media directory used for disk-backed fonts and editor previews. */
     } slayer3d_game_data_font_cache;
 
     /** @brief One cached texture referenced by authored UI image data. */
@@ -481,7 +481,7 @@ extern "C"
      * the new media root.
      *
      * @param cache     Cache to update.
-     * @param media_dir New media directory, or NULL to disable built-in font loading.
+     * @param media_dir New media directory, or NULL to disable disk-backed built-in font loading.
      * @return true on success, false on allocation failure.
      */
     bool slayer3d_game_data_font_cache_set_media_dir(slayer3d_game_data_font_cache *cache, const char *media_dir);

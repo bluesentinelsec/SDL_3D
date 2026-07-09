@@ -50,3 +50,8 @@ Project media should not be hidden behind editor binary embedding. Editor-owned
 fallback assets, icons, and bundled fonts are allowed, but project textures,
 models, skyboxes, liquids, sprites, audio, and effects should come from the
 selected media directory.
+
+The editor default UI font is embedded in the engine as C data so a missing
+project `media/fonts` directory cannot make baseline editor text disappear.
+Additional project fonts can still live under `media/fonts` for future
+font-selection workflows.

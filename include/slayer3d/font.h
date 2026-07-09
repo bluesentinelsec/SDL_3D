@@ -140,17 +140,14 @@ extern "C"
     /* ------------------------------------------------------------------ */
 
     /*
-     * Slayer3D ships with a curated set of open-licensed fonts under
-     * media/fonts/. The catalog below exposes them by stable ID so
-     * applications and the UI system can reference a "built-in" font
-     * without hard-coding filenames. Licensing details live alongside
-     * the files (media/fonts/LICENSE.md + media/fonts/licenses/).
+     * Slayer3D exposes a curated set of open-licensed fonts by stable ID
+     * so applications and the UI system can reference a "built-in" font
+     * without hard-coding filenames. Licensing details live alongside the
+     * source font files (media/fonts/LICENSE.md + media/fonts/licenses/).
      *
-     * Today the loader resolves each ID to a TTF path on disk. The
-     * eventual plan is to embed the bytes directly in the library so
-     * games don't need to ship the media directory at all —
-     * slayer3d_load_builtin_font will then flip over transparently to
-     * slayer3d_load_font_from_memory without any API change.
+     * Inter is embedded in the library as the default editor/UI font. Other
+     * catalog entries currently resolve from media/fonts/ until they are
+     * intentionally moved to embedded data.
      */
     typedef enum slayer3d_builtin_font
     {
@@ -178,10 +175,11 @@ extern "C"
     const char *slayer3d_builtin_font_filename(slayer3d_builtin_font id);
 
     /*
-     * Convenience loader that resolves a built-in ID to its TTF path
-     * under `media_dir` and loads it at `pixel_size`. `media_dir` is
+     * Convenience loader that resolves a built-in ID and loads it at
+     * `pixel_size`. Embedded built-ins ignore `media_dir`; disk-backed
+     * catalog entries resolve under `media_dir/fonts`. `media_dir` is
      * typically the project's SLAYER3D_MEDIA_DIR compile define, so a
-     * typical call looks like:
+     * disk-backed call looks like:
      *
      *   slayer3d_load_builtin_font(SLAYER3D_MEDIA_DIR, SLAYER3D_BUILTIN_FONT_INTER,
      *                           24.0f, &font);

@@ -51,7 +51,7 @@ extern "C"
         slayer3d_game_session *session;
         /** @brief Asset path to the root game JSON, such as `asset://pong.game.json`. Required. */
         const char *data_asset_path;
-        /** @brief Media directory used by built-in font loading. Optional. */
+        /** @brief Media directory used by disk-backed built-in fonts and project media. Optional for embedded fonts. */
         const char *media_dir;
         /** @brief Optional callback that mounts game assets into the runtime resolver. */
         slayer3d_data_game_mount_assets_fn mount_assets;

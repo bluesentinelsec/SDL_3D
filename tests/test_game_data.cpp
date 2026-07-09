@@ -4270,7 +4270,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
     EXPECT_NE(std::find(font_capture.ids.begin(), font_capture.ids.end(), "font.hud"), font_capture.ids.end());
 
     slayer3d_game_data_font_cache font_cache{};
-    slayer3d_game_data_font_cache_init(&font_cache, SLAYER3D_MEDIA_DIR);
+    slayer3d_game_data_font_cache_init(&font_cache, nullptr);
     slayer3d_game_data_asset_warmup_queue queue{};
     slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
     ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
