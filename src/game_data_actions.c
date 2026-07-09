@@ -1640,6 +1640,8 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
         return true;
     }
 
+    const bool was_startup_prompt =
+        slayer3d_properties_get_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
     char *relative_path = editor_relative_directory_for_source_path(runtime, path, absolute_path);
     slayer3d_properties_set_string(runtime->scene_state, "editor.media.path", absolute_path);
     slayer3d_properties_set_string(runtime->scene_state, "editor.media.path.input", absolute_path);
@@ -1661,6 +1663,12 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
                                    texture_path != NULL ? texture_path : absolute_path);
     slayer3d_properties_set_string(runtime->scene_state, "editor.sky.path.input",
                                    skybox_path != NULL ? skybox_path : absolute_path);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
+    if (was_startup_prompt)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.media.settings.open", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
+    }
     slayer3d_properties_set_string(runtime->scene_state, status_key, "media path updated");
     editor_publish_console_message(runtime, "Media path updated");
     SDL_free(texture_path);

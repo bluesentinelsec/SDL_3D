@@ -1118,12 +1118,14 @@
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" },
           { "type": "scene_state.set", "key": "editor.media.settings.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.media.startup_prompt.open", "value": false },
           { "type": "scene_state.set", "key": "editor.media.status", "value": "ready" },
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.media.available", "op": "==", "value": false, "default": false },
             "then": [
               { "type": "scene_state.set", "key": "editor.media.settings.open", "value": true },
+              { "type": "scene_state.set", "key": "editor.media.startup_prompt.open", "value": true },
               { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
               { "type": "scene_state.set", "key": "editor.media.status", "value": "choose a media directory" }
             ]
