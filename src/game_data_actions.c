@@ -1227,6 +1227,14 @@ static void editor_texture_clear_slots(slayer3d_properties *scene_state, int slo
     }
 }
 
+static void editor_texture_set_empty_state(slayer3d_properties *scene_state, bool visible, const char *message)
+{
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(scene_state, "editor.texture.empty.visible", visible);
+    slayer3d_properties_set_string(scene_state, "editor.texture.empty.message", message != NULL ? message : "");
+}
+
 static void editor_texture_publish_slot(slayer3d_properties *scene_state, int slot_index,
                                         const editor_texture_scan_entry *entry)
 {
@@ -1351,6 +1359,9 @@ static int editor_texture_publish_filtered_catalog(slayer3d_game_data_runtime *r
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", -1);
     }
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", published_count);
+    const bool has_query = search_query != NULL && search_query[0] != '\0';
+    editor_texture_set_empty_state(runtime->scene_state, published_count == 0,
+                                   has_query ? "No textures match search" : "No textures found");
     return published_count;
 }
 
@@ -1432,6 +1443,7 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", 0);
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status",
                                        "texture directory unavailable");
+        editor_texture_set_empty_state(runtime->scene_state, true, "Texture directory unavailable");
         editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture directory unavailable", false,
                                            false);
         SDL_free(resolved_fallback_directory);
@@ -1497,17 +1509,34 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     const int published_count = editor_texture_publish_filtered_catalog(
         runtime, catalog_collection, collection, slot_count, scroll_index_key, scroll_y_key, search_query);
 
+    const bool has_search_query = search_query != NULL && search_query[0] != '\0';
     char status[128];
+    char source_status[128];
     if (invalidated_count > 0)
-        SDL_snprintf(status, sizeof(status), "loaded %d texture%s; %d stale material%s reverted", published_count,
-                     published_count == 1 ? "" : "s", invalidated_count, invalidated_count == 1 ? "" : "s");
+    {
+        SDL_snprintf(source_status, sizeof(source_status), "loaded %d texture%s; %d stale material%s reverted",
+                     catalog_count, catalog_count == 1 ? "" : "s", invalidated_count,
+                     invalidated_count == 1 ? "" : "s");
+    }
+    else if (catalog_count == 0)
+        SDL_snprintf(source_status, sizeof(source_status), "no textures found");
     else
-        SDL_snprintf(status, sizeof(status), "loaded %d texture%s", published_count, published_count == 1 ? "" : "s");
+        SDL_snprintf(source_status, sizeof(source_status), "loaded %d texture%s", catalog_count,
+                     catalog_count == 1 ? "" : "s");
+
+    if (catalog_count == 0)
+        SDL_strlcpy(status, source_status, sizeof(status));
+    else if (has_search_query && published_count == 0)
+        SDL_snprintf(status, sizeof(status), "no textures match search");
+    else if (has_search_query)
+        SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
+    else
+        SDL_strlcpy(status, source_status, sizeof(status));
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", published_count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.registered_count", registered_count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.invalidated_count", invalidated_count);
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status", status);
-    editor_asset_source_set_diagnostic(runtime->scene_state, "textures", status, true, published_count == 0);
+    editor_asset_source_set_diagnostic(runtime->scene_state, "textures", source_status, true, catalog_count == 0);
     editor_set_int_output(runtime->scene_state, outputs, "count_key", published_count);
     editor_set_int_output(runtime->scene_state, outputs, "registered_count_key", registered_count);
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
@@ -1531,7 +1560,12 @@ static bool execute_editor_texture_filter_action(slayer3d_game_data_runtime *run
     const int published_count = editor_texture_publish_filtered_catalog(
         runtime, catalog_collection, collection, slot_count, scroll_index_key, scroll_y_key, search_query);
     char status[128];
-    SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
+    if (published_count == 0 && search_query != NULL && search_query[0] != '\0')
+        SDL_snprintf(status, sizeof(status), "no textures match search");
+    else if (published_count == 0)
+        SDL_snprintf(status, sizeof(status), "no textures found");
+    else
+        SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status", status);
     editor_set_int_output(runtime->scene_state, outputs, "count_key", published_count);
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);

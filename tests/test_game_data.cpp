@@ -21998,6 +21998,31 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
         return capture.names;
     };
+    auto visible_texture_labels = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.texture_viewer.", 0) != 0 || name.find(".label") == std::string::npos)
+            {
+                return true;
+            }
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.names;
+    };
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -22091,6 +22116,31 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.thumb"),
               scroll_rects.end());
     EXPECT_TRUE(visible_texture_status_labels().empty());
+    std::vector<std::string> texture_labels = visible_texture_labels();
+    EXPECT_NE(
+        std::find(texture_labels.begin(), texture_labels.end(), "ui.editor_shell.texture_viewer.wall_metal.label"),
+        texture_labels.end());
+    EXPECT_EQ(std::find(texture_labels.begin(), texture_labels.end(), "ui.editor_shell.texture_viewer.empty.label"),
+              texture_labels.end());
+
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", "__missing_texture__");
+    emit_signal("signal.editor.texture.search.apply");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.empty.message", ""),
+                 "No textures match search");
+    EXPECT_TRUE(visible_thumbnails().empty());
+    texture_labels = visible_texture_labels();
+    EXPECT_NE(std::find(texture_labels.begin(), texture_labels.end(), "ui.editor_shell.texture_viewer.empty.label"),
+              texture_labels.end());
+    EXPECT_EQ(
+        std::find(texture_labels.begin(), texture_labels.end(), "ui.editor_shell.texture_viewer.wall_metal.label"),
+        texture_labels.end());
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
+    emit_signal("signal.editor.texture.search.apply");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", true));
+    thumbnail_summaries = visible_thumbnails();
+    EXPECT_EQ(thumbnail_summaries.size(), 6U);
 
     emit_signal("signal.editor.texture.focus.search");
     SDL_Event motion{};
@@ -22693,6 +22743,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "met beta");
     emit_signal("signal.editor.texture.search.apply");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "showing 1 texture");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Beta Panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
                  "mat.project.texture.metal_beta_panel");
@@ -22702,9 +22754,24 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     EXPECT_STREQ(filtered_slot_image.id, "image.editor_shell.texture.slot_0");
     EXPECT_STREQ(filtered_slot_image.path, (texture_dir / "metal" / "beta-panel.png").string().c_str());
 
+    slayer3d_properties_set_string(scene_state, "editor.texture.search", "missing");
+    emit_signal("signal.editor.texture.search.apply");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""),
+                 "no textures match search");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.empty.message", ""),
+                 "No textures match search");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.status", ""),
+                 "loaded 3 textures");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.empty", true));
+
     slayer3d_properties_set_string(scene_state, "editor.texture.search", "");
     emit_signal("signal.editor.texture.search.apply");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 3);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "showing 3 textures");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Alpha Wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.1.label", ""), "Beta Panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.2.label", ""), "Zeta Panel");
@@ -22836,12 +22903,14 @@ TEST(GameDataRuntime, EditorTextureScanReportsUnavailableAndEmptySources)
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", empty_dir.string().c_str());
     emit_signal("signal.editor.texture.refresh");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 0);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "loaded 0 textures");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "no textures found");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.empty.message", ""), "No textures found");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.available", false));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.unavailable", true));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.empty", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.diagnostic", ""),
-                 "loaded 0 textures");
+                 "no textures found");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
