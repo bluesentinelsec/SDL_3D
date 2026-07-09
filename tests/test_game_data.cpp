@@ -18157,6 +18157,10 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 8);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "afternoon");
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.sky.slot.0.layer_count", 0), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.skyboxes.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.skyboxes.empty", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.skyboxes.status", ""),
+                 "8 skyboxes found");
 
     emit_signal("signal.editor.sky.select_slot.0");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.selected.name", ""), "afternoon");
@@ -18201,6 +18205,15 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     emit_signal("signal.editor.sky.refresh");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "packs/deep/my_sunset");
+
+    const std::filesystem::path empty_sky_root = nested_root / "empty";
+    std::filesystem::create_directories(empty_sky_root);
+    slayer3d_properties_set_string(mutable_state, "editor.asset_source.skyboxes.path", empty_sky_root.string().c_str());
+    emit_signal("signal.editor.sky.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.status", ""), "no skyboxes found");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.skyboxes.available", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.skyboxes.empty", false));
     remove_test_dir(nested_root);
 
     slayer3d_game_data_destroy(runtime);
@@ -19488,6 +19501,10 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     emit_signal("signal.editor.palette.game_object");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 18);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 18 actors");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.status", ""),
+                 "loaded 1 model");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
@@ -19530,6 +19547,59 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(model_root);
+}
+
+TEST(GameDataRuntime, EditorActorBrowserReportsMissingAndEmptyModelSources)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path root = unique_test_dir("editor_actor_model_diagnostics");
+    const std::filesystem::path missing_dir = root / "missing_models";
+    const std::filesystem::path empty_dir = root / "empty_models";
+    std::filesystem::create_directories(empty_dir);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", missing_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "media/models");
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""),
+                 "loaded 17 actors (model directory unavailable)");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.available", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.unavailable", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.diagnostic", ""),
+                 "model directory unavailable");
+
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", empty_dir.string().c_str());
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 17);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""), "loaded 17 actors");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.unavailable", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.diagnostic", ""),
+                 "no models found");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(root);
 }
 
 TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
@@ -22605,6 +22675,11 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     emit_signal("signal.editor.palette.material");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 3);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "loaded 3 textures");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.unavailable", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.empty", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.status", ""),
+                 "loaded 3 textures");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.slot.0.available", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.label", ""), "Alpha Wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
@@ -22718,6 +22793,59 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(texture_dir.parent_path());
+}
+
+TEST(GameDataRuntime, EditorTextureScanReportsUnavailableAndEmptySources)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path root = unique_test_dir("editor_texture_diagnostics");
+    const std::filesystem::path missing_dir = root / "missing_textures";
+    const std::filesystem::path empty_dir = root / "empty_textures";
+    std::filesystem::create_directories(empty_dir);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", missing_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "media/textures");
+    emit_signal("signal.editor.texture.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""),
+                 "texture directory unavailable");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.available", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.unavailable", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.empty", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.diagnostic", ""),
+                 "texture directory unavailable");
+
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", empty_dir.string().c_str());
+    emit_signal("signal.editor.texture.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.scan.status", ""), "loaded 0 textures");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.available", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.unavailable", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.textures.empty", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.diagnostic", ""),
+                 "loaded 0 textures");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(root);
 }
 
 TEST(GameDataRuntime, EditorShellDojoTextureSlotThumbnailsReloadWhenSlotPathChanges)
