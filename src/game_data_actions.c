@@ -1384,18 +1384,23 @@ static void editor_asset_source_set_diagnostic(slayer3d_properties *state, const
     slayer3d_properties_set_bool(state, key, available && empty);
 }
 
-static void editor_actor_set_model_empty_state(slayer3d_properties *state, int scanned_model_count, bool source_scanned)
+static void editor_actor_set_model_empty_state(slayer3d_properties *state, int scanned_model_count,
+                                               int filtered_model_count, bool source_scanned, bool search_active)
 {
     if (state == NULL)
         return;
 
     slayer3d_properties_set_int(state, "editor.actor.models.count", source_scanned ? scanned_model_count : 0);
-    const bool show_empty_state = !source_scanned || scanned_model_count == 0;
+    slayer3d_properties_set_int(state, "editor.actor.models.filtered_count", source_scanned ? filtered_model_count : 0);
+    const bool show_empty_state =
+        !source_scanned || scanned_model_count == 0 || (search_active && filtered_model_count == 0);
     slayer3d_properties_set_bool(state, "editor.actor.models.empty.visible", show_empty_state);
     if (!source_scanned)
         slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "Model directory unavailable");
     else if (scanned_model_count == 0)
         slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "No project models found");
+    else if (search_active && filtered_model_count == 0)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "No project models match search");
     else
         slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "");
 }
@@ -2442,6 +2447,49 @@ static bool editor_actor_scan_list_append_builtin(editor_actor_scan_list *list, 
     return entry->id[0] != '\0' && entry->label[0] != '\0';
 }
 
+static bool editor_actor_scan_field_matches_token(const char *field, const char *token, size_t token_len)
+{
+    return field != NULL && field[0] != '\0' && editor_texture_fuzzy_token_matches(field, token, token_len);
+}
+
+static bool editor_actor_scan_entry_token_matches(const editor_actor_scan_entry *entry, const char *token,
+                                                  size_t token_len)
+{
+    if (entry == NULL)
+        return false;
+    return editor_actor_scan_field_matches_token(entry->id, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->label, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->filename, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->relative_path, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->model, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->group, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->classname, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->role, token, token_len);
+}
+
+static bool editor_actor_scan_entry_matches_model_search(const editor_actor_scan_entry *entry, const char *query)
+{
+    if (entry == NULL || !entry->scanned_model)
+        return true;
+    if (query == NULL || query[0] == '\0')
+        return true;
+
+    const char *token = query;
+    while (*token != '\0')
+    {
+        while (editor_ascii_is_space(*token))
+            ++token;
+        const char *end = token;
+        while (*end != '\0' && !editor_ascii_is_space(*end))
+            ++end;
+        const size_t token_len = (size_t)(end - token);
+        if (token_len > 0U && !editor_actor_scan_entry_token_matches(entry, token, token_len))
+            return false;
+        token = end;
+    }
+    return true;
+}
+
 static bool editor_actor_scan_model_id_used(const editor_actor_scan_list *list, const char *model)
 {
     if (list == NULL || model == NULL || model[0] == '\0')
@@ -2877,6 +2925,9 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     const int slot_count = SDL_max(0, json_int(action, "slot_count", 6));
     const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
     const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
+    const char *model_search_query =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.actor.model.search", "");
+    const bool model_search_active = model_search_query != NULL && model_search_query[0] != '\0';
     char *resolved_fallback_directory = NULL;
     char *resolved_model_directory = NULL;
     if (directory == NULL || directory[0] == '\0')
@@ -2985,11 +3036,16 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
         SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);
 
     int published_count = 0;
+    int filtered_model_count = 0;
     int selected_index = -1;
     const char *current_actor = slayer3d_properties_get_string(runtime->scene_state, "editor.actor.selected", "");
     for (int i = 0; ok && i < list.count; ++i)
     {
         const editor_actor_scan_entry *entry = &list.entries[i];
+        if (!editor_actor_scan_entry_matches_model_search(entry, model_search_query))
+            continue;
+        if (entry->scanned_model)
+            ++filtered_model_count;
         ok = editor_actor_collection_publish_row(runtime, collection, published_count, entry);
         if (!ok)
             break;
@@ -3015,12 +3071,16 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     char status[128];
     if (!ok)
         SDL_strlcpy(status, "actor browser allocation failed", sizeof(status));
+    else if (model_search_active && scanned)
+        SDL_snprintf(status, sizeof(status), "loaded %d actor%s (%d matching project model%s)", published_count,
+                     published_count == 1 ? "" : "s", filtered_model_count, filtered_model_count == 1 ? "" : "s");
     else
         SDL_snprintf(status, sizeof(status), "loaded %d actor%s%s", published_count, published_count == 1 ? "" : "s",
                      scanned ? "" : " (model directory unavailable)");
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.browser.count", ok ? published_count : 0);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.scan.status", status);
-    editor_actor_set_model_empty_state(runtime->scene_state, scanned_model_count, scanned);
+    editor_actor_set_model_empty_state(runtime->scene_state, scanned_model_count, filtered_model_count, scanned,
+                                       model_search_active);
     if (!scanned)
         editor_asset_source_set_diagnostic(runtime->scene_state, "models", "model directory unavailable", false, false);
     else if (scanned_model_count == 0)

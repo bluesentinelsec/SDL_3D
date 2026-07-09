@@ -19613,6 +19613,67 @@ TEST(GameDataRuntime, EditorActorBrowserReportsMissingAndEmptyModelSources)
     remove_test_dir(root);
 }
 
+TEST(GameDataRuntime, EditorActorBrowserFiltersProjectModelsBySearch)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::filesystem::path model_root = unique_test_dir("editor_actor_model_search");
+    const std::filesystem::path model_dir = model_root / "models";
+    std::filesystem::create_directories(model_dir);
+    write_text(model_dir / "alpha_guard.obj", "o AlphaGuard\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+    write_text(model_dir / "beta_guard.obj", "o BetaGuard\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", model_dir.string().c_str());
+    slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
+    slayer3d_properties_set_string(scene_state, "editor.actor.model.search", "beta");
+
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.count", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.filtered_count", -1), 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.models.empty.visible", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 18);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""),
+                 "loaded 18 actors (1 matching project model)");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.17.available", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.17.label", ""), "Beta Guard");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.17.model", ""),
+                 "model.project.actor.beta_guard");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.18.available", true));
+
+    slayer3d_properties_set_string(scene_state, "editor.actor.model.search", "zq");
+    emit_signal("signal.editor.actor.refresh");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.count", -1), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.filtered_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 17);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.models.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.models.empty.message", ""),
+                 "No project models match search");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.slot.17.available", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.scan.status", ""),
+                 "loaded 17 actors (0 matching project models)");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(model_root);
+}
+
 TEST(GameDataRuntime, EditorShellDojoPlacesBuiltInObjectThing)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
