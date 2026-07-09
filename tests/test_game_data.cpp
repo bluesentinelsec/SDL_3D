@@ -4297,6 +4297,44 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, FontCacheMediaDirectoryUpdatesClearLoadedFonts)
+{
+    slayer3d_game_data_font_cache font_cache{};
+    slayer3d_game_data_font_cache_init(&font_cache, SLAYER3D_MEDIA_DIR);
+    ASSERT_NE(font_cache.media_dir, nullptr);
+    EXPECT_STREQ(font_cache.media_dir, SLAYER3D_MEDIA_DIR);
+
+    slayer3d_font prepared{};
+    prepared.atlas_pixels = static_cast<unsigned char *>(SDL_malloc(1));
+    ASSERT_NE(prepared.atlas_pixels, nullptr);
+    prepared.atlas_w = 1;
+    prepared.atlas_h = 1;
+    font_cache.fonts = static_cast<slayer3d_font *>(SDL_calloc(1, sizeof(*font_cache.fonts)));
+    font_cache.font_ids = static_cast<const char **>(SDL_calloc(1, sizeof(*font_cache.font_ids)));
+    ASSERT_NE(font_cache.fonts, nullptr);
+    ASSERT_NE(font_cache.font_ids, nullptr);
+    font_cache.fonts[0] = prepared;
+    SDL_zero(prepared);
+    font_cache.font_ids[0] = SDL_strdup("font.test");
+    ASSERT_NE(font_cache.font_ids[0], nullptr);
+    font_cache.count = 1;
+    font_cache.capacity = 1;
+    EXPECT_EQ(font_cache.count, 1);
+
+    const char *replacement = "/tmp/slayer3d-media-font-cache-test";
+    EXPECT_TRUE(slayer3d_game_data_font_cache_set_media_dir(&font_cache, replacement));
+    ASSERT_NE(font_cache.media_dir, nullptr);
+    EXPECT_STREQ(font_cache.media_dir, replacement);
+    EXPECT_EQ(font_cache.count, 0);
+    EXPECT_EQ(font_cache.fonts, nullptr);
+    EXPECT_EQ(font_cache.font_ids, nullptr);
+
+    EXPECT_TRUE(slayer3d_game_data_font_cache_set_media_dir(&font_cache, replacement));
+    EXPECT_STREQ(font_cache.media_dir, replacement);
+
+    slayer3d_game_data_font_cache_free(&font_cache);
+}
+
 TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
 {
     const std::filesystem::path dir = unique_test_dir("presentation_warmup_audio");

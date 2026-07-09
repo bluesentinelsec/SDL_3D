@@ -467,9 +467,13 @@ TEST(ToolCli, EditorMediaPathBecomesAuthoritativeAssetSourceRoot)
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
     ASSERT_NE(launch.asset_sources, nullptr);
     EXPECT_STREQ(launch.media_dir, media.c_str());
+    EXPECT_STREQ(launch.media_relative_path, "media");
     EXPECT_STREQ(launch.asset_sources->textures.path, (media_dir / "textures").string().c_str());
     EXPECT_STREQ(launch.asset_sources->models.path, (media_dir / "models").string().c_str());
     EXPECT_STREQ(launch.asset_sources->liquids.path, (media_dir / "liquids").string().c_str());
+    EXPECT_STREQ(launch.asset_sources->textures.relative_path, "media/textures");
+    EXPECT_STREQ(launch.asset_sources->models.relative_path, "media/models");
+    EXPECT_STREQ(launch.asset_sources->liquids.relative_path, "media/liquids");
     EXPECT_TRUE(launch.asset_sources->textures.available);
     EXPECT_TRUE(launch.asset_sources->liquids.available);
 
@@ -483,9 +487,14 @@ TEST(ToolCli, EditorMediaPathBecomesAuthoritativeAssetSourceRoot)
         joined += invocation.argv[i];
     }
     EXPECT_NE(joined.find("editor.media.path=" + media), std::string::npos);
+    EXPECT_NE(joined.find("editor.media.relative=media"), std::string::npos);
     EXPECT_NE(joined.find("editor.media.available=true"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.path=" + (media_dir / "textures").string()), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.liquids.path=" + (media_dir / "liquids").string()), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.liquids.relative=media/liquids"), std::string::npos);
+    EXPECT_EQ(joined.find("editor.asset_source.textures.relative=" + (media_dir / "textures").string()),
+              std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.any_missing=false"), std::string::npos);
 
     slayer3d_editor_runner_invocation_destroy(&invocation);

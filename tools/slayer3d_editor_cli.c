@@ -1326,7 +1326,7 @@ static char *editor_resolve_session_media_root(const slayer3d_editor_args *args,
     if (args != NULL && args->media_path != NULL && args->media_path[0] != '\0')
     {
         if (out_relative_path != NULL)
-            *out_relative_path = SDL_strdup(args->media_path);
+            *out_relative_path = SDL_strdup(path_is_absolute_tool(args->media_path) ? "media" : args->media_path);
         return path_make_absolute_tool(args->media_path);
     }
     if (project != NULL && !project->embedded && project->media_dir != NULL && project->media_dir[0] != '\0')
