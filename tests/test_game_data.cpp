@@ -22679,10 +22679,42 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
         << error;
     EXPECT_GT(saved_size, 0u);
     const std::string saved_text = read_text(save_path);
-    EXPECT_NE(saved_text.find("\"texture\": \"asset://custom_textures/alpha-wall.jpg\""), std::string::npos);
-    EXPECT_NE(saved_text.find("\"texture\": \"asset://custom_textures/metal/beta-panel.png\""), std::string::npos);
+    EXPECT_NE(saved_text.find("\"texture\": \"custom_textures/alpha-wall.jpg\""), std::string::npos);
+    EXPECT_NE(saved_text.find("\"texture\": \"custom_textures/metal/beta-panel.png\""), std::string::npos);
+    EXPECT_EQ(saved_text.find("\"texture\": \"asset://custom_textures/alpha-wall.jpg\""), std::string::npos);
+    EXPECT_EQ(saved_text.find("\"texture\": \"asset://custom_textures/metal/beta-panel.png\""), std::string::npos);
     EXPECT_EQ(saved_text.find(texture_dir.string()), std::string::npos);
+    EXPECT_TRUE(std::filesystem::exists(save_path.parent_path() / "custom_textures" / "alpha-wall.jpg"));
+    EXPECT_TRUE(std::filesystem::exists(save_path.parent_path() / "custom_textures" / "metal" / "beta-panel.png"));
+    EXPECT_TRUE(std::filesystem::exists(save_path.parent_path() / "custom_textures" / "zeta_panel.png"));
 
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), roundtrip_session, &roundtrip_runtime, error,
+                                             sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_map_file(roundtrip_runtime, "brush.editor_shell.target",
+                                                                save_path.string().c_str(), error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world roundtrip_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor_shell.target", &roundtrip_world));
+    bool saw_roundtrip_alpha = false;
+    const std::string expected_alpha_texture =
+        (save_path.parent_path() / "custom_textures" / "alpha-wall.jpg").string();
+    for (int i = 0; i < roundtrip_world.material_count; ++i)
+    {
+        const slayer3d_game_data_brush_material &material = roundtrip_world.materials[i];
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.alpha_wall") == 0)
+        {
+            saw_roundtrip_alpha = true;
+            EXPECT_STREQ(material.texture, expected_alpha_texture.c_str());
+        }
+    }
+    EXPECT_TRUE(saw_roundtrip_alpha);
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(texture_dir.parent_path());

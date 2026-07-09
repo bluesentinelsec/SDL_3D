@@ -321,6 +321,107 @@ static char *import_map_source_dir(const char *source_path)
     return dir;
 }
 
+static bool import_resolve_owned_map_reference(const char **reference, const char *map_dir, char *error_buffer,
+                                               int error_buffer_size)
+{
+    if (reference == NULL || *reference == NULL || !import_reference_is_relative(*reference) || map_dir == NULL ||
+        map_dir[0] == '\0')
+    {
+        return true;
+    }
+    char resolved[1024];
+    SDL_snprintf(resolved, sizeof(resolved), "%s/%s", map_dir, *reference);
+    char *copy = SDL_strdup(resolved);
+    if (copy == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate resolved editable map asset path");
+        return false;
+    }
+    SDL_free((void *)*reference);
+    *reference = copy;
+    return true;
+}
+
+static bool import_resolve_owned_map_reference_mutable(char **reference, const char *map_dir, char *error_buffer,
+                                                       int error_buffer_size)
+{
+    if (reference == NULL)
+        return true;
+    const char *resolved = *reference;
+    const bool ok = import_resolve_owned_map_reference(&resolved, map_dir, error_buffer, error_buffer_size);
+    *reference = (char *)resolved;
+    return ok;
+}
+
+static bool import_resolve_property_asset_reference(slayer3d_properties *properties, const char *key,
+                                                    const char *map_dir, char *error_buffer, int error_buffer_size)
+{
+    const slayer3d_value *value = slayer3d_properties_get_value(properties, key);
+    if (value == NULL || value->type != SLAYER3D_VALUE_STRING || value->as_string == NULL ||
+        !import_reference_is_relative(value->as_string) || map_dir == NULL || map_dir[0] == '\0')
+    {
+        return true;
+    }
+
+    char resolved[1024];
+    SDL_snprintf(resolved, sizeof(resolved), "%s/%s", map_dir, value->as_string);
+    char *copy = SDL_strdup(resolved);
+    if (copy == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate resolved editable map property asset path");
+        return false;
+    }
+    slayer3d_properties_set_string(properties, key, copy);
+    SDL_free(copy);
+    return true;
+}
+
+static bool import_resolve_property_asset_references(slayer3d_properties *properties, const char *map_dir,
+                                                     char *error_buffer, int error_buffer_size)
+{
+    return properties == NULL || (import_resolve_property_asset_reference(properties, "effect_asset", map_dir,
+                                                                          error_buffer, error_buffer_size) &&
+                                  import_resolve_property_asset_reference(properties, "effect_texture", map_dir,
+                                                                          error_buffer, error_buffer_size) &&
+                                  import_resolve_property_asset_reference(properties, "effect_sprite", map_dir,
+                                                                          error_buffer, error_buffer_size));
+}
+
+static bool import_resolve_staged_asset_references(slayer3d_game_data_runtime *staged, const char *source_path,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    char *map_dir = import_map_source_dir(source_path);
+    if (map_dir == NULL)
+        return true;
+
+    bool ok = true;
+    for (int world_index = 0; ok && world_index < staged->brush_world_count; ++world_index)
+    {
+        slayer3d_game_data_brush_world *world = &staged->brush_worlds[world_index].desc;
+        slayer3d_game_data_brush_material *materials = (slayer3d_game_data_brush_material *)(void *)world->materials;
+        for (int material_index = 0; ok && material_index < world->material_count; ++material_index)
+            ok = import_resolve_owned_map_reference(&materials[material_index].texture, map_dir, error_buffer,
+                                                    error_buffer_size);
+    }
+    for (int actor_index = 0; ok && actor_index < staged->editor_actor_count; ++actor_index)
+    {
+        ok = import_resolve_owned_map_reference_mutable(&staged->editor_actors[actor_index].model, map_dir,
+                                                        error_buffer, error_buffer_size);
+        ok = ok && import_resolve_property_asset_references(staged->editor_actors[actor_index].properties, map_dir,
+                                                            error_buffer, error_buffer_size);
+    }
+    for (int prefab_index = 0; ok && prefab_index < staged->editor_prefab_count; ++prefab_index)
+    {
+        ok = import_resolve_owned_map_reference_mutable(&staged->editor_prefabs[prefab_index].model, map_dir,
+                                                        error_buffer, error_buffer_size);
+        ok = ok && import_resolve_property_asset_references(staged->editor_prefabs[prefab_index].properties, map_dir,
+                                                            error_buffer, error_buffer_size);
+    }
+
+    SDL_free(map_dir);
+    return ok;
+}
+
 /* Restore the saved map's global sky as the runtime sky override so the
  * reopened map previews and re-exports the sky it was saved with. */
 static void import_apply_map_sky(slayer3d_game_data_runtime *runtime, const slayer3d_map_document *map,
@@ -586,6 +687,13 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         set_errorf(error_buffer, error_buffer_size, "editable level brush world '%s' source model is invalid: %s",
                    world_name,
                    diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue : "source integrity check failed");
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
+        yyjson_doc_free(doc);
+        return false;
+    }
+    if (!import_resolve_staged_asset_references(staged, source_path, error_buffer, error_buffer_size))
+    {
         free_staged_import_runtime(staged);
         SDL_free(staged);
         yyjson_doc_free(doc);
