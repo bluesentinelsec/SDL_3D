@@ -6883,6 +6883,29 @@
                 },
                 "layer": 122
               },
+              {
+                "id": "ui.editor_shell.actor_viewer.models.empty.label",
+                "type": "label",
+                "x": 104,
+                "y": 322,
+                "w": 90,
+                "h": 56,
+                "format": "%s",
+                "bindings": [
+                  { "type": "scene_state", "key": "editor.actor.models.empty.message", "default": "No project models found" }
+                ],
+                "text_scale": 0.34,
+                "align": "center",
+                "visible_if": {
+                  "type": "all",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.actor.group.models.collapsed", "op": "==", "value": false, "default": false },
+                    { "type": "scene_state.compare", "key": "editor.actor.models.empty.visible", "op": "==", "value": true, "default": false },
+                    { "type": "scene_state.compare", "key": "editor.actor.slot.17.available", "op": "==", "value": false, "default": false }
+                  ]
+                },
+                "layer": 122
+              },
               { "id": "ui.editor_shell.actor_viewer.scroll.track", "type": "panel", "x": 198, "y": 10, "w": 10, "h": 354, "layer": 122 },
               { "id": "ui.editor_shell.actor_viewer.scroll.thumb", "type": "panel", "x": 200, "y": 14, "w": 6, "h": 330, "layer": 123 }
             ]

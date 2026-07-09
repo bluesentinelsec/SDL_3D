@@ -19505,6 +19505,9 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.status", ""),
                  "loaded 1 model");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.count", -1), 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.models.empty.visible", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.models.empty.message", "stale"), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.2.label", ""), "Trigger");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.3.label", ""), "Sensor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.slot.4.label", ""), "Robot");
@@ -19586,6 +19589,10 @@ TEST(GameDataRuntime, EditorActorBrowserReportsMissingAndEmptyModelSources)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.diagnostic", ""),
                  "model directory unavailable");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.models.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.models.empty.message", ""),
+                 "Model directory unavailable");
 
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", empty_dir.string().c_str());
     emit_signal("signal.editor.palette.game_object");
@@ -19596,6 +19603,10 @@ TEST(GameDataRuntime, EditorActorBrowserReportsMissingAndEmptyModelSources)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.asset_source.models.empty", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.diagnostic", ""),
                  "no models found");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.models.count", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.models.empty.visible", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.models.empty.message", ""),
+                 "No project models found");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

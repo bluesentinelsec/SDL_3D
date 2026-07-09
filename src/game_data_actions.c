@@ -1384,6 +1384,22 @@ static void editor_asset_source_set_diagnostic(slayer3d_properties *state, const
     slayer3d_properties_set_bool(state, key, available && empty);
 }
 
+static void editor_actor_set_model_empty_state(slayer3d_properties *state, int scanned_model_count, bool source_scanned)
+{
+    if (state == NULL)
+        return;
+
+    slayer3d_properties_set_int(state, "editor.actor.models.count", source_scanned ? scanned_model_count : 0);
+    const bool show_empty_state = !source_scanned || scanned_model_count == 0;
+    slayer3d_properties_set_bool(state, "editor.actor.models.empty.visible", show_empty_state);
+    if (!source_scanned)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "Model directory unavailable");
+    else if (scanned_model_count == 0)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "No project models found");
+    else
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "");
+}
+
 static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -3004,6 +3020,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                      scanned ? "" : " (model directory unavailable)");
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.browser.count", ok ? published_count : 0);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.scan.status", status);
+    editor_actor_set_model_empty_state(runtime->scene_state, scanned_model_count, scanned);
     if (!scanned)
         editor_asset_source_set_diagnostic(runtime->scene_state, "models", "model directory unavailable", false, false);
     else if (scanned_model_count == 0)
