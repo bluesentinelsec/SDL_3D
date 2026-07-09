@@ -322,7 +322,10 @@ TEST(ToolCli, EditorProjectAssetSourcesAllowConfiguredMissingDirectories)
     const std::string output = (project_dir / "level.slayermap.json").string();
     args.output_path = output.c_str();
     slayer3d_editor_launch launch;
-    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    {
+        ScopedCurrentPath cwd(project_dir);
+        ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    }
     slayer3d_editor_runner_invocation invocation;
     ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
     std::string joined;
@@ -372,7 +375,10 @@ TEST(ToolCli, EditorProjectMediaRootPreservesManifestRelativePath)
     const std::string output = (project_dir / "level.slayermap.json").string();
     args.output_path = output.c_str();
     slayer3d_editor_launch launch;
-    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    {
+        ScopedCurrentPath cwd(project_dir);
+        ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    }
     ASSERT_STREQ(launch.media_relative_path, "content");
     ASSERT_STREQ(launch.asset_sources->textures.relative_path, "content/textures");
     ASSERT_STREQ(launch.asset_sources->liquids.relative_path, "content/liquids");
@@ -396,9 +402,9 @@ TEST(ToolCli, EditorProjectMediaRootPreservesManifestRelativePath)
     std::filesystem::remove_all(project_dir);
 }
 
-TEST(ToolCli, EditorDefaultLaunchUsesCompileTimeMediaWhenCwdMediaIsMissing)
+TEST(ToolCli, EditorDefaultLaunchStartsWithMediaUnavailableWhenCwdMediaIsMissing)
 {
-    const std::filesystem::path cwd_root = unique_cli_test_dir("editor_embedded_media_fallback");
+    const std::filesystem::path cwd_root = unique_cli_test_dir("editor_media_prompt");
     std::filesystem::create_directories(cwd_root);
     ASSERT_FALSE(std::filesystem::exists(cwd_root / "media"));
 
@@ -415,16 +421,26 @@ TEST(ToolCli, EditorDefaultLaunchUsesCompileTimeMediaWhenCwdMediaIsMissing)
         ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
         ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
 
-        ASSERT_NE(launch.media_dir, nullptr);
         ASSERT_NE(launch.asset_sources, nullptr);
-        EXPECT_NE(std::filesystem::path(launch.media_dir), cwd_root / "media");
-        EXPECT_TRUE(launch.asset_sources->textures.available);
-        EXPECT_TRUE(launch.asset_sources->models.available);
-        EXPECT_TRUE(launch.asset_sources->liquids.available);
-        EXPECT_STREQ(launch.media_relative_path, "media");
-        EXPECT_STREQ(launch.asset_sources->textures.relative_path, "media/textures");
-        EXPECT_STREQ(launch.asset_sources->liquids.relative_path, "media/liquids");
+        EXPECT_EQ(launch.media_dir, nullptr);
+        EXPECT_STREQ(launch.media_relative_path, "");
+        EXPECT_FALSE(launch.asset_sources->textures.available);
+        EXPECT_FALSE(launch.asset_sources->models.available);
+        EXPECT_FALSE(launch.asset_sources->liquids.available);
 
+        slayer3d_editor_runner_invocation invocation;
+        ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+        std::string joined;
+        for (int i = 0; i < invocation.argc; ++i)
+        {
+            if (!joined.empty())
+                joined += "\n";
+            joined += invocation.argv[i];
+        }
+        EXPECT_NE(joined.find("editor.media.available=false"), std::string::npos);
+        EXPECT_EQ(joined.find("--media"), std::string::npos);
+
+        slayer3d_editor_runner_invocation_destroy(&invocation);
         slayer3d_editor_launch_destroy(&launch);
         slayer3d_editor_project_destroy(&loaded_project);
         slayer3d_editor_args_destroy(&args);
@@ -843,7 +859,7 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
     ASSERT_NE(args.project, nullptr);
     ASSERT_NE(args.output_path, nullptr);
-    EXPECT_STREQ(args.project, "embedded://slayer3d_editor");
+    EXPECT_NE(std::string(args.project).find("apps/slayer3d_editor"), std::string::npos);
     EXPECT_NE(std::string(args.output_path).find(".slayermap.json"), std::string::npos);
 
     char error[512]{};
@@ -854,7 +870,6 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
     EXPECT_STREQ(launch.input_path, "");
     EXPECT_STREQ(launch.save_path, args.output_path);
-    EXPECT_TRUE(launch.embedded);
 
     slayer3d_editor_runner_invocation invocation;
     ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
@@ -865,8 +880,8 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("--embedded"), std::string::npos);
-    EXPECT_EQ(joined.find("--root"), std::string::npos);
+    EXPECT_EQ(joined.find("--embedded"), std::string::npos);
+    EXPECT_NE(joined.find("--root"), std::string::npos);
     EXPECT_NE(joined.find("asset://slayer3d_editor.game.json"), std::string::npos);
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);

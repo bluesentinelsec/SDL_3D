@@ -18247,8 +18247,8 @@ TEST(GameDataRuntime, EditorShellMapSaveMaterializesAssetsForPlayableUse)
     /* Referenced assets are copied next to the map with map-relative refs. */
     const std::string map_json = read_text(map_path);
     EXPECT_NE(map_json.find("\"textures/lava.jpg\""), std::string::npos);
-    /* The embedded editor fragment keeps the editor's own asset:// working
-     * references; only the map-level materials must be map-relative. */
+    /* Editor shell data may keep its own asset:// working references; only
+     * map-level materials must be map-relative. */
     EXPECT_NE(map_json.find("\"preset\": \"afternoon\""), std::string::npos);
     EXPECT_TRUE(std::filesystem::exists(save_dir / "textures" / "lava.jpg"));
     EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "px.png"));

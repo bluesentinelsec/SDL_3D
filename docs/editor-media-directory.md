@@ -9,9 +9,9 @@ predictable across the editor, saved maps, and runner workflows.
 On startup, the editor resolves media in this order:
 
 1. `--media-path <dir>` when provided.
-2. The opened editor project manifest `media_root`, when available.
-3. A `media` directory in the current working directory for the built-in editor
-   project.
+2. A `media` directory in the current working directory.
+3. The opened editor project manifest `media_root`, when explicitly provided
+   for compatibility with project-authored launch workflows.
 
 If no usable media directory is found, editor tools remain available with clear
 missing-source warnings. Designers can choose or reload the media directory from

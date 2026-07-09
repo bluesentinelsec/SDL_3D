@@ -259,9 +259,8 @@ build/MyGame
 launches a data-authored editor project, injects editor input/output paths as
 scene state, and leaves the actual tool behavior in JSON/Lua.
 
-Running it with no arguments opens the embedded Slayer3D Editor shell with a
-new untitled `.slayermap.json` save target in SDL's per-user preferences
-directory:
+Running it with no arguments opens the Slayer3D Editor shell with a new
+untitled `.slayermap.json` save target in SDL's per-user preferences directory:
 
 ```sh
 build/debug/slayer3d_editor
@@ -379,17 +378,17 @@ those names otherwise. Missing directories do not abort editor startup; the host
 publishes `editor.asset_source.<kind>.available` and
 `editor.asset_source.any_missing` so data-authored UI can surface path controls.
 
-The editor host translates external manifests into a normal runner launch and
-uses the runner's `--embedded` mount for the no-argument built-in editor. It
-injects
+The editor host translates manifests into a normal runner launch with an
+explicit project root and data asset. It injects
 `editor.command`, `editor.input.path`, `editor.save.path`,
 `editor.test_run.path`, `editor.project.dir`, `editor.project.data_root`, and
 `editor.asset_source.<kind>.path` / `.relative` / `.available` as scene state.
 This keeps the shell data-authored while still giving users a stable CLI:
 `--project` selects the editor project, `--input` selects a `.slayermap.json`
-file for `open`, `--output` selects the save target, and `--texture-path`
-overrides the project texture source for the current session. The editor treats
-the effective texture source as one authoritative directory.
+file for `open`, `--output` selects the save target, and `--media-path`
+selects the one authoritative project media directory for the current session.
+Deprecated per-tool overrides remain for compatibility, but should not be used
+for new editor workflows.
 
 When game data is loaded directly from a filesystem path, the runtime also
 remembers that file's parent directory as a filesystem source root even though

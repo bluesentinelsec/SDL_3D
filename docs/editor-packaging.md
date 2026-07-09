@@ -7,7 +7,7 @@ same managed runtime used by games.
 ## No-Argument Launch
 
 Running the editor with no arguments starts a new untitled map using the bundled
-Slayer3D Editor project embedded in the executable:
+Slayer3D Editor project:
 
 ```sh
 slayer3d_editor
@@ -42,14 +42,11 @@ images (`layer_outer.png`, optional `layer_inner.png`).
 ## Bundled Assets
 
 The default editor shell lives under `apps/slayer3d_editor/data` in source
-builds. CMake packs that directory with `slayer3d_pack`, embeds the generated
-pack into `slayer3d_editor`, and launches the built-in project through the
-runner's `--embedded` path. Changes to JSON, default textures, default models,
-skyboxes, and other files under that directory are picked up on the next build.
-
-User-provided project, texture, and model directories remain external. For
-example, `--texture-path media/textures` overrides the embedded default texture
-source for that editor session.
+builds and is launched as an explicit project root. Project media is not packed
+or embedded into the native editor binary. When no `--media-path` is provided,
+the editor looks for a `media/` directory in the current working directory; if
+one is not available, the Project Media settings panel opens so the user can
+choose a directory.
 
 ## Desktop Build
 
@@ -79,26 +76,27 @@ Native installs include:
 - `share/slayer3d/demos/slayermap_example`
 - `share/slayer3d/media`
 
-The installed no-argument editor does not need a packaged editor project
-directory. Its built-in shell data is embedded in the binary. External media is
-still installed for tools, examples, and caller-owned projects.
+The installed no-argument editor needs access to the editor project data and a
+media directory. Packaging should install or bundle the editor project data next
+to the executable or in a platform-appropriate resource directory, and should
+make a conventional `media/` directory available for first launch.
 
 ## Distribution Notes
 
 The editor is generic. Project assets and map files stay external unless the
-caller explicitly packages them. The embedded Slayer3D Editor project exists so
-a fresh executable opens into a useful brush editor immediately; users can then
-open or configure their own projects from the editor workflow.
+caller explicitly packages them. A fresh executable should open into a useful
+brush editor immediately, but project media remains an explicit directory chosen
+by CLI argument, current working directory convention, or the Project Media
+settings panel.
 
 ## Browser Editor (Emscripten)
 
 `slayer3d_editor_web` is an Emscripten-only CMake target that runs the same
-data-authored editor shell in a web browser. Instead of the desktop embedded
-asset pack (which requires the native `slayer3d_pack` tool), the web build
-preloads `apps/slayer3d_editor` and the built-in media it references into the
-Emscripten virtual filesystem and resolves the default project from
-`/apps/slayer3d_editor` at startup. No CLI arguments are required; the browser
-editor boots into the default untitled map.
+data-authored editor shell in a web browser. The web build preloads
+`apps/slayer3d_editor` and browser-test media into the Emscripten virtual
+filesystem and resolves the default project from `/apps/slayer3d_editor` at
+startup. No CLI arguments are required; the browser editor boots into the
+default untitled map.
 
 The supported build-and-host workflow is Docker-based:
 
