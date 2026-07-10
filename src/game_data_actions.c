@@ -1046,7 +1046,8 @@ static const char *editor_texture_material_reference(const editor_texture_scan_e
         *owned = NULL;
     if (entry == NULL)
         return NULL;
-    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' && owned != NULL)
+    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' &&
+        !editor_path_absolute(entry->relative_path) && owned != NULL)
     {
         *owned = editor_asset_uri_from_relative_path(entry->relative_path);
         if (*owned != NULL)

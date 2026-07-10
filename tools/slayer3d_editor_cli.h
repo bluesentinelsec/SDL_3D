@@ -110,6 +110,7 @@ extern "C"
         char *owned_media_relative_assignment;
         char *owned_media_available_assignment;
         char *owned_asset_source_assignments[32];
+        char *owned_asset_roots[8];
     } slayer3d_editor_runner_invocation;
 
     slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args,

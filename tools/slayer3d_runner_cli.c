@@ -18,7 +18,8 @@ void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream)
             "  %s\n"
             "  %s --map <level.slayermap.json> [--media <media-dir>] [--state <key=value> ...] "
             "[--state-json <object>] [--state-file <path-or-asset>]\n"
-            "  %s --root <asset-root> (--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
+            "  %s --root <asset-root> [--root <asset-root> ...] "
+            "(--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
             "[--state-file <path-or-asset>]\n"
@@ -69,23 +70,27 @@ void slayer3d_runner_args_destroy(slayer3d_runner_args *args)
     SDL_free(args->state_assignments);
     SDL_free(args->state_json_values);
     SDL_free(args->state_files);
+    SDL_free(args->mount_paths);
     SDL_free(args->owned_data_asset_path);
     SDL_free(args->owned_scene);
     SDL_free(args->owned_player_start);
     args->state_assignments = NULL;
     args->state_json_values = NULL;
     args->state_files = NULL;
+    args->mount_paths = NULL;
     args->owned_data_asset_path = NULL;
     args->owned_scene = NULL;
     args->owned_player_start = NULL;
     args->state_assignment_count = 0;
     args->state_json_count = 0;
     args->state_file_count = 0;
+    args->mount_path_count = 0;
 }
 
 slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slayer3d_runner_args *args, FILE *stream)
 {
-    struct arg_str *root = arg_str0(NULL, "root", "<asset-root>", "mount a directory asset root");
+    struct arg_str *root =
+        arg_strn(NULL, "root", "<asset-root>", 0, argc > 0 ? argc : 1, "mount a directory asset root");
     struct arg_str *pack = arg_str0(NULL, "pack", "<game.slayer3dpak>", "mount an SLAYER3D asset pack");
     struct arg_str *map = arg_str0(NULL, "map", "<level.slayermap.json>", "run a Slayer3D map as a playable FPS scene");
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
@@ -155,7 +160,7 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_ERROR;
     }
 
-    const int explicit_mount_count = root->count + pack->count
+    const int explicit_mount_count = (root->count > 0 ? 1 : 0) + pack->count
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
                                      + embedded->count
 #endif
@@ -212,6 +217,8 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     {
         args->mount_kind = SLAYER3D_RUNNER_MOUNT_NONE;
         args->mount_path = NULL;
+        args->mount_paths = NULL;
+        args->mount_path_count = 0;
         args->data_asset_path = NULL;
         if (args->map_path[0] == '\0')
         {
@@ -233,6 +240,18 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
 
     const bool mount_path_required =
         args->mount_kind == SLAYER3D_RUNNER_MOUNT_DIRECTORY || args->mount_kind == SLAYER3D_RUNNER_MOUNT_PACK;
+    if (mount_path_required && args->mount_kind == SLAYER3D_RUNNER_MOUNT_DIRECTORY)
+    {
+        for (int i = 0; i < root->count; ++i)
+        {
+            if (root->sval[i] == NULL || root->sval[i][0] == '\0')
+            {
+                fprintf(out, "%s: --root path must be non-empty\n", program);
+                arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+                return SLAYER3D_TOOL_CLI_ERROR;
+            }
+        }
+    }
     if ((mount_path_required && (args->mount_path == NULL || args->mount_path[0] == '\0')) ||
         (args->mount_kind != SLAYER3D_RUNNER_MOUNT_NONE &&
          (args->data_asset_path == NULL || args->data_asset_path[0] == '\0') &&
@@ -247,6 +266,8 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     if ((args->scene != NULL && args->scene[0] == '\0') ||
         (args->player_start != NULL && args->player_start[0] == '\0') ||
         (args->test_run_manifest_path != NULL && args->test_run_manifest_path[0] == '\0') ||
+        (args->mount_kind == SLAYER3D_RUNNER_MOUNT_DIRECTORY &&
+         !copy_string_list(&args->mount_paths, &args->mount_path_count, root->sval, root->count)) ||
         !copy_string_list(&args->state_assignments, &args->state_assignment_count, state->sval, state->count) ||
         !copy_string_list(&args->state_json_values, &args->state_json_count, state_json->sval, state_json->count) ||
         !copy_string_list(&args->state_files, &args->state_file_count, state_file->sval, state_file->count))

@@ -1548,6 +1548,131 @@ static bool editor_add_arg(slayer3d_editor_runner_invocation *invocation, int *i
     return true;
 }
 
+static bool editor_path_separator_equal(char a, char b)
+{
+    const bool a_sep = a == '/' || a == '\\';
+    const bool b_sep = b == '/' || b == '\\';
+    return (a_sep && b_sep) || a == b;
+}
+
+static size_t editor_trim_trailing_separators(const char *path, size_t len)
+{
+    while (len > 1u && (path[len - 1u] == '/' || path[len - 1u] == '\\'))
+        --len;
+    return len;
+}
+
+static char *editor_asset_root_for_source(const slayer3d_editor_asset_source *source)
+{
+    if (source == NULL || source->path == NULL || source->relative_path == NULL || source->path[0] == '\0' ||
+        source->relative_path[0] == '\0' || path_is_absolute_tool(source->relative_path))
+    {
+        return NULL;
+    }
+
+    const size_t path_len = editor_trim_trailing_separators(source->path, SDL_strlen(source->path));
+    const size_t relative_len =
+        editor_trim_trailing_separators(source->relative_path, SDL_strlen(source->relative_path));
+    if (path_len <= relative_len || relative_len == 0u)
+        return NULL;
+
+    const size_t path_tail = path_len - relative_len;
+    for (size_t i = 0; i < relative_len; ++i)
+    {
+        if (!editor_path_separator_equal(source->path[path_tail + i], source->relative_path[i]))
+            return NULL;
+    }
+    if (path_tail > 0u && source->path[path_tail - 1u] != '/' && source->path[path_tail - 1u] != '\\')
+        return NULL;
+
+    size_t root_len = editor_trim_trailing_separators(source->path, path_tail);
+    if (root_len == 0u)
+        root_len = 1u;
+
+    char *root = (char *)SDL_malloc(root_len + 1u);
+    if (root == NULL)
+        return NULL;
+    SDL_memcpy(root, source->path, root_len);
+    root[root_len] = '\0';
+    return root;
+}
+
+static bool editor_path_text_equal_tool(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL)
+        return false;
+    while (*a != '\0' && *b != '\0')
+    {
+        if (!editor_path_separator_equal(*a, *b))
+            return false;
+        ++a;
+        ++b;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+static bool editor_invocation_has_asset_root(const slayer3d_editor_runner_invocation *invocation, const char *root,
+                                             const char *launch_root)
+{
+    if (editor_path_text_equal_tool(root, launch_root))
+        return true;
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (editor_path_text_equal_tool(invocation->owned_asset_roots[i], root))
+            return true;
+    }
+    return false;
+}
+
+static bool editor_invocation_add_asset_source_root(slayer3d_editor_runner_invocation *invocation,
+                                                    const slayer3d_editor_asset_source *source, const char *launch_root)
+{
+    char *root = editor_asset_root_for_source(source);
+    if (root == NULL)
+        return true;
+    if (editor_invocation_has_asset_root(invocation, root, launch_root))
+    {
+        SDL_free(root);
+        return true;
+    }
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (invocation->owned_asset_roots[i] == NULL)
+        {
+            invocation->owned_asset_roots[i] = root;
+            return true;
+        }
+    }
+    SDL_free(root);
+    return false;
+}
+
+static bool editor_invocation_collect_asset_roots(slayer3d_editor_runner_invocation *invocation,
+                                                  const slayer3d_editor_launch *launch)
+{
+    if (invocation == NULL || launch == NULL || launch->asset_sources == NULL)
+        return false;
+    return editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->textures, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->models, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->sprites, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->skyboxes, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->liquids, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->effects, launch->root);
+}
+
+static int editor_invocation_extra_asset_root_count(const slayer3d_editor_runner_invocation *invocation)
+{
+    int count = 0;
+    if (invocation == NULL)
+        return 0;
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (invocation->owned_asset_roots[i] != NULL)
+            ++count;
+    }
+    return count;
+}
+
 bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launch, const char *program,
                                              slayer3d_editor_runner_invocation *out_invocation)
 {
@@ -1561,14 +1686,23 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         return false;
     }
 
+    if (!editor_invocation_collect_asset_roots(out_invocation, launch))
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+
     const int state_count = 4 + 2 + 3 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
-    int argc = 5 + (state_count * 2);
+    int argc = 5 + (editor_invocation_extra_asset_root_count(out_invocation) * 2) + (state_count * 2);
     if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
 
     char **argv = (char **)SDL_calloc((size_t)argc + 1u, sizeof(*argv));
     if (argv == NULL)
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
+    }
 
     out_invocation->argv = argv;
     out_invocation->argc = argc;
@@ -1602,6 +1736,17 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     {
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(out_invocation->owned_asset_roots); ++i)
+    {
+        if (out_invocation->owned_asset_roots[i] == NULL)
+            continue;
+        if (!editor_add_arg(out_invocation, &index, "--root") ||
+            !editor_add_arg(out_invocation, &index, out_invocation->owned_asset_roots[i]))
+        {
+            slayer3d_editor_runner_invocation_destroy(out_invocation);
+            return false;
+        }
     }
     if (!editor_add_arg(out_invocation, &index, "--data") ||
         !editor_add_arg(out_invocation, &index, (char *)launch->data_asset_path))
@@ -1685,6 +1830,8 @@ void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation
     SDL_free(invocation->owned_media_available_assignment);
     for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_source_assignments); ++i)
         SDL_free(invocation->owned_asset_source_assignments[i]);
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+        SDL_free(invocation->owned_asset_roots[i]);
     SDL_free(invocation->argv);
     SDL_zero(*invocation);
 }
