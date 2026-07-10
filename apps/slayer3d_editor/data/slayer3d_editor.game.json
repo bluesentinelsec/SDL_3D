@@ -660,8 +660,6 @@
     "signal.editor.texture.filter",
     "signal.editor.texture.search.apply",
     "signal.editor.texture.focus.search",
-    "signal.editor.texture.focus.path",
-    "signal.editor.texture.path.apply",
     "signal.editor.texture.select_slot.0",
     "signal.editor.texture.select_slot.1",
     "signal.editor.texture.select_slot.2",
@@ -677,9 +675,6 @@
     "signal.editor.texture.viewer.toggle",
     "signal.editor.sky.panel.toggle",
     "signal.editor.sky.refresh",
-    "signal.editor.sky.focus.path",
-    "signal.editor.sky.path.apply",
-    "signal.editor.sky.path.apply.request",
     "signal.editor.sky.select_slot.0",
     "signal.editor.sky.select_slot.1",
     "signal.editor.sky.select_slot.2",
@@ -1814,33 +1809,6 @@
         ]
       },
       {
-        "signal": "signal.editor.texture.focus.path",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.texture.edit.focus", "value": "path" },
-          { "type": "scene_state.set", "key": "editor.texture.edit.replace_on_text", "value": true },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "editing texture path" }
-        ]
-      },
-      {
-        "signal": "signal.editor.texture.path.apply",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
-          { "type": "editor.texture.path.apply" },
-          { "type": "console.write", "message_from_state": "editor.tool.last_action" },
-          {
-            "type": "editor.texture.scan",
-            "world": "brush.editor_shell.target",
-            "collection": "editor.textures",
-            "slot_count": 6,
-            "outputs": {
-              "count_key": "editor.texture.count",
-              "registered_count_key": "editor.texture.registered_count",
-              "status_key": "editor.texture.scan.status"
-            }
-          }
-        ]
-      },
-      {
         "signal": "signal.editor.texture.select_slot.0",
         "actions": [
           { "type": "editor.texture.select_index", "collection": "editor.textures", "index": 0, "index_offset_key": "editor.texture.scroll.index" }
@@ -1982,24 +1950,6 @@
         "actions": [
           { "type": "editor.sky.scan" },
           { "type": "console.write", "message_from_state": "editor.sky.status" }
-        ]
-      },
-      {
-        "signal": "signal.editor.sky.focus.path",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.sky.edit.focus", "value": "path" }
-        ]
-      },
-      {
-        "signal": "signal.editor.sky.path.apply",
-        "actions": [
-          { "type": "editor.sky.path.apply" }
-        ]
-      },
-      {
-        "signal": "signal.editor.sky.path.apply.request",
-        "actions": [
-          { "type": "editor.sky.path.apply" }
         ]
       },
       {

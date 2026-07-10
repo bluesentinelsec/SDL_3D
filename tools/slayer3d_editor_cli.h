@@ -33,9 +33,6 @@ extern "C"
         const char *input_path;
         const char *output_path;
         const char *media_path;
-        const char *texture_path;
-        const char *model_path;
-        const char *skybox_path;
         char *owned_project;
         char *owned_output_path;
         bool overwrite;

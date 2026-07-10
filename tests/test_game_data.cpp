@@ -23560,6 +23560,9 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", "/tmp/slayer3d-textures");
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", "/tmp/slayer3d-models");
+    slayer3d_properties_set_string(scene_state, "editor.media.path", "/tmp/slayer3d-media");
+    slayer3d_properties_set_string(scene_state, "editor.media.relative", "media");
+    slayer3d_properties_set_bool(scene_state, "editor.media.available", true);
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
     slayer3d_properties_set_bool(scene_state, "editor.texture.viewer.active", true);
     slayer3d_properties_set_bool(scene_state, "editor.actor.viewer.active", true);
@@ -23616,6 +23619,9 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "/tmp/slayer3d-textures");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.path", ""),
                  "/tmp/slayer3d-models");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.path", ""), "/tmp/slayer3d-media");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.relative", ""), "media");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.media.available", false));
 
     slayer3d_properties_set_string(scene_state, "editor.file.open.path", save_path.string().c_str());
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
@@ -23703,77 +23709,6 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(texture_dir.parent_path());
-}
-
-TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTextures)
-{
-    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
-    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
-    const std::filesystem::path root_dir = unique_test_dir("editor_texture_path_apply");
-    const std::filesystem::path old_dir = root_dir / "old_textures";
-    const std::filesystem::path new_dir = root_dir / "new_textures";
-    std::filesystem::create_directories(old_dir);
-    std::filesystem::create_directories(new_dir);
-    write_text(old_dir / "old-panel.png", "fake texture bytes");
-    write_text(new_dir / "new-panel.png", "fake texture bytes");
-
-    slayer3d_game_session *session = nullptr;
-    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
-    char error[512]{};
-    slayer3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
-        << error;
-
-    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
-    ASSERT_NE(bus, nullptr);
-    auto emit_signal = [&](const char *name) {
-        const int signal = slayer3d_game_data_find_signal(runtime, name);
-        ASSERT_GE(signal, 0) << name;
-        slayer3d_signal_emit(bus, signal, nullptr);
-    };
-
-    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
-    ASSERT_NE(scene_state, nullptr);
-    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", old_dir.string().c_str());
-    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "old_textures");
-    emit_signal("signal.editor.texture.refresh");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
-                 "mat.project.texture.old_panel");
-
-    slayer3d_properties_set_string(scene_state, "editor.texture.path.input", new_dir.string().c_str());
-    emit_signal("signal.editor.texture.path.apply");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.path", ""),
-                 new_dir.string().c_str());
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.invalidated_count", -1), 1);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
-                 "mat.project.texture.new_panel");
-
-    slayer3d_game_data_brush_world world{};
-    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
-    bool saw_old = false;
-    bool saw_new = false;
-    for (int i = 0; i < world.material_count; ++i)
-    {
-        const slayer3d_game_data_brush_material &material = world.materials[i];
-        if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.old_panel") == 0)
-        {
-            saw_old = true;
-            EXPECT_EQ(material.texture, nullptr);
-        }
-        if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.new_panel") == 0)
-        {
-            saw_new = true;
-            EXPECT_STREQ(material.texture, "asset://new_textures/new-panel.png");
-        }
-    }
-    EXPECT_TRUE(saw_old);
-    EXPECT_TRUE(saw_new);
-
-    slayer3d_game_data_destroy(runtime);
-    slayer3d_game_session_destroy(session);
-    remove_test_dir(root_dir);
 }
 
 TEST(GameDataRuntime, EditorMediaPathApplyKeepsChildSourcesRelativeToMediaRoot)

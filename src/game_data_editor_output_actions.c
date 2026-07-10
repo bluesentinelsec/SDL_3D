@@ -185,10 +185,11 @@ static bool editor_state_key_preserved_for_new_document(const char *key)
 {
     if (editor_state_key_has_prefix(key, "editor.asset_source."))
         return true;
+    if (SDL_strcmp(key, "editor.media.path") == 0 || SDL_strcmp(key, "editor.media.relative") == 0 ||
+        SDL_strcmp(key, "editor.media.available") == 0)
+        return true;
 
-    return SDL_strcmp(key, "editor.texture.path.input") == 0 || SDL_strcmp(key, "editor.texture.path.display") == 0 ||
-           SDL_strcmp(key, "editor.texture.path.status") == 0 || SDL_strcmp(key, "editor.model.path.input") == 0 ||
-           SDL_strcmp(key, "editor.model.path.display") == 0 || SDL_strcmp(key, "editor.model.path.status") == 0;
+    return false;
 }
 
 static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime *runtime)
