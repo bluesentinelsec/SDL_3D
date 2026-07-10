@@ -279,6 +279,19 @@ static char *editor_asset_path_join(const char *base, const char *leaf)
     return joined;
 }
 
+static char *editor_relative_path_join(const char *base, const char *leaf)
+{
+    char *joined = editor_asset_path_join(base, leaf);
+    if (joined == NULL)
+        return NULL;
+    for (char *p = joined; *p != '\0'; ++p)
+    {
+        if (*p == '\\')
+            *p = '/';
+    }
+    return joined;
+}
+
 static char *editor_path_make_absolute_from_cwd(const char *path)
 {
     if (path == NULL || path[0] == '\0')
@@ -1644,7 +1657,7 @@ static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, c
     if (path == NULL)
         return false;
     char *relative_path = media_relative_root != NULL && media_relative_root[0] != '\0'
-                              ? editor_path_join(media_relative_root, leaf)
+                              ? editor_relative_path_join(media_relative_root, leaf)
                               : SDL_strdup(leaf);
     if (relative_path == NULL)
     {

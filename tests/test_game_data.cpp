@@ -1004,6 +1004,18 @@ void configure_editor_shell_default_test_camera(slayer3d_game_data_runtime *runt
                                  slayer3d_vec3_make(0.79584f, -0.29161f, -0.53056f));
 }
 
+void configure_editor_shell_media_available_for_tests(slayer3d_game_data_runtime *runtime)
+{
+    ASSERT_NE(runtime, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_bool(scene_state, "editor.media.available", true);
+    slayer3d_properties_set_bool(scene_state, "editor.media.settings.open", false);
+    slayer3d_properties_set_bool(scene_state, "editor.media.startup_prompt.open", false);
+    slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", false);
+    slayer3d_properties_set_string(scene_state, "editor.media.status", "ready");
+}
+
 void seed_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
 {
     ASSERT_NE(runtime, nullptr);
@@ -20357,6 +20369,7 @@ TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndTh
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -20479,6 +20492,7 @@ TEST(GameDataRuntime, EditorLockTogglesRejectBrushMutationsAndDoNotExport)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -21929,6 +21943,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -22321,6 +22336,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -23106,6 +23122,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -37024,6 +37041,7 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     editor_brush_source_prefab_result stair_result{};
     const int stair_min[3] = {0, 0, 0};

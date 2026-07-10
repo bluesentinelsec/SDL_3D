@@ -85,6 +85,17 @@ static void path_normalize_host_separators_tool(char *path)
 #endif
 }
 
+static void path_normalize_relative_separators_tool(char *path)
+{
+    if (path == NULL)
+        return;
+    for (char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '\\')
+            *p = '/';
+    }
+}
+
 static char path_separator_tool(void)
 {
 #if defined(_WIN32)
@@ -164,9 +175,17 @@ static char *path_make_absolute_tool(const char *path)
 static char *path_join_relative_tool(const char *base, const char *path)
 {
     if (path == NULL || path[0] == '\0')
-        return SDL_strdup(base != NULL ? base : "");
+    {
+        char *copy = SDL_strdup(base != NULL ? base : "");
+        path_normalize_relative_separators_tool(copy);
+        return copy;
+    }
     if (path_is_absolute_tool(path) || base == NULL || base[0] == '\0')
-        return SDL_strdup(path);
+    {
+        char *copy = SDL_strdup(path);
+        path_normalize_relative_separators_tool(copy);
+        return copy;
+    }
     const size_t base_len = SDL_strlen(base);
     const size_t path_len = SDL_strlen(path);
     const bool needs_sep = base_len > 0u && base[base_len - 1u] != '/' && base[base_len - 1u] != '\\';
@@ -178,6 +197,7 @@ static char *path_join_relative_tool(const char *base, const char *path)
     if (needs_sep)
         joined[offset++] = '/';
     SDL_memcpy(joined + offset, path, path_len + 1u);
+    path_normalize_relative_separators_tool(joined);
     return joined;
 }
 
@@ -446,7 +466,10 @@ static bool load_editor_asset_source(yyjson_val *asset_sources, const char *key,
 
     char *relative = NULL;
     if (configured != NULL && configured[0] != '\0')
+    {
         relative = SDL_strdup(configured);
+        path_normalize_relative_separators_tool(relative);
+    }
     else if (media_root != NULL && media_root[0] != '\0')
         relative = path_join_relative_tool(media_root, fallback_leaf);
     else
@@ -1146,6 +1169,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     char *resolved_media_root =
         media_root != NULL && media_root[0] != '\0' ? path_join_tool(project_dir, media_root) : NULL;
     char *media_root_relative_path = media_root != NULL && media_root[0] != '\0' ? SDL_strdup(media_root) : NULL;
+    path_normalize_relative_separators_tool(media_root_relative_path);
     char *resolved_test_run =
         test_run_output != NULL && test_run_output[0] != '\0' ? path_join_tool(project_dir, test_run_output) : NULL;
     char *entry_copy = SDL_strdup(editor_entry);
@@ -1226,6 +1250,7 @@ static bool editor_override_asset_source(slayer3d_editor_asset_source *source, c
         return false;
     }
     char *relative_path = SDL_strdup(path);
+    path_normalize_relative_separators_tool(relative_path);
     if (relative_path == NULL)
     {
         SDL_free(absolute_path);
@@ -1246,8 +1271,9 @@ static bool editor_set_media_child_source(slayer3d_editor_asset_source *source, 
     if (path == NULL)
         return false;
     char *relative_path = media_relative_root != NULL && media_relative_root[0] != '\0'
-                              ? path_join_tool(media_relative_root, leaf)
+                              ? path_join_relative_tool(media_relative_root, leaf)
                               : SDL_strdup(leaf);
+    path_normalize_relative_separators_tool(relative_path);
     if (relative_path == NULL)
     {
         SDL_free(path);
@@ -1282,7 +1308,10 @@ static char *editor_resolve_session_media_root(const slayer3d_editor_args *args,
     if (args != NULL && args->media_path != NULL && args->media_path[0] != '\0')
     {
         if (out_relative_path != NULL)
+        {
             *out_relative_path = SDL_strdup(path_is_absolute_tool(args->media_path) ? "media" : args->media_path);
+            path_normalize_relative_separators_tool(*out_relative_path);
+        }
         return path_make_absolute_tool(args->media_path);
     }
     if (directory_exists_tool("media"))
@@ -1294,8 +1323,11 @@ static char *editor_resolve_session_media_root(const slayer3d_editor_args *args,
     if (project != NULL && project->media_dir != NULL && project->media_dir[0] != '\0')
     {
         if (out_relative_path != NULL)
+        {
             *out_relative_path =
                 SDL_strdup(project->media_root_relative_path != NULL ? project->media_root_relative_path : "");
+            path_normalize_relative_separators_tool(*out_relative_path);
+        }
         return SDL_strdup(project->media_dir);
     }
     return NULL;
