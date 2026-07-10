@@ -52,6 +52,16 @@ std::string read_text_file(const std::filesystem::path &path)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
+std::string path_text_with_forward_slashes(std::string path)
+{
+    for (char &c : path)
+    {
+        if (c == '\\')
+            c = '/';
+    }
+    return path;
+}
+
 std::string read_temp_file(FILE *file)
 {
     if (file == nullptr)
@@ -591,8 +601,10 @@ TEST(ToolCli, EditorTexturePathOverrideBecomesAuthoritativeTextureSource)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("editor.asset_source.textures.path=" + textures), std::string::npos);
-    EXPECT_NE(joined.find("editor.asset_source.textures.relative=" + textures), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.path=" + path_text_with_forward_slashes(textures)),
+              std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.relative=" + path_text_with_forward_slashes(textures)),
+              std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.available=true"), std::string::npos);
     EXPECT_EQ(joined.find("editor.asset_source.textures.path=" + (project_dir / "media" / "textures").string()),
               std::string::npos);
@@ -726,8 +738,10 @@ TEST(ToolCli, EditorModelPathOverrideBecomesAuthoritativeModelSource)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("editor.asset_source.models.path=" + models), std::string::npos);
-    EXPECT_NE(joined.find("editor.asset_source.models.relative=" + models), std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.models.path=" + path_text_with_forward_slashes(models)),
+              std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.models.relative=" + path_text_with_forward_slashes(models)),
+              std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.models.available=true"), std::string::npos);
     EXPECT_EQ(joined.find("editor.asset_source.models.path=" + (project_dir / "media" / "models").string()),
               std::string::npos);
@@ -762,7 +776,8 @@ TEST(ToolCli, EditorDefaultLaunchAcceptsModelPathOverride)
     ASSERT_NE(launch.asset_sources, nullptr);
     EXPECT_TRUE(std::filesystem::path(launch.asset_sources->models.path).is_absolute());
     EXPECT_TRUE(std::filesystem::is_directory(launch.asset_sources->models.path));
-    EXPECT_STREQ(launch.asset_sources->models.relative_path, models.c_str());
+    const std::string normalized_models = path_text_with_forward_slashes(models);
+    EXPECT_STREQ(launch.asset_sources->models.relative_path, normalized_models.c_str());
 
     slayer3d_editor_launch_destroy(&launch);
     slayer3d_editor_project_destroy(&loaded_project);
@@ -803,7 +818,9 @@ TEST(ToolCli, EditorDefaultLaunchResolvesRelativeTexturePathOverride)
                 joined += "\n";
             joined += invocation.argv[i];
         }
-        EXPECT_NE(joined.find("--root\n" + std::filesystem::weakly_canonical(cwd_root).string()), std::string::npos)
+        EXPECT_NE(joined.find("--root\n" +
+                              path_text_with_forward_slashes(std::filesystem::weakly_canonical(cwd_root).string())),
+                  std::string::npos)
             << joined;
         EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
 

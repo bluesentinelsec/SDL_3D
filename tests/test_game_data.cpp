@@ -1233,6 +1233,12 @@ std::string read_text(const std::filesystem::path &path)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
+std::string path_text_with_forward_slashes(std::string path)
+{
+    std::replace(path.begin(), path.end(), '\\', '/');
+    return path;
+}
+
 std::filesystem::path unique_test_dir(const char *name)
 {
     const std::filesystem::path root = std::filesystem::temp_directory_path();
@@ -22931,14 +22937,15 @@ TEST(GameDataRuntime, EditorShellDojoTextureRefreshScansConfiguredTextureDirecto
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor_shell.target", &roundtrip_world));
     bool saw_roundtrip_alpha = false;
     const std::string expected_alpha_texture =
-        (save_path.parent_path() / "custom_textures" / "alpha-wall.jpg").string();
+        path_text_with_forward_slashes((save_path.parent_path() / "custom_textures" / "alpha-wall.jpg").string());
     for (int i = 0; i < roundtrip_world.material_count; ++i)
     {
         const slayer3d_game_data_brush_material &material = roundtrip_world.materials[i];
         if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.alpha_wall") == 0)
         {
             saw_roundtrip_alpha = true;
-            EXPECT_STREQ(material.texture, expected_alpha_texture.c_str());
+            EXPECT_EQ(path_text_with_forward_slashes(material.texture != nullptr ? material.texture : ""),
+                      expected_alpha_texture);
         }
     }
     EXPECT_TRUE(saw_roundtrip_alpha);
