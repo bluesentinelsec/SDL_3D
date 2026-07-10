@@ -62,6 +62,30 @@ std::string path_text_with_forward_slashes(std::string path)
     return path;
 }
 
+bool invocation_has_equivalent_root(const slayer3d_editor_runner_invocation &invocation,
+                                    const std::filesystem::path &expected_root)
+{
+    std::error_code expected_error;
+    const std::filesystem::path expected_canonical = std::filesystem::weakly_canonical(expected_root, expected_error);
+    for (int i = 0; i + 1 < invocation.argc; ++i)
+    {
+        if (std::strcmp(invocation.argv[i], "--root") != 0)
+            continue;
+
+        const std::filesystem::path candidate_root = invocation.argv[i + 1];
+        std::error_code equivalent_error;
+        if (std::filesystem::equivalent(candidate_root, expected_root, equivalent_error) && !equivalent_error)
+            return true;
+
+        std::error_code candidate_error;
+        const std::filesystem::path candidate_canonical =
+            std::filesystem::weakly_canonical(candidate_root, candidate_error);
+        if (!expected_error && !candidate_error && candidate_canonical == expected_canonical)
+            return true;
+    }
+    return false;
+}
+
 std::string read_temp_file(FILE *file)
 {
     if (file == nullptr)
@@ -816,8 +840,7 @@ TEST(ToolCli, EditorDefaultLaunchResolvesRelativeTexturePathOverride)
                 joined += "\n";
             joined += invocation.argv[i];
         }
-        EXPECT_NE(joined.find("--root\n" + std::filesystem::weakly_canonical(cwd_root).string()), std::string::npos)
-            << joined;
+        EXPECT_TRUE(invocation_has_equivalent_root(invocation, cwd_root)) << joined;
         EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
 
         slayer3d_editor_runner_invocation_destroy(&invocation);
