@@ -601,8 +601,7 @@ TEST(ToolCli, EditorTexturePathOverrideBecomesAuthoritativeTextureSource)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("editor.asset_source.textures.path=" + path_text_with_forward_slashes(textures)),
-              std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.textures.path=" + textures), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.relative=" + path_text_with_forward_slashes(textures)),
               std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.available=true"), std::string::npos);
@@ -738,8 +737,7 @@ TEST(ToolCli, EditorModelPathOverrideBecomesAuthoritativeModelSource)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("editor.asset_source.models.path=" + path_text_with_forward_slashes(models)),
-              std::string::npos);
+    EXPECT_NE(joined.find("editor.asset_source.models.path=" + models), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.models.relative=" + path_text_with_forward_slashes(models)),
               std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.models.available=true"), std::string::npos);
@@ -818,9 +816,7 @@ TEST(ToolCli, EditorDefaultLaunchResolvesRelativeTexturePathOverride)
                 joined += "\n";
             joined += invocation.argv[i];
         }
-        EXPECT_NE(joined.find("--root\n" +
-                              path_text_with_forward_slashes(std::filesystem::weakly_canonical(cwd_root).string())),
-                  std::string::npos)
+        EXPECT_NE(joined.find("--root\n" + std::filesystem::weakly_canonical(cwd_root).string()), std::string::npos)
             << joined;
         EXPECT_NE(joined.find("editor.asset_source.textures.relative=media/textures"), std::string::npos);
 
