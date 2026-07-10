@@ -12,15 +12,7 @@
 #include "slayer3d/sprite_asset.h"
 #include "slayer3d/texture.h"
 
-void slayer3d_game_data_font_cache_init(slayer3d_game_data_font_cache *cache, const char *media_dir)
-{
-    if (cache == NULL)
-        return;
-    SDL_zero(*cache);
-    cache->media_dir = media_dir;
-}
-
-void slayer3d_game_data_font_cache_free(slayer3d_game_data_font_cache *cache)
+static void font_cache_clear_fonts(slayer3d_game_data_font_cache *cache)
 {
     if (cache == NULL)
         return;
@@ -31,6 +23,50 @@ void slayer3d_game_data_font_cache_free(slayer3d_game_data_font_cache *cache)
     }
     SDL_free(cache->fonts);
     SDL_free(cache->font_ids);
+    cache->fonts = NULL;
+    cache->font_ids = NULL;
+    cache->count = 0;
+    cache->capacity = 0;
+}
+
+void slayer3d_game_data_font_cache_init(slayer3d_game_data_font_cache *cache, const char *media_dir)
+{
+    if (cache == NULL)
+        return;
+    SDL_zero(*cache);
+    if (media_dir != NULL)
+    {
+        cache->media_dir = SDL_strdup(media_dir);
+        if (cache->media_dir == NULL)
+            SDL_OutOfMemory();
+    }
+}
+
+bool slayer3d_game_data_font_cache_set_media_dir(slayer3d_game_data_font_cache *cache, const char *media_dir)
+{
+    if (cache == NULL)
+        return false;
+    const char *current = cache->media_dir != NULL ? cache->media_dir : "";
+    const char *next = media_dir != NULL ? media_dir : "";
+    if (SDL_strcmp(current, next) == 0)
+        return true;
+
+    char *owned_next = media_dir != NULL ? SDL_strdup(media_dir) : NULL;
+    if (media_dir != NULL && owned_next == NULL)
+        return SDL_OutOfMemory();
+
+    font_cache_clear_fonts(cache);
+    SDL_free(cache->media_dir);
+    cache->media_dir = owned_next;
+    return true;
+}
+
+void slayer3d_game_data_font_cache_free(slayer3d_game_data_font_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    font_cache_clear_fonts(cache);
+    SDL_free(cache->media_dir);
     SDL_zero(*cache);
 }
 

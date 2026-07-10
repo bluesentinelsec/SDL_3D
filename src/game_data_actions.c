@@ -91,7 +91,8 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
 
     const char *mode = json_string(action, "mode", "");
     const bool save = SDL_strcmp(mode, "save") == 0;
-    if (!save && SDL_strcmp(mode, "open") != 0)
+    const bool folder = SDL_strcmp(mode, "folder") == 0;
+    if (!save && !folder && SDL_strcmp(mode, "open") != 0)
         return false;
 
     const char *path_key = json_string(action, "path_key", NULL);
@@ -129,7 +130,7 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
     {
         if (request->status_key[0] != '\0')
             slayer3d_properties_set_string(runtime->scene_state, request->status_key,
-                                           save ? "save pending" : "open pending");
+                                           save ? "save pending" : (folder ? "folder pending" : "open pending"));
         if (request->message_key[0] != '\0')
             slayer3d_properties_set_string(runtime->scene_state, request->message_key, "");
     }
@@ -138,6 +139,10 @@ static bool execute_editor_file_dialog_action(slayer3d_game_data_runtime *runtim
     {
         SDL_ShowSaveFileDialog(editor_file_dialog_callback, request, NULL, map_filters, (int)SDL_arraysize(map_filters),
                                request->default_location);
+    }
+    else if (folder)
+    {
+        SDL_ShowOpenFolderDialog(editor_file_dialog_callback, request, NULL, request->default_location, false);
     }
     else
     {
@@ -271,6 +276,19 @@ static char *editor_asset_path_join(const char *base, const char *leaf)
     if (needs_sep)
         joined[offset++] = '/';
     SDL_memcpy(joined + offset, leaf, leaf_len + 1U);
+    return joined;
+}
+
+static char *editor_relative_path_join(const char *base, const char *leaf)
+{
+    char *joined = editor_asset_path_join(base, leaf);
+    if (joined == NULL)
+        return NULL;
+    for (char *p = joined; *p != '\0'; ++p)
+    {
+        if (*p == '\\')
+            *p = '/';
+    }
     return joined;
 }
 
@@ -1041,7 +1059,8 @@ static const char *editor_texture_material_reference(const editor_texture_scan_e
         *owned = NULL;
     if (entry == NULL)
         return NULL;
-    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' && owned != NULL)
+    if (entry->relative_path != NULL && entry->relative_path[0] != '\0' &&
+        !editor_path_absolute(entry->relative_path) && owned != NULL)
     {
         *owned = editor_asset_uri_from_relative_path(entry->relative_path);
         if (*owned != NULL)
@@ -1222,6 +1241,14 @@ static void editor_texture_clear_slots(slayer3d_properties *scene_state, int slo
     }
 }
 
+static void editor_texture_set_empty_state(slayer3d_properties *scene_state, bool visible, const char *message)
+{
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(scene_state, "editor.texture.empty.visible", visible);
+    slayer3d_properties_set_string(scene_state, "editor.texture.empty.message", message != NULL ? message : "");
+}
+
 static void editor_texture_publish_slot(slayer3d_properties *scene_state, int slot_index,
                                         const editor_texture_scan_entry *entry)
 {
@@ -1346,7 +1373,50 @@ static int editor_texture_publish_filtered_catalog(slayer3d_game_data_runtime *r
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", -1);
     }
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", published_count);
+    const bool has_query = search_query != NULL && search_query[0] != '\0';
+    editor_texture_set_empty_state(runtime->scene_state, published_count == 0,
+                                   has_query ? "No textures match search" : "No textures found");
     return published_count;
+}
+
+static void editor_asset_source_set_diagnostic(slayer3d_properties *state, const char *source_name, const char *status,
+                                               bool available, bool empty)
+{
+    if (state == NULL || source_name == NULL || source_name[0] == '\0')
+        return;
+
+    char key[160];
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.status", source_name);
+    slayer3d_properties_set_string(state, key, status != NULL ? status : "");
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.diagnostic", source_name);
+    slayer3d_properties_set_string(state, key, status != NULL ? status : "");
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", source_name);
+    slayer3d_properties_set_bool(state, key, available);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.unavailable", source_name);
+    slayer3d_properties_set_bool(state, key, !available);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.empty", source_name);
+    slayer3d_properties_set_bool(state, key, available && empty);
+}
+
+static void editor_actor_set_model_empty_state(slayer3d_properties *state, int scanned_model_count,
+                                               int filtered_model_count, bool source_scanned, bool search_active)
+{
+    if (state == NULL)
+        return;
+
+    slayer3d_properties_set_int(state, "editor.actor.models.count", source_scanned ? scanned_model_count : 0);
+    slayer3d_properties_set_int(state, "editor.actor.models.filtered_count", source_scanned ? filtered_model_count : 0);
+    const bool show_empty_state =
+        !source_scanned || scanned_model_count == 0 || (search_active && filtered_model_count == 0);
+    slayer3d_properties_set_bool(state, "editor.actor.models.empty.visible", show_empty_state);
+    if (!source_scanned)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "Model directory unavailable");
+    else if (scanned_model_count == 0)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "No project models found");
+    else if (search_active && filtered_model_count == 0)
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "No project models match search");
+    else
+        slayer3d_properties_set_string(state, "editor.actor.models.empty.message", "");
 }
 
 static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
@@ -1408,6 +1478,9 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
         slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", 0);
         slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status",
                                        "texture directory unavailable");
+        editor_texture_set_empty_state(runtime->scene_state, true, "Texture directory unavailable");
+        editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture directory unavailable", false,
+                                           false);
         SDL_free(resolved_fallback_directory);
         SDL_free(resolved_texture_directory);
         return true;
@@ -1471,16 +1544,34 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     const int published_count = editor_texture_publish_filtered_catalog(
         runtime, catalog_collection, collection, slot_count, scroll_index_key, scroll_y_key, search_query);
 
+    const bool has_search_query = search_query != NULL && search_query[0] != '\0';
     char status[128];
+    char source_status[128];
     if (invalidated_count > 0)
-        SDL_snprintf(status, sizeof(status), "loaded %d texture%s; %d stale material%s reverted", published_count,
-                     published_count == 1 ? "" : "s", invalidated_count, invalidated_count == 1 ? "" : "s");
+    {
+        SDL_snprintf(source_status, sizeof(source_status), "loaded %d texture%s; %d stale material%s reverted",
+                     catalog_count, catalog_count == 1 ? "" : "s", invalidated_count,
+                     invalidated_count == 1 ? "" : "s");
+    }
+    else if (catalog_count == 0)
+        SDL_snprintf(source_status, sizeof(source_status), "no textures found");
     else
-        SDL_snprintf(status, sizeof(status), "loaded %d texture%s", published_count, published_count == 1 ? "" : "s");
+        SDL_snprintf(source_status, sizeof(source_status), "loaded %d texture%s", catalog_count,
+                     catalog_count == 1 ? "" : "s");
+
+    if (catalog_count == 0)
+        SDL_strlcpy(status, source_status, sizeof(status));
+    else if (has_search_query && published_count == 0)
+        SDL_snprintf(status, sizeof(status), "no textures match search");
+    else if (has_search_query)
+        SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
+    else
+        SDL_strlcpy(status, source_status, sizeof(status));
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.count", published_count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.registered_count", registered_count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.invalidated_count", invalidated_count);
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status", status);
+    editor_asset_source_set_diagnostic(runtime->scene_state, "textures", source_status, true, catalog_count == 0);
     editor_set_int_output(runtime->scene_state, outputs, "count_key", published_count);
     editor_set_int_output(runtime->scene_state, outputs, "registered_count_key", registered_count);
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
@@ -1504,7 +1595,12 @@ static bool execute_editor_texture_filter_action(slayer3d_game_data_runtime *run
     const int published_count = editor_texture_publish_filtered_catalog(
         runtime, catalog_collection, collection, slot_count, scroll_index_key, scroll_y_key, search_query);
     char status[128];
-    SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
+    if (published_count == 0 && search_query != NULL && search_query[0] != '\0')
+        SDL_snprintf(status, sizeof(status), "no textures match search");
+    else if (published_count == 0)
+        SDL_snprintf(status, sizeof(status), "no textures found");
+    else
+        SDL_snprintf(status, sizeof(status), "showing %d texture%s", published_count, published_count == 1 ? "" : "s");
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.scan.status", status);
     editor_set_int_output(runtime->scene_state, outputs, "count_key", published_count);
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
@@ -1533,6 +1629,8 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
         slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path is not a directory");
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
                                        "texture path is not a directory");
+        editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture path is not a directory", false,
+                                           false);
         SDL_free(absolute_path);
         return true;
     }
@@ -1544,6 +1642,137 @@ static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime 
     slayer3d_properties_set_bool(runtime->scene_state, available_key, true);
     slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path updated");
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture path updated");
+    editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture path updated", true, false);
+    SDL_free(relative_path);
+    SDL_free(absolute_path);
+    return true;
+}
+
+static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, const char *name, const char *media_root,
+                                          const char *media_relative_root, const char *leaf)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || name == NULL || media_root == NULL || leaf == NULL)
+        return false;
+    char *path = editor_path_join(media_root, leaf);
+    if (path == NULL)
+        return false;
+    char *relative_path = media_relative_root != NULL && media_relative_root[0] != '\0'
+                              ? editor_relative_path_join(media_relative_root, leaf)
+                              : SDL_strdup(leaf);
+    if (relative_path == NULL)
+    {
+        SDL_free(path);
+        return false;
+    }
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool available = SDL_GetPathInfo(path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    char key[128];
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.path", name);
+    slayer3d_properties_set_string(runtime->scene_state, key, path);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.relative", name);
+    slayer3d_properties_set_string(runtime->scene_state, key, relative_path);
+    SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", name);
+    slayer3d_properties_set_bool(runtime->scene_state, key, available);
+    char status[160];
+    SDL_snprintf(status, sizeof(status), "%s directory %s", name, available ? "ready" : "missing");
+    editor_asset_source_set_diagnostic(runtime->scene_state, name, status, available, false);
+    SDL_free(relative_path);
+    SDL_free(path);
+    return true;
+}
+
+static void editor_media_refresh_missing_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    static const char *const names[] = {"textures", "models", "sprites", "skyboxes", "liquids", "effects"};
+    bool any_missing = false;
+    for (size_t i = 0; i < SDL_arraysize(names); ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", names[i]);
+        any_missing = any_missing || !slayer3d_properties_get_bool(runtime->scene_state, key, false);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.asset_source.any_missing", any_missing);
+}
+
+static void editor_media_mark_child_sources_unavailable(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    static const char *const names[] = {"textures", "models", "sprites", "skyboxes", "liquids", "effects"};
+    for (size_t i = 0; i < SDL_arraysize(names); ++i)
+    {
+        char key[128];
+        SDL_snprintf(key, sizeof(key), "editor.asset_source.%s.available", names[i]);
+        slayer3d_properties_set_bool(runtime->scene_state, key, false);
+        char status[160];
+        SDL_snprintf(status, sizeof(status), "%s directory missing", names[i]);
+        editor_asset_source_set_diagnostic(runtime->scene_state, names[i], status, false, false);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.asset_source.any_missing", true);
+}
+
+static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    const char *path_key = json_string(action, "path_key", "editor.media.path.input");
+    const char *status_key = json_string(action, "status_key", "editor.media.status");
+    const char *path = slayer3d_properties_get_string(runtime->scene_state, path_key, "");
+    if (path == NULL || path[0] == '\0')
+        path = slayer3d_properties_get_string(runtime->scene_state, "editor.media.path", "");
+
+    char *absolute_path = editor_path_make_absolute_from_cwd(path);
+    SDL_PathInfo info;
+    SDL_zero(info);
+    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
+                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    if (!valid_directory)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.media.available", false);
+        editor_media_mark_child_sources_unavailable(runtime);
+        slayer3d_properties_set_string(runtime->scene_state, status_key, "media path is not a directory");
+        editor_publish_console_message(runtime, "Media path is not a directory");
+        SDL_free(absolute_path);
+        return true;
+    }
+
+    const bool was_startup_prompt =
+        slayer3d_properties_get_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
+    char *relative_path = editor_relative_directory_for_source_path(runtime, path, absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.path", absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.path.input", absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.media.relative",
+                                   relative_path != NULL ? relative_path : "media");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.media.available", true);
+    const char *media_relative_root = relative_path != NULL ? relative_path : "media";
+    (void)editor_media_set_child_source(runtime, "textures", absolute_path, media_relative_root, "textures");
+    (void)editor_media_set_child_source(runtime, "models", absolute_path, media_relative_root, "models");
+    (void)editor_media_set_child_source(runtime, "sprites", absolute_path, media_relative_root, "sprites");
+    (void)editor_media_set_child_source(runtime, "skyboxes", absolute_path, media_relative_root, "skyboxes");
+    (void)editor_media_set_child_source(runtime, "liquids", absolute_path, media_relative_root, "liquids");
+    (void)editor_media_set_child_source(runtime, "effects", absolute_path, media_relative_root, "effects");
+    editor_media_refresh_missing_state(runtime);
+
+    char *texture_path = editor_path_join(absolute_path, "textures");
+    char *skybox_path = editor_path_join(absolute_path, "skyboxes");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.input",
+                                   texture_path != NULL ? texture_path : absolute_path);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.sky.path.input",
+                                   skybox_path != NULL ? skybox_path : absolute_path);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
+    if (was_startup_prompt)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.media.settings.open", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
+    }
+    slayer3d_properties_set_string(runtime->scene_state, status_key, "media path updated");
+    editor_publish_console_message(runtime, "Media path updated");
+    SDL_free(texture_path);
+    SDL_free(skybox_path);
     SDL_free(relative_path);
     SDL_free(absolute_path);
     return true;
@@ -1848,10 +2077,17 @@ static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, 
         resolved_fallback = editor_resolve_directory(runtime, "skyboxes");
         directory = resolved_fallback != NULL ? resolved_fallback : "";
     }
+    bool source_available = directory != NULL && directory[0] != '\0';
+    if (source_available && !editor_path_asset_uri(directory))
+    {
+        SDL_PathInfo info;
+        SDL_zero(info);
+        source_available = SDL_GetPathInfo(directory, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
+    }
 
     editor_sky_scan_list list;
     SDL_zero(list);
-    if (directory[0] != '\0')
+    if (source_available)
     {
         if (editor_path_asset_uri(directory))
             editor_sky_scan_asset_directory(runtime, directory, "", &list, 0);
@@ -1879,8 +2115,15 @@ static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, 
     editor_sky_publish_slots(runtime);
 
     char status[96];
-    SDL_snprintf(status, sizeof(status), "%d skybox%s found", list.count, list.count == 1 ? "" : "es");
+    if (!source_available)
+        SDL_strlcpy(status, "skybox directory unavailable", sizeof(status));
+    else if (list.count == 0)
+        SDL_strlcpy(status, "no skyboxes found", sizeof(status));
+    else
+        SDL_snprintf(status, sizeof(status), "%d skybox%s found", list.count, list.count == 1 ? "" : "es");
     slayer3d_properties_set_string(state, "editor.sky.status", status);
+    editor_asset_source_set_diagnostic(state, "skyboxes", status, source_available,
+                                       source_available && list.count == 0);
     slayer3d_properties_set_string(state, "editor.tool.last_action", status);
     return true;
 }
@@ -2216,6 +2459,49 @@ static bool editor_actor_scan_list_append_builtin(editor_actor_scan_list *list, 
     entry->scale = scale;
     entry->sort_order = sort_order;
     return entry->id[0] != '\0' && entry->label[0] != '\0';
+}
+
+static bool editor_actor_scan_field_matches_token(const char *field, const char *token, size_t token_len)
+{
+    return field != NULL && field[0] != '\0' && editor_texture_fuzzy_token_matches(field, token, token_len);
+}
+
+static bool editor_actor_scan_entry_token_matches(const editor_actor_scan_entry *entry, const char *token,
+                                                  size_t token_len)
+{
+    if (entry == NULL)
+        return false;
+    return editor_actor_scan_field_matches_token(entry->id, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->label, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->filename, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->relative_path, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->model, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->group, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->classname, token, token_len) ||
+           editor_actor_scan_field_matches_token(entry->role, token, token_len);
+}
+
+static bool editor_actor_scan_entry_matches_model_search(const editor_actor_scan_entry *entry, const char *query)
+{
+    if (entry == NULL || !entry->scanned_model)
+        return true;
+    if (query == NULL || query[0] == '\0')
+        return true;
+
+    const char *token = query;
+    while (*token != '\0')
+    {
+        while (editor_ascii_is_space(*token))
+            ++token;
+        const char *end = token;
+        while (*end != '\0' && !editor_ascii_is_space(*end))
+            ++end;
+        const size_t token_len = (size_t)(end - token);
+        if (token_len > 0U && !editor_actor_scan_entry_token_matches(entry, token, token_len))
+            return false;
+        token = end;
+    }
+    return true;
 }
 
 static bool editor_actor_scan_model_id_used(const editor_actor_scan_list *list, const char *model)
@@ -2653,6 +2939,9 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     const int slot_count = SDL_max(0, json_int(action, "slot_count", 6));
     const char *directory = slayer3d_properties_get_string(runtime->scene_state, directory_key, "");
     const char *relative_directory = slayer3d_properties_get_string(runtime->scene_state, relative_directory_key, "");
+    const char *model_search_query =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.actor.model.search", "");
+    const bool model_search_active = model_search_query != NULL && model_search_query[0] != '\0';
     char *resolved_fallback_directory = NULL;
     char *resolved_model_directory = NULL;
     if (directory == NULL || directory[0] == '\0')
@@ -2751,15 +3040,26 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
                    "actor.editor_shell.smoke_marker", "Effects", "actor_effect", "smoke_marker", "effect", "smoke",
                    (slayer3d_color){148, 154, 166, 165}, slayer3d_vec3_make(0.8f, 0.8f, 0.8f), 2003);
     const bool scanned = editor_scan_actor_model_source(runtime, directory, relative_directory, model_prefix, &list);
+    int scanned_model_count = 0;
+    for (int i = 0; i < list.count; ++i)
+    {
+        if (list.entries[i].scanned_model)
+            ++scanned_model_count;
+    }
     if (ok && list.count > 1)
         SDL_qsort(list.entries, (size_t)list.count, sizeof(list.entries[0]), editor_actor_scan_entry_compare);
 
     int published_count = 0;
+    int filtered_model_count = 0;
     int selected_index = -1;
     const char *current_actor = slayer3d_properties_get_string(runtime->scene_state, "editor.actor.selected", "");
     for (int i = 0; ok && i < list.count; ++i)
     {
         const editor_actor_scan_entry *entry = &list.entries[i];
+        if (!editor_actor_scan_entry_matches_model_search(entry, model_search_query))
+            continue;
+        if (entry->scanned_model)
+            ++filtered_model_count;
         ok = editor_actor_collection_publish_row(runtime, collection, published_count, entry);
         if (!ok)
             break;
@@ -2785,11 +3085,27 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     char status[128];
     if (!ok)
         SDL_strlcpy(status, "actor browser allocation failed", sizeof(status));
+    else if (model_search_active && scanned)
+        SDL_snprintf(status, sizeof(status), "loaded %d actor%s (%d matching project model%s)", published_count,
+                     published_count == 1 ? "" : "s", filtered_model_count, filtered_model_count == 1 ? "" : "s");
     else
         SDL_snprintf(status, sizeof(status), "loaded %d actor%s%s", published_count, published_count == 1 ? "" : "s",
                      scanned ? "" : " (model directory unavailable)");
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.browser.count", ok ? published_count : 0);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.scan.status", status);
+    editor_actor_set_model_empty_state(runtime->scene_state, scanned_model_count, filtered_model_count, scanned,
+                                       model_search_active);
+    if (!scanned)
+        editor_asset_source_set_diagnostic(runtime->scene_state, "models", "model directory unavailable", false, false);
+    else if (scanned_model_count == 0)
+        editor_asset_source_set_diagnostic(runtime->scene_state, "models", "no models found", true, true);
+    else
+    {
+        char model_status[96];
+        SDL_snprintf(model_status, sizeof(model_status), "loaded %d model%s", scanned_model_count,
+                     scanned_model_count == 1 ? "" : "s");
+        editor_asset_source_set_diagnostic(runtime->scene_state, "models", model_status, true, false);
+    }
     editor_set_int_output(runtime->scene_state, outputs, "count_key", ok ? published_count : 0);
     editor_set_string_output(runtime->scene_state, outputs, "status_key", status);
     editor_actor_scan_list_free(&list);
@@ -4532,6 +4848,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.texture.path.apply") == 0)
         return execute_editor_texture_path_apply_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.media.path.apply") == 0)
+        return execute_editor_media_path_apply_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.texture.select_index") == 0)
         return execute_editor_texture_select_index_action(runtime, action);

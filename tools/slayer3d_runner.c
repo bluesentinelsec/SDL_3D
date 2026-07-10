@@ -68,6 +68,18 @@ static bool runner_mount_assets(slayer3d_asset_resolver *assets, void *userdata,
     switch (state->args.mount_kind)
     {
     case SLAYER3D_RUNNER_MOUNT_DIRECTORY:
+        if (state->args.mount_path_count > 0)
+        {
+            for (int i = 0; i < state->args.mount_path_count; ++i)
+            {
+                if (!slayer3d_asset_resolver_mount_directory(assets, state->args.mount_paths[i], error_buffer,
+                                                             error_buffer_size))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         return slayer3d_asset_resolver_mount_directory(assets, state->args.mount_path, error_buffer, error_buffer_size);
     case SLAYER3D_RUNNER_MOUNT_PACK:
         return slayer3d_asset_resolver_mount_pack_file(assets, state->args.mount_path, error_buffer, error_buffer_size);

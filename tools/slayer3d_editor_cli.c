@@ -15,11 +15,6 @@
 
 #include "../vendor/yyjson/yyjson.h"
 
-#define SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI "embedded://slayer3d_editor"
-#if !defined(SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET)
-#define SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET "asset://slayer3d_editor.game.json"
-#endif
-
 static void editor_set_error(char *buffer, int buffer_size, const char *message)
 {
     if (buffer != NULL && buffer_size > 0)
@@ -39,10 +34,12 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
-        "  %s [--texture-path <dir>] [--model-path <dir>] [--skybox-path <dir>]\n"
-        "  %s new --project <project-dir-or-json> --output <level.json> [--texture-path <dir>] [--model-path <dir>] "
+        "  %s [--media-path <dir>]\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--media-path <dir>] [--texture-path <dir>] "
+        "[--model-path <dir>] "
         "[--overwrite]\n"
-        "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--texture-path <dir>] "
+        "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--media-path <dir>] "
+        "[--texture-path <dir>] "
         "[--model-path <dir>] "
         "[--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
@@ -50,11 +47,15 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "  %s lighting-artifact-validate --input <lighting-static.json>\n"
         "\n"
         "Commands:\n"
-        "  no args  Launch the embedded Slayer3D Editor shell with a new untitled map.\n"
+        "  no args  Launch the Slayer3D Editor shell with a new untitled map.\n"
         "  new    Start from the project's empty editor level and save to --output.\n"
         "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
         "  lighting-plan  Print the shared map lighting build/bake plan without launching the editor.\n"
         "  lighting-artifact-validate  Validate a generated static-lighting artifact JSON file.\n"
+        "\n"
+        "Media defaults to ./media when present. --media-path overrides the session media root for textures, models, "
+        "sprites, skyboxes, liquids, and effects.\n"
+        "--texture-path, --model-path, and --skybox-path are deprecated compatibility overrides.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
         program, program, program, program, program);
@@ -82,6 +83,17 @@ static void path_normalize_host_separators_tool(char *path)
 #else
     (void)path;
 #endif
+}
+
+static void path_normalize_relative_separators_tool(char *path)
+{
+    if (path == NULL)
+        return;
+    for (char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '\\')
+            *p = '/';
+    }
 }
 
 static char path_separator_tool(void)
@@ -163,9 +175,17 @@ static char *path_make_absolute_tool(const char *path)
 static char *path_join_relative_tool(const char *base, const char *path)
 {
     if (path == NULL || path[0] == '\0')
-        return SDL_strdup(base != NULL ? base : "");
+    {
+        char *copy = SDL_strdup(base != NULL ? base : "");
+        path_normalize_relative_separators_tool(copy);
+        return copy;
+    }
     if (path_is_absolute_tool(path) || base == NULL || base[0] == '\0')
-        return SDL_strdup(path);
+    {
+        char *copy = SDL_strdup(path);
+        path_normalize_relative_separators_tool(copy);
+        return copy;
+    }
     const size_t base_len = SDL_strlen(base);
     const size_t path_len = SDL_strlen(path);
     const bool needs_sep = base_len > 0u && base[base_len - 1u] != '/' && base[base_len - 1u] != '\\';
@@ -177,6 +197,7 @@ static char *path_join_relative_tool(const char *base, const char *path)
     if (needs_sep)
         joined[offset++] = '/';
     SDL_memcpy(joined + offset, path, path_len + 1u);
+    path_normalize_relative_separators_tool(joined);
     return joined;
 }
 
@@ -285,9 +306,6 @@ static char *editor_default_project_path(void)
     if (directory_exists_tool(env_project))
         return SDL_strdup(env_project);
 
-#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
-    return SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
-#else
 #if defined(SLAYER3D_EDITOR_DEFAULT_PROJECT)
     if (directory_exists_tool(SLAYER3D_EDITOR_DEFAULT_PROJECT))
         return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
@@ -325,7 +343,6 @@ static char *editor_default_project_path(void)
     return SDL_strdup(SLAYER3D_EDITOR_DEFAULT_PROJECT);
 #else
     return SDL_strdup("apps/slayer3d_editor");
-#endif
 #endif
 }
 
@@ -366,24 +383,6 @@ static void editor_asset_source_destroy(slayer3d_editor_asset_source *source)
 
 static void editor_asset_sources_destroy(slayer3d_editor_asset_sources *sources);
 
-static bool editor_asset_source_copy(const slayer3d_editor_asset_source *source,
-                                     slayer3d_editor_asset_source *out_source)
-{
-    if (source == NULL || out_source == NULL)
-        return false;
-    SDL_zero(*out_source);
-    out_source->path = SDL_strdup(source->path != NULL ? source->path : "");
-    out_source->relative_path = SDL_strdup(source->relative_path != NULL ? source->relative_path : "");
-    out_source->available = source->available;
-    if (out_source->path == NULL || out_source->relative_path == NULL)
-    {
-        editor_asset_source_destroy(out_source);
-        return false;
-    }
-    return true;
-}
-
-#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
 static bool editor_asset_source_init(slayer3d_editor_asset_source *source, const char *path, const char *relative_path,
                                      bool available)
 {
@@ -400,7 +399,14 @@ static bool editor_asset_source_init(slayer3d_editor_asset_source *source, const
     }
     return true;
 }
-#endif
+
+static bool editor_asset_source_copy(const slayer3d_editor_asset_source *source,
+                                     slayer3d_editor_asset_source *out_source)
+{
+    if (source == NULL || out_source == NULL)
+        return false;
+    return editor_asset_source_init(out_source, source->path, source->relative_path, source->available);
+}
 
 static bool editor_asset_sources_copy(const slayer3d_editor_asset_sources *sources,
                                       slayer3d_editor_asset_sources *out_sources)
@@ -412,6 +418,7 @@ static bool editor_asset_sources_copy(const slayer3d_editor_asset_sources *sourc
         !editor_asset_source_copy(&sources->models, &out_sources->models) ||
         !editor_asset_source_copy(&sources->sprites, &out_sources->sprites) ||
         !editor_asset_source_copy(&sources->skyboxes, &out_sources->skyboxes) ||
+        !editor_asset_source_copy(&sources->liquids, &out_sources->liquids) ||
         !editor_asset_source_copy(&sources->effects, &out_sources->effects))
     {
         editor_asset_sources_destroy(out_sources);
@@ -459,7 +466,10 @@ static bool load_editor_asset_source(yyjson_val *asset_sources, const char *key,
 
     char *relative = NULL;
     if (configured != NULL && configured[0] != '\0')
+    {
         relative = SDL_strdup(configured);
+        path_normalize_relative_separators_tool(relative);
+    }
     else if (media_root != NULL && media_root[0] != '\0')
         relative = path_join_relative_tool(media_root, fallback_leaf);
     else
@@ -499,6 +509,8 @@ static bool load_editor_asset_sources(yyjson_val *root, const char *project_dir,
                                     error_buffer, error_buffer_size) &&
            load_editor_asset_source(asset_sources, "skyboxes", project_dir, media_root, "skyboxes",
                                     &out_sources->skyboxes, error_buffer, error_buffer_size) &&
+           load_editor_asset_source(asset_sources, "liquids", project_dir, media_root, "liquids", &out_sources->liquids,
+                                    error_buffer, error_buffer_size) &&
            load_editor_asset_source(asset_sources, "effects", project_dir, media_root, "effects", &out_sources->effects,
                                     error_buffer, error_buffer_size);
 }
@@ -511,6 +523,7 @@ static void editor_asset_sources_destroy(slayer3d_editor_asset_sources *sources)
     editor_asset_source_destroy(&sources->models);
     editor_asset_source_destroy(&sources->sprites);
     editor_asset_source_destroy(&sources->skyboxes);
+    editor_asset_source_destroy(&sources->liquids);
     editor_asset_source_destroy(&sources->effects);
 }
 
@@ -579,6 +592,8 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     struct arg_str *project = arg_str0(NULL, "project", "<project>", "project directory or slayer3d.project.json");
     struct arg_str *input = arg_str0(NULL, "input", "<level.json>", "editable level fragment to open");
     struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
+    struct arg_str *media_path =
+        arg_str0(NULL, "media-path", "<dir>", "authoritative media directory for this editor session");
     struct arg_str *texture_path =
         arg_str0(NULL, "texture-path", "<dir>", "authoritative texture directory for this editor session");
     struct arg_str *model_path =
@@ -603,6 +618,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     void *argtable[] = {project,
                         input,
                         output,
+                        media_path,
                         texture_path,
                         model_path,
                         skybox_path,
@@ -718,6 +734,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->project = project->count > 0 ? project->sval[0] : NULL;
     args->input_path = input->count > 0 ? input->sval[0] : NULL;
     args->output_path = output->count > 0 ? output->sval[0] : NULL;
+    args->media_path = media_path->count > 0 ? media_path->sval[0] : NULL;
     args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
     args->model_path = model_path->count > 0 ? model_path->sval[0] : NULL;
     args->skybox_path = skybox_path->count > 0 ? skybox_path->sval[0] : NULL;
@@ -735,10 +752,17 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
         {
             fprintf(out,
-                    "%s: default editor launch only accepts --texture-path, --model-path, and --skybox-path; use "
+                    "%s: default editor launch only accepts --media-path, --texture-path, --model-path, and "
+                    "--skybox-path; use "
                     "'new' or 'open' for "
                     "map paths.\n",
                     program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->media_path != NULL && args->media_path[0] == '\0')
+        {
+            fprintf(out, "%s: --media-path must be non-empty when present.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -757,6 +781,15 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->skybox_path != NULL && args->skybox_path[0] == '\0')
         {
             fprintf(out, "%s: --skybox-path must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->media_path != NULL && args->media_path[0] != '\0' &&
+            ((args->texture_path != NULL && args->texture_path[0] != '\0') ||
+             (args->model_path != NULL && args->model_path[0] != '\0') ||
+             (args->skybox_path != NULL && args->skybox_path[0] != '\0')))
+        {
+            fprintf(out, "%s: --media-path cannot be combined with per-tool media overrides.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -784,8 +817,8 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || texture_path->count > 0 || model_path->count > 0 || skybox_path->count > 0 ||
-            overwrite->count > 0)
+        if (project->count > 0 || media_path->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
+            skybox_path->count > 0 || overwrite->count > 0)
         {
             fprintf(out, "%s: 'lighting-plan' only accepts --input, --output, and lighting budget/quality options.\n",
                     program);
@@ -834,10 +867,10 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || output->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
-            skybox_path->count > 0 || max_dynamic_lights->count > 0 || max_static_lights->count > 0 ||
-            preview_quality->count > 0 || final_quality->count > 0 || no_dynamic_preview->count > 0 ||
-            manifest->count > 0 || static_artifact->count > 0 || overwrite->count > 0)
+        if (project->count > 0 || output->count > 0 || media_path->count > 0 || texture_path->count > 0 ||
+            model_path->count > 0 || skybox_path->count > 0 || max_dynamic_lights->count > 0 ||
+            max_static_lights->count > 0 || preview_quality->count > 0 || final_quality->count > 0 ||
+            no_dynamic_preview->count > 0 || manifest->count > 0 || static_artifact->count > 0 || overwrite->count > 0)
         {
             fprintf(out, "%s: 'lighting-artifact-validate' only accepts --input.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
@@ -883,9 +916,24 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             return SLAYER3D_TOOL_CLI_ERROR;
         }
     }
+    if (args->media_path != NULL && args->media_path[0] == '\0')
+    {
+        fprintf(out, "%s: --media-path must be non-empty when present.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
     if (args->texture_path != NULL && args->texture_path[0] == '\0')
     {
         fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+    if (args->media_path != NULL && args->media_path[0] != '\0' &&
+        ((args->texture_path != NULL && args->texture_path[0] != '\0') ||
+         (args->model_path != NULL && args->model_path[0] != '\0') ||
+         (args->skybox_path != NULL && args->skybox_path[0] != '\0')))
+    {
+        fprintf(out, "%s: --media-path cannot be combined with per-tool media overrides.\n", program);
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
@@ -1072,38 +1120,6 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
         return false;
     }
 
-    if (SDL_strcmp(project_arg != NULL ? project_arg : "", SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI) == 0)
-    {
-#if defined(SLAYER3D_EDITOR_EMBEDDED_ASSETS)
-        out_project->project_dir = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
-        out_project->data_root = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_PROJECT_URI);
-        out_project->data_root_relative_path = SDL_strdup("embedded");
-        out_project->editor_entry = SDL_strdup(SLAYER3D_EDITOR_EMBEDDED_DATA_ASSET);
-#if defined(SLAYER3D_MEDIA_DIR)
-        out_project->media_dir = SLAYER3D_MEDIA_DIR;
-#endif
-        out_project->embedded = true;
-        const bool ok =
-            out_project->project_dir != NULL && out_project->data_root != NULL &&
-            out_project->data_root_relative_path != NULL && out_project->editor_entry != NULL &&
-            editor_asset_source_init(&out_project->asset_sources.textures, "asset://textures", "textures", true) &&
-            editor_asset_source_init(&out_project->asset_sources.models, "asset://models", "models", true) &&
-            editor_asset_source_init(&out_project->asset_sources.sprites, "asset://sprites", "sprites", true) &&
-            editor_asset_source_init(&out_project->asset_sources.skyboxes, "asset://skyboxes", "skyboxes", true) &&
-            editor_asset_source_init(&out_project->asset_sources.effects, "asset://effects", "effects", true);
-        if (!ok)
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to allocate embedded editor project");
-            slayer3d_editor_project_destroy(out_project);
-            return false;
-        }
-        return true;
-#else
-        editor_set_error(error_buffer, error_buffer_size, "this editor build does not contain embedded assets");
-        return false;
-#endif
-    }
-
     char *manifest = project_manifest_path(project_arg, error_buffer, error_buffer_size);
     if (manifest == NULL)
         return false;
@@ -1152,6 +1168,8 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     char *resolved_data_root = path_join_tool(project_dir, data_root);
     char *resolved_media_root =
         media_root != NULL && media_root[0] != '\0' ? path_join_tool(project_dir, media_root) : NULL;
+    char *media_root_relative_path = media_root != NULL && media_root[0] != '\0' ? SDL_strdup(media_root) : NULL;
+    path_normalize_relative_separators_tool(media_root_relative_path);
     char *resolved_test_run =
         test_run_output != NULL && test_run_output[0] != '\0' ? path_join_tool(project_dir, test_run_output) : NULL;
     char *entry_copy = SDL_strdup(editor_entry);
@@ -1160,12 +1178,14 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     SDL_zero(asset_sources);
     if (project_dir == NULL || resolved_data_root == NULL || entry_copy == NULL || data_root_copy == NULL ||
         (media_root != NULL && media_root[0] != '\0' && resolved_media_root == NULL) ||
+        (media_root != NULL && media_root[0] != '\0' && media_root_relative_path == NULL) ||
         (test_run_output != NULL && test_run_output[0] != '\0' && resolved_test_run == NULL))
     {
         editor_set_error(error_buffer, error_buffer_size, "failed to allocate project manifest paths");
         SDL_free(project_dir);
         SDL_free(resolved_data_root);
         SDL_free(resolved_media_root);
+        SDL_free(media_root_relative_path);
         SDL_free(resolved_test_run);
         SDL_free(entry_copy);
         SDL_free(data_root_copy);
@@ -1179,6 +1199,7 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
         SDL_free(project_dir);
         SDL_free(resolved_data_root);
         SDL_free(resolved_media_root);
+        SDL_free(media_root_relative_path);
         SDL_free(resolved_test_run);
         SDL_free(entry_copy);
         SDL_free(data_root_copy);
@@ -1194,9 +1215,9 @@ bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_proje
     out_project->editor_entry = entry_copy;
     out_project->owned_media_dir = resolved_media_root;
     out_project->media_dir = out_project->owned_media_dir;
+    out_project->media_root_relative_path = media_root_relative_path;
     out_project->test_run_path = resolved_test_run;
     out_project->asset_sources = asset_sources;
-    out_project->embedded = false;
     yyjson_doc_free(doc);
     SDL_free(manifest);
     return true;
@@ -1211,6 +1232,7 @@ void slayer3d_editor_project_destroy(slayer3d_editor_project *project)
     SDL_free(project->data_root_relative_path);
     SDL_free(project->editor_entry);
     SDL_free(project->owned_media_dir);
+    SDL_free(project->media_root_relative_path);
     SDL_free(project->test_run_path);
     editor_asset_sources_destroy(&project->asset_sources);
     SDL_zero(*project);
@@ -1228,6 +1250,7 @@ static bool editor_override_asset_source(slayer3d_editor_asset_source *source, c
         return false;
     }
     char *relative_path = SDL_strdup(path);
+    path_normalize_relative_separators_tool(relative_path);
     if (relative_path == NULL)
     {
         SDL_free(absolute_path);
@@ -1239,6 +1262,75 @@ static bool editor_override_asset_source(slayer3d_editor_asset_source *source, c
     source->relative_path = relative_path;
     source->available = editor_asset_source_available(absolute_path);
     return true;
+}
+
+static bool editor_set_media_child_source(slayer3d_editor_asset_source *source, const char *media_root,
+                                          const char *media_relative_root, const char *leaf)
+{
+    char *path = path_join_tool(media_root, leaf);
+    if (path == NULL)
+        return false;
+    char *relative_path = media_relative_root != NULL && media_relative_root[0] != '\0'
+                              ? path_join_relative_tool(media_relative_root, leaf)
+                              : SDL_strdup(leaf);
+    path_normalize_relative_separators_tool(relative_path);
+    if (relative_path == NULL)
+    {
+        SDL_free(path);
+        return false;
+    }
+    const bool available = editor_asset_source_available(path);
+    editor_asset_source_destroy(source);
+    source->path = path;
+    source->relative_path = relative_path;
+    source->available = available;
+    return true;
+}
+
+static bool editor_set_media_child_sources(slayer3d_editor_asset_sources *sources, const char *media_root,
+                                           const char *media_relative_root)
+{
+    if (sources == NULL || media_root == NULL || media_root[0] == '\0')
+        return false;
+    return editor_set_media_child_source(&sources->textures, media_root, media_relative_root, "textures") &&
+           editor_set_media_child_source(&sources->models, media_root, media_relative_root, "models") &&
+           editor_set_media_child_source(&sources->sprites, media_root, media_relative_root, "sprites") &&
+           editor_set_media_child_source(&sources->skyboxes, media_root, media_relative_root, "skyboxes") &&
+           editor_set_media_child_source(&sources->liquids, media_root, media_relative_root, "liquids") &&
+           editor_set_media_child_source(&sources->effects, media_root, media_relative_root, "effects");
+}
+
+static char *editor_resolve_session_media_root(const slayer3d_editor_args *args, const slayer3d_editor_project *project,
+                                               char **out_relative_path)
+{
+    if (out_relative_path != NULL)
+        *out_relative_path = NULL;
+    if (args != NULL && args->media_path != NULL && args->media_path[0] != '\0')
+    {
+        if (out_relative_path != NULL)
+        {
+            *out_relative_path = SDL_strdup(path_is_absolute_tool(args->media_path) ? "media" : args->media_path);
+            path_normalize_relative_separators_tool(*out_relative_path);
+        }
+        return path_make_absolute_tool(args->media_path);
+    }
+    if (directory_exists_tool("media"))
+    {
+        if (out_relative_path != NULL)
+            *out_relative_path = SDL_strdup("media");
+        return path_make_absolute_tool("media");
+    }
+    if (project != NULL && project->media_dir != NULL && project->media_dir[0] != '\0')
+    {
+        if (out_relative_path != NULL)
+        {
+            *out_relative_path =
+                SDL_strdup(project->media_root_relative_path != NULL ? project->media_root_relative_path : "");
+            path_normalize_relative_separators_tool(*out_relative_path);
+        }
+        return SDL_strdup(project->media_dir);
+    }
+    return NULL;
 }
 
 bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slayer3d_editor_project *project,
@@ -1263,19 +1355,49 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->root = project->data_root;
     out_launch->data_asset_path = project->editor_entry;
     out_launch->media_dir = project->media_dir;
+    out_launch->media_relative_path = "";
     out_launch->input_path = args->command == SLAYER3D_EDITOR_COMMAND_OPEN ? args->input_path : "";
     out_launch->save_path = save_path;
     out_launch->test_run_path = project->test_run_path;
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
     out_launch->asset_sources = &project->asset_sources;
-    out_launch->embedded = project->embedded;
+    char *media_relative_path = NULL;
+    char *media_root = editor_resolve_session_media_root(args, project, &media_relative_path);
+    if ((media_root != NULL && media_root[0] != '\0') ||
+        (media_relative_path != NULL && media_relative_path[0] != '\0'))
+    {
+        if (media_root == NULL || media_root[0] == '\0' || media_relative_path == NULL)
+        {
+            SDL_free(media_root);
+            SDL_free(media_relative_path);
+            editor_set_error(error_buffer, error_buffer_size, "failed to resolve media path");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
+        out_launch->owned_media_dir = media_root;
+        out_launch->owned_media_relative_path = media_relative_path;
+        out_launch->media_dir = out_launch->owned_media_dir;
+        out_launch->media_relative_path = out_launch->owned_media_relative_path;
+        if (!editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources) ||
+            !editor_set_media_child_sources(&out_launch->owned_asset_sources, out_launch->owned_media_dir,
+                                            out_launch->owned_media_relative_path))
+        {
+            editor_set_error(error_buffer, error_buffer_size, "failed to allocate media asset sources");
+            slayer3d_editor_launch_destroy(out_launch);
+            return false;
+        }
+        out_launch->asset_sources = &out_launch->owned_asset_sources;
+        out_launch->owns_asset_sources = true;
+    }
+
     const bool has_texture_override = args->texture_path != NULL && args->texture_path[0] != '\0';
     const bool has_model_override = args->model_path != NULL && args->model_path[0] != '\0';
     const bool has_skybox_override = args->skybox_path != NULL && args->skybox_path[0] != '\0';
     if (has_texture_override || has_model_override || has_skybox_override)
     {
-        if (!editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
+        if (!out_launch->owns_asset_sources &&
+            !editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
         {
             editor_set_error(error_buffer, error_buffer_size, "failed to allocate asset source overrides");
             slayer3d_editor_launch_destroy(out_launch);
@@ -1301,6 +1423,8 @@ void slayer3d_editor_launch_destroy(slayer3d_editor_launch *launch)
 {
     if (launch == NULL)
         return;
+    SDL_free(launch->owned_media_dir);
+    SDL_free(launch->owned_media_relative_path);
     if (launch->owns_asset_sources)
         editor_asset_sources_destroy(&launch->owned_asset_sources);
     SDL_zero(*launch);
@@ -1312,6 +1436,12 @@ bool slayer3d_editor_validate_paths(const slayer3d_editor_args *args, const slay
     if (args == NULL || launch == NULL)
     {
         editor_set_error(error_buffer, error_buffer_size, "editor path validation requires args and launch");
+        return false;
+    }
+    if (args->media_path != NULL && args->media_path[0] != '\0' && !directory_exists_tool(args->media_path))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "media path '%s' is not an existing directory",
+                          args->media_path);
         return false;
     }
     if (args->texture_path != NULL && args->texture_path[0] != '\0' && !directory_exists_tool(args->texture_path))
@@ -1385,7 +1515,7 @@ static bool editor_asset_sources_any_missing(const slayer3d_editor_asset_sources
     if (sources == NULL)
         return true;
     return !sources->textures.available || !sources->models.available || !sources->sprites.available ||
-           !sources->skyboxes.available || !sources->effects.available;
+           !sources->skyboxes.available || !sources->liquids.available || !sources->effects.available;
 }
 
 static bool editor_build_asset_source_assignment(char **assignments, size_t assignment_count, size_t *index,
@@ -1427,6 +1557,9 @@ static bool editor_build_asset_source_assignments(slayer3d_editor_runner_invocat
                                               "skyboxes", &sources->skyboxes) ||
         !editor_build_asset_source_assignment(invocation->owned_asset_source_assignments,
                                               SDL_arraysize(invocation->owned_asset_source_assignments), &index,
+                                              "liquids", &sources->liquids) ||
+        !editor_build_asset_source_assignment(invocation->owned_asset_source_assignments,
+                                              SDL_arraysize(invocation->owned_asset_source_assignments), &index,
                                               "effects", &sources->effects))
     {
         return false;
@@ -1435,8 +1568,7 @@ static bool editor_build_asset_source_assignments(slayer3d_editor_runner_invocat
         return false;
     invocation->owned_asset_source_assignments[index++] = editor_state_assignment(
         "editor.asset_source.any_missing", editor_asset_sources_any_missing(sources) ? "true" : "false");
-    return index == SDL_arraysize(invocation->owned_asset_source_assignments) &&
-           invocation->owned_asset_source_assignments[index - 1u] != NULL;
+    return invocation->owned_asset_source_assignments[index - 1u] != NULL;
 }
 
 static bool editor_add_arg(slayer3d_editor_runner_invocation *invocation, int *index, char *arg)
@@ -1446,6 +1578,131 @@ static bool editor_add_arg(slayer3d_editor_runner_invocation *invocation, int *i
     invocation->argv[*index] = arg;
     ++(*index);
     return true;
+}
+
+static bool editor_path_separator_equal(char a, char b)
+{
+    const bool a_sep = a == '/' || a == '\\';
+    const bool b_sep = b == '/' || b == '\\';
+    return (a_sep && b_sep) || a == b;
+}
+
+static size_t editor_trim_trailing_separators(const char *path, size_t len)
+{
+    while (len > 1u && (path[len - 1u] == '/' || path[len - 1u] == '\\'))
+        --len;
+    return len;
+}
+
+static char *editor_asset_root_for_source(const slayer3d_editor_asset_source *source)
+{
+    if (source == NULL || source->path == NULL || source->relative_path == NULL || source->path[0] == '\0' ||
+        source->relative_path[0] == '\0' || path_is_absolute_tool(source->relative_path))
+    {
+        return NULL;
+    }
+
+    const size_t path_len = editor_trim_trailing_separators(source->path, SDL_strlen(source->path));
+    const size_t relative_len =
+        editor_trim_trailing_separators(source->relative_path, SDL_strlen(source->relative_path));
+    if (path_len <= relative_len || relative_len == 0u)
+        return NULL;
+
+    const size_t path_tail = path_len - relative_len;
+    for (size_t i = 0; i < relative_len; ++i)
+    {
+        if (!editor_path_separator_equal(source->path[path_tail + i], source->relative_path[i]))
+            return NULL;
+    }
+    if (path_tail > 0u && source->path[path_tail - 1u] != '/' && source->path[path_tail - 1u] != '\\')
+        return NULL;
+
+    size_t root_len = editor_trim_trailing_separators(source->path, path_tail);
+    if (root_len == 0u)
+        root_len = 1u;
+
+    char *root = (char *)SDL_malloc(root_len + 1u);
+    if (root == NULL)
+        return NULL;
+    SDL_memcpy(root, source->path, root_len);
+    root[root_len] = '\0';
+    return root;
+}
+
+static bool editor_path_text_equal_tool(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL)
+        return false;
+    while (*a != '\0' && *b != '\0')
+    {
+        if (!editor_path_separator_equal(*a, *b))
+            return false;
+        ++a;
+        ++b;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+static bool editor_invocation_has_asset_root(const slayer3d_editor_runner_invocation *invocation, const char *root,
+                                             const char *launch_root)
+{
+    if (editor_path_text_equal_tool(root, launch_root))
+        return true;
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (editor_path_text_equal_tool(invocation->owned_asset_roots[i], root))
+            return true;
+    }
+    return false;
+}
+
+static bool editor_invocation_add_asset_source_root(slayer3d_editor_runner_invocation *invocation,
+                                                    const slayer3d_editor_asset_source *source, const char *launch_root)
+{
+    char *root = editor_asset_root_for_source(source);
+    if (root == NULL)
+        return true;
+    if (editor_invocation_has_asset_root(invocation, root, launch_root))
+    {
+        SDL_free(root);
+        return true;
+    }
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (invocation->owned_asset_roots[i] == NULL)
+        {
+            invocation->owned_asset_roots[i] = root;
+            return true;
+        }
+    }
+    SDL_free(root);
+    return false;
+}
+
+static bool editor_invocation_collect_asset_roots(slayer3d_editor_runner_invocation *invocation,
+                                                  const slayer3d_editor_launch *launch)
+{
+    if (invocation == NULL || launch == NULL || launch->asset_sources == NULL)
+        return false;
+    return editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->textures, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->models, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->sprites, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->skyboxes, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->liquids, launch->root) &&
+           editor_invocation_add_asset_source_root(invocation, &launch->asset_sources->effects, launch->root);
+}
+
+static int editor_invocation_extra_asset_root_count(const slayer3d_editor_runner_invocation *invocation)
+{
+    int count = 0;
+    if (invocation == NULL)
+        return 0;
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+    {
+        if (invocation->owned_asset_roots[i] != NULL)
+            ++count;
+    }
+    return count;
 }
 
 bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launch, const char *program,
@@ -1461,14 +1718,23 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         return false;
     }
 
-    const int state_count = 4 + 2 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
-    int argc = (launch->embedded ? 4 : 5) + (state_count * 2);
+    if (!editor_invocation_collect_asset_roots(out_invocation, launch))
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+
+    const int state_count = 4 + 2 + 3 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
+    int argc = 5 + (editor_invocation_extra_asset_root_count(out_invocation) * 2) + (state_count * 2);
     if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
 
     char **argv = (char **)SDL_calloc((size_t)argc + 1u, sizeof(*argv));
     if (argv == NULL)
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
+    }
 
     out_invocation->argv = argv;
     out_invocation->argc = argc;
@@ -1497,19 +1763,22 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
     }
-    if (launch->embedded)
+    if (!editor_add_arg(out_invocation, &index, "--root") ||
+        !editor_add_arg(out_invocation, &index, (char *)launch->root))
     {
-        if (!editor_add_arg(out_invocation, &index, "--embedded"))
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(out_invocation->owned_asset_roots); ++i)
+    {
+        if (out_invocation->owned_asset_roots[i] == NULL)
+            continue;
+        if (!editor_add_arg(out_invocation, &index, "--root") ||
+            !editor_add_arg(out_invocation, &index, out_invocation->owned_asset_roots[i]))
         {
             slayer3d_editor_runner_invocation_destroy(out_invocation);
             return false;
         }
-    }
-    else if (!editor_add_arg(out_invocation, &index, "--root") ||
-             !editor_add_arg(out_invocation, &index, (char *)launch->root))
-    {
-        slayer3d_editor_runner_invocation_destroy(out_invocation);
-        return false;
     }
     if (!editor_add_arg(out_invocation, &index, "--data") ||
         !editor_add_arg(out_invocation, &index, (char *)launch->data_asset_path))
@@ -1527,10 +1796,28 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         }
     }
 
+    out_invocation->owned_media_path_assignment = editor_state_assignment("editor.media.path", launch->media_dir);
+    out_invocation->owned_media_relative_assignment =
+        editor_state_assignment("editor.media.relative", launch->media_relative_path);
+    out_invocation->owned_media_available_assignment =
+        editor_state_assignment("editor.media.available", launch->media_dir != NULL && launch->media_dir[0] != '\0' &&
+                                                                  directory_exists_tool(launch->media_dir)
+                                                              ? "true"
+                                                              : "false");
+    if (out_invocation->owned_media_path_assignment == NULL ||
+        out_invocation->owned_media_relative_assignment == NULL ||
+        out_invocation->owned_media_available_assignment == NULL)
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+
     char *owned_state[] = {
-        out_invocation->owned_command_assignment,     out_invocation->owned_input_assignment,
-        out_invocation->owned_save_assignment,        out_invocation->owned_test_run_assignment,
-        out_invocation->owned_project_dir_assignment, out_invocation->owned_project_data_root_assignment};
+        out_invocation->owned_command_assignment,        out_invocation->owned_input_assignment,
+        out_invocation->owned_save_assignment,           out_invocation->owned_test_run_assignment,
+        out_invocation->owned_project_dir_assignment,    out_invocation->owned_project_data_root_assignment,
+        out_invocation->owned_media_path_assignment,     out_invocation->owned_media_relative_assignment,
+        out_invocation->owned_media_available_assignment};
     for (size_t i = 0; i < SDL_arraysize(owned_state); ++i)
     {
         if (!editor_add_arg(out_invocation, &index, "--state") ||
@@ -1542,6 +1829,8 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     }
     for (size_t i = 0; i < SDL_arraysize(out_invocation->owned_asset_source_assignments); ++i)
     {
+        if (out_invocation->owned_asset_source_assignments[i] == NULL)
+            continue;
         if (!editor_add_arg(out_invocation, &index, "--state") ||
             !editor_add_arg(out_invocation, &index, out_invocation->owned_asset_source_assignments[i]))
         {
@@ -1549,7 +1838,8 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
             return false;
         }
     }
-    if (index != argc)
+    out_invocation->argc = index;
+    if (index > argc)
     {
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
@@ -1567,8 +1857,13 @@ void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation
     SDL_free(invocation->owned_test_run_assignment);
     SDL_free(invocation->owned_project_dir_assignment);
     SDL_free(invocation->owned_project_data_root_assignment);
+    SDL_free(invocation->owned_media_path_assignment);
+    SDL_free(invocation->owned_media_relative_assignment);
+    SDL_free(invocation->owned_media_available_assignment);
     for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_source_assignments); ++i)
         SDL_free(invocation->owned_asset_source_assignments[i]);
+    for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_roots); ++i)
+        SDL_free(invocation->owned_asset_roots[i]);
     SDL_free(invocation->argv);
     SDL_zero(*invocation);
 }

@@ -4,6 +4,7 @@
 
 #include "slayer3d/font.h"
 
+#include "embedded_font_inter_regular.h"
 #include "texture_internal.h"
 
 #include <SDL3/SDL_error.h>
@@ -519,6 +520,24 @@ static bool builtin_font_valid(slayer3d_builtin_font id)
     return id >= 0 && id < SLAYER3D_BUILTIN_FONT_COUNT;
 }
 
+static bool builtin_font_embedded_data(slayer3d_builtin_font id, const void **data, int *data_size)
+{
+    if (!data || !data_size)
+    {
+        return false;
+    }
+
+    switch (id)
+    {
+    case SLAYER3D_BUILTIN_FONT_INTER:
+        *data = slayer3d_embedded_font_inter_regular_ttf;
+        *data_size = (int)slayer3d_embedded_font_inter_regular_ttf_size;
+        return true;
+    default:
+        return false;
+    }
+}
+
 const char *slayer3d_builtin_font_name(slayer3d_builtin_font id)
 {
     return builtin_font_valid(id) ? slayer3d_builtin_fonts[id].name : NULL;
@@ -531,22 +550,32 @@ const char *slayer3d_builtin_font_filename(slayer3d_builtin_font id)
 
 bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id, float pixel_size, slayer3d_font *out)
 {
+    const void *embedded_data = NULL;
+    int embedded_size = 0;
+
     if (!builtin_font_valid(id))
     {
         return SDL_SetError("slayer3d_load_builtin_font: invalid font id %d", (int)id);
-    }
-    if (!media_dir)
-    {
-        return SDL_InvalidParamError("media_dir");
     }
     if (!out)
     {
         return SDL_InvalidParamError("out");
     }
 
+    if (builtin_font_embedded_data(id, &embedded_data, &embedded_size))
+    {
+        return slayer3d_load_font_from_memory(embedded_data, embedded_size, pixel_size, out);
+    }
+
+    if (!media_dir)
+    {
+        return SDL_InvalidParamError("media_dir");
+    }
+
     /* Compose "<media_dir>/fonts/<filename>". The engine convention is
      * that all bundled assets live under media_dir, with fonts in a
-     * "fonts" subdirectory — the path the bundled LICENSE.md documents. */
+     * "fonts" subdirectory. Non-embedded catalog entries still use this
+     * disk-backed path until they are intentionally embedded. */
     const char *filename = slayer3d_builtin_fonts[id].filename;
     char path[1024];
     int needed = SDL_snprintf(path, sizeof(path), "%s/fonts/%s", media_dir, filename);

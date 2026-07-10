@@ -744,6 +744,10 @@
     "signal.editor.file.save_as",
     "signal.editor.file.validate",
     "signal.editor.file.plan_lighting",
+    "signal.editor.media.settings.toggle",
+    "signal.editor.media.settings.close",
+    "signal.editor.media.folder_dialog",
+    "signal.editor.media.path.apply",
     "signal.editor.global.toggle",
     "signal.editor.global.close",
     "signal.editor.global.tab.lighting",
@@ -1113,6 +1117,19 @@
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" },
+          { "type": "scene_state.set", "key": "editor.media.settings.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.media.startup_prompt.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.media.status", "value": "ready" },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.media.available", "op": "==", "value": false, "default": false },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.media.settings.open", "value": true },
+              { "type": "scene_state.set", "key": "editor.media.startup_prompt.open", "value": true },
+              { "type": "scene_state.set", "key": "editor.file.menu.open", "value": true },
+              { "type": "scene_state.set", "key": "editor.media.status", "value": "choose a media directory" }
+            ]
+          },
           { "type": "console.write", "message": "Editor ready" }
         ]
       },
@@ -5547,6 +5564,45 @@
         "signal": "signal.editor.file.close",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.media.settings.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.media.settings.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.media.path.input", "value_from_state": "editor.media.path" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "media settings" }
+        ]
+      },
+      {
+        "signal": "signal.editor.media.settings.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.media.settings.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.media.folder_dialog",
+        "actions": [
+          { "type": "editor.file.dialog", "mode": "folder", "path_key": "editor.media.path.input", "default_path_key": "editor.media.path", "accept_signal": "signal.editor.media.path.apply", "status_key": "editor.media.dialog.status", "message_key": "editor.media.dialog.message" }
+        ]
+      },
+      {
+        "signal": "signal.editor.media.path.apply",
+        "actions": [
+          { "type": "editor.media.path.apply" },
+          {
+            "type": "editor.texture.scan",
+            "world": "brush.editor_shell.target",
+            "collection": "editor.textures",
+            "slot_count": 6,
+            "outputs": {
+              "count_key": "editor.texture.count",
+              "registered_count_key": "editor.texture.registered_count",
+              "status_key": "editor.texture.scan.status"
+            }
+          },
+          { "type": "editor.sky.scan" },
+          { "type": "editor.actor.scan" }
         ]
       },
       {

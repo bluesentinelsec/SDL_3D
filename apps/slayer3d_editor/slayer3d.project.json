@@ -3,13 +3,5 @@
   "name": "Slayer 3D Editor",
   "data_root": "data",
   "editor_entry": "asset://slayer3d_editor.game.json",
-  "media_root": "../../media",
-  "asset_sources": {
-    "textures": "data/textures",
-    "models": "data/models",
-    "sprites": "../../media/sprites",
-    "skyboxes": "data/skyboxes",
-    "effects": "data/effects"
-  },
   "test_run_output": "../../build/slayer3d_editor/test-run.json"
 }

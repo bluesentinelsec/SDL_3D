@@ -1016,6 +1016,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.texture.scan", validate_editor_texture_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.filter", validate_editor_texture_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.path.apply", validate_editor_texture_path_apply_action),
+        ACTION_RULE_EXACT_HANDLER("editor.media.path.apply", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.select_index", validate_editor_texture_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.sky.scan", validate_editor_sky_scan_action),
         ACTION_RULE_EXACT_HANDLER("editor.sky.select", validate_editor_sky_select_action),
@@ -1165,8 +1166,9 @@ static bool validate_editor_file_dialog_action(validation_context *ctx, yyjson_v
 {
     (void)type;
     const char *mode = json_string(action, "mode");
-    if (mode == NULL || (SDL_strcmp(mode, "open") != 0 && SDL_strcmp(mode, "save") != 0))
-        return validation_error(ctx, json_path, "editor.file.dialog mode must be open or save");
+    if (mode == NULL ||
+        (SDL_strcmp(mode, "open") != 0 && SDL_strcmp(mode, "save") != 0 && SDL_strcmp(mode, "folder") != 0))
+        return validation_error(ctx, json_path, "editor.file.dialog mode must be open, save, or folder");
     if (!is_non_empty_string(action, "path_key"))
         return validation_error(ctx, json_path, "editor.file.dialog requires a non-empty path_key");
     if (!require_ref(ctx, &names->signals, "accept_signal", json_string(action, "accept_signal"), json_path))

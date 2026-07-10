@@ -129,6 +129,24 @@ static void data_game_set_warmup_bool(slayer3d_properties *state, const char *pr
         slayer3d_properties_set_bool(state, key, value);
 }
 
+static void data_game_sync_presentation_media_dir(slayer3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL || runtime->data == NULL)
+        return;
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime->data);
+    const char *media_dir =
+        scene_state != NULL ? slayer3d_properties_get_string(scene_state, "editor.media.path", NULL) : NULL;
+    if (media_dir == NULL || media_dir[0] == '\0')
+        return;
+    const char *current = runtime->font_cache.media_dir != NULL ? runtime->font_cache.media_dir : "";
+    const bool changed = SDL_strcmp(current, media_dir) != 0;
+    if (!slayer3d_game_data_font_cache_set_media_dir(&runtime->font_cache, media_dir) || !changed)
+        return;
+    const int warmup_budget = runtime->asset_warmup.max_jobs_per_frame;
+    slayer3d_game_data_asset_warmup_queue_free(&runtime->asset_warmup);
+    slayer3d_game_data_asset_warmup_queue_init(&runtime->asset_warmup, warmup_budget);
+}
+
 static void data_game_set_warmup_string(slayer3d_properties *state, const char *prefix, const char *field,
                                         const char *value)
 {
@@ -1747,6 +1765,7 @@ void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slay
 
     slayer3d_game_data_frame_state_record_render(&runtime->frame_state, ctx, runtime->data);
     (void)slayer3d_data_game_runtime_publish_asset_warmup_stats(runtime, NULL);
+    data_game_sync_presentation_media_dir(runtime);
 
     slayer3d_game_data_frame_desc frame;
     SDL_zero(frame);
