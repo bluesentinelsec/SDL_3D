@@ -584,6 +584,18 @@ if(EMSCRIPTEN)
                                             "/media/sprites")
     slayer3d_target_preload_asset_directory(slayer3d_editor_web "${CMAKE_CURRENT_SOURCE_DIR}/media/skyboxes"
                                             "/media/skyboxes")
+    # The editor scans every session media child source (textures, models,
+    # liquids, effects, plus the sprites/skyboxes above), so preload them all
+    # for native/web testing parity. Empty directories pack no bytes but are
+    # only mounted when they contain files, so guard each one.
+    foreach(media_source_dir textures models liquids effects)
+        file(GLOB_RECURSE media_source_files "${CMAKE_CURRENT_SOURCE_DIR}/media/${media_source_dir}/*")
+        if(media_source_files)
+            slayer3d_target_preload_asset_directory(slayer3d_editor_web
+                                                    "${CMAKE_CURRENT_SOURCE_DIR}/media/${media_source_dir}"
+                                                    "/media/${media_source_dir}")
+        endif()
+    endforeach()
     slayer3d_enable_warnings(slayer3d_editor_web)
 endif()
 

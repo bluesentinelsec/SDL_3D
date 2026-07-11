@@ -1,6 +1,10 @@
 # Build and host the browser build of the Slayer3D editor.
 #
-# Usage (from the repository root):
+# Preferred entry point (from the repository root):
+#   make web        # build the image and start the container
+#   make web-stop   # stop the container
+#
+# Manual usage:
 #   docker build -f docker/emscripten-editor/Dockerfile -t slayer3d-editor-web .
 #   docker run --rm -it -p 8080:8080 slayer3d-editor-web
 #
