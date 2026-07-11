@@ -29,6 +29,8 @@ static slayer3d_ui_layout_node_type ui_widget_type_from_string(const char *type)
         return SLAYER3D_UI_LAYOUT_NODE_CONSOLE;
     if (SDL_strcmp(type, "image") == 0)
         return SLAYER3D_UI_LAYOUT_NODE_IMAGE;
+    if (SDL_strcmp(type, "scroll") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_SCROLL;
     return SLAYER3D_UI_LAYOUT_NODE_PANEL;
 }
 
@@ -268,6 +270,19 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         ui_widget_selected_index_from_values(runtime, node, ui_widget_int(node, "selected_index", "selected_index", 0));
     desc.image = json_string(node, "image", NULL);
     desc.preserve_aspect = ui_widget_bool(node, "preserve_aspect", false);
+    const char *anchor_x = json_string(node, "anchor_x", NULL);
+    desc.anchor_right = anchor_x != NULL && SDL_strcmp(anchor_x, "right") == 0;
+    const char *anchor_y = json_string(node, "anchor_y", NULL);
+    desc.anchor_bottom = anchor_y != NULL && SDL_strcmp(anchor_y, "bottom") == 0;
+    desc.scroll_key = json_string(node, "scroll_key", NULL);
+    float pane_scroll = 0.0f;
+    if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))
+        desc.scroll_offset = pane_scroll;
+    float scroll_span = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "scroll_count_key", NULL), &scroll_span))
+        desc.scroll_span = SDL_max(scroll_span, 0.0f);
+    desc.scroll_signal = json_string(node, "scroll_signal", NULL);
+    desc.scroll_step = json_float(node, "scroll_step", 0.0f);
     desc.open = ui_widget_bool(node, "open", false);
     const char *open_key = json_string(node, "open_key", NULL);
     if (open_key != NULL && open_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)
@@ -339,6 +354,58 @@ bool slayer3d_game_data_for_each_ui_widget_image_id(const slayer3d_game_data_run
             if (!ui_widget_for_each_image_id(yyjson_arr_get(widgets, i), callback, userdata))
                 return true;
     }
+    return true;
+}
+
+bool slayer3d_game_data_sync_ui_scroll_limits(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return false;
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, NULL, layout))
+    {
+        slayer3d_ui_layout_destroy(layout);
+        return false;
+    }
+
+    for (int i = 0, count = slayer3d_ui_layout_node_count(layout); i < count; ++i)
+    {
+        const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_resolved_node_at(layout, i);
+        if (node == NULL || node->scroll_key[0] == '\0' ||
+            (node->type != SLAYER3D_UI_LAYOUT_NODE_SCROLL && !node->scroll_virtual))
+            continue;
+
+        /* The pane already clamps what it renders; clamping the owning state
+         * key keeps steppers and drags anchored to real content bounds, and
+         * the published limit lets data-authored logic bind against it.
+         * Virtualized lists store item indices, typically as ints - preserve
+         * the key's authored type. */
+        const slayer3d_value *existing = slayer3d_properties_get_value(runtime->scene_state, node->scroll_key);
+        const bool integer_key = existing != NULL && existing->type == SLAYER3D_VALUE_INT;
+        const float requested = integer_key
+                                    ? (float)slayer3d_properties_get_int(runtime->scene_state, node->scroll_key, 0)
+                                    : slayer3d_properties_get_float(runtime->scene_state, node->scroll_key, 0.0f);
+        if (requested != node->scroll_offset)
+        {
+            if (integer_key)
+                slayer3d_properties_set_int(runtime->scene_state, node->scroll_key,
+                                            (int)SDL_lroundf(node->scroll_offset));
+            else
+                slayer3d_properties_set_float(runtime->scene_state, node->scroll_key, node->scroll_offset);
+        }
+
+        char limit_key[SLAYER3D_UI_LAYOUT_ACTION_MAX + 8];
+        SDL_snprintf(limit_key, sizeof(limit_key), "%s.limit", node->scroll_key);
+        slayer3d_properties_set_float(runtime->scene_state, limit_key, node->scroll_max);
+    }
+
+    slayer3d_ui_layout_destroy(layout);
     return true;
 }
 

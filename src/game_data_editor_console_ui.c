@@ -171,39 +171,3 @@ bool editor_console_copy_selection_if_requested(slayer3d_game_data_runtime *runt
         return false;
     return editor_console_copy_selection(runtime);
 }
-
-int editor_console_wheel_scroll_delta(float wheel_y)
-{
-    if (wheel_y == 0.0f)
-        return 0;
-    const int steps = SDL_max(1, (int)SDL_ceilf(SDL_fabsf(wheel_y) * 3.0f));
-    return wheel_y > 0.0f ? -steps : steps;
-}
-
-bool editor_update_console_scroll_drag(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
-                                       float mouse_y)
-{
-    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
-        return false;
-
-    const slayer3d_ui_layout_hit_region *track =
-        editor_find_layout_hit_by_id(layout, "ui.editor_shell.console.scroll.track");
-    if (track == NULL)
-        return false;
-
-    const int count = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0), 0,
-                                EDITOR_CONSOLE_HISTORY_COUNT);
-    const int max_scroll = SDL_max(0, count - EDITOR_CONSOLE_VISIBLE_COUNT);
-    if (max_scroll <= 0)
-        return editor_set_console_scroll(runtime, 0);
-
-    const float thumb_h = 24.0f;
-    const float travel = track->rect.h - thumb_h;
-    if (travel <= 0.0f)
-        return false;
-
-    const float local_y = editor_clamp_float(mouse_y - track->rect.y - thumb_h * 0.5f, 0.0f, travel);
-    const float ratio = local_y / travel;
-    const int scroll = SDL_clamp((int)SDL_floorf(ratio * (float)max_scroll + 0.5f), 0, max_scroll);
-    return editor_set_console_scroll(runtime, scroll);
-}

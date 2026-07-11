@@ -2017,6 +2017,13 @@ static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, 
         editor_sky_publish_slots(runtime);
         return true;
     }
+    /* Rebind the visible slot window at the current scroll index without
+     * rescanning the directory; scrollbar drags use this. */
+    if (json_bool(action, "rebind", false))
+    {
+        editor_sky_publish_slots(runtime);
+        return true;
+    }
 
     const char *directory = slayer3d_properties_get_string(state, "editor.asset_source.skyboxes.path", "");
     char *resolved_fallback = NULL;
@@ -4773,6 +4780,11 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.sky.scan") == 0)
         return execute_editor_sky_scan_action(runtime, action);
+
+    /* Clamp the console scroll and rebind the visible line window; the
+     * shared scrollbar/wheel path emits this after changing the index. */
+    if (SDL_strcmp(type, "editor.console.sync") == 0)
+        return editor_scroll_console_by(runtime, 0);
 
     if (SDL_strcmp(type, "editor.sky.select") == 0)
         return execute_editor_sky_select_action(runtime, action);

@@ -43,6 +43,14 @@ extern "C"
         SLAYER3D_UI_LAYOUT_NODE_SPACER,
         SLAYER3D_UI_LAYOUT_NODE_CONSOLE,
         SLAYER3D_UI_LAYOUT_NODE_IMAGE,
+        /**
+         * Vertical scroll pane. Children lay out in the pane's content
+         * coordinates; the pane clips them, measures their extent, clamps
+         * the requested offset into [0, extent - viewport], shifts the
+         * subtree, and synthesizes a proportional scrollbar when content
+         * overflows. Correctness lives in the container, not per child.
+         */
+        SLAYER3D_UI_LAYOUT_NODE_SCROLL,
     } slayer3d_ui_layout_node_type;
 
     /** @brief Optional layout axis applied to a node's direct children. */
@@ -121,6 +129,34 @@ extern "C"
         const char *image;
         /** @brief Preserve the source image aspect ratio inside the node rect. */
         bool preserve_aspect;
+        /** @brief Requested scroll offset for SLAYER3D_UI_LAYOUT_NODE_SCROLL nodes; clamped at resolve. */
+        float scroll_offset;
+        /** @brief Optional caller state key that owns this pane's scroll offset. */
+        const char *scroll_key;
+        /**
+         * @brief Anchor the node's x to the right edge of its parent (or viewport).
+         *
+         * When set, `rect.x` is the distance from the right edge to the
+         * node's right side, so docked panels keep their margin at any
+         * viewport size instead of hardcoding absolute positions.
+         */
+        bool anchor_right;
+        /** @brief Anchor the node's y to the bottom edge of its parent (or viewport). */
+        bool anchor_bottom;
+        /**
+         * @brief Total item count for a virtualized list container.
+         *
+         * When positive on a container with a scroll_key, the container
+         * scrolls in item-index units: its resolved children are the visible
+         * window, scroll_max becomes max(span - child count, 0), and the same
+         * proportional scrollbar is synthesized as for pixel scroll panes.
+         * Children are not shifted - hosts rebind their contents per index.
+         */
+        float scroll_span;
+        /** @brief Optional signal emitted by hosts when a scrollbar drag changes the offset. */
+        const char *scroll_signal;
+        /** @brief Wheel step per notch; 0 selects the default (1 item, or 40px for scroll panes). */
+        float scroll_step;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -153,6 +189,20 @@ extern "C"
         float border_thickness;
         char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
         bool preserve_aspect;
+        /** @brief Applied (clamped) scroll offset for scroll panes. */
+        float scroll_offset;
+        /** @brief Maximum valid scroll offset: max(content extent - viewport, 0). */
+        float scroll_max;
+        /** @brief Measured content extent of a scroll pane in pane-content units. */
+        float content_extent;
+        /** @brief Caller state key that owns this pane's scroll offset, when authored. */
+        char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        /** @brief True when the node scrolls in item-index units (virtualized list). */
+        bool scroll_virtual;
+        /** @brief Signal hosts emit after a scrollbar drag changes the offset, when authored. */
+        char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        /** @brief Wheel step per notch; 0 selects the default. */
+        float scroll_step;
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -281,6 +331,19 @@ extern "C"
     /** @brief Update retained widget hover/active state and return any activated action. */
     bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_input_state *input,
                                          slayer3d_ui_layout_activation *out_activation);
+
+    /** @brief Suffix appended to a scroll pane id for its synthesized scrollbar commands. */
+#define SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX ".scrollbar"
+
+    /**
+     * @brief Map a pointer y on a scroll pane's synthesized scrollbar to a scroll offset.
+     *
+     * Uses the pane's resolved geometry so callers never duplicate thumb or
+     * travel math. Returns false when @p pane_id is not a resolved scroll
+     * pane or its content does not overflow.
+     */
+    bool slayer3d_ui_layout_scrollbar_offset_for_pointer(const slayer3d_ui_layout_model *model, const char *pane_id,
+                                                         float pointer_y, float *out_offset);
 
 #ifdef __cplusplus
 }

@@ -47,6 +47,64 @@ Supported node types are:
 - `button`, `dropdown`, and `tab_strip` for interactive controls.
 - `label`, `console`, and `log_view` for text output.
 - `image` for thumbnails and icons.
+- `scroll` for vertically scrolling panes.
+
+### Scroll Panes
+
+`scroll` containers own their children the way a Tk or GTK scrolled window
+does. Children are authored in the pane's content coordinates; the pane always
+clips them, measures the content extent from their resolved rectangles,
+clamps the requested offset into `[0, extent - viewport]`, shifts the whole
+subtree, and synthesizes a proportional scrollbar whenever content overflows.
+Nothing scroll-related is authored per child, and there is no authored
+maximum anywhere — rows hidden by `visible_if` (a collapsed section, an
+inactive tab) shrink the extent and the scrollbar follows automatically.
+
+### Virtualized Lists
+
+Fixed-slot browsers (six texture cells windowing hundreds of files) scroll by
+rebinding slot contents per index, not by moving pixels. Author `scroll_key`
+plus `scroll_count_key` on the container that holds the slots: it becomes a
+virtualized list that scrolls in item units. The container's resolved
+children are the visible window, `scroll_max` is `count - visible`, and the
+same proportional scrollbar is synthesized as for pixel scroll panes - one
+scrollbar implementation everywhere. `scroll_signal` names the signal hosts
+emit after a scrollbar drag changes the index so the slots rebind.
+
+```json
+{
+  "id": "ui.browser.grid",
+  "type": "panel",
+  "layout": "grid",
+  "columns": 2,
+  "scroll_key": "editor.texture.scroll.index",
+  "scroll_count_key": "editor.texture.count",
+  "scroll_signal": "signal.editor.texture.filter",
+  "children": [ "...six slot cells..." ]
+}
+```
+
+`scroll_key` names the scene-state float that owns the offset. Steppers and
+data-authored actions adjust that key freely; the host calls
+`slayer3d_game_data_sync_ui_scroll_limits()` once per update to pull the key
+back inside the measured bounds and to publish `<scroll_key>.limit` for
+anything that wants to bind against the real maximum. Scrollbar drags map
+pointer positions through the pane's resolved geometry via
+`slayer3d_ui_layout_scrollbar_offset_for_pointer()`, so no C code carries
+thumb or travel math.
+
+```json
+{
+  "id": "ui.panel.rows",
+  "type": "scroll",
+  "x": 0, "y": 94, "w": 296, "h": 318,
+  "scroll_key": "editor.inspector.scroll",
+  "children": [
+    { "id": "ui.panel.rows.first", "type": "panel", "x": 12, "y": 0, "w": 272, "h": 26 },
+    { "id": "ui.panel.rows.second", "type": "panel", "x": 12, "y": 30, "w": 272, "h": 26 }
+  ]
+}
+```
 
 ### Grid Containers
 
@@ -88,6 +146,27 @@ visibility, and layering, so a thumbnail authored as a child of its slot
 button can never drift out of the slot. Set `preserve_aspect: true` to fit the
 source aspect ratio inside the rect, and an optional `color` to tint. Images
 are display-only unless they author `interactive` / `action`.
+
+### Edge Anchoring
+
+`anchor_x: "right"` / `anchor_y: "bottom"` reinterpret a node's `x` / `y` as
+margins from the opposite edge of its parent (or the viewport, for roots).
+Docked panels author their margin once and track any viewport size, so a
+right-docked browser never encodes the canonical resolution in its position.
+
+### Wheel And Scrollbar Behavior
+
+Every scrollable container - pixel `scroll` panes and virtualized lists -
+shares one interaction model: the synthesized scrollbar drags through the
+pane's resolved geometry, wheel input over the pane adjusts its `scroll_key`
+(one item per notch for lists, 40px for panes, overridable with
+`scroll_step`), and events over panes are consumed before the world/canvas.
+Clicks outside an open dropdown popup dismiss it and are likewise consumed.
+
+Bare-key editor shortcuts gate on the single scene fact
+`editor.ui.text_entry.active`, published by the runtime from the live
+text-field focus keys before input sensors evaluate; new text fields extend
+the C-side computation instead of adding conditions to every sensor.
 
 ## Styling
 

@@ -47,12 +47,32 @@ typedef struct ui_layout_node
     float option_height;
     char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
     bool preserve_aspect;
+    bool anchor_right;
+    bool anchor_bottom;
+    float scroll_offset;
+    char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    float scroll_span;
+    char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    float scroll_step;
+    float resolved_scroll_offset;
+    float resolved_scroll_max;
+    float resolved_content_extent;
+    /* Visible window in the same units as resolved_content_extent: pixels
+     * for scroll panes, item counts for virtualized lists. */
+    float resolved_scroll_viewport;
     bool hovered;
     bool active;
     bool selected;
     bool resolved;
     bool resolving;
 } ui_layout_node;
+
+enum
+{
+    UI_LAYOUT_SCROLLBAR_WIDTH = 8,
+    UI_LAYOUT_SCROLLBAR_MARGIN = 2,
+    UI_LAYOUT_SCROLLBAR_MIN_THUMB = 24,
+};
 
 struct slayer3d_ui_layout_model
 {
@@ -309,7 +329,10 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     }
     if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) || !ui_layout_action_valid(desc->action))
         return false;
-    if (!ui_layout_image_valid(desc->image))
+    if (!ui_layout_image_valid(desc->image) || !ui_layout_action_valid(desc->scroll_key) ||
+        !ui_layout_action_valid(desc->scroll_signal))
+        return false;
+    if (desc->scroll_span < 0.0f || desc->scroll_step < 0.0f)
         return false;
     if (desc->grid_columns < 0 || (desc->axis == SLAYER3D_UI_LAYOUT_AXIS_GRID && desc->grid_columns < 1))
         return false;
@@ -360,6 +383,16 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->option_height = desc->option_height;
     ui_layout_copy_image(node->image, desc->image);
     node->preserve_aspect = desc->preserve_aspect;
+    node->anchor_right = desc->anchor_right;
+    node->anchor_bottom = desc->anchor_bottom;
+    node->scroll_offset = desc->scroll_offset;
+    ui_layout_copy_action(node->scroll_key, desc->scroll_key);
+    node->scroll_span = desc->scroll_span;
+    ui_layout_copy_action(node->scroll_signal, desc->scroll_signal);
+    node->scroll_step = desc->scroll_step;
+    /* A scroll pane owns its children: clipping is not optional. */
+    if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
+        node->clip_children = true;
     for (int i = 0; i < node->option_count; ++i)
         ui_layout_copy_text(node->options[i], desc->options[i]);
     node->interactive = desc->interactive || desc->action != NULL || ui_layout_type_interactive(desc->type);
@@ -440,6 +473,117 @@ static float ui_layout_distributed_fill_extent(const slayer3d_ui_layout_model *m
 
 static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, float viewport_w, float viewport_h);
 
+static bool ui_layout_node_is_descendant(const slayer3d_ui_layout_model *model, int node_index, int ancestor_index)
+{
+    int cursor = model->nodes[node_index].parent_index;
+    while (cursor >= 0)
+    {
+        if (cursor == ancestor_index)
+            return true;
+        cursor = model->nodes[cursor].parent_index;
+    }
+    return false;
+}
+
+/*
+ * Finalize a scroll pane after its children resolved: measure the content
+ * extent from the children's placed rects, clamp the requested offset so the
+ * pane can never scroll past its content, and shift the whole subtree.
+ * Children authored (or reflowed) in content coordinates therefore scroll,
+ * clip, and clamp correctly without any per-child annotations.
+ */
+static void ui_layout_apply_scroll_pane(slayer3d_ui_layout_model *model, int pane_index)
+{
+    ui_layout_node *pane = &model->nodes[pane_index];
+    slayer3d_ui_layout_rect content;
+    ui_layout_content_rect(pane, &content);
+
+    float content_bottom = content.y;
+    for (int i = 0; i < model->count; ++i)
+    {
+        const ui_layout_node *child = &model->nodes[i];
+        if (child->parent_index != pane_index)
+            continue;
+        content_bottom = SDL_max(content_bottom, child->resolved_rect.y + child->resolved_rect.h);
+    }
+    pane->resolved_content_extent = SDL_max(content_bottom - content.y, 0.0f);
+    pane->resolved_scroll_viewport = content.h;
+    pane->resolved_scroll_max = SDL_max(pane->resolved_content_extent - content.h, 0.0f);
+    pane->resolved_scroll_offset = SDL_clamp(pane->scroll_offset, 0.0f, pane->resolved_scroll_max);
+    if (pane->resolved_scroll_offset <= 0.0f)
+        return;
+
+    for (int i = 0; i < model->count; ++i)
+    {
+        if (ui_layout_node_is_descendant(model, i, pane_index))
+            model->nodes[i].resolved_rect.y -= pane->resolved_scroll_offset;
+    }
+}
+
+static bool ui_layout_node_is_virtual_list(const ui_layout_node *node)
+{
+    return node->type != SLAYER3D_UI_LAYOUT_NODE_SCROLL && node->scroll_span > 0.0f && node->scroll_key[0] != '\0';
+}
+
+/*
+ * Finalize a virtualized list: the resolved children are the visible window
+ * onto scroll_span items whose contents the host rebinds per index. Nothing
+ * moves - the container just learns its bounds so the shared scrollbar and
+ * state clamping work in item units.
+ */
+static void ui_layout_apply_virtual_list(slayer3d_ui_layout_model *model, int list_index)
+{
+    ui_layout_node *list = &model->nodes[list_index];
+    float visible = 0.0f;
+    for (int i = 0; i < model->count; ++i)
+    {
+        if (model->nodes[i].parent_index == list_index)
+            visible += 1.0f;
+    }
+    list->resolved_content_extent = list->scroll_span;
+    list->resolved_scroll_viewport = visible;
+    list->resolved_scroll_max = SDL_max(list->scroll_span - visible, 0.0f);
+    list->resolved_scroll_offset = SDL_clamp(list->scroll_offset, 0.0f, list->resolved_scroll_max);
+}
+
+static bool ui_layout_scrollbar_geometry(const ui_layout_node *pane, slayer3d_ui_layout_rect *out_track,
+                                         slayer3d_ui_layout_rect *out_thumb)
+{
+    const bool scrollable = pane->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(pane);
+    if (!scrollable || pane->resolved_scroll_max <= 0.0f || pane->resolved_content_extent <= 0.0f)
+        return false;
+
+    slayer3d_ui_layout_rect content;
+    ui_layout_content_rect(pane, &content);
+    if (content.w <= (float)UI_LAYOUT_SCROLLBAR_WIDTH || content.h <= 0.0f)
+        return false;
+
+    slayer3d_ui_layout_rect track = {
+        content.x + content.w - (float)UI_LAYOUT_SCROLLBAR_WIDTH,
+        content.y,
+        (float)UI_LAYOUT_SCROLLBAR_WIDTH,
+        content.h,
+    };
+    /* Viewport and extent share units (pixels for panes, items for
+     * virtualized lists), so the proportion is unit-agnostic. */
+    float thumb_h = track.h * (pane->resolved_scroll_viewport / pane->resolved_content_extent);
+    thumb_h = SDL_clamp(thumb_h, (float)UI_LAYOUT_SCROLLBAR_MIN_THUMB, track.h);
+    const float travel = track.h - thumb_h;
+    const float ratio =
+        pane->resolved_scroll_max > 0.0f ? pane->resolved_scroll_offset / pane->resolved_scroll_max : 0.0f;
+    slayer3d_ui_layout_rect thumb = {
+        track.x + (float)UI_LAYOUT_SCROLLBAR_MARGIN,
+        track.y + travel * ratio,
+        track.w - (float)UI_LAYOUT_SCROLLBAR_MARGIN * 2.0f,
+        thumb_h,
+    };
+    if (out_track != NULL)
+        *out_track = track;
+    if (out_thumb != NULL)
+        *out_thumb = thumb;
+    return true;
+}
+
 static float ui_layout_grid_cell_width(const ui_layout_node *parent, slayer3d_ui_layout_rect content)
 {
     const float columns = (float)SDL_max(parent->grid_columns, 1);
@@ -472,7 +616,13 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
     ui_layout_node *parent = &model->nodes[parent_index];
     const int child_count = ui_layout_child_count(model, parent_index);
     if (child_count == 0)
+    {
+        if (parent->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
+            ui_layout_apply_scroll_pane(model, parent_index);
+        else if (ui_layout_node_is_virtual_list(parent))
+            ui_layout_apply_virtual_list(model, parent_index);
         return true;
+    }
 
     slayer3d_ui_layout_rect content;
     ui_layout_content_rect(parent, &content);
@@ -527,10 +677,14 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         }
         else
         {
-            child->resolved_rect.x = content.x + child->local_rect.x;
-            child->resolved_rect.y = content.y + child->local_rect.y;
             child->resolved_rect.w = ui_layout_node_width(child, content.w);
             child->resolved_rect.h = ui_layout_node_height(child, content.h);
+            child->resolved_rect.x = child->anchor_right
+                                         ? content.x + content.w - child->local_rect.x - child->resolved_rect.w
+                                         : content.x + child->local_rect.x;
+            child->resolved_rect.y = child->anchor_bottom
+                                         ? content.y + content.h - child->local_rect.y - child->resolved_rect.h
+                                         : content.y + child->local_rect.y;
         }
 
         child->resolved = true;
@@ -554,6 +708,11 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         if (!ui_layout_resolve_children(model, i, viewport_w, viewport_h))
             return false;
     }
+
+    if (parent->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
+        ui_layout_apply_scroll_pane(model, parent_index);
+    else if (ui_layout_node_is_virtual_list(parent))
+        ui_layout_apply_virtual_list(model, parent_index);
     return true;
 }
 
@@ -573,10 +732,12 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
     }
     else
     {
-        node->resolved_rect.x = node->local_rect.x;
-        node->resolved_rect.y = node->local_rect.y;
         node->resolved_rect.w = ui_layout_node_width(node, viewport_w);
         node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
+        node->resolved_rect.x =
+            node->anchor_right ? viewport_w - node->local_rect.x - node->resolved_rect.w : node->local_rect.x;
+        node->resolved_rect.y =
+            node->anchor_bottom ? viewport_h - node->local_rect.y - node->resolved_rect.h : node->local_rect.y;
         node->resolved_layer = node->layer;
         node->has_resolved_clip_rect = false;
         node->resolved = true;
@@ -680,6 +841,13 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->border_thickness = node->border_thickness;
         ui_layout_copy_image(resolved->image, node->image);
         resolved->preserve_aspect = node->preserve_aspect;
+        resolved->scroll_offset = node->resolved_scroll_offset;
+        resolved->scroll_max = node->resolved_scroll_max;
+        resolved->content_extent = node->resolved_content_extent;
+        ui_layout_copy_action(resolved->scroll_key, node->scroll_key);
+        resolved->scroll_virtual = ui_layout_node_is_virtual_list(node);
+        ui_layout_copy_action(resolved->scroll_signal, node->scroll_signal);
+        resolved->scroll_step = node->scroll_step;
     }
 }
 
@@ -724,6 +892,8 @@ static int ui_layout_required_flat_capacity(const slayer3d_ui_layout_model *mode
         const ui_layout_node *node = &model->nodes[i];
         if (node->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && node->open && node->option_count > 0)
             required += 1 + node->option_count;
+        if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(node))
+            required += 2; /* synthesized scrollbar track + thumb */
     }
     return required;
 }
@@ -809,6 +979,39 @@ static slayer3d_ui_layout_rect ui_layout_dropdown_popup_rect(const slayer3d_ui_l
     return rect;
 }
 
+/*
+ * Synthesize a scroll pane's proportional scrollbar. Like dropdown popups,
+ * the flat commands derive entirely from the pane's resolved geometry, so
+ * scrollbars can never drift from the content they represent.
+ */
+static void ui_layout_compile_scrollbar(slayer3d_ui_layout_model *model, const ui_layout_node *node)
+{
+    slayer3d_ui_layout_rect track;
+    slayer3d_ui_layout_rect thumb;
+    if (!ui_layout_scrollbar_geometry(node, &track, &thumb))
+        return;
+
+    char scrollbar_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    SDL_snprintf(scrollbar_id, sizeof(scrollbar_id), "%s" SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX, node->id);
+    char thumb_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    SDL_snprintf(thumb_id, sizeof(thumb_id), "%s" SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX ".thumb", node->id);
+
+    const slayer3d_color track_fill = {18, 26, 36, 230};
+    const slayer3d_color track_border = {68, 92, 124, 235};
+    const slayer3d_color thumb_fill = {92, 140, 198, 245};
+    ui_layout_store_render_command(
+        model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, track, node->resolved_layer + 1,
+        node->has_resolved_clip_rect, node->resolved_clip_rect, "", NULL, false, false, -1, (slayer3d_color){0}, false,
+        0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, track_fill, true, track_border, true, 1.0f, NULL, false);
+    ui_layout_store_render_command(
+        model, thumb_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, thumb, node->resolved_layer + 2,
+        node->has_resolved_clip_rect, node->resolved_clip_rect, "", NULL, false, false, -1, (slayer3d_color){0}, false,
+        0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, thumb_fill, true, (slayer3d_color){0}, false, 0.0f, NULL, false);
+    ui_layout_store_hit_region(model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_SCROLL, track,
+                               node->resolved_layer + 2, node->has_resolved_clip_rect, node->resolved_clip_rect, NULL,
+                               false, -1);
+}
+
 static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui_layout_node *node)
 {
     if (!node->open || node->option_count <= 0)
@@ -873,6 +1076,9 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         }
         if (source->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && !ui_layout_compile_dropdown(model, source))
             return false;
+        if ((source->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(source)) &&
+            visible_in_clip)
+            ui_layout_compile_scrollbar(model, source);
     }
     ui_layout_sort_flat_lists(model);
     return true;
@@ -909,6 +1115,29 @@ bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_
         return false;
     model->dirty = false;
     ++model->generation;
+    return true;
+}
+
+bool slayer3d_ui_layout_scrollbar_offset_for_pointer(const slayer3d_ui_layout_model *model, const char *pane_id,
+                                                     float pointer_y, float *out_offset)
+{
+    if (out_offset != NULL)
+        *out_offset = 0.0f;
+    const int index = ui_layout_find_node_index(model, pane_id);
+    if (index < 0 || !model->nodes[index].resolved || out_offset == NULL)
+        return false;
+
+    const ui_layout_node *pane = &model->nodes[index];
+    slayer3d_ui_layout_rect track;
+    slayer3d_ui_layout_rect thumb;
+    if (!ui_layout_scrollbar_geometry(pane, &track, &thumb))
+        return false;
+
+    const float travel = track.h - thumb.h;
+    if (travel <= 0.0f)
+        return false;
+    const float local_y = SDL_clamp(pointer_y - track.y - thumb.h * 0.5f, 0.0f, travel);
+    *out_offset = (local_y / travel) * pane->resolved_scroll_max;
     return true;
 }
 

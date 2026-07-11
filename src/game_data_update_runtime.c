@@ -143,6 +143,16 @@ bool slayer3d_game_data_update(slayer3d_game_data_runtime *runtime, float dt)
     update_control_components(runtime, root, dt);
     update_motion_components(runtime, root, dt);
     update_wave_schedules(runtime, dt);
+    /* One authoritative "a text field owns the keyboard" fact, refreshed
+     * from the live focus keys before sensors evaluate so bare-key shortcut
+     * guards never read a stale frame. */
+    if (runtime->scene_state != NULL)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.ui.text_entry.active",
+                                     editor_property_edit_has_focus(runtime) ||
+                                         editor_texture_edit_has_focus(runtime) ||
+                                         editor_global_edit_has_focus(runtime));
+    }
     update_sensors(runtime);
     update_noise_events(runtime, dt);
     actor_lifecycle_defer_end(runtime);

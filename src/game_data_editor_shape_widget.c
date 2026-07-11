@@ -151,7 +151,13 @@ bool editor_handle_shape_widget(slayer3d_game_data_runtime *runtime, yyjson_val 
     }
 
     if (opened && retained_layout_valid)
+    {
+        /* A click outside an open popup dismisses it and stops there; it
+         * must never fall through to the world or widgets underneath. */
         slayer3d_properties_set_bool(runtime->scene_state, open_key, false);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+    }
 
     slayer3d_ui_layout_destroy(layout);
     return true;

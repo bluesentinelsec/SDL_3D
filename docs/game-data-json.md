@@ -3835,7 +3835,10 @@ should use `ui.widgets`.
 ```
 
 Widgets support `panel`, `toolbar`, `row`, `column`, `button`, `label`,
-`dropdown`, `tab_strip`, `spacer`, `console`, `log_view`, and `image` nodes.
+`dropdown`, `tab_strip`, `spacer`, `console`, `log_view`, `image`, and
+`scroll` nodes. `scroll` panes own their children: they clip, measure content
+extent, clamp the offset read from `scroll_key`, and synthesize a
+proportional scrollbar when content overflows.
 `w` and `h` may be positive numbers or `"fill"`. Nodes may author `color` /
 `fill_color`, `border_color`, `border_thickness`, `text_color`, `text_scale`,
 and `align` (`left`, `center`, or `right`). Containers may author

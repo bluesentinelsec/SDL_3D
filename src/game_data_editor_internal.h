@@ -205,9 +205,6 @@ bool editor_console_begin_selection(slayer3d_game_data_runtime *runtime, const s
 bool editor_console_copy_selection(slayer3d_game_data_runtime *runtime);
 bool editor_console_copy_selection_if_requested(slayer3d_game_data_runtime *runtime,
                                                 const slayer3d_input_manager *input);
-int editor_console_wheel_scroll_delta(float wheel_y);
-bool editor_update_console_scroll_drag(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
-                                       float mouse_y);
 bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime);

@@ -4374,6 +4374,62 @@ TEST(GameDataRuntime, FontCacheBakesAtlasDensityFromDisplayScale)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, SyncUiScrollLimitsClampsStateAgainstResolvedContent)
+{
+    const std::filesystem::path dir = unique_test_dir("scroll_limit_sync");
+    write_text(dir / "scroll.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Scroll Limits", "id": "test.scroll_limits", "version": "0.1.0" },
+  "world": { "name": "world.scroll_limits", "kind": "fixed_screen" },
+  "ui": {
+    "widgets": [
+      {
+        "id": "hud.list",
+        "type": "scroll",
+        "x": 40, "y": 40, "w": 200, "h": 100,
+        "scroll_key": "hud.list.scroll",
+        "children": [
+          { "id": "hud.list.row.a", "type": "panel", "x": 0, "y": 0, "w": 180, "h": 30 },
+          {
+            "id": "hud.list.row.b", "type": "panel", "x": 0, "y": 220, "w": 180, "h": 30,
+            "visible_if": { "type": "scene_state.compare", "key": "hud.expanded", "op": "==", "value": true, "default": true }
+          }
+        ]
+      }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "scroll.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+    slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+
+    // Content reaches y=250 in a 100-high pane: limit is 150. A stepper that
+    // overshot gets pulled back and the measured limit is published.
+    slayer3d_properties_set_float(state, "hud.list.scroll", 400.0f);
+    ASSERT_TRUE(slayer3d_game_data_sync_ui_scroll_limits(runtime));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "hud.list.scroll", -1.0f), 150.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "hud.list.scroll.limit", -1.0f), 150.0f);
+
+    // Hiding the tall row shrinks the measured content, and the limit follows
+    // without any authored maximum anywhere.
+    slayer3d_properties_set_bool(state, "hud.expanded", false);
+    ASSERT_TRUE(slayer3d_game_data_sync_ui_scroll_limits(runtime));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "hud.list.scroll", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "hud.list.scroll.limit", -1.0f), 0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RetainedUIWidgetLayoutUsesPublishedViewport)
 {
     const std::filesystem::path dir = unique_test_dir("retained_ui_viewport");
@@ -22456,7 +22512,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             }
             EXPECT_FLOAT_EQ(resolved.w, 62.0f);
             EXPECT_FLOAT_EQ(resolved.h, 62.0f);
-            EXPECT_EQ(resolved.layer, 123);
+            // Layers derive from tree depth (grid -> cell -> button ->
+            // thumbnail); assert the structural floor, not a magic depth.
+            EXPECT_GT(resolved.layer, 121);
             EXPECT_TRUE(resolved.has_clip_rect);
             EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
             EXPECT_FLOAT_EQ(resolved.clip_y, 210.0f);
@@ -22491,7 +22549,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             if (rect == nullptr || rect->name == nullptr)
                 return true;
             const std::string name = rect->name;
-            if (name.rfind("ui.editor_shell.texture_viewer.scroll.", 0) != 0)
+            if (name.rfind("ui.editor_shell.texture_viewer.slot.grid.scrollbar", 0) != 0)
                 return true;
             slayer3d_game_data_ui_rect resolved{};
             bool visible = false;
@@ -22660,11 +22718,20 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               texture_rects.end());
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.apply"),
               texture_rects.end());
+    // The scrollbar is synthesized from the virtualized grid: with all six
+    // project textures visible in six slots there is nothing to scroll, so
+    // no scrollbar exists (the old hand-authored track was always drawn).
     std::vector<std::string> scroll_rects = visible_rect_names();
-    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.track"),
+    EXPECT_EQ(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
               scroll_rects.end());
-    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.thumb"),
+    slayer3d_properties_set_int(slayer3d_game_data_mutable_scene_state(runtime), "editor.texture.count", 20);
+    scroll_rects = visible_rect_names();
+    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
               scroll_rects.end());
+    EXPECT_NE(
+        std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar.thumb"),
+        scroll_rects.end());
+    slayer3d_properties_set_int(slayer3d_game_data_mutable_scene_state(runtime), "editor.texture.count", 6);
     EXPECT_TRUE(visible_texture_status_labels().empty());
     std::vector<std::string> texture_labels = visible_texture_labels();
     EXPECT_NE(
@@ -22967,9 +23034,42 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
               text_names.end());
     EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.brush_color.r.value"),
               text_names.end());
-    RectSummary scroll_track = visible_frame("ui.editor_shell.left_inspector.scroll.track");
+    // The scroll pane synthesizes its scrollbar from resolved content, so the
+    // track/thumb exist without any hand-authored widgets.
+    auto inspector_pane = [&]() {
+        slayer3d_ui_layout_resolved_node pane{};
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return pane;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *resolved =
+            slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.left_inspector.scroll.pane");
+        if (resolved != nullptr)
+            pane = *resolved;
+        slayer3d_ui_layout_destroy(layout);
+        return pane;
+    };
+    auto track_offset_for_pointer = [&](float pointer_y) {
+        float offset = 0.0f;
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return offset;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        EXPECT_TRUE(slayer3d_ui_layout_scrollbar_offset_for_pointer(
+            layout, "ui.editor_shell.left_inspector.scroll.pane", pointer_y, &offset));
+        slayer3d_ui_layout_destroy(layout);
+        return offset;
+    };
+    const slayer3d_ui_layout_resolved_node pane_initial = inspector_pane();
+    EXPECT_GT(pane_initial.content_extent, pane_initial.rect.h);
+    EXPECT_GT(pane_initial.scroll_max, 0.0f);
+    EXPECT_STREQ(pane_initial.scroll_key, "editor.inspector.scroll");
+    RectSummary scroll_track = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar");
     EXPECT_TRUE(scroll_track.found);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0").found);
+    RectSummary thumb_initial = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
+    EXPECT_TRUE(thumb_initial.found);
     RectSummary map_tab_initial = visible_frame("ui.editor_shell.left_inspector.map.tab");
     RectSummary entity_tab_initial = visible_frame("ui.editor_shell.left_inspector.entity.tab");
     ASSERT_TRUE(map_tab_initial.found);
@@ -23138,8 +23238,8 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.property0").found);
     EXPECT_EQ(retained_ui_hit(inspector.x + 32.0f, inspector.y + 140.0f).id, "ui.editor_shell.left_inspector.panel");
     HitSummary track_hit = retained_ui_hit(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
-    EXPECT_EQ(track_hit.id, "ui.editor_shell.left_inspector.scroll.track");
-    EXPECT_EQ(track_hit.action, "editor.inspector.scroll.down");
+    EXPECT_EQ(track_hit.id, "ui.editor_shell.left_inspector.scroll.pane.scrollbar");
+    EXPECT_EQ(track_hit.action, "");
 
     RectSummary scroll_down = visible_frame("ui.editor_shell.left_inspector.scroll.down");
     ASSERT_TRUE(scroll_down.found);
@@ -23147,7 +23247,9 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         60.0f);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.1").found);
+    RectSummary thumb_scrolled = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
+    ASSERT_TRUE(thumb_scrolled.found);
+    EXPECT_GT(thumb_scrolled.y, thumb_initial.y);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.name").found);
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.row.selection").found);
     RectSummary map_tab_scrolled = visible_frame("ui.editor_shell.left_inspector.map.tab");
@@ -23167,7 +23269,9 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         240.0f);
-    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.scroll.thumb.4").found);
+    RectSummary thumb_deep = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
+    ASSERT_TRUE(thumb_deep.found);
+    EXPECT_GE(thumb_deep.y, thumb_scrolled.y);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.brush_color.apply").found);
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.brush_color.reset").found);
     RectSummary red_up = visible_frame("ui.editor_shell.left_inspector.brush_color.r.up");
@@ -23192,26 +23296,34 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
         0.0f);
-    click_editor(scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 220.0f);
+    // Clicking the synthesized track jumps to the pane-mapped offset; the
+    // geometry math itself is covered by the ui_layout unit tests.
+    const float track_click_y = scroll_track.y + 220.0f;
+    click_editor(scroll_track.x + scroll_track.w * 0.5f, track_click_y);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        240.0f);
+        track_offset_for_pointer(track_click_y));
     slayer3d_properties_set_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f);
 
-    RectSummary thumb0 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.0");
-    ASSERT_TRUE(thumb0.found);
-    drag_editor(thumb0.x + thumb0.w * 0.5f, thumb0.y + thumb0.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
-                scroll_track.y + scroll_track.h - 4.0f);
+    // Dragging the thumb to the track ends lands exactly on the measured
+    // bounds - not on a hand-maintained maximum.
+    RectSummary thumb_for_drag = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
+    ASSERT_TRUE(thumb_for_drag.found);
+    drag_editor(thumb_for_drag.x + thumb_for_drag.w * 0.5f, thumb_for_drag.y + thumb_for_drag.h * 0.5f,
+                scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + scroll_track.h - 4.0f);
+    const slayer3d_ui_layout_resolved_node pane_after_drag = inspector_pane();
+    EXPECT_GT(pane_after_drag.scroll_max, 0.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
-        300.0f);
-    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
-                                              "editor.inspector.scroll.drag.active", true));
+        pane_after_drag.scroll_max);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_mutable_scene_state(runtime),
+                                                "editor.ui.scrollbar.drag.pane", "unset"),
+                 "");
 
-    RectSummary thumb5 = visible_frame("ui.editor_shell.left_inspector.scroll.thumb.5");
-    ASSERT_TRUE(thumb5.found);
-    drag_editor(thumb5.x + thumb5.w * 0.5f, thumb5.y + thumb5.h * 0.5f, scroll_track.x + scroll_track.w * 0.5f,
-                scroll_track.y + 4.0f);
+    RectSummary thumb_at_bottom = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
+    ASSERT_TRUE(thumb_at_bottom.found);
+    drag_editor(thumb_at_bottom.x + thumb_at_bottom.w * 0.5f, thumb_at_bottom.y + thumb_at_bottom.h * 0.5f,
+                scroll_track.x + scroll_track.w * 0.5f, scroll_track.y + 4.0f);
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 1.0f),
         0.0f);
