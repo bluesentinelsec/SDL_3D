@@ -96,8 +96,8 @@ static bool editor_hit_is_console(const slayer3d_ui_layout_hit_region *hit)
 
 static bool editor_hit_is_inspector_scrollbar(const slayer3d_ui_layout_hit_region *hit)
 {
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.scroll.track") ||
-           editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.scroll.thumb.");
+    return editor_hit_id_has_prefix(hit,
+                                    "ui.editor_shell.left_inspector.scroll.pane" SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX);
 }
 
 static bool editor_hit_is_texture_scrollbar(const slayer3d_ui_layout_hit_region *hit)
@@ -187,15 +187,6 @@ float editor_clamp_float(float value, float min_value, float max_value)
     return value;
 }
 
-static float editor_round_to_step(float value, float step)
-{
-    if (step <= 0.0f)
-        return value;
-    const float normalized = value / step;
-    const float rounded = normalized >= 0.0f ? SDL_floorf(normalized + 0.5f) : SDL_ceilf(normalized - 0.5f);
-    return rounded * step;
-}
-
 static bool editor_screen_rect_contains(float x, float y, float w, float h, float mouse_x, float mouse_y)
 {
     return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
@@ -249,24 +240,14 @@ static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runt
     if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
         return false;
 
-    const slayer3d_ui_layout_hit_region *track =
-        editor_find_layout_hit_by_id(layout, "ui.editor_shell.left_inspector.scroll.track");
-    if (track == NULL)
+    /* The scroll pane owns extent, travel, and thumb math; drags just map
+     * the pointer through the pane's resolved geometry. */
+    float scroll = 0.0f;
+    if (!slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "ui.editor_shell.left_inspector.scroll.pane", mouse_y,
+                                                         &scroll))
+    {
         return false;
-
-    const float scroll_min = 0.0f;
-    const float scroll_max = 300.0f;
-    const float scroll_step = 60.0f;
-    const float thumb_h = 66.0f;
-    const float travel = track->rect.h - thumb_h;
-    if (travel <= 0.0f)
-        return false;
-
-    const float local_y = editor_clamp_float(mouse_y - track->rect.y - thumb_h * 0.5f, 0.0f, travel);
-    const float ratio = local_y / travel;
-    float scroll = scroll_min + ratio * (scroll_max - scroll_min);
-    scroll = editor_round_to_step(scroll, scroll_step);
-    scroll = editor_clamp_float(scroll, scroll_min, scroll_max);
+    }
     slayer3d_properties_set_float(runtime->scene_state, "editor.inspector.scroll", scroll);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "inspector scrolled");
     return true;

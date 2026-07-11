@@ -43,6 +43,14 @@ extern "C"
         SLAYER3D_UI_LAYOUT_NODE_SPACER,
         SLAYER3D_UI_LAYOUT_NODE_CONSOLE,
         SLAYER3D_UI_LAYOUT_NODE_IMAGE,
+        /**
+         * Vertical scroll pane. Children lay out in the pane's content
+         * coordinates; the pane clips them, measures their extent, clamps
+         * the requested offset into [0, extent - viewport], shifts the
+         * subtree, and synthesizes a proportional scrollbar when content
+         * overflows. Correctness lives in the container, not per child.
+         */
+        SLAYER3D_UI_LAYOUT_NODE_SCROLL,
     } slayer3d_ui_layout_node_type;
 
     /** @brief Optional layout axis applied to a node's direct children. */
@@ -121,6 +129,10 @@ extern "C"
         const char *image;
         /** @brief Preserve the source image aspect ratio inside the node rect. */
         bool preserve_aspect;
+        /** @brief Requested scroll offset for SLAYER3D_UI_LAYOUT_NODE_SCROLL nodes; clamped at resolve. */
+        float scroll_offset;
+        /** @brief Optional caller state key that owns this pane's scroll offset. */
+        const char *scroll_key;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -153,6 +165,14 @@ extern "C"
         float border_thickness;
         char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
         bool preserve_aspect;
+        /** @brief Applied (clamped) scroll offset for scroll panes. */
+        float scroll_offset;
+        /** @brief Maximum valid scroll offset: max(content extent - viewport, 0). */
+        float scroll_max;
+        /** @brief Measured content extent of a scroll pane in pane-content units. */
+        float content_extent;
+        /** @brief Caller state key that owns this pane's scroll offset, when authored. */
+        char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -281,6 +301,19 @@ extern "C"
     /** @brief Update retained widget hover/active state and return any activated action. */
     bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_input_state *input,
                                          slayer3d_ui_layout_activation *out_activation);
+
+    /** @brief Suffix appended to a scroll pane id for its synthesized scrollbar commands. */
+#define SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX ".scrollbar"
+
+    /**
+     * @brief Map a pointer y on a scroll pane's synthesized scrollbar to a scroll offset.
+     *
+     * Uses the pane's resolved geometry so callers never duplicate thumb or
+     * travel math. Returns false when @p pane_id is not a resolved scroll
+     * pane or its content does not overflow.
+     */
+    bool slayer3d_ui_layout_scrollbar_offset_for_pointer(const slayer3d_ui_layout_model *model, const char *pane_id,
+                                                         float pointer_y, float *out_offset);
 
 #ifdef __cplusplus
 }

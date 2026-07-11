@@ -353,6 +353,134 @@ TEST(SLAYER3DUI, RetainedGridLayoutRequiresColumns)
     slayer3d_ui_layout_destroy(layout);
 }
 
+static slayer3d_ui_layout_node_desc scroll_pane_desc(const char *id, float h, float scroll_offset)
+{
+    slayer3d_ui_layout_node_desc pane{};
+    pane.id = id;
+    pane.type = SLAYER3D_UI_LAYOUT_NODE_SCROLL;
+    pane.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    pane.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    pane.rect = {10.0f, 20.0f, 200.0f, h};
+    pane.scroll_offset = scroll_offset;
+    pane.scroll_key = "test.scroll";
+    return pane;
+}
+
+static slayer3d_ui_layout_node_desc scroll_row_desc(const char *id, const char *parent, float y, float h)
+{
+    slayer3d_ui_layout_node_desc row{};
+    row.id = id;
+    row.parent_id = parent;
+    row.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    row.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    row.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    row.rect = {0.0f, y, 180.0f, h};
+    return row;
+}
+
+TEST(SLAYER3DUI, ScrollPaneMeasuresClampsAndShiftsChildren)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    // Content: rows at y 0..250 inside a 100-high pane -> extent 250, max 150.
+    slayer3d_ui_layout_node_desc pane = scroll_pane_desc("pane", 100.0f, 60.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &pane));
+    slayer3d_ui_layout_node_desc top = scroll_row_desc("row.top", "pane", 0.0f, 30.0f);
+    slayer3d_ui_layout_node_desc bottom = scroll_row_desc("row.bottom", "pane", 220.0f, 30.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &top));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved_pane = slayer3d_ui_layout_find_resolved_node(layout, "pane");
+    ASSERT_NE(resolved_pane, nullptr);
+    EXPECT_FLOAT_EQ(resolved_pane->content_extent, 250.0f);
+    EXPECT_FLOAT_EQ(resolved_pane->scroll_max, 150.0f);
+    EXPECT_FLOAT_EQ(resolved_pane->scroll_offset, 60.0f);
+    EXPECT_STREQ(resolved_pane->scroll_key, "test.scroll");
+
+    // Children shift up by the applied offset and inherit the pane clip.
+    const slayer3d_ui_layout_resolved_node *resolved_top = slayer3d_ui_layout_find_resolved_node(layout, "row.top");
+    ASSERT_NE(resolved_top, nullptr);
+    EXPECT_FLOAT_EQ(resolved_top->rect.y, 20.0f - 60.0f);
+    EXPECT_TRUE(resolved_top->has_clip_rect);
+    EXPECT_FLOAT_EQ(resolved_top->clip_rect.y, 20.0f);
+    EXPECT_FLOAT_EQ(resolved_top->clip_rect.h, 100.0f);
+
+    // Requests past the content clamp to the measured maximum; negatives to 0.
+    slayer3d_ui_layout_clear(layout);
+    pane.scroll_offset = 500.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &pane));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &top));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    resolved_pane = slayer3d_ui_layout_find_resolved_node(layout, "pane");
+    ASSERT_NE(resolved_pane, nullptr);
+    EXPECT_FLOAT_EQ(resolved_pane->scroll_offset, 150.0f);
+
+    slayer3d_ui_layout_clear(layout);
+    pane.scroll_offset = -25.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &pane));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &top));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    resolved_pane = slayer3d_ui_layout_find_resolved_node(layout, "pane");
+    ASSERT_NE(resolved_pane, nullptr);
+    EXPECT_FLOAT_EQ(resolved_pane->scroll_offset, 0.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, ScrollPaneSynthesizesProportionalScrollbar)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc pane = scroll_pane_desc("pane", 100.0f, 75.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &pane));
+    slayer3d_ui_layout_node_desc bottom = scroll_row_desc("row.bottom", "pane", 220.0f, 30.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    // Track hugs the pane's right edge; thumb height is proportional to the
+    // visible fraction (100/250 of 100 = 40 >= minimum 24) and its position
+    // reflects offset 75 of max 150.
+    const slayer3d_ui_layout_render_command *track = find_render_command(layout, "pane.scrollbar");
+    ASSERT_NE(track, nullptr);
+    EXPECT_FLOAT_EQ(track->rect.x, 10.0f + 200.0f - 8.0f);
+    EXPECT_FLOAT_EQ(track->rect.y, 20.0f);
+    EXPECT_FLOAT_EQ(track->rect.h, 100.0f);
+    const slayer3d_ui_layout_render_command *thumb = find_render_command(layout, "pane.scrollbar.thumb");
+    ASSERT_NE(thumb, nullptr);
+    EXPECT_FLOAT_EQ(thumb->rect.h, 40.0f);
+    EXPECT_FLOAT_EQ(thumb->rect.y, 20.0f + (100.0f - 40.0f) * 0.5f);
+    const slayer3d_ui_layout_hit_region *track_hit = find_hit_region(layout, "pane.scrollbar");
+    ASSERT_NE(track_hit, nullptr);
+    EXPECT_STREQ(track_hit->owner_id, "pane");
+
+    // Pointer mapping inverts the same geometry: track center -> half of max.
+    float offset = 0.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "pane", 20.0f + 50.0f, &offset));
+    EXPECT_FLOAT_EQ(offset, 75.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "pane", 1000.0f, &offset));
+    EXPECT_FLOAT_EQ(offset, 150.0f);
+
+    // Content that fits produces no scrollbar and no pointer mapping.
+    slayer3d_ui_layout_clear(layout);
+    slayer3d_ui_layout_node_desc fits = scroll_pane_desc("pane", 400.0f, 10.0f);
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &fits));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved_fits = slayer3d_ui_layout_find_resolved_node(layout, "pane");
+    ASSERT_NE(resolved_fits, nullptr);
+    EXPECT_FLOAT_EQ(resolved_fits->scroll_max, 0.0f);
+    EXPECT_FLOAT_EQ(resolved_fits->scroll_offset, 0.0f);
+    EXPECT_EQ(find_render_command(layout, "pane.scrollbar"), nullptr);
+    EXPECT_FALSE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "pane", 100.0f, &offset));
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 {
     slayer3d_ui_layout_model *layout = nullptr;

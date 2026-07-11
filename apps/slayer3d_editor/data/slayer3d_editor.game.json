@@ -2351,14 +2351,14 @@
       {
         "signal": "signal.editor.inspector.scroll.up",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": -60.0, "default": 0.0, "min": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled up" }
         ]
       },
       {
         "signal": "signal.editor.inspector.scroll.down",
         "actions": [
-          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0, "max": 300.0 },
+          { "type": "scene_state.add", "key": "editor.inspector.scroll", "value": 60.0, "default": 0.0, "min": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector scrolled down" }
         ]
       },

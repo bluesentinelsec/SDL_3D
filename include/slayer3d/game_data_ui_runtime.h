@@ -90,6 +90,18 @@ extern "C"
                                                         void *userdata);
 
     /**
+     * @brief Clamp scroll-pane state keys against resolved content and publish limits.
+     *
+     * For every retained `scroll` widget with an authored `scroll_key`, the
+     * scene-state value is clamped into [0, scroll_max] as measured from the
+     * pane's resolved children, and `<scroll_key>.limit` is published so
+     * data-authored logic can bind against the real maximum. Hosts call this
+     * once per update after actions run; panes clamp their own rendering
+     * regardless, so this only keeps the owning state honest.
+     */
+    bool slayer3d_game_data_sync_ui_scroll_limits(slayer3d_game_data_runtime *runtime);
+
+    /**
      * @brief Publish the logical UI viewport used to resolve retained widget layouts.
      *
      * Hosts call this with the render context's logical size (once at startup

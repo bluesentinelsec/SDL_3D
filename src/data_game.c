@@ -1760,6 +1760,7 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
     if (!slayer3d_game_data_update_frame(&runtime->frame_state, &frame))
         return false;
 
+    (void)slayer3d_game_data_sync_ui_scroll_limits(runtime->data);
     managed_network_update_after_frame(runtime, ctx);
     data_game_apply_scene_mouse_capture(runtime, ctx);
     slayer3d_game_data_frame_state_record_update_cpu_time(

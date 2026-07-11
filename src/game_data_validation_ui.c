@@ -143,8 +143,8 @@ static bool is_json_scalar(yyjson_val *value)
 static bool ui_widget_type_valid(const char *type)
 {
     static const char *const types[] = {
-        "panel",    "toolbar",   "row",    "column",  "button",   "label",
-        "dropdown", "tab_strip", "spacer", "console", "log_view", "image",
+        "panel",     "toolbar", "row",     "column",   "button", "label",  "dropdown",
+        "tab_strip", "spacer",  "console", "log_view", "image",  "scroll",
     };
     if (type == NULL || type[0] == '\0')
         return false;
@@ -401,6 +401,14 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     }
     if (!ui_widget_optional_bool(node, "preserve_aspect"))
         return validation_error(ctx, path, "UI widget preserve_aspect must be a boolean when authored");
+    yyjson_val *scroll_key = obj_get(node, "scroll_key");
+    if (scroll_key != NULL && SDL_strcmp(type, "scroll") != 0)
+        return validation_error(ctx, path, "UI widget scroll_key is only supported by scroll widgets");
+    if (!ui_widget_optional_non_empty_string_len(node, "scroll_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+    {
+        return validation_error(ctx, path, "UI widget scroll_key must be a non-empty string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_ACTION_MAX);
+    }
     yyjson_val *columns = obj_get(node, "columns");
     if (columns == NULL)
         columns = obj_get(node, "grid_columns");

@@ -47,6 +47,40 @@ Supported node types are:
 - `button`, `dropdown`, and `tab_strip` for interactive controls.
 - `label`, `console`, and `log_view` for text output.
 - `image` for thumbnails and icons.
+- `scroll` for vertically scrolling panes.
+
+### Scroll Panes
+
+`scroll` containers own their children the way a Tk or GTK scrolled window
+does. Children are authored in the pane's content coordinates; the pane always
+clips them, measures the content extent from their resolved rectangles,
+clamps the requested offset into `[0, extent - viewport]`, shifts the whole
+subtree, and synthesizes a proportional scrollbar whenever content overflows.
+Nothing scroll-related is authored per child, and there is no authored
+maximum anywhere — rows hidden by `visible_if` (a collapsed section, an
+inactive tab) shrink the extent and the scrollbar follows automatically.
+
+`scroll_key` names the scene-state float that owns the offset. Steppers and
+data-authored actions adjust that key freely; the host calls
+`slayer3d_game_data_sync_ui_scroll_limits()` once per update to pull the key
+back inside the measured bounds and to publish `<scroll_key>.limit` for
+anything that wants to bind against the real maximum. Scrollbar drags map
+pointer positions through the pane's resolved geometry via
+`slayer3d_ui_layout_scrollbar_offset_for_pointer()`, so no C code carries
+thumb or travel math.
+
+```json
+{
+  "id": "ui.panel.rows",
+  "type": "scroll",
+  "x": 0, "y": 94, "w": 296, "h": 318,
+  "scroll_key": "editor.inspector.scroll",
+  "children": [
+    { "id": "ui.panel.rows.first", "type": "panel", "x": 12, "y": 0, "w": 272, "h": 26 },
+    { "id": "ui.panel.rows.second", "type": "panel", "x": 12, "y": 30, "w": 272, "h": 26 }
+  ]
+}
+```
 
 ### Grid Containers
 
