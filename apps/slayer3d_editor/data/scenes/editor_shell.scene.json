@@ -6239,40 +6239,12 @@
             "layer": 121
           },
           {
-            "id": "ui.editor_shell.texture_viewer.path.field",
-            "type": "button",
-            "x": 12,
-            "y": 118,
-            "w": 156,
-            "h": 24,
-            "text_scale": 0.30,
-            "format": "Path: %s",
-            "bindings": [{ "type": "scene_state", "key": "editor.texture.path.display", "default": "" }],
-            "interactive": true,
-            "action": "editor.texture.focus.path",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.edit.focus", "op": "==", "value": "path", "default": "" },
-            "layer": 121
-          },
-          {
-            "id": "ui.editor_shell.texture_viewer.path.apply",
-            "type": "button",
-            "x": 174,
-            "y": 118,
-            "w": 52,
-            "h": 24,
-            "text": "Apply",
-            "text_scale": 0.34,
-            "interactive": true,
-            "action": "editor.texture.path.apply",
-            "layer": 121
-          },
-          {
             "id": "ui.editor_shell.texture_viewer.list.panel",
             "type": "panel",
             "x": 10,
-            "y": 154,
+            "y": 118,
             "w": 218,
-            "h": 354,
+            "h": 390,
             "layer": 121,
             "clip_children": true,
             "children": [
@@ -6384,40 +6356,12 @@
           },
           { "id": "ui.editor_shell.skybox_panel.active.label", "type": "label", "x": 12, "y": 48, "w": 214, "h": 20, "format": "Active: %s", "bindings": [{ "type": "scene_state", "key": "editor.sky.active", "default": "default" }], "text_scale": 0.40, "align": "left", "layer": 141 },
           {
-            "id": "ui.editor_shell.skybox_panel.path.field",
-            "type": "button",
-            "x": 12,
-            "y": 74,
-            "w": 156,
-            "h": 24,
-            "text_scale": 0.30,
-            "format": "Path: %s",
-            "bindings": [{ "type": "scene_state", "key": "editor.sky.path.display", "default": "" }],
-            "interactive": true,
-            "action": "editor.sky.focus.path",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.sky.edit.focus", "op": "==", "value": "path", "default": "" },
-            "layer": 141
-          },
-          {
-            "id": "ui.editor_shell.skybox_panel.path.apply",
-            "type": "button",
-            "x": 174,
-            "y": 74,
-            "w": 52,
-            "h": 24,
-            "text": "Apply",
-            "text_scale": 0.34,
-            "interactive": true,
-            "action": "editor.sky.path.apply.request",
-            "layer": 141
-          },
-          {
             "id": "ui.editor_shell.skybox_panel.list.panel",
             "type": "panel",
             "x": 10,
-            "y": 106,
+            "y": 74,
             "w": 218,
-            "h": 330,
+            "h": 362,
             "layer": 141,
             "clip_children": true,
             "children": [
@@ -8140,11 +8084,11 @@
         "image": "image.editor_shell.sky.slot_0",
         "layer": 143,
         "x": 1048,
-        "y": 210,
+        "y": 178,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8161,11 +8105,11 @@
         "image": "image.editor_shell.sky.slot_1",
         "layer": 143,
         "x": 1048,
-        "y": 263,
+        "y": 231,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8182,11 +8126,11 @@
         "image": "image.editor_shell.sky.slot_2",
         "layer": 143,
         "x": 1048,
-        "y": 316,
+        "y": 284,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8203,11 +8147,11 @@
         "image": "image.editor_shell.sky.slot_3",
         "layer": 143,
         "x": 1048,
-        "y": 369,
+        "y": 337,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8224,11 +8168,11 @@
         "image": "image.editor_shell.sky.slot_4",
         "layer": 143,
         "x": 1048,
-        "y": 422,
+        "y": 390,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8245,11 +8189,11 @@
         "image": "image.editor_shell.sky.slot_5",
         "layer": 143,
         "x": 1048,
-        "y": 475,
+        "y": 443,
         "w": 40,
         "h": 40,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 198, "w": 218, "h": 330 },
+        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8266,11 +8210,11 @@
         "image": "image.editor_shell.texture.slot_0",
         "layer": 123,
         "x": 1058,
-        "y": 266,
+        "y": 230,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8285,11 +8229,11 @@
         "image": "image.editor_shell.texture.slot_1",
         "layer": 123,
         "x": 1154,
-        "y": 266,
+        "y": 230,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8304,11 +8248,11 @@
         "image": "image.editor_shell.texture.slot_2",
         "layer": 123,
         "x": 1058,
-        "y": 376,
+        "y": 340,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8323,11 +8267,11 @@
         "image": "image.editor_shell.texture.slot_3",
         "layer": 123,
         "x": 1154,
-        "y": 376,
+        "y": 340,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8342,11 +8286,11 @@
         "image": "image.editor_shell.texture.slot_4",
         "layer": 123,
         "x": 1058,
-        "y": 486,
+        "y": 450,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [
@@ -8361,11 +8305,11 @@
         "image": "image.editor_shell.texture.slot_5",
         "layer": 123,
         "x": 1154,
-        "y": 486,
+        "y": 450,
         "w": 62,
         "h": 62,
         "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 246, "w": 218, "h": 354 },
+        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
         "visible_if": {
           "type": "all",
           "conditions": [

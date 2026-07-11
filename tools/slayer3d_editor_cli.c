@@ -35,12 +35,8 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         out,
         "Usage:\n"
         "  %s [--media-path <dir>]\n"
-        "  %s new --project <project-dir-or-json> --output <level.json> [--media-path <dir>] [--texture-path <dir>] "
-        "[--model-path <dir>] "
-        "[--overwrite]\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--media-path <dir>] [--overwrite]\n"
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--media-path <dir>] "
-        "[--texture-path <dir>] "
-        "[--model-path <dir>] "
         "[--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
         "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact] [--output <file>]\n"
@@ -55,7 +51,6 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "\n"
         "Media defaults to ./media when present. --media-path overrides the session media root for textures, models, "
         "sprites, skyboxes, liquids, and effects.\n"
-        "--texture-path, --model-path, and --skybox-path are deprecated compatibility overrides.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
         program, program, program, program, program);
@@ -594,12 +589,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
     struct arg_str *media_path =
         arg_str0(NULL, "media-path", "<dir>", "authoritative media directory for this editor session");
-    struct arg_str *texture_path =
-        arg_str0(NULL, "texture-path", "<dir>", "authoritative texture directory for this editor session");
-    struct arg_str *model_path =
-        arg_str0(NULL, "model-path", "<dir>", "authoritative actor model directory for this editor session");
-    struct arg_str *skybox_path =
-        arg_str0(NULL, "skybox-path", "<dir>", "authoritative skybox directory for this editor session");
     struct arg_int *max_dynamic_lights =
         arg_int0(NULL, "max-dynamic-lights", "<n>", "dynamic/runtime light budget for lighting-plan");
     struct arg_int *max_static_lights =
@@ -619,9 +608,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
                         input,
                         output,
                         media_path,
-                        texture_path,
-                        model_path,
-                        skybox_path,
                         max_dynamic_lights,
                         max_static_lights,
                         preview_quality,
@@ -735,9 +721,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->input_path = input->count > 0 ? input->sval[0] : NULL;
     args->output_path = output->count > 0 ? output->sval[0] : NULL;
     args->media_path = media_path->count > 0 ? media_path->sval[0] : NULL;
-    args->texture_path = texture_path->count > 0 ? texture_path->sval[0] : NULL;
-    args->model_path = model_path->count > 0 ? model_path->sval[0] : NULL;
-    args->skybox_path = skybox_path->count > 0 ? skybox_path->sval[0] : NULL;
     args->overwrite = overwrite->count > 0;
     args->lighting_preview_quality = preview_quality->count > 0;
     args->lighting_final_quality = final_quality->count > 0;
@@ -751,11 +734,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     {
         if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
         {
-            fprintf(out,
-                    "%s: default editor launch only accepts --media-path, --texture-path, --model-path, and "
-                    "--skybox-path; use "
-                    "'new' or 'open' for "
-                    "map paths.\n",
+            fprintf(out, "%s: default editor launch only accepts --media-path; use 'new' or 'open' for map paths.\n",
                     program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
@@ -763,33 +742,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->media_path != NULL && args->media_path[0] == '\0')
         {
             fprintf(out, "%s: --media-path must be non-empty when present.\n", program);
-            arg_freetable(argtable, SDL_arraysize(argtable));
-            return SLAYER3D_TOOL_CLI_ERROR;
-        }
-        if (args->texture_path != NULL && args->texture_path[0] == '\0')
-        {
-            fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
-            arg_freetable(argtable, SDL_arraysize(argtable));
-            return SLAYER3D_TOOL_CLI_ERROR;
-        }
-        if (args->model_path != NULL && args->model_path[0] == '\0')
-        {
-            fprintf(out, "%s: --model-path must be non-empty when present.\n", program);
-            arg_freetable(argtable, SDL_arraysize(argtable));
-            return SLAYER3D_TOOL_CLI_ERROR;
-        }
-        if (args->skybox_path != NULL && args->skybox_path[0] == '\0')
-        {
-            fprintf(out, "%s: --skybox-path must be non-empty when present.\n", program);
-            arg_freetable(argtable, SDL_arraysize(argtable));
-            return SLAYER3D_TOOL_CLI_ERROR;
-        }
-        if (args->media_path != NULL && args->media_path[0] != '\0' &&
-            ((args->texture_path != NULL && args->texture_path[0] != '\0') ||
-             (args->model_path != NULL && args->model_path[0] != '\0') ||
-             (args->skybox_path != NULL && args->skybox_path[0] != '\0')))
-        {
-            fprintf(out, "%s: --media-path cannot be combined with per-tool media overrides.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -817,8 +769,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || media_path->count > 0 || texture_path->count > 0 || model_path->count > 0 ||
-            skybox_path->count > 0 || overwrite->count > 0)
+        if (project->count > 0 || media_path->count > 0 || overwrite->count > 0)
         {
             fprintf(out, "%s: 'lighting-plan' only accepts --input, --output, and lighting budget/quality options.\n",
                     program);
@@ -867,8 +818,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || output->count > 0 || media_path->count > 0 || texture_path->count > 0 ||
-            model_path->count > 0 || skybox_path->count > 0 || max_dynamic_lights->count > 0 ||
+        if (project->count > 0 || output->count > 0 || media_path->count > 0 || max_dynamic_lights->count > 0 ||
             max_static_lights->count > 0 || preview_quality->count > 0 || final_quality->count > 0 ||
             no_dynamic_preview->count > 0 || manifest->count > 0 || static_artifact->count > 0 || overwrite->count > 0)
         {
@@ -922,34 +872,6 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
-    if (args->texture_path != NULL && args->texture_path[0] == '\0')
-    {
-        fprintf(out, "%s: --texture-path must be non-empty when present.\n", program);
-        arg_freetable(argtable, SDL_arraysize(argtable));
-        return SLAYER3D_TOOL_CLI_ERROR;
-    }
-    if (args->media_path != NULL && args->media_path[0] != '\0' &&
-        ((args->texture_path != NULL && args->texture_path[0] != '\0') ||
-         (args->model_path != NULL && args->model_path[0] != '\0') ||
-         (args->skybox_path != NULL && args->skybox_path[0] != '\0')))
-    {
-        fprintf(out, "%s: --media-path cannot be combined with per-tool media overrides.\n", program);
-        arg_freetable(argtable, SDL_arraysize(argtable));
-        return SLAYER3D_TOOL_CLI_ERROR;
-    }
-    if (args->model_path != NULL && args->model_path[0] == '\0')
-    {
-        fprintf(out, "%s: --model-path must be non-empty when present.\n", program);
-        arg_freetable(argtable, SDL_arraysize(argtable));
-        return SLAYER3D_TOOL_CLI_ERROR;
-    }
-    if (args->skybox_path != NULL && args->skybox_path[0] == '\0')
-    {
-        fprintf(out, "%s: --skybox-path must be non-empty when present.\n", program);
-        arg_freetable(argtable, SDL_arraysize(argtable));
-        return SLAYER3D_TOOL_CLI_ERROR;
-    }
-
     arg_freetable(argtable, SDL_arraysize(argtable));
     return SLAYER3D_TOOL_CLI_OK;
 }
@@ -1238,32 +1160,6 @@ void slayer3d_editor_project_destroy(slayer3d_editor_project *project)
     SDL_zero(*project);
 }
 
-static bool editor_override_asset_source(slayer3d_editor_asset_source *source, const char *path, const char *label,
-                                         char *error_buffer, int error_buffer_size)
-{
-    if (source == NULL || path == NULL || path[0] == '\0')
-        return true;
-    char *absolute_path = path_make_absolute_tool(path);
-    if (absolute_path == NULL)
-    {
-        editor_set_errorf(error_buffer, error_buffer_size, "failed to resolve %s path override", label);
-        return false;
-    }
-    char *relative_path = SDL_strdup(path);
-    path_normalize_relative_separators_tool(relative_path);
-    if (relative_path == NULL)
-    {
-        SDL_free(absolute_path);
-        editor_set_errorf(error_buffer, error_buffer_size, "failed to allocate %s path override", label);
-        return false;
-    }
-    editor_asset_source_destroy(source);
-    source->path = absolute_path;
-    source->relative_path = relative_path;
-    source->available = editor_asset_source_available(absolute_path);
-    return true;
-}
-
 static bool editor_set_media_child_source(slayer3d_editor_asset_source *source, const char *media_root,
                                           const char *media_relative_root, const char *leaf)
 {
@@ -1391,31 +1287,6 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
         out_launch->owns_asset_sources = true;
     }
 
-    const bool has_texture_override = args->texture_path != NULL && args->texture_path[0] != '\0';
-    const bool has_model_override = args->model_path != NULL && args->model_path[0] != '\0';
-    const bool has_skybox_override = args->skybox_path != NULL && args->skybox_path[0] != '\0';
-    if (has_texture_override || has_model_override || has_skybox_override)
-    {
-        if (!out_launch->owns_asset_sources &&
-            !editor_asset_sources_copy(&project->asset_sources, &out_launch->owned_asset_sources))
-        {
-            editor_set_error(error_buffer, error_buffer_size, "failed to allocate asset source overrides");
-            slayer3d_editor_launch_destroy(out_launch);
-            return false;
-        }
-        out_launch->asset_sources = &out_launch->owned_asset_sources;
-        out_launch->owns_asset_sources = true;
-        if (!editor_override_asset_source(&out_launch->owned_asset_sources.textures, args->texture_path, "texture",
-                                          error_buffer, error_buffer_size) ||
-            !editor_override_asset_source(&out_launch->owned_asset_sources.skyboxes, args->skybox_path, "skybox",
-                                          error_buffer, error_buffer_size) ||
-            !editor_override_asset_source(&out_launch->owned_asset_sources.models, args->model_path, "model",
-                                          error_buffer, error_buffer_size))
-        {
-            slayer3d_editor_launch_destroy(out_launch);
-            return false;
-        }
-    }
     return true;
 }
 
@@ -1442,24 +1313,6 @@ bool slayer3d_editor_validate_paths(const slayer3d_editor_args *args, const slay
     {
         editor_set_errorf(error_buffer, error_buffer_size, "media path '%s' is not an existing directory",
                           args->media_path);
-        return false;
-    }
-    if (args->texture_path != NULL && args->texture_path[0] != '\0' && !directory_exists_tool(args->texture_path))
-    {
-        editor_set_errorf(error_buffer, error_buffer_size, "texture path '%s' is not an existing directory",
-                          args->texture_path);
-        return false;
-    }
-    if (args->model_path != NULL && args->model_path[0] != '\0' && !directory_exists_tool(args->model_path))
-    {
-        editor_set_errorf(error_buffer, error_buffer_size, "model path '%s' is not an existing directory",
-                          args->model_path);
-        return false;
-    }
-    if (args->skybox_path != NULL && args->skybox_path[0] != '\0' && !directory_exists_tool(args->skybox_path))
-    {
-        editor_set_errorf(error_buffer, error_buffer_size, "skybox path '%s' is not an existing directory",
-                          args->skybox_path);
         return false;
     }
     bool is_file = false;

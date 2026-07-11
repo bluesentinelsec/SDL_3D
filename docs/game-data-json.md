@@ -1842,10 +1842,12 @@ brush textures.
 }
 ```
 
-Use `editor.texture.path.apply` from GUI controls that let users change the
-authoritative texture directory at runtime. It validates the path stored in
-`editor.texture.path.input`, updates `editor.asset_source.textures.path`,
-`.relative`, and `.available`, and writes a status message for the editor UI.
+Use `editor.media.path.apply` from GUI controls that let users change the
+authoritative media directory at runtime. It validates the path stored in
+`editor.media.path.input`, updates `editor.media.*` and each
+`editor.asset_source.<kind>.*` child source, and writes a status message for the
+editor UI. The texture tool reads from the media root's `textures/` subtree
+rather than maintaining a separate texture directory.
 
 Use `editor.texture.select_index` to choose a scanned texture row by index. The
 action updates `editor.palette.material.cursor`, `editor.texture.material`, and

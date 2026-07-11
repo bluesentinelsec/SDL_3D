@@ -18180,6 +18180,51 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.skyboxes.status", ""),
                  "8 skyboxes found");
 
+    emit_signal("signal.editor.sky.panel.toggle");
+    struct SkyThumbnailSummary
+    {
+        std::string name;
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+    };
+    struct SkyThumbnailCapture
+    {
+        slayer3d_game_data_runtime *runtime = nullptr;
+        std::vector<SkyThumbnailSummary> thumbnails;
+    } sky_thumbnail_capture{runtime, {}};
+    auto collect_sky_thumbnail = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+        auto *capture = static_cast<SkyThumbnailCapture *>(userdata);
+        if (image == nullptr || image->name == nullptr)
+            return true;
+        const std::string name = image->name;
+        if (name.rfind("ui.editor_shell.skybox_panel.", 0) != 0 || name.find(".thumbnail") == std::string::npos)
+            return true;
+        slayer3d_game_data_ui_image resolved{};
+        bool visible = false;
+        if (!slayer3d_game_data_resolve_ui_image(capture->runtime, image, nullptr, &resolved, &visible) || !visible)
+            return true;
+        EXPECT_FLOAT_EQ(resolved.w, 40.0f);
+        EXPECT_FLOAT_EQ(resolved.h, 40.0f);
+        EXPECT_TRUE(resolved.has_clip_rect);
+        EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_y, 166.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_h, 362.0f);
+        EXPECT_GE(resolved.x, resolved.clip_x);
+        EXPECT_GE(resolved.y, resolved.clip_y);
+        EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
+        EXPECT_LE(resolved.y + resolved.h, resolved.clip_y + resolved.clip_h);
+        capture->thumbnails.push_back({resolved.name, resolved.x, resolved.y, resolved.w, resolved.h});
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect_sky_thumbnail, &sky_thumbnail_capture));
+    ASSERT_EQ(sky_thumbnail_capture.thumbnails.size(), 6U);
+    EXPECT_STREQ(sky_thumbnail_capture.thumbnails[0].name.c_str(), "ui.editor_shell.skybox_panel.slot0.thumbnail");
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].x, 1048.0f);
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].y, 178.0f);
+
     emit_signal("signal.editor.sky.select_slot.0");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.selected.name", ""), "afternoon");
 
@@ -21998,9 +22043,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             EXPECT_EQ(resolved.layer, 123);
             EXPECT_TRUE(resolved.has_clip_rect);
             EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
-            EXPECT_FLOAT_EQ(resolved.clip_y, 246.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_y, 210.0f);
             EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
-            EXPECT_FLOAT_EQ(resolved.clip_h, 354.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_h, 390.0f);
             EXPECT_GE(resolved.x, resolved.clip_x);
             EXPECT_GE(resolved.y, resolved.clip_y);
             EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
@@ -22174,16 +22219,16 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         find_thumbnail("ui.editor_shell.texture_viewer.wall_metal.thumbnail");
     ASSERT_NE(wall_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(wall_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(wall_thumbnail->y, 266.0f);
+    EXPECT_FLOAT_EQ(wall_thumbnail->y, 230.0f);
     const TextureThumbnailSummary *rock_thumbnail =
         find_thumbnail("ui.editor_shell.texture_viewer.rock_floor.thumbnail");
     ASSERT_NE(rock_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(rock_thumbnail->x, 1154.0f);
-    EXPECT_FLOAT_EQ(rock_thumbnail->y, 266.0f);
+    EXPECT_FLOAT_EQ(rock_thumbnail->y, 230.0f);
     const TextureThumbnailSummary *lava_thumbnail = find_thumbnail("ui.editor_shell.texture_viewer.lava.thumbnail");
     ASSERT_NE(lava_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(lava_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(lava_thumbnail->y, 486.0f);
+    EXPECT_FLOAT_EQ(lava_thumbnail->y, 450.0f);
     std::vector<std::string> thumbnails;
     for (const TextureThumbnailSummary &thumbnail : thumbnail_summaries)
         thumbnails.emplace_back(thumbnail.name);
@@ -22198,10 +22243,6 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.field"),
               texture_rects.end());
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.apply"),
-              texture_rects.end());
-    EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.path.field"),
-              texture_rects.end());
-    EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.path.apply"),
               texture_rects.end());
     std::vector<std::string> scroll_rects = visible_rect_names();
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.track"),
@@ -23560,6 +23601,9 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
 
     slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", "/tmp/slayer3d-textures");
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", "/tmp/slayer3d-models");
+    slayer3d_properties_set_string(scene_state, "editor.media.path", "/tmp/slayer3d-media");
+    slayer3d_properties_set_string(scene_state, "editor.media.relative", "media");
+    slayer3d_properties_set_bool(scene_state, "editor.media.available", true);
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
     slayer3d_properties_set_bool(scene_state, "editor.texture.viewer.active", true);
     slayer3d_properties_set_bool(scene_state, "editor.actor.viewer.active", true);
@@ -23616,6 +23660,9 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  "/tmp/slayer3d-textures");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.models.path", ""),
                  "/tmp/slayer3d-models");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.path", ""), "/tmp/slayer3d-media");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.media.relative", ""), "media");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.media.available", false));
 
     slayer3d_properties_set_string(scene_state, "editor.file.open.path", save_path.string().c_str());
     slayer3d_properties_set_bool(scene_state, "editor.file.menu.open", true);
@@ -23703,77 +23750,6 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(texture_dir.parent_path());
-}
-
-TEST(GameDataRuntime, EditorTexturePathApplyRescansAndInvalidatesStaleProjectTextures)
-{
-    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
-    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
-    const std::filesystem::path root_dir = unique_test_dir("editor_texture_path_apply");
-    const std::filesystem::path old_dir = root_dir / "old_textures";
-    const std::filesystem::path new_dir = root_dir / "new_textures";
-    std::filesystem::create_directories(old_dir);
-    std::filesystem::create_directories(new_dir);
-    write_text(old_dir / "old-panel.png", "fake texture bytes");
-    write_text(new_dir / "new-panel.png", "fake texture bytes");
-
-    slayer3d_game_session *session = nullptr;
-    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
-    char error[512]{};
-    slayer3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
-        << error;
-
-    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
-    ASSERT_NE(bus, nullptr);
-    auto emit_signal = [&](const char *name) {
-        const int signal = slayer3d_game_data_find_signal(runtime, name);
-        ASSERT_GE(signal, 0) << name;
-        slayer3d_signal_emit(bus, signal, nullptr);
-    };
-
-    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
-    ASSERT_NE(scene_state, nullptr);
-    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.path", old_dir.string().c_str());
-    slayer3d_properties_set_string(scene_state, "editor.asset_source.textures.relative", "old_textures");
-    emit_signal("signal.editor.texture.refresh");
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
-                 "mat.project.texture.old_panel");
-
-    slayer3d_properties_set_string(scene_state, "editor.texture.path.input", new_dir.string().c_str());
-    emit_signal("signal.editor.texture.path.apply");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.textures.path", ""),
-                 new_dir.string().c_str());
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.count", -1), 1);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.texture.invalidated_count", -1), 1);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.slot.0.material", ""),
-                 "mat.project.texture.new_panel");
-
-    slayer3d_game_data_brush_world world{};
-    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
-    bool saw_old = false;
-    bool saw_new = false;
-    for (int i = 0; i < world.material_count; ++i)
-    {
-        const slayer3d_game_data_brush_material &material = world.materials[i];
-        if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.old_panel") == 0)
-        {
-            saw_old = true;
-            EXPECT_EQ(material.texture, nullptr);
-        }
-        if (material.name != nullptr && SDL_strcmp(material.name, "mat.project.texture.new_panel") == 0)
-        {
-            saw_new = true;
-            EXPECT_STREQ(material.texture, "asset://new_textures/new-panel.png");
-        }
-    }
-    EXPECT_TRUE(saw_old);
-    EXPECT_TRUE(saw_new);
-
-    slayer3d_game_data_destroy(runtime);
-    slayer3d_game_session_destroy(session);
-    remove_test_dir(root_dir);
 }
 
 TEST(GameDataRuntime, EditorMediaPathApplyKeepsChildSourcesRelativeToMediaRoot)

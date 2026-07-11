@@ -200,7 +200,7 @@ static const editor_text_edit_context editor_property_edit_context = {
     editor_property_edit_on_changed,
 };
 
-/* Texture viewer search/path fields. */
+/* Texture viewer search field. */
 
 static void editor_texture_edit_on_changed(slayer3d_game_data_runtime *runtime, const editor_text_field_binding *field)
 {
@@ -215,8 +215,6 @@ static void editor_texture_edit_on_changed(slayer3d_game_data_runtime *runtime, 
 static const editor_text_field_binding editor_texture_edit_fields[] = {
     {"search", "editor.texture.search", "editor.texture.search.display", 96U, "signal.editor.texture.search.apply",
      "editing texture search"},
-    {"path", "editor.texture.path.input", "editor.texture.path.display", 240U, "signal.editor.texture.path.apply",
-     "editing texture path"},
 };
 
 static const editor_text_edit_context editor_texture_edit_context = {
@@ -228,24 +226,6 @@ static const editor_text_edit_context editor_texture_edit_context = {
     true,
     true,
     editor_texture_edit_on_changed,
-};
-
-/* Skybox panel path field. */
-
-static const editor_text_field_binding editor_sky_edit_fields[] = {
-    {"path", "editor.sky.path.input", "editor.sky.path.display", 240U, "signal.editor.sky.path.apply",
-     "editing skybox path"},
-};
-
-static const editor_text_edit_context editor_sky_edit_context = {
-    "editor.sky.edit.focus",
-    "editor.sky.edit.replace_on_text",
-    editor_sky_edit_fields,
-    SDL_arraysize(editor_sky_edit_fields),
-    "skybox edit cancelled",
-    true,
-    true,
-    NULL,
 };
 
 /* Global panel data key/value fields. */
@@ -283,11 +263,6 @@ bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime)
     return editor_text_edit_active_field(runtime, &editor_global_edit_context) != NULL;
 }
 
-bool editor_sky_edit_has_focus(const slayer3d_game_data_runtime *runtime)
-{
-    return editor_text_edit_active_field(runtime, &editor_sky_edit_context) != NULL;
-}
-
 bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime)
 {
     return editor_update_text_edit(runtime, &editor_property_edit_context);
@@ -303,11 +278,6 @@ bool editor_update_global_text_edit(slayer3d_game_data_runtime *runtime)
     return editor_update_text_edit(runtime, &editor_global_edit_context);
 }
 
-bool editor_update_sky_text_edit(slayer3d_game_data_runtime *runtime)
-{
-    return editor_update_text_edit(runtime, &editor_sky_edit_context);
-}
-
 void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
 {
     editor_text_edit_refresh_displays(runtime, &editor_texture_edit_context);
@@ -316,9 +286,4 @@ void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
 void editor_update_global_edit_display(slayer3d_game_data_runtime *runtime)
 {
     editor_text_edit_refresh_displays(runtime, &editor_global_edit_context);
-}
-
-void editor_update_sky_edit_display(slayer3d_game_data_runtime *runtime)
-{
-    editor_text_edit_refresh_displays(runtime, &editor_sky_edit_context);
 }

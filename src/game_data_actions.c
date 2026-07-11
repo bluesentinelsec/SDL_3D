@@ -1462,9 +1462,6 @@ static bool execute_editor_texture_scan_action(slayer3d_game_data_runtime *runti
     }
     if (relative_directory == NULL || relative_directory[0] == '\0')
         relative_directory = fallback_relative_directory != NULL ? fallback_relative_directory : "";
-    if (slayer3d_properties_get_string(runtime->scene_state, "editor.texture.path.input", "")[0] == '\0')
-        slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.input", directory);
-
     editor_texture_clear_slots(runtime->scene_state, slot_count);
     slayer3d_game_data_runtime_collection_clear(runtime, collection);
     slayer3d_game_data_runtime_collection_clear(runtime, catalog_collection);
@@ -1607,47 +1604,6 @@ static bool execute_editor_texture_filter_action(slayer3d_game_data_runtime *run
     return true;
 }
 
-static bool execute_editor_texture_path_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
-{
-    if (runtime == NULL || runtime->scene_state == NULL)
-        return false;
-    const char *path_key = json_string(action, "path_key", "editor.texture.path.input");
-    const char *directory_key = json_string(action, "directory_key", "editor.asset_source.textures.path");
-    const char *relative_directory_key =
-        json_string(action, "relative_directory_key", "editor.asset_source.textures.relative");
-    const char *available_key = json_string(action, "available_key", "editor.asset_source.textures.available");
-    const char *status_key = json_string(action, "status_key", "editor.texture.path.status");
-    const char *path = slayer3d_properties_get_string(runtime->scene_state, path_key, "");
-    char *absolute_path = editor_path_make_absolute_from_cwd(path);
-    SDL_PathInfo info;
-    SDL_zero(info);
-    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
-                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
-    if (!valid_directory)
-    {
-        slayer3d_properties_set_bool(runtime->scene_state, available_key, false);
-        slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path is not a directory");
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       "texture path is not a directory");
-        editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture path is not a directory", false,
-                                           false);
-        SDL_free(absolute_path);
-        return true;
-    }
-
-    char *relative_path = editor_relative_directory_for_source_path(runtime, path, absolute_path);
-    slayer3d_properties_set_string(runtime->scene_state, directory_key, absolute_path);
-    slayer3d_properties_set_string(runtime->scene_state, relative_directory_key,
-                                   relative_path != NULL ? relative_path : "textures");
-    slayer3d_properties_set_bool(runtime->scene_state, available_key, true);
-    slayer3d_properties_set_string(runtime->scene_state, status_key, "texture path updated");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture path updated");
-    editor_asset_source_set_diagnostic(runtime->scene_state, "textures", "texture path updated", true, false);
-    SDL_free(relative_path);
-    SDL_free(absolute_path);
-    return true;
-}
-
 static bool editor_media_set_child_source(slayer3d_game_data_runtime *runtime, const char *name, const char *media_root,
                                           const char *media_relative_root, const char *leaf)
 {
@@ -1757,12 +1713,6 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
     (void)editor_media_set_child_source(runtime, "effects", absolute_path, media_relative_root, "effects");
     editor_media_refresh_missing_state(runtime);
 
-    char *texture_path = editor_path_join(absolute_path, "textures");
-    char *skybox_path = editor_path_join(absolute_path, "skyboxes");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.texture.path.input",
-                                   texture_path != NULL ? texture_path : absolute_path);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.sky.path.input",
-                                   skybox_path != NULL ? skybox_path : absolute_path);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
     if (was_startup_prompt)
     {
@@ -1771,8 +1721,6 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
     }
     slayer3d_properties_set_string(runtime->scene_state, status_key, "media path updated");
     editor_publish_console_message(runtime, "Media path updated");
-    SDL_free(texture_path);
-    SDL_free(skybox_path);
     SDL_free(relative_path);
     SDL_free(absolute_path);
     return true;
@@ -2266,35 +2214,6 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     SDL_snprintf(message, sizeof(message), "Skybox applied: %s%s", name, layer_count > 0 ? " (animated)" : "");
     editor_publish_console_message(runtime, message);
     return true;
-}
-
-static bool execute_editor_sky_path_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
-{
-    if (runtime == NULL || runtime->scene_state == NULL)
-        return false;
-    slayer3d_properties *state = runtime->scene_state;
-    const char *path = slayer3d_properties_get_string(state, "editor.sky.path.input", "");
-    char *absolute_path = editor_path_make_absolute_from_cwd(path);
-    SDL_PathInfo info;
-    SDL_zero(info);
-    const bool valid_directory = absolute_path != NULL && absolute_path[0] != '\0' &&
-                                 SDL_GetPathInfo(absolute_path, &info) && info.type == SDL_PATHTYPE_DIRECTORY;
-    if (!valid_directory)
-    {
-        slayer3d_properties_set_string(state, "editor.sky.status", "skybox path is not a directory");
-        editor_publish_console_message(runtime, "Skybox path is not a directory");
-        SDL_free(absolute_path);
-        return true;
-    }
-
-    slayer3d_properties_set_string(state, "editor.asset_source.skyboxes.path", absolute_path);
-    slayer3d_properties_set_bool(state, "editor.asset_source.skyboxes.available", true);
-    slayer3d_properties_set_int(state, "editor.sky.scroll", 0);
-    slayer3d_properties_set_int(state, "editor.sky.selected_index", -1);
-    slayer3d_properties_set_string(state, "editor.sky.selected.name", "");
-    SDL_free(absolute_path);
-    editor_publish_console_message(runtime, "Skybox path updated");
-    return execute_editor_sky_scan_action(runtime, action);
 }
 
 static bool execute_editor_texture_select_index_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
@@ -4846,9 +4765,6 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.texture.filter") == 0)
         return execute_editor_texture_filter_action(runtime, action);
 
-    if (SDL_strcmp(type, "editor.texture.path.apply") == 0)
-        return execute_editor_texture_path_apply_action(runtime, action);
-
     if (SDL_strcmp(type, "editor.media.path.apply") == 0)
         return execute_editor_media_path_apply_action(runtime, action);
 
@@ -4863,9 +4779,6 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.sky.apply") == 0)
         return execute_editor_sky_apply_action(runtime, action);
-
-    if (SDL_strcmp(type, "editor.sky.path.apply") == 0)
-        return execute_editor_sky_path_apply_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.actor.scan") == 0)
         return execute_editor_actor_scan_action(runtime, action);

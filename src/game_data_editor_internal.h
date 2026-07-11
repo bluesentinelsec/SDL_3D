@@ -210,9 +210,6 @@ bool editor_update_console_scroll_drag(slayer3d_game_data_runtime *runtime, cons
                                        float mouse_y);
 bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime);
-bool editor_sky_edit_has_focus(const slayer3d_game_data_runtime *runtime);
-bool editor_update_sky_text_edit(slayer3d_game_data_runtime *runtime);
-void editor_update_sky_edit_display(slayer3d_game_data_runtime *runtime);
 bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime);
 bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime);
