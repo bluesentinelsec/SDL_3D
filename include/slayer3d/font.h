@@ -31,6 +31,10 @@ extern "C"
 #define SLAYER3D_FONT_FIRST_CHAR 32
 #define SLAYER3D_FONT_CHAR_COUNT 95 /* ASCII 32..126 */
 
+/* Valid atlas density range for the _ex loaders. */
+#define SLAYER3D_FONT_DENSITY_MIN 0.25f
+#define SLAYER3D_FONT_DENSITY_MAX 4.0f
+
     typedef struct slayer3d_glyph
     {
         float u0, v0, u1, v1; /* normalized atlas UVs */
@@ -44,7 +48,8 @@ extern "C"
         slayer3d_glyph glyphs[SLAYER3D_FONT_CHAR_COUNT];
         unsigned char *atlas_pixels; /* single-channel alpha, atlas_w × atlas_h */
         int atlas_w, atlas_h;
-        float size;                       /* font size in pixels */
+        float size;                       /* font size in display units */
+        float density;                    /* atlas texels per display unit (1 = legacy) */
         float ascent;                     /* distance from baseline to top */
         float descent;                    /* distance from baseline to bottom (negative) */
         float line_gap;                   /* extra spacing between lines */
@@ -59,9 +64,24 @@ extern "C"
     bool slayer3d_load_font(const char *path, float pixel_size, slayer3d_font *out);
 
     /*
+     * Density-aware variants. `density` is the atlas oversampling factor in
+     * texels per display unit (clamped to SLAYER3D_FONT_DENSITY_MIN/MAX):
+     * glyphs are rasterized at `pixel_size * density` but every exposed
+     * metric stays in display units, so measurement and placement are
+     * identical at any density. Bake at the display's output scale for
+     * crisp text on high-DPI/4K targets, or below 1 for heavily
+     * downscaled text.
+     */
+    bool slayer3d_load_font_ex(const char *path, float pixel_size, float density, slayer3d_font *out);
+
+    /*
      * Load a font from memory (e.g., embedded font data).
      */
     bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel_size, slayer3d_font *out);
+
+    /* Density-aware variant of slayer3d_load_font_from_memory; see slayer3d_load_font_ex. */
+    bool slayer3d_load_font_from_memory_ex(const void *data, int data_size, float pixel_size, float density,
+                                           slayer3d_font *out);
 
     /*
      * Free font resources (atlas pixels).
@@ -186,6 +206,10 @@ extern "C"
      */
     bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id, float pixel_size,
                                     slayer3d_font *out);
+
+    /* Density-aware variant of slayer3d_load_builtin_font; see slayer3d_load_font_ex. */
+    bool slayer3d_load_builtin_font_ex(const char *media_dir, slayer3d_builtin_font id, float pixel_size, float density,
+                                       slayer3d_font *out);
 
 #ifdef __cplusplus
 }

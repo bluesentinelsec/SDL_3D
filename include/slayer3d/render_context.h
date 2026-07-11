@@ -246,6 +246,15 @@ extern "C"
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
     /**
+     * @brief Return native display pixels per logical unit for the letterboxed
+     * presentation viewport.
+     *
+     * Above 1 the window shows more pixels than the logical size (high-DPI or
+     * upscaled fullscreen); below 1 the logical stream is downscaled. Returns
+     * 1 when no window is attached (headless/tests).
+     */
+    float slayer3d_get_render_context_display_scale(const slayer3d_render_context *context);
+    /**
      * @brief Set the internal 3D/world render scale for capable backends.
      *
      * The logical presentation size, UI coordinates, input mapping, and camera

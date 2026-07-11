@@ -72,6 +72,37 @@ extern "C"
                                              slayer3d_game_data_ui_rect_fn callback, void *userdata);
 
     /**
+     * @brief Callback for iterating image asset ids referenced by retained UI widgets.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*slayer3d_game_data_ui_widget_image_id_fn)(void *userdata, const char *image_id);
+
+    /**
+     * @brief Iterate every image asset id referenced by authored `ui.widgets` trees.
+     *
+     * Iteration covers global and active-scene widgets and ignores `visible_if`
+     * conditions: hidden panels' thumbnails are still reported so asset warmup
+     * can keep them resident, preventing reload flicker when a panel opens.
+     */
+    bool slayer3d_game_data_for_each_ui_widget_image_id(const slayer3d_game_data_runtime *runtime,
+                                                        slayer3d_game_data_ui_widget_image_id_fn callback,
+                                                        void *userdata);
+
+    /**
+     * @brief Publish the logical UI viewport used to resolve retained widget layouts.
+     *
+     * Hosts call this with the render context's logical size (once at startup
+     * and again when it changes) so every retained layout consumer — widget
+     * rendering, hit testing, and editor tooling — resolves against the same
+     * viewport. Until published, layouts resolve against the 1280×720 default.
+     *
+     * @return true when the viewport was stored; false for NULL runtime or
+     * non-positive dimensions.
+     */
+    bool slayer3d_game_data_set_ui_viewport(slayer3d_game_data_runtime *runtime, float width, float height);
+
+    /**
      * @brief Initialize runtime UI state to identity values.
      *
      * The initialized state has no override flags, zero offset, scale 1, alpha

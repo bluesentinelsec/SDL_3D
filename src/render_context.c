@@ -433,6 +433,23 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     return context->height;
 }
 
+float slayer3d_get_render_context_display_scale(const slayer3d_render_context *context)
+{
+    if (context == NULL || context->window == NULL || context->width <= 0 || context->height <= 0)
+        return 1.0f;
+
+    int pixel_w = 0;
+    int pixel_h = 0;
+    if (!SDL_GetWindowSizeInPixels(context->window, &pixel_w, &pixel_h) || pixel_w <= 0 || pixel_h <= 0)
+        return 1.0f;
+
+    /* Presentation letterboxes to preserve aspect, so one logical unit maps
+     * to the smaller of the two axis scales in native pixels. */
+    const float scale_x = (float)pixel_w / (float)context->width;
+    const float scale_y = (float)pixel_h / (float)context->height;
+    return SDL_max(SDL_min(scale_x, scale_y), 0.0625f);
+}
+
 static bool apply_world_render_scale(slayer3d_render_context *context, float scale)
 {
     if (context == NULL)

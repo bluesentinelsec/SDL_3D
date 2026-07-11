@@ -304,6 +304,62 @@ static bool ui_widget_add_root_widgets(const slayer3d_game_data_runtime *runtime
     return true;
 }
 
+static bool ui_widget_for_each_image_id(yyjson_val *node, slayer3d_game_data_ui_widget_image_id_fn callback,
+                                        void *userdata)
+{
+    const char *type = json_string(node, "type", NULL);
+    const char *image = json_string(node, "image", NULL);
+    if (type != NULL && SDL_strcmp(type, "image") == 0 && image != NULL && image[0] != '\0' &&
+        !callback(userdata, image))
+    {
+        return false;
+    }
+    yyjson_val *children = obj_get(node, "children");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+        if (!ui_widget_for_each_image_id(yyjson_arr_get(children, i), callback, userdata))
+            return false;
+    return true;
+}
+
+bool slayer3d_game_data_for_each_ui_widget_image_id(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_ui_widget_image_id_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *roots[2];
+    roots[0] = runtime_root(runtime);
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    roots[1] = scene != NULL ? scene->root : NULL;
+
+    for (int root_index = 0; root_index < 2; ++root_index)
+    {
+        yyjson_val *widgets = obj_get(obj_get(roots[root_index], "ui"), "widgets");
+        for (size_t i = 0; yyjson_is_arr(widgets) && i < yyjson_arr_size(widgets); ++i)
+            if (!ui_widget_for_each_image_id(yyjson_arr_get(widgets, i), callback, userdata))
+                return true;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_set_ui_viewport(slayer3d_game_data_runtime *runtime, float width, float height)
+{
+    if (runtime == NULL || width <= 0.0f || height <= 0.0f)
+        return false;
+    runtime->ui_viewport_w = width;
+    runtime->ui_viewport_h = height;
+    return true;
+}
+
+void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
+{
+    const bool published = runtime != NULL && runtime->ui_viewport_w > 0.0f && runtime->ui_viewport_h > 0.0f;
+    if (out_width != NULL)
+        *out_width = published ? runtime->ui_viewport_w : 1280.0f;
+    if (out_height != NULL)
+        *out_height = published ? runtime->ui_viewport_h : 720.0f;
+}
+
 bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
                                                       float viewport_h, const slayer3d_game_data_ui_metrics *metrics,
                                                       slayer3d_ui_layout_model *layout)

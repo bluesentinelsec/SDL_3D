@@ -24,20 +24,33 @@
 /* Font loading                                                        */
 /* ------------------------------------------------------------------ */
 
-bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel_size, slayer3d_font *out)
+bool slayer3d_load_font_from_memory_ex(const void *data, int data_size, float pixel_size, float density,
+                                       slayer3d_font *out)
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
 
-    /* Scale the atlas so all 95 ASCII glyphs fit at any pixel size.
-     * With 2× oversampling each glyph cell is roughly (pixel_size*2)².
+    if (!data || data_size <= 0 || !out)
+    {
+        return SDL_InvalidParamError("data");
+    }
+    if (pixel_size <= 0.0f)
+    {
+        return SDL_InvalidParamError("pixel_size");
+    }
+
+    density = SDL_clamp(density, SLAYER3D_FONT_DENSITY_MIN, SLAYER3D_FONT_DENSITY_MAX);
+    const float baked_size = pixel_size * density;
+
+    /* Scale the atlas so all 95 ASCII glyphs fit at any baked pixel size.
+     * With 2× oversampling each glyph cell is roughly (baked_size*2)².
      * 512×512 is fine up to ~32px; beyond that we step up. */
-    if (pixel_size > 64.0f)
+    if (baked_size > 64.0f)
     {
         atlas_w = 2048;
         atlas_h = 2048;
     }
-    else if (pixel_size > 32.0f)
+    else if (baked_size > 32.0f)
     {
         atlas_w = 1024;
         atlas_h = 1024;
@@ -47,11 +60,6 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
     float scale;
     int ascent, descent, line_gap;
 
-    if (!data || data_size <= 0 || !out)
-    {
-        return SDL_InvalidParamError("data");
-    }
-
     SDL_zerop(out);
 
     if (!stbtt_InitFont(&info, (const unsigned char *)data, 0))
@@ -59,9 +67,11 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
         return SDL_SetError("stb_truetype: failed to init font");
     }
 
+    /* Vertical metrics stay in display units regardless of atlas density. */
     scale = stbtt_ScaleForPixelHeight(&info, pixel_size);
     stbtt_GetFontVMetrics(&info, &ascent, &descent, &line_gap);
     out->size = pixel_size;
+    out->density = density;
     out->ascent = (float)ascent * scale;
     out->descent = (float)descent * scale;
     out->line_gap = (float)line_gap * scale;
@@ -83,10 +93,14 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
         }
 
         stbtt_PackSetOversampling(&pc, 2, 2);
-        stbtt_PackFontRange(&pc, (const unsigned char *)data, 0, pixel_size, SLAYER3D_FONT_FIRST_CHAR,
+        stbtt_PackFontRange(&pc, (const unsigned char *)data, 0, baked_size, SLAYER3D_FONT_FIRST_CHAR,
                             SLAYER3D_FONT_CHAR_COUNT, packed);
         stbtt_PackEnd(&pc);
 
+        /* Glyphs are baked at pixel_size × density but exposed in display
+         * units, so callers measure and place text identically at every
+         * density; only the texel coverage under each quad changes. */
+        const float inv_density = 1.0f / density;
         for (int i = 0; i < SLAYER3D_FONT_CHAR_COUNT; i++)
         {
             slayer3d_glyph *g = &out->glyphs[i];
@@ -94,11 +108,11 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
             g->v0 = (float)packed[i].y0 / (float)atlas_h;
             g->u1 = (float)packed[i].x1 / (float)atlas_w;
             g->v1 = (float)packed[i].y1 / (float)atlas_h;
-            g->xoff = packed[i].xoff;
-            g->yoff = packed[i].yoff;
-            g->xoff2 = packed[i].xoff2;
-            g->yoff2 = packed[i].yoff2;
-            g->xadvance = packed[i].xadvance;
+            g->xoff = packed[i].xoff * inv_density;
+            g->yoff = packed[i].yoff * inv_density;
+            g->xoff2 = packed[i].xoff2 * inv_density;
+            g->yoff2 = packed[i].yoff2 * inv_density;
+            g->xadvance = packed[i].xadvance * inv_density;
         }
     }
 
@@ -131,12 +145,17 @@ bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel
     out->atlas_texture.wrap_v = SLAYER3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.generation = slayer3d_texture_next_generation();
 
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w,
-                 atlas_h, SLAYER3D_FONT_CHAR_COUNT);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D font: %.0fpx (density %.2f), atlas %dx%d, %d glyphs",
+                 pixel_size, density, atlas_w, atlas_h, SLAYER3D_FONT_CHAR_COUNT);
     return true;
 }
 
-bool slayer3d_load_font(const char *path, float pixel_size, slayer3d_font *out)
+bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel_size, slayer3d_font *out)
+{
+    return slayer3d_load_font_from_memory_ex(data, data_size, pixel_size, 1.0f, out);
+}
+
+bool slayer3d_load_font_ex(const char *path, float pixel_size, float density, slayer3d_font *out)
 {
     size_t size = 0;
     void *data = SDL_LoadFile(path, &size);
@@ -147,9 +166,14 @@ bool slayer3d_load_font(const char *path, float pixel_size, slayer3d_font *out)
         return SDL_SetError("Failed to load font file '%s'", path);
     }
 
-    ok = slayer3d_load_font_from_memory(data, (int)size, pixel_size, out);
+    ok = slayer3d_load_font_from_memory_ex(data, (int)size, pixel_size, density, out);
     SDL_free(data);
     return ok;
+}
+
+bool slayer3d_load_font(const char *path, float pixel_size, slayer3d_font *out)
+{
+    return slayer3d_load_font_ex(path, pixel_size, 1.0f, out);
 }
 
 void slayer3d_free_font(slayer3d_font *font)
@@ -163,6 +187,7 @@ void slayer3d_free_font(slayer3d_font *font)
         font->atlas_w = 0;
         font->atlas_h = 0;
         font->size = 0.0f;
+        font->density = 0.0f;
         font->ascent = 0.0f;
         font->descent = 0.0f;
         font->line_gap = 0.0f;
@@ -548,7 +573,8 @@ const char *slayer3d_builtin_font_filename(slayer3d_builtin_font id)
     return builtin_font_valid(id) ? slayer3d_builtin_fonts[id].filename : NULL;
 }
 
-bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id, float pixel_size, slayer3d_font *out)
+bool slayer3d_load_builtin_font_ex(const char *media_dir, slayer3d_builtin_font id, float pixel_size, float density,
+                                   slayer3d_font *out)
 {
     const void *embedded_data = NULL;
     int embedded_size = 0;
@@ -564,7 +590,7 @@ bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id,
 
     if (builtin_font_embedded_data(id, &embedded_data, &embedded_size))
     {
-        return slayer3d_load_font_from_memory(embedded_data, embedded_size, pixel_size, out);
+        return slayer3d_load_font_from_memory_ex(embedded_data, embedded_size, pixel_size, density, out);
     }
 
     if (!media_dir)
@@ -584,7 +610,12 @@ bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id,
         return SDL_SetError("slayer3d_load_builtin_font: path too long for media_dir='%s' filename='%s'", media_dir,
                             filename);
     }
-    return slayer3d_load_font(path, pixel_size, out);
+    return slayer3d_load_font_ex(path, pixel_size, density, out);
+}
+
+bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id, float pixel_size, slayer3d_font *out)
+{
+    return slayer3d_load_builtin_font_ex(media_dir, id, pixel_size, 1.0f, out);
 }
 
 /* ------------------------------------------------------------------ */

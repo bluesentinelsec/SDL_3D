@@ -1727,6 +1727,16 @@ bool slayer3d_data_game_runtime_process_event(slayer3d_data_game_runtime *runtim
     return true;
 }
 
+/* Keep retained UI layout, hit testing, and font density in sync with the
+ * active render context so every consumer resolves the same viewport. */
+static void data_game_publish_ui_viewport(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
+{
+    if (runtime == NULL || runtime->data == NULL || ctx == NULL || ctx->renderer == NULL)
+        return;
+    (void)slayer3d_game_data_set_ui_viewport(runtime->data, (float)slayer3d_get_render_context_width(ctx->renderer),
+                                             (float)slayer3d_get_render_context_height(ctx->renderer));
+}
+
 bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx, float dt)
 {
     const Uint64 start_counter = SDL_GetPerformanceCounter();
@@ -1735,6 +1745,7 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
         return false;
     }
 
+    data_game_publish_ui_viewport(runtime, ctx);
     if (!refresh_active_input_profile_if_available(runtime))
         return false;
 
@@ -1763,6 +1774,7 @@ void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slay
         return;
     }
 
+    data_game_publish_ui_viewport(runtime, ctx);
     slayer3d_game_data_frame_state_record_render(&runtime->frame_state, ctx, runtime->data);
     (void)slayer3d_data_game_runtime_publish_asset_warmup_stats(runtime, NULL);
     data_game_sync_presentation_media_dir(runtime);

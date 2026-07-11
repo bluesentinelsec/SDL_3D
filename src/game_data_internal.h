@@ -83,6 +83,10 @@ typedef struct slayer3d_game_data_runtime
     int active_scene_index;
     slayer3d_properties *scene_state;
     yyjson_doc *scene_sky_override;
+    /* Logical UI viewport used to resolve retained widget layouts; 0 means
+     * the 1280×720 default until the host publishes the render size. */
+    float ui_viewport_w;
+    float ui_viewport_h;
     ui_state_entry *ui_states;
     int ui_state_count;
     int ui_state_capacity;
@@ -280,6 +284,8 @@ const char *asset_path_without_scheme(const char *path);
 bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
                                                       float viewport_h, const slayer3d_game_data_ui_metrics *metrics,
                                                       slayer3d_ui_layout_model *layout);
+/* Read the published logical UI viewport, falling back to 1280×720. */
+void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height);
 bool slayer3d_game_data_ui_binding_to_string(const slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_ui_metrics *metrics, yyjson_val *binding,
                                              char *buffer, size_t buffer_size);
