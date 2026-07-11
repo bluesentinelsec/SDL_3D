@@ -221,7 +221,8 @@ static bool draw_resolved_ui_text(ui_draw_context *draw, const slayer3d_game_dat
         return true;
     }
 
-    slayer3d_font *font = slayer3d_game_data_find_or_load_font(draw->runtime, draw->font_cache, resolved->font);
+    slayer3d_font *font =
+        slayer3d_game_data_find_or_load_font_scaled(draw->runtime, draw->font_cache, resolved->font, resolved->scale);
     if (font == NULL)
     {
         draw->ok = false;
@@ -580,6 +581,10 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
     if (runtime == NULL || renderer == NULL)
         return false;
 
+    if (font_cache != NULL)
+        slayer3d_game_data_font_cache_set_display_scale(font_cache,
+                                                        slayer3d_get_render_context_display_scale(renderer));
+
     ui_draw_list list;
     SDL_zero(list);
     list.ok = true;
@@ -648,6 +653,8 @@ bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, 
 {
     if (runtime == NULL || renderer == NULL || font_cache == NULL)
         return false;
+
+    slayer3d_game_data_font_cache_set_display_scale(font_cache, slayer3d_get_render_context_display_scale(renderer));
 
     ui_draw_context context;
     SDL_zero(context);

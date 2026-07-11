@@ -194,16 +194,48 @@ bool slayer3d_game_data_ensure_mesh_primitive_cache_capacity(slayer3d_game_data_
     return true;
 }
 
-slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_runtime *runtime,
-                                                    slayer3d_game_data_font_cache *cache, const char *font_id)
+/*
+ * Quantize a desired atlas density into a small set of buckets so window
+ * resizes reuse cached atlases instead of rebaking every frame. Rounds up
+ * so text errs on the sharp side of 1:1 texel sampling.
+ */
+static float font_density_bucket(float desired)
+{
+    static const float buckets[] = {0.25f, 0.5f, 0.75f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f};
+    for (size_t i = 0; i < SDL_arraysize(buckets); ++i)
+    {
+        if (desired <= buckets[i] + 0.001f)
+            return buckets[i];
+    }
+    return buckets[SDL_arraysize(buckets) - 1];
+}
+
+void slayer3d_game_data_font_cache_set_display_scale(slayer3d_game_data_font_cache *cache, float display_scale)
+{
+    if (cache != NULL)
+        cache->display_scale = display_scale > 0.0f ? display_scale : 1.0f;
+}
+
+slayer3d_font *slayer3d_game_data_find_or_load_font_scaled(const slayer3d_game_data_runtime *runtime,
+                                                           slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                           float text_scale)
 {
     if (runtime == NULL || cache == NULL || font_id == NULL)
         return NULL;
 
+    /* Glyphs render at authored size × text_scale, and the presentation
+     * viewport maps logical units onto native pixels; bake the atlas at
+     * that effective on-screen density so sampling stays near 1:1. */
+    const float display_scale = cache->display_scale > 0.0f ? cache->display_scale : 1.0f;
+    const float density = font_density_bucket((text_scale > 0.0f ? text_scale : 1.0f) * display_scale);
+
     for (int i = 0; i < cache->count; ++i)
     {
-        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0)
+        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0 &&
+            cache->fonts[i].density == density)
+        {
             return &cache->fonts[i];
+        }
     }
 
     if (!ensure_font_cache_capacity(cache, cache->count + 1))
@@ -217,9 +249,9 @@ slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_run
     SDL_zero(prepared);
     bool loaded = false;
     if (font.builtin)
-        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, &prepared);
+        loaded = slayer3d_load_builtin_font_ex(cache->media_dir, font.builtin_id, font.size, density, &prepared);
     else if (font.path != NULL)
-        loaded = slayer3d_load_font(font.path, font.size, &prepared);
+        loaded = slayer3d_load_font_ex(font.path, font.size, density, &prepared);
     if (!loaded)
         return NULL;
 
@@ -227,6 +259,12 @@ slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_run
     if (cached == NULL)
         slayer3d_free_font(&prepared);
     return cached;
+}
+
+slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_font_cache *cache, const char *font_id)
+{
+    return slayer3d_game_data_find_or_load_font_scaled(runtime, cache, font_id, 1.0f);
 }
 
 slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
@@ -237,7 +275,8 @@ slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_
 
     for (int i = 0; i < cache->count; ++i)
     {
-        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0)
+        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0 &&
+            cache->fonts[i].density == font->density)
         {
             slayer3d_free_font(font);
             return &cache->fonts[i];

@@ -304,6 +304,24 @@ static bool ui_widget_add_root_widgets(const slayer3d_game_data_runtime *runtime
     return true;
 }
 
+bool slayer3d_game_data_set_ui_viewport(slayer3d_game_data_runtime *runtime, float width, float height)
+{
+    if (runtime == NULL || width <= 0.0f || height <= 0.0f)
+        return false;
+    runtime->ui_viewport_w = width;
+    runtime->ui_viewport_h = height;
+    return true;
+}
+
+void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
+{
+    const bool published = runtime != NULL && runtime->ui_viewport_w > 0.0f && runtime->ui_viewport_h > 0.0f;
+    if (out_width != NULL)
+        *out_width = published ? runtime->ui_viewport_w : 1280.0f;
+    if (out_height != NULL)
+        *out_height = published ? runtime->ui_viewport_h : 720.0f;
+}
+
 bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
                                                       float viewport_h, const slayer3d_game_data_ui_metrics *metrics,
                                                       slayer3d_ui_layout_model *layout)

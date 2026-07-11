@@ -1782,7 +1782,10 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, metrics, layout))
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, metrics, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;
@@ -2140,7 +2143,10 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, NULL, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;
@@ -2204,7 +2210,10 @@ static bool retained_ui_images_from_layout(const slayer3d_game_data_runtime *run
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, NULL, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;

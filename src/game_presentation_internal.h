@@ -30,6 +30,11 @@ bool slayer3d_game_data_ensure_mesh_primitive_cache_capacity(slayer3d_game_data_
 slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_runtime *runtime,
                                                     slayer3d_game_data_font_cache *cache, const char *font_id);
 
+/* Variant that bakes the atlas at text_scale × the cache display scale. */
+slayer3d_font *slayer3d_game_data_find_or_load_font_scaled(const slayer3d_game_data_runtime *runtime,
+                                                           slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                           float text_scale);
+
 slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
                                                              slayer3d_font *font);
 

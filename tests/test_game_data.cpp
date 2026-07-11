@@ -212,6 +212,9 @@ extern "C"
                                                           float viewport_h,
                                                           const slayer3d_game_data_ui_metrics *metrics,
                                                           slayer3d_ui_layout_model *layout);
+    slayer3d_font *slayer3d_game_data_find_or_load_font_scaled(const slayer3d_game_data_runtime *runtime,
+                                                               slayer3d_game_data_font_cache *cache,
+                                                               const char *font_id, float text_scale);
     void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                          const slayer3d_game_data_editor_selection *hover_selection);
     bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
@@ -4310,6 +4313,122 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
     slayer3d_game_data_font_cache_free(&font_cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, FontCacheBakesAtlasDensityFromDisplayScale)
+{
+    const std::filesystem::path dir = unique_test_dir("font_cache_density");
+    write_text(dir / "density.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Font Density", "id": "test.font_density", "version": "0.1.0" },
+  "world": { "name": "world.font_density", "kind": "fixed_screen" },
+  "assets": {
+    "fonts": [{ "id": "font.hud", "builtin": "Inter", "size": 24 }]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "density.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_font_cache font_cache{};
+    slayer3d_game_data_font_cache_init(&font_cache, nullptr);
+
+    // Without a display scale the cache behaves exactly as before: one
+    // density-1 atlas shared by every lookup.
+    slayer3d_font *base = slayer3d_game_data_find_or_load_font_scaled(runtime, &font_cache, "font.hud", 1.0f);
+    ASSERT_NE(base, nullptr);
+    EXPECT_FLOAT_EQ(base->density, 1.0f);
+    EXPECT_EQ(font_cache.count, 1);
+
+    // A 4K-ish display scale bakes denser atlases; small editor text scales
+    // pick a proportionally lower bucket. Metrics stay in display units.
+    slayer3d_game_data_font_cache_set_display_scale(&font_cache, 3.0f);
+    slayer3d_font *dense = slayer3d_game_data_find_or_load_font_scaled(runtime, &font_cache, "font.hud", 1.0f);
+    ASSERT_NE(dense, nullptr);
+    EXPECT_FLOAT_EQ(dense->density, 3.0f);
+    EXPECT_FLOAT_EQ(dense->size, base->size);
+    EXPECT_FLOAT_EQ(dense->ascent, base->ascent);
+    EXPECT_EQ(font_cache.count, 2);
+
+    slayer3d_font *small_text = slayer3d_game_data_find_or_load_font_scaled(runtime, &font_cache, "font.hud", 0.4f);
+    ASSERT_NE(small_text, nullptr);
+    EXPECT_FLOAT_EQ(small_text->density, 1.5f);
+    EXPECT_EQ(font_cache.count, 3);
+
+    // Repeat lookups reuse the cached buckets instead of rebaking.
+    EXPECT_EQ(slayer3d_game_data_find_or_load_font_scaled(runtime, &font_cache, "font.hud", 0.4f), small_text);
+    EXPECT_EQ(font_cache.count, 3);
+
+    slayer3d_game_data_font_cache_free(&font_cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RetainedUIWidgetLayoutUsesPublishedViewport)
+{
+    const std::filesystem::path dir = unique_test_dir("retained_ui_viewport");
+    write_text(dir / "viewport.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Retained UI Viewport", "id": "test.retained_ui_viewport", "version": "0.1.0" },
+  "world": { "name": "world.retained_ui_viewport", "kind": "fixed_screen" },
+  "ui": {
+    "widgets": [
+      { "id": "hud.bar", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 48 }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "viewport.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct RectCapture
+    {
+        float width = 0.0f;
+        bool found = false;
+    } capture;
+    auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *state = static_cast<RectCapture *>(userdata);
+        if (rect != nullptr && rect->name != nullptr && std::string(rect->name) == "hud.bar" && !state->found)
+        {
+            state->width = rect->w;
+            state->found = true;
+        }
+        return true;
+    };
+
+    // Until a host publishes the render size, layouts resolve at the
+    // 1280×720 default, matching all previously authored content.
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+    ASSERT_TRUE(capture.found);
+    EXPECT_FLOAT_EQ(capture.width, 1280.0f);
+
+    // Publishing a different logical viewport re-resolves fill sizing for
+    // every retained-layout consumer.
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 2560.0f, 1440.0f));
+    capture = RectCapture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+    ASSERT_TRUE(capture.found);
+    EXPECT_FLOAT_EQ(capture.width, 2560.0f);
+
+    EXPECT_FALSE(slayer3d_game_data_set_ui_viewport(runtime, 0.0f, 1440.0f));
+    EXPECT_FALSE(slayer3d_game_data_set_ui_viewport(nullptr, 1280.0f, 720.0f));
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);

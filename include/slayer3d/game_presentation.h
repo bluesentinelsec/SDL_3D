@@ -43,11 +43,12 @@ extern "C"
      */
     typedef struct slayer3d_game_data_font_cache
     {
-        slayer3d_font *fonts;  /**< Loaded font instances. */
+        slayer3d_font *fonts;  /**< Loaded font instances, keyed by id plus atlas density. */
         const char **font_ids; /**< Runtime-owned authored font ids. */
         int count;             /**< Number of cached fonts. */
         int capacity;          /**< Allocated cache slots. */
         char *media_dir;       /**< Owned media directory used for disk-backed fonts and editor previews. */
+        float display_scale;   /**< Native pixels per logical unit used to pick atlas densities; 0 acts as 1. */
     } slayer3d_game_data_font_cache;
 
     /** @brief One cached texture referenced by authored UI image data. */
@@ -485,6 +486,18 @@ extern "C"
      * @return true on success, false on allocation failure.
      */
     bool slayer3d_game_data_font_cache_set_media_dir(slayer3d_game_data_font_cache *cache, const char *media_dir);
+
+    /**
+     * @brief Set the display scale used to pick font atlas densities.
+     *
+     * Pass slayer3d_get_render_context_display_scale() once per frame so text
+     * atlases are baked at the effective on-screen pixel density. Cached
+     * atlases at other densities are kept and reused when the scale returns.
+     *
+     * @param cache         Cache to update.
+     * @param display_scale Native pixels per logical unit; values <= 0 act as 1.
+     */
+    void slayer3d_game_data_font_cache_set_display_scale(slayer3d_game_data_font_cache *cache, float display_scale);
 
     /**
      * @brief Free all fonts owned by a cache.

@@ -17,8 +17,11 @@ static const slayer3d_ui_layout_hit_region *editor_retained_shape_hit(const slay
 {
     if (out_layout_valid != NULL)
         *out_layout_valid = false;
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
     if (layout == NULL || dropdown_id == NULL ||
-        !slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+        !slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, NULL, layout))
     {
         return NULL;
     }
