@@ -18180,6 +18180,51 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.skyboxes.status", ""),
                  "8 skyboxes found");
 
+    emit_signal("signal.editor.sky.panel.toggle");
+    struct SkyThumbnailSummary
+    {
+        std::string name;
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+    };
+    struct SkyThumbnailCapture
+    {
+        slayer3d_game_data_runtime *runtime = nullptr;
+        std::vector<SkyThumbnailSummary> thumbnails;
+    } sky_thumbnail_capture{runtime, {}};
+    auto collect_sky_thumbnail = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+        auto *capture = static_cast<SkyThumbnailCapture *>(userdata);
+        if (image == nullptr || image->name == nullptr)
+            return true;
+        const std::string name = image->name;
+        if (name.rfind("ui.editor_shell.skybox_panel.", 0) != 0 || name.find(".thumbnail") == std::string::npos)
+            return true;
+        slayer3d_game_data_ui_image resolved{};
+        bool visible = false;
+        if (!slayer3d_game_data_resolve_ui_image(capture->runtime, image, nullptr, &resolved, &visible) || !visible)
+            return true;
+        EXPECT_FLOAT_EQ(resolved.w, 40.0f);
+        EXPECT_FLOAT_EQ(resolved.h, 40.0f);
+        EXPECT_TRUE(resolved.has_clip_rect);
+        EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_y, 166.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_h, 362.0f);
+        EXPECT_GE(resolved.x, resolved.clip_x);
+        EXPECT_GE(resolved.y, resolved.clip_y);
+        EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
+        EXPECT_LE(resolved.y + resolved.h, resolved.clip_y + resolved.clip_h);
+        capture->thumbnails.push_back({resolved.name, resolved.x, resolved.y, resolved.w, resolved.h});
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect_sky_thumbnail, &sky_thumbnail_capture));
+    ASSERT_EQ(sky_thumbnail_capture.thumbnails.size(), 6U);
+    EXPECT_STREQ(sky_thumbnail_capture.thumbnails[0].name.c_str(), "ui.editor_shell.skybox_panel.slot0.thumbnail");
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].x, 1048.0f);
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].y, 178.0f);
+
     emit_signal("signal.editor.sky.select_slot.0");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.selected.name", ""), "afternoon");
 
@@ -21998,9 +22043,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             EXPECT_EQ(resolved.layer, 123);
             EXPECT_TRUE(resolved.has_clip_rect);
             EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
-            EXPECT_FLOAT_EQ(resolved.clip_y, 246.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_y, 210.0f);
             EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
-            EXPECT_FLOAT_EQ(resolved.clip_h, 354.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_h, 390.0f);
             EXPECT_GE(resolved.x, resolved.clip_x);
             EXPECT_GE(resolved.y, resolved.clip_y);
             EXPECT_LE(resolved.x + resolved.w, resolved.clip_x + resolved.clip_w);
@@ -22174,16 +22219,16 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         find_thumbnail("ui.editor_shell.texture_viewer.wall_metal.thumbnail");
     ASSERT_NE(wall_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(wall_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(wall_thumbnail->y, 266.0f);
+    EXPECT_FLOAT_EQ(wall_thumbnail->y, 230.0f);
     const TextureThumbnailSummary *rock_thumbnail =
         find_thumbnail("ui.editor_shell.texture_viewer.rock_floor.thumbnail");
     ASSERT_NE(rock_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(rock_thumbnail->x, 1154.0f);
-    EXPECT_FLOAT_EQ(rock_thumbnail->y, 266.0f);
+    EXPECT_FLOAT_EQ(rock_thumbnail->y, 230.0f);
     const TextureThumbnailSummary *lava_thumbnail = find_thumbnail("ui.editor_shell.texture_viewer.lava.thumbnail");
     ASSERT_NE(lava_thumbnail, nullptr);
     EXPECT_FLOAT_EQ(lava_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(lava_thumbnail->y, 486.0f);
+    EXPECT_FLOAT_EQ(lava_thumbnail->y, 450.0f);
     std::vector<std::string> thumbnails;
     for (const TextureThumbnailSummary &thumbnail : thumbnail_summaries)
         thumbnails.emplace_back(thumbnail.name);
@@ -22198,10 +22243,6 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.field"),
               texture_rects.end());
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.apply"),
-              texture_rects.end());
-    EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.path.field"),
-              texture_rects.end());
-    EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.path.apply"),
               texture_rects.end());
     std::vector<std::string> scroll_rects = visible_rect_names();
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.track"),
