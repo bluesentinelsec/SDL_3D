@@ -27,6 +27,8 @@ static slayer3d_ui_layout_node_type ui_widget_type_from_string(const char *type)
         return SLAYER3D_UI_LAYOUT_NODE_SPACER;
     if (SDL_strcmp(type, "console") == 0 || SDL_strcmp(type, "log_view") == 0)
         return SLAYER3D_UI_LAYOUT_NODE_CONSOLE;
+    if (SDL_strcmp(type, "image") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_IMAGE;
     return SLAYER3D_UI_LAYOUT_NODE_PANEL;
 }
 
@@ -36,6 +38,8 @@ static slayer3d_ui_layout_axis ui_widget_axis_from_string(const char *layout)
         return SLAYER3D_UI_LAYOUT_AXIS_ROW;
     if (layout != NULL && SDL_strcmp(layout, "column") == 0)
         return SLAYER3D_UI_LAYOUT_AXIS_COLUMN;
+    if (layout != NULL && SDL_strcmp(layout, "grid") == 0)
+        return SLAYER3D_UI_LAYOUT_AXIS_GRID;
     return SLAYER3D_UI_LAYOUT_AXIS_NONE;
 }
 
@@ -235,6 +239,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.rect.h = ui_widget_size_number(height, 1.0f);
     desc.padding = json_float(node, "padding", 0.0f);
     desc.gap = json_float(node, "gap", 0.0f);
+    desc.grid_columns = ui_widget_int(node, "columns", "grid_columns", 0);
     desc.clip_children = ui_widget_bool(node, "clip_children", false);
     desc.clip_rect_id = json_string(node, "clip_rect_id", NULL);
     desc.layer = ui_widget_int(node, "layer", "z", 0);
@@ -261,6 +266,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
                     (selected_if != NULL && eval_data_condition(runtime, selected_if, metrics));
     desc.selected_index =
         ui_widget_selected_index_from_values(runtime, node, ui_widget_int(node, "selected_index", "selected_index", 0));
+    desc.image = json_string(node, "image", NULL);
+    desc.preserve_aspect = ui_widget_bool(node, "preserve_aspect", false);
     desc.open = ui_widget_bool(node, "open", false);
     const char *open_key = json_string(node, "open_key", NULL);
     if (open_key != NULL && open_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)

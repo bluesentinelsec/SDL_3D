@@ -11,6 +11,25 @@ Use `ui.rects`, `ui.text`, and `ui.images` for small one-off overlays. Treat
 structured UI should use `ui.widgets` so controls can move without child
 geometry drifting away from their parents.
 
+## Authoring Rules
+
+These rules exist because hand-maintained absolute coordinates caused repeated
+regressions (thumbnails drifting out of their slots, stale clip rectangles,
+labels detaching from moved panels):
+
+1. Author widgets that visually belong together as one component: a slot cell
+   is a `button` whose thumbnail `image` and labels are its `children`.
+2. Never author panel content in `ui.images` / `ui.rects` with absolute
+   coordinates. Content belongs in the widget tree, where position, layer,
+   clipping, and visibility are inherited from the parent.
+3. Do not duplicate ancestor `visible_if` conditions on children. A child is
+   only shown when every ancestor is visible, so author each condition once,
+   on the node that owns it.
+4. Do not author `clip_rect` values that mirror another node's geometry. Set
+   `clip_children` on the container; descendants inherit the clip.
+5. Omit `layer` on children when possible — a child automatically resolves
+   one layer above its parent.
+
 ## Layout
 
 Widget coordinates are logical pixels. The renderer scales the final UI stream
@@ -19,14 +38,56 @@ scaling.
 
 Each node has an `id`, a `type`, optional `x` / `y`, and a size. `w` / `h` may
 be a positive number or `"fill"`. Children are positioned relative to their
-parent. Containers can use `layout: "row"` or `layout: "column"` with optional
-`padding` and `gap`.
+parent. Containers can use `layout: "row"`, `layout: "column"`, or
+`layout: "grid"` with optional `padding` and `gap`.
 
 Supported node types are:
 
 - `panel`, `toolbar`, `row`, `column`, and `spacer` for structure.
 - `button`, `dropdown`, and `tab_strip` for interactive controls.
 - `label`, `console`, and `log_view` for text output.
+- `image` for thumbnails and icons.
+
+### Grid Containers
+
+`layout: "grid"` places children row-major into a fixed number of `columns`.
+Cell width is the padded content width divided by the column count (minus
+gaps); children with `w: "fill"` stretch to the cell, fixed-size children keep
+their size at the cell origin. Each row is as tall as its tallest fixed-height
+child. Use grids for asset browsers, palettes, and forms:
+
+```json
+{
+  "id": "ui.browser.grid",
+  "type": "panel",
+  "layout": "grid",
+  "columns": 2,
+  "w": 218, "h": 390,
+  "padding": 10,
+  "gap": 12,
+  "clip_children": true,
+  "children": [
+    {
+      "id": "ui.browser.cell0",
+      "type": "button",
+      "w": 78, "h": 78,
+      "action": "editor.asset.select.0",
+      "children": [
+        { "id": "ui.browser.cell0.thumbnail", "type": "image", "image": "image.asset.slot_0", "x": 8, "y": 8, "w": 62, "h": 62 }
+      ]
+    }
+  ]
+}
+```
+
+### Images
+
+`image` nodes draw an image asset (`image`) inside the node rect and take part
+in layout like any other node: they inherit parent position, clipping,
+visibility, and layering, so a thumbnail authored as a child of its slot
+button can never drift out of the slot. Set `preserve_aspect: true` to fit the
+source aspect ratio inside the rect, and an optional `color` to tint. Images
+are display-only unless they author `interactive` / `action`.
 
 ## Styling
 

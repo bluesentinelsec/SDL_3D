@@ -26,6 +26,8 @@ extern "C"
 #define SLAYER3D_UI_LAYOUT_ACTION_MAX 128
     /** @brief Maximum inline options stored by one retained UI dropdown. */
 #define SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX 64
+    /** @brief Maximum bytes stored for a retained UI image asset id, including the terminator. */
+#define SLAYER3D_UI_LAYOUT_IMAGE_MAX 128
 
     /** @brief Authored retained UI widget type. */
     typedef enum slayer3d_ui_layout_node_type
@@ -40,6 +42,7 @@ extern "C"
         SLAYER3D_UI_LAYOUT_NODE_TAB_STRIP,
         SLAYER3D_UI_LAYOUT_NODE_SPACER,
         SLAYER3D_UI_LAYOUT_NODE_CONSOLE,
+        SLAYER3D_UI_LAYOUT_NODE_IMAGE,
     } slayer3d_ui_layout_node_type;
 
     /** @brief Optional layout axis applied to a node's direct children. */
@@ -48,6 +51,7 @@ extern "C"
         SLAYER3D_UI_LAYOUT_AXIS_NONE = 0,
         SLAYER3D_UI_LAYOUT_AXIS_ROW,
         SLAYER3D_UI_LAYOUT_AXIS_COLUMN,
+        SLAYER3D_UI_LAYOUT_AXIS_GRID,
     } slayer3d_ui_layout_axis;
 
     /** @brief Sizing behavior for one axis. */
@@ -87,6 +91,8 @@ extern "C"
         slayer3d_ui_layout_rect rect;
         float padding;
         float gap;
+        /** @brief Number of columns for children placed with SLAYER3D_UI_LAYOUT_AXIS_GRID. */
+        int grid_columns;
         /** @brief Clip descendant rendering and hit testing to this node's padded content rect. */
         bool clip_children;
         /** @brief Optional resolved node id whose rect clips this node and its descendants. */
@@ -111,6 +117,10 @@ extern "C"
         int selected_index;
         bool open;
         float option_height;
+        /** @brief Optional image asset id drawn by SLAYER3D_UI_LAYOUT_NODE_IMAGE nodes. */
+        const char *image;
+        /** @brief Preserve the source image aspect ratio inside the node rect. */
+        bool preserve_aspect;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -141,6 +151,8 @@ extern "C"
         slayer3d_color border_color;
         bool has_border_color;
         float border_thickness;
+        char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
+        bool preserve_aspect;
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -169,6 +181,8 @@ extern "C"
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         bool popup;
+        char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
+        bool preserve_aspect;
     } slayer3d_ui_layout_render_command;
 
     /** @brief Flat retained UI hit region compiled from a resolved interactive node. */
