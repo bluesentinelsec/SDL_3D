@@ -270,6 +270,10 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         ui_widget_selected_index_from_values(runtime, node, ui_widget_int(node, "selected_index", "selected_index", 0));
     desc.image = json_string(node, "image", NULL);
     desc.preserve_aspect = ui_widget_bool(node, "preserve_aspect", false);
+    const char *anchor_x = json_string(node, "anchor_x", NULL);
+    desc.anchor_right = anchor_x != NULL && SDL_strcmp(anchor_x, "right") == 0;
+    const char *anchor_y = json_string(node, "anchor_y", NULL);
+    desc.anchor_bottom = anchor_y != NULL && SDL_strcmp(anchor_y, "bottom") == 0;
     desc.scroll_key = json_string(node, "scroll_key", NULL);
     float pane_scroll = 0.0f;
     if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))
@@ -278,6 +282,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     if (ui_widget_scene_float(runtime, json_string(node, "scroll_count_key", NULL), &scroll_span))
         desc.scroll_span = SDL_max(scroll_span, 0.0f);
     desc.scroll_signal = json_string(node, "scroll_signal", NULL);
+    desc.scroll_step = json_float(node, "scroll_step", 0.0f);
     desc.open = ui_widget_bool(node, "open", false);
     const char *open_key = json_string(node, "open_key", NULL);
     if (open_key != NULL && open_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)

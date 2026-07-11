@@ -4781,6 +4781,11 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.sky.scan") == 0)
         return execute_editor_sky_scan_action(runtime, action);
 
+    /* Clamp the console scroll and rebind the visible line window; the
+     * shared scrollbar/wheel path emits this after changing the index. */
+    if (SDL_strcmp(type, "editor.console.sync") == 0)
+        return editor_scroll_console_by(runtime, 0);
+
     if (SDL_strcmp(type, "editor.sky.select") == 0)
         return execute_editor_sky_select_action(runtime, action);
 

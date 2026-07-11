@@ -134,6 +134,16 @@ extern "C"
         /** @brief Optional caller state key that owns this pane's scroll offset. */
         const char *scroll_key;
         /**
+         * @brief Anchor the node's x to the right edge of its parent (or viewport).
+         *
+         * When set, `rect.x` is the distance from the right edge to the
+         * node's right side, so docked panels keep their margin at any
+         * viewport size instead of hardcoding absolute positions.
+         */
+        bool anchor_right;
+        /** @brief Anchor the node's y to the bottom edge of its parent (or viewport). */
+        bool anchor_bottom;
+        /**
          * @brief Total item count for a virtualized list container.
          *
          * When positive on a container with a scroll_key, the container
@@ -145,6 +155,8 @@ extern "C"
         float scroll_span;
         /** @brief Optional signal emitted by hosts when a scrollbar drag changes the offset. */
         const char *scroll_signal;
+        /** @brief Wheel step per notch; 0 selects the default (1 item, or 40px for scroll panes). */
+        float scroll_step;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -189,6 +201,8 @@ extern "C"
         bool scroll_virtual;
         /** @brief Signal hosts emit after a scrollbar drag changes the offset, when authored. */
         char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        /** @brief Wheel step per notch; 0 selects the default. */
+        float scroll_step;
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */

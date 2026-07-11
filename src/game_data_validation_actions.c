@@ -1018,6 +1018,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.media.path.apply", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.texture.select_index", validate_editor_texture_select_index_action),
         ACTION_RULE_EXACT_HANDLER("editor.sky.scan", validate_editor_sky_scan_action),
+        ACTION_RULE_EXACT_HANDLER("editor.console.sync", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.sky.select", validate_editor_sky_select_action),
         ACTION_RULE_EXACT_HANDLER("editor.sky.apply", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.actor.scan", validate_editor_actor_scan_action),

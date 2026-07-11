@@ -47,10 +47,13 @@ typedef struct ui_layout_node
     float option_height;
     char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
     bool preserve_aspect;
+    bool anchor_right;
+    bool anchor_bottom;
     float scroll_offset;
     char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     float scroll_span;
     char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    float scroll_step;
     float resolved_scroll_offset;
     float resolved_scroll_max;
     float resolved_content_extent;
@@ -329,7 +332,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     if (!ui_layout_image_valid(desc->image) || !ui_layout_action_valid(desc->scroll_key) ||
         !ui_layout_action_valid(desc->scroll_signal))
         return false;
-    if (desc->scroll_span < 0.0f)
+    if (desc->scroll_span < 0.0f || desc->scroll_step < 0.0f)
         return false;
     if (desc->grid_columns < 0 || (desc->axis == SLAYER3D_UI_LAYOUT_AXIS_GRID && desc->grid_columns < 1))
         return false;
@@ -380,10 +383,13 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->option_height = desc->option_height;
     ui_layout_copy_image(node->image, desc->image);
     node->preserve_aspect = desc->preserve_aspect;
+    node->anchor_right = desc->anchor_right;
+    node->anchor_bottom = desc->anchor_bottom;
     node->scroll_offset = desc->scroll_offset;
     ui_layout_copy_action(node->scroll_key, desc->scroll_key);
     node->scroll_span = desc->scroll_span;
     ui_layout_copy_action(node->scroll_signal, desc->scroll_signal);
+    node->scroll_step = desc->scroll_step;
     /* A scroll pane owns its children: clipping is not optional. */
     if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
         node->clip_children = true;
@@ -671,10 +677,14 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         }
         else
         {
-            child->resolved_rect.x = content.x + child->local_rect.x;
-            child->resolved_rect.y = content.y + child->local_rect.y;
             child->resolved_rect.w = ui_layout_node_width(child, content.w);
             child->resolved_rect.h = ui_layout_node_height(child, content.h);
+            child->resolved_rect.x = child->anchor_right
+                                         ? content.x + content.w - child->local_rect.x - child->resolved_rect.w
+                                         : content.x + child->local_rect.x;
+            child->resolved_rect.y = child->anchor_bottom
+                                         ? content.y + content.h - child->local_rect.y - child->resolved_rect.h
+                                         : content.y + child->local_rect.y;
         }
 
         child->resolved = true;
@@ -722,10 +732,12 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
     }
     else
     {
-        node->resolved_rect.x = node->local_rect.x;
-        node->resolved_rect.y = node->local_rect.y;
         node->resolved_rect.w = ui_layout_node_width(node, viewport_w);
         node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
+        node->resolved_rect.x =
+            node->anchor_right ? viewport_w - node->local_rect.x - node->resolved_rect.w : node->local_rect.x;
+        node->resolved_rect.y =
+            node->anchor_bottom ? viewport_h - node->local_rect.y - node->resolved_rect.h : node->local_rect.y;
         node->resolved_layer = node->layer;
         node->has_resolved_clip_rect = false;
         node->resolved = true;
@@ -835,6 +847,7 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         ui_layout_copy_action(resolved->scroll_key, node->scroll_key);
         resolved->scroll_virtual = ui_layout_node_is_virtual_list(node);
         ui_layout_copy_action(resolved->scroll_signal, node->scroll_signal);
+        resolved->scroll_step = node->scroll_step;
     }
 }
 

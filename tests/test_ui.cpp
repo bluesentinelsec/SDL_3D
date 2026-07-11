@@ -564,6 +564,51 @@ TEST(SLAYER3DUI, VirtualListSharesScrollbarWithoutMovingChildren)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, AnchoredNodesTrackViewportEdges)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    // x/y become edge margins: a right-docked panel keeps its 12px margin
+    // at any viewport size instead of hardcoding the 1280-wide layout.
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "dock";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {12.0f, 0.0f, 238.0f, 520.0f};
+    panel.anchor_right = true;
+    panel.anchor_bottom = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    // Anchored children resolve against the parent's content edges too.
+    slayer3d_ui_layout_node_desc corner{};
+    corner.id = "dock.corner";
+    corner.parent_id = "dock";
+    corner.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    corner.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    corner.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    corner.rect = {4.0f, 4.0f, 40.0f, 20.0f};
+    corner.anchor_right = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &corner));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "dock"), 1280.0f - 12.0f - 238.0f, 720.0f - 520.0f,
+                238.0f, 520.0f);
+    const slayer3d_ui_layout_resolved_node *resolved_corner =
+        slayer3d_ui_layout_find_resolved_node(layout, "dock.corner");
+    ASSERT_NE(resolved_corner, nullptr);
+    EXPECT_FLOAT_EQ(resolved_corner->rect.x, (1280.0f - 12.0f - 238.0f) + 238.0f - 4.0f - 40.0f);
+
+    // The same tree at a larger viewport stays docked to the edges.
+    slayer3d_ui_layout_mark_dirty(layout);
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 2560.0f, 1440.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "dock"), 2560.0f - 12.0f - 238.0f, 1440.0f - 520.0f,
+                238.0f, 520.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 {
     slayer3d_ui_layout_model *layout = nullptr;

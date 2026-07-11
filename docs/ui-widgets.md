@@ -147,6 +147,27 @@ button can never drift out of the slot. Set `preserve_aspect: true` to fit the
 source aspect ratio inside the rect, and an optional `color` to tint. Images
 are display-only unless they author `interactive` / `action`.
 
+### Edge Anchoring
+
+`anchor_x: "right"` / `anchor_y: "bottom"` reinterpret a node's `x` / `y` as
+margins from the opposite edge of its parent (or the viewport, for roots).
+Docked panels author their margin once and track any viewport size, so a
+right-docked browser never encodes the canonical resolution in its position.
+
+### Wheel And Scrollbar Behavior
+
+Every scrollable container - pixel `scroll` panes and virtualized lists -
+shares one interaction model: the synthesized scrollbar drags through the
+pane's resolved geometry, wheel input over the pane adjusts its `scroll_key`
+(one item per notch for lists, 40px for panes, overridable with
+`scroll_step`), and events over panes are consumed before the world/canvas.
+Clicks outside an open dropdown popup dismiss it and are likewise consumed.
+
+Bare-key editor shortcuts gate on the single scene fact
+`editor.ui.text_entry.active`, published by the runtime from the live
+text-field focus keys before input sensors evaluate; new text fields extend
+the C-side computation instead of adding conditions to every sensor.
+
 ## Styling
 
 Nodes may author:
