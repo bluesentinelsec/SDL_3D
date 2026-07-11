@@ -160,6 +160,16 @@ static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_ima
     return true;
 }
 
+static bool queue_scene_ui_widget_image(void *userdata, const char *image_id)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || image_id == NULL || image_id[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_ui_image_source(
+        context->queue, queue_scene_image_source_path(context, image_id), image_id);
+    return true;
+}
+
 static void queue_skybox_image(slayer3d_game_data_asset_warmup_queue *queue, const char *image_id)
 {
     if (queue == NULL || image_id == NULL || image_id[0] == '\0')
@@ -380,6 +390,7 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
     context.queue = frame->asset_warmup;
     (void)slayer3d_game_data_for_each_font_asset(frame->runtime, queue_font_asset, &context);
     (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
+    (void)slayer3d_game_data_for_each_ui_widget_image_id(frame->runtime, queue_scene_ui_widget_image, &context);
     queue_active_scene_skybox_images(frame->runtime, frame->asset_warmup,
                                      frame->font_cache != NULL ? frame->font_cache->media_dir : NULL);
     (void)slayer3d_game_data_for_each_model_asset(frame->runtime, queue_model_browser_asset, &context);

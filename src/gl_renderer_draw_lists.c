@@ -52,6 +52,22 @@ void slayer3d_gl_free_overlay_list(slayer3d_gl_context *ctx)
         SDL_free(e->uvs);
     }
     ctx->overlay_count = 0;
+
+    /* Retired atlases (see find_or_create_overlay_atlas) stay alive until
+     * the entries recorded against them have replayed; reclaim them now. */
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    int kept = 0;
+    for (int i = 0; i < ctx->overlay_atlas_count; i++)
+    {
+        slayer3d_overlay_atlas *a = &ctx->overlay_atlases[i];
+        if (a->source == NULL)
+        {
+            gl->DeleteTextures(1, &a->gl_tex);
+            continue;
+        }
+        ctx->overlay_atlases[kept++] = *a;
+    }
+    ctx->overlay_atlas_count = kept;
 }
 
 static slayer3d_overlay_entry *append_overlay_entry(slayer3d_gl_context *ctx)
@@ -95,17 +111,19 @@ static int find_or_create_overlay_atlas(slayer3d_gl_context *ctx, const slayer3d
     for (int i = 0; i < ctx->overlay_atlas_count; i++)
     {
         slayer3d_overlay_atlas *a = &ctx->overlay_atlases[i];
-        if (a->source == texture)
-        {
-            if (a->generation != texture->generation)
-            {
-                gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-                gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                               texture->pixels);
-                a->generation = texture->generation;
-            }
+        if (a->source != texture)
+            continue;
+        if (a->generation == texture->generation)
             return i;
-        }
+        /* Same address, different generation: either an in-place texture
+         * update or an unrelated texture reusing a freed address (caches
+         * that store slayer3d_font/texture structs by value relocate on
+         * growth). Never re-upload the existing GL texture — entries
+         * recorded earlier this frame may still replay from it. Retire it
+         * and fall through to a fresh atlas; the retired one is reclaimed
+         * after replay in slayer3d_gl_free_overlay_list. */
+        a->source = NULL;
+        break;
     }
 
     if (!ensure_overlay_atlas_capacity(ctx))

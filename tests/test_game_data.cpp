@@ -10891,6 +10891,79 @@ TEST(GameDataRuntime, RetainedUIWidgetImagesResolveInsideParents)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, WidgetImageIdIterationIgnoresVisibility)
+{
+    const std::filesystem::path dir = unique_test_dir("widget_image_id_iteration");
+    write_test_pixel_png(dir / "images" / "a.png");
+    write_test_pixel_png(dir / "images" / "b.png");
+    write_text(dir / "widget_images.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Widget Image Ids", "id": "test.widget_image_ids", "version": "0.1.0" },
+  "world": { "name": "world.widget_image_ids", "kind": "fixed_screen" },
+  "assets": {
+    "images": [
+      { "id": "image.visible", "path": "asset://images/a.png" },
+      { "id": "image.hidden", "path": "asset://images/b.png" }
+    ]
+  },
+  "ui": {
+    "widgets": [
+      {
+        "id": "panel.collapsed",
+        "type": "panel",
+        "x": 0, "y": 0, "w": 200, "h": 200,
+        "visible_if": { "type": "scene_state.compare", "key": "panel.open", "op": "==", "value": true, "default": false },
+        "children": [
+          { "id": "panel.collapsed.thumb", "type": "image", "image": "image.hidden", "x": 8, "y": 8, "w": 40, "h": 40 }
+        ]
+      },
+      { "id": "hud.icon", "type": "image", "image": "image.visible", "x": 0, "y": 0, "w": 32, "h": 32 }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "widget_images.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    // The visible-image stream culls the collapsed panel's thumbnail...
+    struct ImageNames
+    {
+        std::vector<std::string> values;
+    } visible_names;
+    auto collect_visible = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+        auto *state = static_cast<ImageNames *>(userdata);
+        if (image != nullptr && image->image != nullptr)
+            state->values.emplace_back(image->image);
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect_visible, &visible_names));
+    EXPECT_NE(std::find(visible_names.values.begin(), visible_names.values.end(), "image.visible"),
+              visible_names.values.end());
+    EXPECT_EQ(std::find(visible_names.values.begin(), visible_names.values.end(), "image.hidden"),
+              visible_names.values.end());
+
+    // ...but the warmup id iteration reports both, so hidden panels keep
+    // their thumbnails resident and reopening them does not flicker.
+    ImageNames all_ids;
+    auto collect_id = [](void *userdata, const char *image_id) -> bool {
+        static_cast<ImageNames *>(userdata)->values.emplace_back(image_id);
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_widget_image_id(runtime, collect_id, &all_ids));
+    EXPECT_NE(std::find(all_ids.values.begin(), all_ids.values.end(), "image.visible"), all_ids.values.end());
+    EXPECT_NE(std::find(all_ids.values.begin(), all_ids.values.end(), "image.hidden"), all_ids.values.end());
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
 {
     struct Case

@@ -77,6 +77,93 @@ typedef struct ui_scissor_scope
     SDL_Rect previous;
 } ui_scissor_scope;
 
+/*
+ * Duplicate one collected string so a deferred draw item never outlives its
+ * source. Iteration callbacks may hand out strings backed by transient
+ * storage — retained-layout models destroyed after iteration, or menu label
+ * stack buffers — so anything kept until the draw pass must be owned here.
+ */
+static bool ui_draw_item_own_string(const char **field)
+{
+    if (*field == NULL)
+        return true;
+    char *owned = SDL_strdup(*field);
+    /* On failure the field is cleared rather than left borrowed, so the
+     * item's strings are always safe to free wholesale. */
+    *field = owned;
+    return owned != NULL;
+}
+
+static bool ui_draw_item_own_strings(ui_draw_item *item)
+{
+    bool ok = true;
+    switch (item->type)
+    {
+    case UI_DRAW_ITEM_RECT:
+        ok &= ui_draw_item_own_string(&item->data.rect.name);
+        ok &= ui_draw_item_own_string(&item->data.rect.visible);
+        ok &= ui_draw_item_own_string(&item->data.rect.alpha_source_target);
+        ok &= ui_draw_item_own_string(&item->data.rect.alpha_source_key);
+        break;
+    case UI_DRAW_ITEM_IMAGE:
+        ok &= ui_draw_item_own_string(&item->data.image.name);
+        ok &= ui_draw_item_own_string(&item->data.image.image);
+        ok &= ui_draw_item_own_string(&item->data.image.visible);
+        ok &= ui_draw_item_own_string(&item->data.image.effect);
+        ok &= ui_draw_item_own_string(&item->data.image.scroll_y_key);
+        break;
+    case UI_DRAW_ITEM_TEXT:
+        ok &= ui_draw_item_own_string(&item->data.text.name);
+        ok &= ui_draw_item_own_string(&item->data.text.font);
+        ok &= ui_draw_item_own_string(&item->data.text.text);
+        ok &= ui_draw_item_own_string(&item->data.text.format);
+        ok &= ui_draw_item_own_string(&item->data.text.source);
+        ok &= ui_draw_item_own_string(&item->data.text.visible);
+        break;
+    }
+    return ok;
+}
+
+static void ui_draw_item_free_strings(ui_draw_item *item)
+{
+    switch (item->type)
+    {
+    case UI_DRAW_ITEM_RECT:
+        SDL_free((void *)item->data.rect.name);
+        SDL_free((void *)item->data.rect.visible);
+        SDL_free((void *)item->data.rect.alpha_source_target);
+        SDL_free((void *)item->data.rect.alpha_source_key);
+        break;
+    case UI_DRAW_ITEM_IMAGE:
+        SDL_free((void *)item->data.image.name);
+        SDL_free((void *)item->data.image.image);
+        SDL_free((void *)item->data.image.visible);
+        SDL_free((void *)item->data.image.effect);
+        SDL_free((void *)item->data.image.scroll_y_key);
+        break;
+    case UI_DRAW_ITEM_TEXT:
+        SDL_free((void *)item->data.text.name);
+        SDL_free((void *)item->data.text.font);
+        SDL_free((void *)item->data.text.text);
+        SDL_free((void *)item->data.text.format);
+        SDL_free((void *)item->data.text.source);
+        SDL_free((void *)item->data.text.visible);
+        break;
+    }
+}
+
+static void ui_draw_list_free(ui_draw_list *list)
+{
+    if (list == NULL)
+        return;
+    for (int i = 0; i < list->count; ++i)
+        ui_draw_item_free_strings(&list->items[i]);
+    SDL_free(list->items);
+    list->items = NULL;
+    list->count = 0;
+    list->capacity = 0;
+}
+
 static bool ui_draw_list_append(ui_draw_list *list, const ui_draw_item *item)
 {
     if (list == NULL || item == NULL)
@@ -93,7 +180,15 @@ static bool ui_draw_list_append(ui_draw_list *list, const ui_draw_item *item)
         list->items = items;
         list->capacity = new_capacity;
     }
-    list->items[list->count++] = *item;
+    ui_draw_item *stored = &list->items[list->count];
+    *stored = *item;
+    if (!ui_draw_item_own_strings(stored))
+    {
+        ui_draw_item_free_strings(stored);
+        list->ok = false;
+        return false;
+    }
+    ++list->count;
     return true;
 }
 
@@ -642,7 +737,7 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
         ok = rect_context.ok && image_context.ok && text_context.ok && ok;
     }
 
-    SDL_free(list.items);
+    ui_draw_list_free(&list);
     return ok;
 }
 
