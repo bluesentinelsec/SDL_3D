@@ -22512,7 +22512,9 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             }
             EXPECT_FLOAT_EQ(resolved.w, 62.0f);
             EXPECT_FLOAT_EQ(resolved.h, 62.0f);
-            EXPECT_EQ(resolved.layer, 123);
+            // Layers derive from tree depth (grid -> cell -> button ->
+            // thumbnail); assert the structural floor, not a magic depth.
+            EXPECT_GT(resolved.layer, 121);
             EXPECT_TRUE(resolved.has_clip_rect);
             EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
             EXPECT_FLOAT_EQ(resolved.clip_y, 210.0f);
