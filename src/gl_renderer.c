@@ -35,11 +35,11 @@ static const unsigned int k_cube_indices[] = {
  * sampling needs them promoted to highp.
  */
 #define SLAYER3D_GLSL_PREFIX_ES                                                                                        \
-    "#version 300 es\n"                                                                                               \
-    "precision highp float;\n"                                                                                        \
-    "precision highp int;\n"                                                                                          \
-    "precision highp sampler2D;\n"                                                                                    \
-    "precision highp sampler2DArray;\n"                                                                               \
+    "#version 300 es\n"                                                                                                \
+    "precision highp float;\n"                                                                                         \
+    "precision highp int;\n"                                                                                           \
+    "precision highp sampler2D;\n"                                                                                     \
+    "precision highp sampler2DArray;\n"                                                                                \
     "precision highp samplerCube;\n"
 #define SLAYER3D_GLSL_PREFIX_CORE "#version 330\n"
 
@@ -2589,8 +2589,9 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[s]);
         for (int i = 0; i < 6; i++)
         {
+            /* ES 3.0 pairs DEPTH_COMPONENT24 with UNSIGNED_INT, never FLOAT. */
             gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_DEPTH_COMPONENT24, 1024, 1024, 0,
-                           GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+                           GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
         }
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_NEAREST);

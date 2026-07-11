@@ -26,7 +26,8 @@ static bool create_fbo(slayer3d_gl_context *ctx, int w, int h)
 
     gl->GenTextures(1, &ctx->fbo_depth);
     gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_depth);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    /* ES 3.0 pairs DEPTH_COMPONENT24 with UNSIGNED_INT, never FLOAT. */
+    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
