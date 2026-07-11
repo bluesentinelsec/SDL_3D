@@ -20,7 +20,10 @@ static bool editor_retained_ui_hit(const slayer3d_game_data_runtime *runtime, fl
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+    float viewport_w = 0.0f;
+    float viewport_h = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_w, viewport_h, NULL, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;
