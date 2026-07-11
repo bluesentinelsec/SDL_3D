@@ -157,6 +157,8 @@ extern "C"
         const char *scroll_signal;
         /** @brief Wheel step per notch; 0 selects the default (1 item, or 40px for scroll panes). */
         float scroll_step;
+        /** @brief Draw a disabled scrollbar affordance even when content currently fits. */
+        bool scrollbar_always;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */

@@ -478,6 +478,15 @@ TEST(SLAYER3DUI, ScrollPaneSynthesizesProportionalScrollbar)
     EXPECT_EQ(find_render_command(layout, "pane.scrollbar"), nullptr);
     EXPECT_FALSE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "pane", 100.0f, &offset));
 
+    slayer3d_ui_layout_clear(layout);
+    fits.scrollbar_always = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &fits));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    EXPECT_NE(find_render_command(layout, "pane.scrollbar"), nullptr);
+    EXPECT_NE(find_render_command(layout, "pane.scrollbar.thumb"), nullptr);
+    EXPECT_FALSE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "pane", 100.0f, &offset));
+
     slayer3d_ui_layout_destroy(layout);
 }
 
@@ -560,6 +569,25 @@ TEST(SLAYER3DUI, VirtualListSharesScrollbarWithoutMovingChildren)
     EXPECT_FLOAT_EQ(resolved->scroll_max, 0.0f);
     EXPECT_FLOAT_EQ(resolved->scroll_offset, 0.0f);
     EXPECT_EQ(find_render_command(layout, "list.scrollbar"), nullptr);
+
+    slayer3d_ui_layout_clear(layout);
+    list.scrollbar_always = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &list));
+    for (int i = 0; i < 6; ++i)
+    {
+        slayer3d_ui_layout_node_desc slot{};
+        slot.id = ids[i];
+        slot.parent_id = "list";
+        slot.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+        slot.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.rect = {0.0f, 0.0f, 180.0f, 48.0f};
+        ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &slot));
+    }
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    EXPECT_NE(find_render_command(layout, "list.scrollbar"), nullptr);
+    EXPECT_NE(find_render_command(layout, "list.scrollbar.thumb"), nullptr);
+    EXPECT_FALSE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "list", 20.0f + 150.0f, &offset));
 
     slayer3d_ui_layout_destroy(layout);
 }

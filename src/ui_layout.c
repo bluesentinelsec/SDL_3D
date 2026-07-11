@@ -54,6 +54,7 @@ typedef struct ui_layout_node
     float scroll_span;
     char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     float scroll_step;
+    bool scrollbar_always;
     float resolved_scroll_offset;
     float resolved_scroll_max;
     float resolved_content_extent;
@@ -390,6 +391,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->scroll_span = desc->scroll_span;
     ui_layout_copy_action(node->scroll_signal, desc->scroll_signal);
     node->scroll_step = desc->scroll_step;
+    node->scrollbar_always = desc->scrollbar_always;
     /* A scroll pane owns its children: clipping is not optional. */
     if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
         node->clip_children = true;
@@ -550,7 +552,9 @@ static bool ui_layout_scrollbar_geometry(const ui_layout_node *pane, slayer3d_ui
                                          slayer3d_ui_layout_rect *out_thumb)
 {
     const bool scrollable = pane->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(pane);
-    if (!scrollable || pane->resolved_scroll_max <= 0.0f || pane->resolved_content_extent <= 0.0f)
+    if (!scrollable || pane->resolved_content_extent <= 0.0f)
+        return false;
+    if (pane->resolved_scroll_max <= 0.0f && !pane->scrollbar_always)
         return false;
 
     slayer3d_ui_layout_rect content;
@@ -1007,6 +1011,8 @@ static void ui_layout_compile_scrollbar(slayer3d_ui_layout_model *model, const u
         model, thumb_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, thumb, node->resolved_layer + 2,
         node->has_resolved_clip_rect, node->resolved_clip_rect, "", NULL, false, false, -1, (slayer3d_color){0}, false,
         0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, thumb_fill, true, (slayer3d_color){0}, false, 0.0f, NULL, false);
+    if (node->resolved_scroll_max <= 0.0f)
+        return;
     ui_layout_store_hit_region(model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_SCROLL, track,
                                node->resolved_layer + 2, node->has_resolved_clip_rect, node->resolved_clip_rect, NULL,
                                false, -1);
@@ -1131,6 +1137,8 @@ bool slayer3d_ui_layout_scrollbar_offset_for_pointer(const slayer3d_ui_layout_mo
     slayer3d_ui_layout_rect track;
     slayer3d_ui_layout_rect thumb;
     if (!ui_layout_scrollbar_geometry(pane, &track, &thumb))
+        return false;
+    if (pane->resolved_scroll_max <= 0.0f)
         return false;
 
     const float travel = track.h - thumb.h;
