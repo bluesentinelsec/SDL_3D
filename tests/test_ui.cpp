@@ -207,6 +207,152 @@ TEST(SLAYER3DUI, RetainedColumnLayoutDistributesFillChildren)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedImageNodeInheritsParentPlacementAndClip)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc slot{};
+    slot.id = "slot";
+    slot.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    slot.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    slot.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    slot.rect = {40.0f, 60.0f, 180.0f, 48.0f};
+    slot.clip_children = true;
+    slot.layer = 20;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &slot));
+
+    slayer3d_ui_layout_node_desc thumb{};
+    thumb.id = "thumb";
+    thumb.parent_id = "slot";
+    thumb.type = SLAYER3D_UI_LAYOUT_NODE_IMAGE;
+    thumb.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    thumb.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    thumb.rect = {4.0f, 4.0f, 40.0f, 40.0f};
+    thumb.image = "image.test.thumb";
+    thumb.preserve_aspect = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &thumb));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved = slayer3d_ui_layout_find_resolved_node(layout, "thumb");
+    expect_rect(resolved, 44.0f, 64.0f, 40.0f, 40.0f);
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_STREQ(resolved->image, "image.test.thumb");
+    EXPECT_TRUE(resolved->preserve_aspect);
+    EXPECT_TRUE(resolved->has_clip_rect);
+    EXPECT_FLOAT_EQ(resolved->clip_rect.x, 40.0f);
+    EXPECT_FLOAT_EQ(resolved->clip_rect.y, 60.0f);
+    EXPECT_FLOAT_EQ(resolved->clip_rect.w, 180.0f);
+    EXPECT_FLOAT_EQ(resolved->clip_rect.h, 48.0f);
+    EXPECT_EQ(resolved->layer, 21);
+
+    const slayer3d_ui_layout_render_command *command = find_render_command(layout, "thumb");
+    ASSERT_NE(command, nullptr);
+    EXPECT_EQ(command->type, SLAYER3D_UI_LAYOUT_NODE_IMAGE);
+    EXPECT_STREQ(command->image, "image.test.thumb");
+    EXPECT_TRUE(command->preserve_aspect);
+    EXPECT_TRUE(command->has_clip_rect);
+
+    // Images are display-only by default: the slot button owns the input.
+    EXPECT_EQ(find_hit_region(layout, "thumb"), nullptr);
+    ASSERT_NE(find_hit_region(layout, "slot"), nullptr);
+
+    // Moving the slot moves the thumbnail without touching its authored rect.
+    slayer3d_ui_layout_clear(layout);
+    slot.rect = {200.0f, 300.0f, 180.0f, 48.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &slot));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &thumb));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "thumb"), 204.0f, 304.0f, 40.0f, 40.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedImageNodeCanOptIntoInput)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc icon{};
+    icon.id = "icon";
+    icon.type = SLAYER3D_UI_LAYOUT_NODE_IMAGE;
+    icon.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    icon.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    icon.rect = {10.0f, 10.0f, 32.0f, 32.0f};
+    icon.image = "image.test.icon";
+    icon.action = "editor.icon.activate";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &icon));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_hit_region *region = find_hit_region(layout, "icon");
+    ASSERT_NE(region, nullptr);
+    EXPECT_STREQ(region->action, "editor.icon.activate");
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedGridLayoutPlacesChildrenRowMajor)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc grid{};
+    grid.id = "grid";
+    grid.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    grid.axis = SLAYER3D_UI_LAYOUT_AXIS_GRID;
+    grid.grid_columns = 2;
+    grid.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    grid.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    grid.rect = {0.0f, 0.0f, 100.0f, 100.0f};
+    grid.padding = 4.0f;
+    grid.gap = 2.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &grid));
+
+    // Content rect is (4, 4, 92, 92); two columns of width (92 - 2) / 2 = 45.
+    const char *ids[] = {"cell.a", "cell.b", "cell.c", "cell.d"};
+    for (int i = 0; i < 4; ++i)
+    {
+        slayer3d_ui_layout_node_desc cell{};
+        cell.id = ids[i];
+        cell.parent_id = "grid";
+        cell.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+        cell.width_mode = i == 1 ? SLAYER3D_UI_LAYOUT_SIZE_FILL : SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        cell.height_mode = i == 3 ? SLAYER3D_UI_LAYOUT_SIZE_FILL : SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        cell.rect = {0.0f, 0.0f, 20.0f, i < 2 ? 30.0f : 15.0f};
+        ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &cell));
+    }
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    // Row 0 height is the tallest fixed child (30); row 1 starts after the gap.
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "cell.a"), 4.0f, 4.0f, 20.0f, 30.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "cell.b"), 51.0f, 4.0f, 45.0f, 30.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "cell.c"), 4.0f, 36.0f, 20.0f, 15.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "cell.d"), 51.0f, 36.0f, 20.0f, 15.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedGridLayoutRequiresColumns)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc grid{};
+    grid.id = "grid";
+    grid.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    grid.axis = SLAYER3D_UI_LAYOUT_AXIS_GRID;
+    grid.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    grid.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    grid.rect = {0.0f, 0.0f, 100.0f, 100.0f};
+    EXPECT_FALSE(slayer3d_ui_layout_add_node(layout, &grid));
+    grid.grid_columns = -1;
+    EXPECT_FALSE(slayer3d_ui_layout_add_node(layout, &grid));
+    grid.grid_columns = 2;
+    EXPECT_TRUE(slayer3d_ui_layout_add_node(layout, &grid));
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 {
     slayer3d_ui_layout_model *layout = nullptr;

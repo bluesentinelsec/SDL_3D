@@ -6248,27 +6248,27 @@
             "layer": 121,
             "clip_children": true,
             "children": [
-              { "id": "ui.editor_shell.texture_viewer.wall_metal.button", "type": "button", "x": 10, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.0", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 0, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.0.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.wall_metal.button", "type": "button", "x": 10, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.0", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 0, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.0.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.wall_metal.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_0", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.wall_metal.loading", "type": "label", "x": 10, "y": 41, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_0.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.wall_metal.failed", "type": "label", "x": 10, "y": 41, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_0.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.wall_metal.label", "type": "label", "x": 6, "y": 92, "w": 86, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.0.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.0.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.texture_viewer.rock_floor.button", "type": "button", "x": 106, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.1", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 1, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.1.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.rock_floor.button", "type": "button", "x": 106, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.1", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 1, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.1.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.rock_floor.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_1", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.rock_floor.loading", "type": "label", "x": 106, "y": 41, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_1.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.rock_floor.failed", "type": "label", "x": 106, "y": 41, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_1.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.rock_floor.label", "type": "label", "x": 102, "y": 92, "w": 86, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.1.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.1.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.button", "type": "button", "x": 10, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.2", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 2, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.2.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.button", "type": "button", "x": 10, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.2", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 2, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.2.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.ceiling_metal.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_2", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.ceiling_metal.loading", "type": "label", "x": 10, "y": 151, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_2.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.ceiling_metal.failed", "type": "label", "x": 10, "y": 151, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_2.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.ceiling_metal.label", "type": "label", "x": 6, "y": 202, "w": 86, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.2.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.2.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.texture_viewer.door_hatch.button", "type": "button", "x": 106, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.3", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 3, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.3.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.door_hatch.button", "type": "button", "x": 106, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.3", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 3, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.3.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.door_hatch.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_3", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.door_hatch.loading", "type": "label", "x": 106, "y": 151, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_3.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.door_hatch.failed", "type": "label", "x": 106, "y": 151, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_3.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.door_hatch.label", "type": "label", "x": 102, "y": 202, "w": 86, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.3.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.3.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.texture_viewer.lava.button", "type": "button", "x": 10, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.4", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 4, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.4.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.lava.button", "type": "button", "x": 10, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.4", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 4, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.4.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.lava.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_4", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.lava.loading", "type": "label", "x": 10, "y": 261, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_4.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.lava.failed", "type": "label", "x": 10, "y": 261, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_4.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.lava.label", "type": "label", "x": 6, "y": 312, "w": 86, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.4.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.4.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.button", "type": "button", "x": 106, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.5", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 5, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.5.available", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.button", "type": "button", "x": 106, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.5", "selected_if": { "type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 5, "default": -1 }, "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.5.available", "op": "==", "value": true, "default": false }, "children": [ { "id": "ui.editor_shell.texture_viewer.radioactive_crate.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_5", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false } ] },
               { "id": "ui.editor_shell.texture_viewer.radioactive_crate.loading", "type": "label", "x": 106, "y": 261, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_5.pending", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.radioactive_crate.failed", "type": "label", "x": 106, "y": 261, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.slot_5.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.radioactive_crate.label", "type": "label", "x": 98, "y": 312, "w": 94, "h": 18, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.texture.slot.5.label", "default": "" }], "text_scale": 0.38, "align": "center", "layer": 122, "visible_if": { "type": "scene_state.compare", "key": "editor.texture.slot.5.available", "op": "==", "value": true, "default": false } },
@@ -6365,30 +6365,42 @@
             "layer": 141,
             "clip_children": true,
             "children": [
-              { "id": "ui.editor_shell.skybox_panel.slot0.button", "type": "button", "x": 8, "y": 8, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.0", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 0, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot0.name", "type": "label", "x": 58, "y": 16, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.0.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot0.kind.animated", "type": "label", "x": 58, "y": 34, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot0.kind.static", "type": "label", "x": 58, "y": 34, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot1.button", "type": "button", "x": 8, "y": 61, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.1", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 1, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot1.name", "type": "label", "x": 58, "y": 69, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.1.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot1.kind.animated", "type": "label", "x": 58, "y": 87, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot1.kind.static", "type": "label", "x": 58, "y": 87, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot2.button", "type": "button", "x": 8, "y": 114, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.2", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 2, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot2.name", "type": "label", "x": 58, "y": 122, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.2.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot2.kind.animated", "type": "label", "x": 58, "y": 140, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot2.kind.static", "type": "label", "x": 58, "y": 140, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot3.button", "type": "button", "x": 8, "y": 167, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.3", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 3, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot3.name", "type": "label", "x": 58, "y": 175, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.3.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot3.kind.animated", "type": "label", "x": 58, "y": 193, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot3.kind.static", "type": "label", "x": 58, "y": 193, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot4.button", "type": "button", "x": 8, "y": 220, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.4", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 4, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot4.name", "type": "label", "x": 58, "y": 228, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.4.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot4.kind.animated", "type": "label", "x": 58, "y": 246, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot4.kind.static", "type": "label", "x": 58, "y": 246, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot5.button", "type": "button", "x": 8, "y": 273, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.5", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 5, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot5.name", "type": "label", "x": 58, "y": 281, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.5.name", "default": "" }], "text_scale": 0.38, "align": "left", "layer": 143, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false } },
-              { "id": "ui.editor_shell.skybox_panel.slot5.kind.animated", "type": "label", "x": 58, "y": 299, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": ">", "value": 0, "default": 0 } ] } },
-              { "id": "ui.editor_shell.skybox_panel.slot5.kind.static", "type": "label", "x": 58, "y": 299, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "layer": 143, "visible_if": { "type": "all", "conditions": [ { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }, { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": "==", "value": 0, "default": 0 } ] } },
+              { "id": "ui.editor_shell.skybox_panel.slot0.button", "type": "button", "x": 8, "y": 8, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.0", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 0, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot0.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_0", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot0.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.0.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot0.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot0.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.0.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
+              { "id": "ui.editor_shell.skybox_panel.slot1.button", "type": "button", "x": 8, "y": 61, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.1", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 1, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot1.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_1", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot1.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.1.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot1.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot1.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.1.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
+              { "id": "ui.editor_shell.skybox_panel.slot2.button", "type": "button", "x": 8, "y": 114, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.2", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 2, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot2.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_2", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot2.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.2.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot2.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot2.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.2.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
+              { "id": "ui.editor_shell.skybox_panel.slot3.button", "type": "button", "x": 8, "y": 167, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.3", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 3, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot3.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_3", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot3.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.3.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot3.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot3.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.3.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
+              { "id": "ui.editor_shell.skybox_panel.slot4.button", "type": "button", "x": 8, "y": 220, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.4", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 4, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot4.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_4", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot4.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.4.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot4.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot4.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.4.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
+              { "id": "ui.editor_shell.skybox_panel.slot5.button", "type": "button", "x": 8, "y": 273, "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.5", "selected_if": { "type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 5, "default": -1 }, "layer": 142, "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }, "children": [
+                { "id": "ui.editor_shell.skybox_panel.slot5.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_5", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false },
+                { "id": "ui.editor_shell.skybox_panel.slot5.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.sky.slot.5.name", "default": "" }], "text_scale": 0.38, "align": "left" },
+                { "id": "ui.editor_shell.skybox_panel.slot5.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": ">", "value": 0, "default": 0 } },
+                { "id": "ui.editor_shell.skybox_panel.slot5.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": { "type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": "==", "value": 0, "default": 0 } }
+              ] },
               { "id": "ui.editor_shell.skybox_panel.scroll.up", "type": "button", "x": 194, "y": 8, "w": 20, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.up", "layer": 142 },
               { "id": "ui.editor_shell.skybox_panel.scroll.down", "type": "button", "x": 194, "y": 298, "w": 20, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.down", "layer": 142 }
             ]
@@ -8077,248 +8089,6 @@
                 "value": ""
         }
 }
-    ],
-    "images": [
-      {
-        "name": "ui.editor_shell.skybox_panel.slot0.thumbnail",
-        "image": "image.editor_shell.sky.slot_0",
-        "layer": 143,
-        "x": 1048,
-        "y": 178,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.skybox_panel.slot1.thumbnail",
-        "image": "image.editor_shell.sky.slot_1",
-        "layer": 143,
-        "x": 1048,
-        "y": 231,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.1.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.skybox_panel.slot2.thumbnail",
-        "image": "image.editor_shell.sky.slot_2",
-        "layer": 143,
-        "x": 1048,
-        "y": 284,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.2.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.skybox_panel.slot3.thumbnail",
-        "image": "image.editor_shell.sky.slot_3",
-        "layer": 143,
-        "x": 1048,
-        "y": 337,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.3.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.skybox_panel.slot4.thumbnail",
-        "image": "image.editor_shell.sky.slot_4",
-        "layer": 143,
-        "x": 1048,
-        "y": 390,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.4.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.skybox_panel.slot5.thumbnail",
-        "image": "image.editor_shell.sky.slot_5",
-        "layer": 143,
-        "x": 1048,
-        "y": 443,
-        "w": 40,
-        "h": 40,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 166, "w": 218, "h": 362 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.slot.5.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.wall_metal.thumbnail",
-        "image": "image.editor_shell.texture.slot_0",
-        "layer": 123,
-        "x": 1058,
-        "y": 230,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.0.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.rock_floor.thumbnail",
-        "image": "image.editor_shell.texture.slot_1",
-        "layer": 123,
-        "x": 1154,
-        "y": 230,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.1.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.ceiling_metal.thumbnail",
-        "image": "image.editor_shell.texture.slot_2",
-        "layer": 123,
-        "x": 1058,
-        "y": 340,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.2.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.door_hatch.thumbnail",
-        "image": "image.editor_shell.texture.slot_3",
-        "layer": 123,
-        "x": 1154,
-        "y": 340,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.3.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.lava.thumbnail",
-        "image": "image.editor_shell.texture.slot_4",
-        "layer": 123,
-        "x": 1058,
-        "y": 450,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.4.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.texture_viewer.radioactive_crate.thumbnail",
-        "image": "image.editor_shell.texture.slot_5",
-        "layer": 123,
-        "x": 1154,
-        "y": 450,
-        "w": 62,
-        "h": 62,
-        "preserve_aspect": false,
-        "clip_rect": { "x": 1040, "y": 210, "w": 218, "h": 390 },
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.slot.5.available", "op": "==", "value": true, "default": false }
-          ]
-        }
-      }
     ]
   }
 }

@@ -2166,7 +2166,7 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
         const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
         if (command == NULL || command->type == SLAYER3D_UI_LAYOUT_NODE_LABEL ||
             command->type == SLAYER3D_UI_LAYOUT_NODE_SPACER || command->type == SLAYER3D_UI_LAYOUT_NODE_ROW ||
-            command->type == SLAYER3D_UI_LAYOUT_NODE_COLUMN)
+            command->type == SLAYER3D_UI_LAYOUT_NODE_COLUMN || command->type == SLAYER3D_UI_LAYOUT_NODE_IMAGE)
         {
             continue;
         }
@@ -2192,6 +2192,53 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
                                                   command->clip_rect, callback, userdata);
             }
         }
+    }
+
+    slayer3d_ui_layout_destroy(layout);
+    return ok;
+}
+
+static bool retained_ui_images_from_layout(const slayer3d_game_data_runtime *runtime,
+                                           slayer3d_game_data_ui_image_fn callback, void *userdata)
+{
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return false;
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+    {
+        slayer3d_ui_layout_destroy(layout);
+        return false;
+    }
+
+    bool ok = true;
+    for (int i = 0; ok && i < slayer3d_ui_layout_render_command_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+        if (command == NULL || command->type != SLAYER3D_UI_LAYOUT_NODE_IMAGE || command->image[0] == '\0')
+            continue;
+
+        slayer3d_game_data_ui_image image;
+        SDL_zero(image);
+        image.name = command->id;
+        image.image = command->image;
+        image.visible = "always";
+        image.layer = command->layer;
+        image.x = command->rect.x;
+        image.y = command->rect.y;
+        image.w = command->rect.w;
+        image.h = command->rect.h;
+        image.preserve_aspect = command->preserve_aspect;
+        image.align = SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
+        image.valign = SLAYER3D_GAME_DATA_UI_VALIGN_TOP;
+        image.scale = 1.0f;
+        image.color = command->has_fill_color ? command->fill_color : (slayer3d_color){255, 255, 255, 255};
+        image.has_clip_rect = command->has_clip_rect;
+        image.clip_x = command->clip_rect.x;
+        image.clip_y = command->clip_rect.y;
+        image.clip_w = command->clip_rect.w;
+        image.clip_h = command->clip_rect.h;
+        image.clip_normalized = false;
+        ok = callback(userdata, &image);
     }
 
     slayer3d_ui_layout_destroy(layout);
@@ -2329,6 +2376,8 @@ bool slayer3d_game_data_for_each_ui_image(const slayer3d_game_data_runtime *runt
     for (int root_index = 0; root_index < 2; ++root_index)
         if (!for_each_authored_ui_image_root(roots[root_index], callback, userdata))
             return true;
+    if (!retained_ui_images_from_layout(runtime, callback, userdata))
+        return true;
     return true;
 }
 

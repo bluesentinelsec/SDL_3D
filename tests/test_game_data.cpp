@@ -10530,16 +10530,66 @@ TEST(GameDataRuntime, AcceptsLiquidEditorToolMode)
     remove_test_dir(dir);
 }
 
+static void write_test_pixel_png(const std::filesystem::path &path)
+{
+    Uint8 pixels[] = {255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 1;
+    image.height = 1;
+    std::filesystem::create_directories(path.parent_path());
+    ASSERT_TRUE(slayer3d_save_image_png(&image, path.string().c_str())) << SDL_GetError();
+}
+
 TEST(GameDataRuntime, RetainedUIWidgetsValidate)
 {
     const std::filesystem::path dir = unique_test_dir("retained_ui_widgets");
+    write_test_pixel_png(dir / "images" / "thumb.png");
     write_text(dir / "retained_ui.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Retained UI Widgets", "id": "test.retained_ui", "version": "0.1.0" },
   "world": { "name": "world.retained_ui", "kind": "fixed_screen" },
+  "assets": {
+    "images": [{ "id": "image.retained_ui.thumb", "path": "asset://images/thumb.png" }]
+  },
   "ui": {
     "widgets": [
+      {
+        "id": "browser.grid",
+        "type": "panel",
+        "layout": "grid",
+        "columns": 2,
+        "x": 400,
+        "y": 40,
+        "w": 200,
+        "h": 240,
+        "padding": 8,
+        "gap": 6,
+        "clip_children": true,
+        "children": [
+          {
+            "id": "browser.cell0",
+            "type": "button",
+            "w": 78,
+            "h": 78,
+            "action": "editor.asset.select.0",
+            "children": [
+              {
+                "id": "browser.cell0.thumbnail",
+                "type": "image",
+                "image": "image.retained_ui.thumb",
+                "x": 8,
+                "y": 8,
+                "w": 62,
+                "h": 62,
+                "preserve_aspect": false
+              }
+            ]
+          },
+          { "id": "browser.cell1", "type": "button", "w": 78, "h": 78, "action": "editor.asset.select.1" }
+        ]
+      },
       {
         "id": "toolbar.main",
         "type": "toolbar",
@@ -10590,6 +10640,135 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
     EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "retained_ui.game.json").string().c_str(), nullptr, error,
                                                  sizeof(error)))
         << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RetainedUIWidgetImagesResolveInsideParents)
+{
+    const std::filesystem::path dir = unique_test_dir("retained_ui_widget_images");
+    write_test_pixel_png(dir / "images" / "a.png");
+    write_test_pixel_png(dir / "images" / "b.png");
+    write_text(dir / "retained_ui_images.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Retained UI Widget Images", "id": "test.retained_ui_images", "version": "0.1.0" },
+  "world": { "name": "world.retained_ui_images", "kind": "fixed_screen" },
+  "assets": {
+    "images": [
+      { "id": "image.cell.a", "path": "asset://images/a.png" },
+      { "id": "image.cell.b", "path": "asset://images/b.png" }
+    ]
+  },
+  "ui": {
+    "widgets": [
+      {
+        "id": "browser.grid",
+        "type": "panel",
+        "layout": "grid",
+        "columns": 2,
+        "x": 100,
+        "y": 50,
+        "w": 200,
+        "h": 240,
+        "padding": 10,
+        "gap": 4,
+        "layer": 40,
+        "clip_children": true,
+        "children": [
+          {
+            "id": "browser.cell.a",
+            "type": "button",
+            "w": 78,
+            "h": 78,
+            "action": "editor.asset.select.0",
+            "children": [
+              { "id": "browser.cell.a.thumbnail", "type": "image", "image": "image.cell.a", "x": 8, "y": 8, "w": 62, "h": 62 }
+            ]
+          },
+          {
+            "id": "browser.cell.b",
+            "type": "button",
+            "w": 78,
+            "h": 78,
+            "action": "editor.asset.select.1",
+            "children": [
+              { "id": "browser.cell.b.thumbnail", "type": "image", "image": "image.cell.b", "x": 8, "y": 8, "w": 62, "h": 62 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "retained_ui_images.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+
+    // Grid cells are placed row-major inside the panel's padded content rect.
+    const slayer3d_ui_layout_resolved_node *cell_a = slayer3d_ui_layout_find_resolved_node(layout, "browser.cell.a");
+    const slayer3d_ui_layout_resolved_node *cell_b = slayer3d_ui_layout_find_resolved_node(layout, "browser.cell.b");
+    ASSERT_NE(cell_a, nullptr);
+    ASSERT_NE(cell_b, nullptr);
+    EXPECT_FLOAT_EQ(cell_a->rect.x, 110.0f);
+    EXPECT_FLOAT_EQ(cell_a->rect.y, 60.0f);
+    EXPECT_FLOAT_EQ(cell_b->rect.x, 202.0f);
+    EXPECT_FLOAT_EQ(cell_b->rect.y, 60.0f);
+
+    // Thumbnails are structural children: inside the cell rect, clipped by
+    // the grid panel, layered above the owning button.
+    const slayer3d_ui_layout_resolved_node *thumb =
+        slayer3d_ui_layout_find_resolved_node(layout, "browser.cell.a.thumbnail");
+    ASSERT_NE(thumb, nullptr);
+    EXPECT_FLOAT_EQ(thumb->rect.x, cell_a->rect.x + 8.0f);
+    EXPECT_FLOAT_EQ(thumb->rect.y, cell_a->rect.y + 8.0f);
+    EXPECT_GE(thumb->rect.x, cell_a->rect.x);
+    EXPECT_LE(thumb->rect.x + thumb->rect.w, cell_a->rect.x + cell_a->rect.w);
+    EXPECT_GE(thumb->rect.y, cell_a->rect.y);
+    EXPECT_LE(thumb->rect.y + thumb->rect.h, cell_a->rect.y + cell_a->rect.h);
+    EXPECT_TRUE(thumb->has_clip_rect);
+    EXPECT_FLOAT_EQ(thumb->clip_rect.x, 110.0f);
+    EXPECT_FLOAT_EQ(thumb->clip_rect.y, 60.0f);
+    EXPECT_FLOAT_EQ(thumb->clip_rect.w, 180.0f);
+    EXPECT_FLOAT_EQ(thumb->clip_rect.h, 220.0f);
+    EXPECT_GT(thumb->layer, cell_a->layer);
+    EXPECT_STREQ(thumb->image, "image.cell.a");
+    slayer3d_ui_layout_destroy(layout);
+
+    // The same widget tree feeds the UI image stream used by presentation.
+    struct ImageCapture
+    {
+        std::vector<slayer3d_game_data_ui_image> images;
+        std::vector<std::string> names;
+    } capture;
+    auto collect = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+        auto *state = static_cast<ImageCapture *>(userdata);
+        state->images.push_back(*image);
+        state->names.emplace_back(image->name != nullptr ? image->name : "");
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect, &capture));
+    ASSERT_EQ(capture.images.size(), 2U);
+    EXPECT_EQ(capture.names[0], "browser.cell.a.thumbnail");
+    EXPECT_EQ(capture.names[1], "browser.cell.b.thumbnail");
+    EXPECT_FLOAT_EQ(capture.images[0].x, 118.0f);
+    EXPECT_FLOAT_EQ(capture.images[0].y, 68.0f);
+    EXPECT_FLOAT_EQ(capture.images[0].w, 62.0f);
+    EXPECT_FLOAT_EQ(capture.images[0].h, 62.0f);
+    EXPECT_TRUE(capture.images[0].has_clip_rect);
+    EXPECT_FLOAT_EQ(capture.images[0].clip_x, 110.0f);
+    EXPECT_FLOAT_EQ(capture.images[0].clip_y, 60.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -10752,6 +10931,51 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget options are only supported by dropdown widgets",
+        },
+        {
+            "image_without_asset_id",
+            R"json({
+  "widgets": [
+    { "id": "thumb", "type": "image", "w": 40, "h": 40 }
+  ]
+})json",
+            "UI image widget requires a non-empty image",
+        },
+        {
+            "image_on_non_image_widget",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "image": "image.icon" }
+  ]
+})json",
+            "UI widget image is only supported by image widgets",
+        },
+        {
+            "image_unknown_asset",
+            R"json({
+  "widgets": [
+    { "id": "thumb", "type": "image", "w": 40, "h": 40, "image": "image.missing" }
+  ]
+})json",
+            "unknown image asset",
+        },
+        {
+            "columns_without_grid",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 100, "h": 100, "columns": 2 }
+  ]
+})json",
+            "UI widget columns require layout \"grid\"",
+        },
+        {
+            "grid_without_columns",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "layout": "grid", "w": 100, "h": 100 }
+  ]
+})json",
+            "UI grid widgets require a positive integer columns count",
         },
     };
 

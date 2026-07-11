@@ -144,7 +144,7 @@ static bool ui_widget_type_valid(const char *type)
 {
     static const char *const types[] = {
         "panel",    "toolbar",   "row",    "column",  "button",   "label",
-        "dropdown", "tab_strip", "spacer", "console", "log_view",
+        "dropdown", "tab_strip", "spacer", "console", "log_view", "image",
     };
     if (type == NULL || type[0] == '\0')
         return false;
@@ -159,7 +159,7 @@ static bool ui_widget_type_valid(const char *type)
 static bool ui_widget_layout_valid(const char *layout)
 {
     return layout == NULL || layout[0] == '\0' || SDL_strcmp(layout, "none") == 0 || SDL_strcmp(layout, "row") == 0 ||
-           SDL_strcmp(layout, "column") == 0;
+           SDL_strcmp(layout, "column") == 0 || SDL_strcmp(layout, "grid") == 0;
 }
 
 static bool ui_widget_size_value_valid(yyjson_val *value)
@@ -384,6 +384,31 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     {
         return false;
     }
+    const bool is_image = SDL_strcmp(type, "image") == 0;
+    yyjson_val *image_value = obj_get(node, "image");
+    if (image_value != NULL && !is_image)
+        return validation_error(ctx, path, "UI widget image is only supported by image widgets");
+    if (is_image)
+    {
+        if (!ui_widget_optional_non_empty_string_len(node, "image", SLAYER3D_UI_LAYOUT_IMAGE_MAX) ||
+            image_value == NULL)
+        {
+            return validation_error(ctx, path, "UI image widget requires a non-empty image shorter than %d bytes",
+                                    SLAYER3D_UI_LAYOUT_IMAGE_MAX);
+        }
+        if (!require_ref(ctx, &names->images, "image asset", json_string(node, "image"), path))
+            return false;
+    }
+    if (!ui_widget_optional_bool(node, "preserve_aspect"))
+        return validation_error(ctx, path, "UI widget preserve_aspect must be a boolean when authored");
+    yyjson_val *columns = obj_get(node, "columns");
+    if (columns == NULL)
+        columns = obj_get(node, "grid_columns");
+    const bool is_grid = layout != NULL && SDL_strcmp(layout, "grid") == 0;
+    if (columns != NULL && !is_grid)
+        return validation_error(ctx, path, "UI widget columns require layout \"grid\"");
+    if (is_grid && (!yyjson_is_int(columns) || yyjson_get_int(columns) < 1))
+        return validation_error(ctx, path, "UI grid widgets require a positive integer columns count");
     if (!ui_widget_optional_non_empty_string_len(node, "x_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "y_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||

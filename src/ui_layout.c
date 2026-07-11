@@ -22,6 +22,7 @@ typedef struct ui_layout_node
     slayer3d_ui_layout_rect resolved_clip_rect;
     float padding;
     float gap;
+    int grid_columns;
     bool clip_children;
     char clip_rect_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     int layer;
@@ -44,6 +45,8 @@ typedef struct ui_layout_node
     int selected_index;
     bool open;
     float option_height;
+    char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
+    bool preserve_aspect;
     bool hovered;
     bool active;
     bool selected;
@@ -98,6 +101,11 @@ static void ui_layout_copy_font(char *dst, const char *src)
 static void ui_layout_copy_action(char *dst, const char *src)
 {
     SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_ACTION_MAX, "%s", src != NULL ? src : "");
+}
+
+static void ui_layout_copy_image(char *dst, const char *src)
+{
+    SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_IMAGE_MAX, "%s", src != NULL ? src : "");
 }
 
 static int ui_layout_find_node_index(const slayer3d_ui_layout_model *model, const char *id)
@@ -221,6 +229,11 @@ static bool ui_layout_font_valid(const char *font)
     return font == NULL || SDL_strlen(font) < SLAYER3D_UI_LAYOUT_FONT_MAX;
 }
 
+static bool ui_layout_image_valid(const char *image)
+{
+    return image == NULL || SDL_strlen(image) < SLAYER3D_UI_LAYOUT_IMAGE_MAX;
+}
+
 static bool ui_layout_dropdown_options_valid(const slayer3d_ui_layout_node_desc *desc)
 {
     if (desc->option_count < 0 || desc->option_count > SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX)
@@ -296,6 +309,10 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     }
     if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) || !ui_layout_action_valid(desc->action))
         return false;
+    if (!ui_layout_image_valid(desc->image))
+        return false;
+    if (desc->grid_columns < 0 || (desc->axis == SLAYER3D_UI_LAYOUT_AXIS_GRID && desc->grid_columns < 1))
+        return false;
     if (desc->type != SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && desc->option_count > 0)
         return false;
     if (!ui_layout_dropdown_options_valid(desc))
@@ -320,6 +337,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->local_rect = desc->rect;
     node->padding = desc->padding;
     node->gap = desc->gap;
+    node->grid_columns = desc->grid_columns;
     node->clip_children = desc->clip_children;
     ui_layout_copy_id(node->clip_rect_id, desc->clip_rect_id);
     node->layer = desc->layer;
@@ -340,6 +358,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->selected_index = desc->selected_index;
     node->open = desc->open;
     node->option_height = desc->option_height;
+    ui_layout_copy_image(node->image, desc->image);
+    node->preserve_aspect = desc->preserve_aspect;
     for (int i = 0; i < node->option_count; ++i)
         ui_layout_copy_text(node->options[i], desc->options[i]);
     node->interactive = desc->interactive || desc->action != NULL || ui_layout_type_interactive(desc->type);
@@ -420,6 +440,32 @@ static float ui_layout_distributed_fill_extent(const slayer3d_ui_layout_model *m
 
 static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, float viewport_w, float viewport_h);
 
+static float ui_layout_grid_cell_width(const ui_layout_node *parent, slayer3d_ui_layout_rect content)
+{
+    const float columns = (float)SDL_max(parent->grid_columns, 1);
+    return SDL_max((content.w - parent->gap * (columns - 1.0f)) / columns, 0.0f);
+}
+
+static float ui_layout_grid_row_height(const slayer3d_ui_layout_model *model, int parent_index, int row, int columns,
+                                       float fallback)
+{
+    const int first_slot = row * columns;
+    float height = 0.0f;
+    int slot = 0;
+    for (int i = 0; i < model->count; ++i)
+    {
+        const ui_layout_node *child = &model->nodes[i];
+        if (child->parent_index != parent_index)
+            continue;
+        if (slot >= first_slot && slot < first_slot + columns && child->height_mode == SLAYER3D_UI_LAYOUT_SIZE_FIXED)
+        {
+            height = SDL_max(height, child->local_rect.h);
+        }
+        ++slot;
+    }
+    return height > 0.0f ? height : fallback;
+}
+
 static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int parent_index, float viewport_w,
                                        float viewport_h)
 {
@@ -434,6 +480,10 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         ui_layout_distributed_fill_extent(model, parent_index, SLAYER3D_UI_LAYOUT_AXIS_ROW, content.w, parent->gap);
     const float column_fill =
         ui_layout_distributed_fill_extent(model, parent_index, SLAYER3D_UI_LAYOUT_AXIS_COLUMN, content.h, parent->gap);
+    const int grid_columns = SDL_max(parent->grid_columns, 1);
+    const float grid_cell_w = ui_layout_grid_cell_width(parent, content);
+    float grid_row_h = 0.0f;
+    int grid_slot = 0;
     float cursor_x = content.x;
     float cursor_y = content.y;
 
@@ -443,7 +493,23 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         if (child->parent_index != parent_index)
             continue;
 
-        if (parent->axis == SLAYER3D_UI_LAYOUT_AXIS_ROW)
+        if (parent->axis == SLAYER3D_UI_LAYOUT_AXIS_GRID)
+        {
+            const int grid_col = grid_slot % grid_columns;
+            if (grid_col == 0)
+            {
+                if (grid_slot > 0)
+                    cursor_y += grid_row_h + parent->gap;
+                grid_row_h =
+                    ui_layout_grid_row_height(model, parent_index, grid_slot / grid_columns, grid_columns, grid_cell_w);
+            }
+            child->resolved_rect.x = content.x + (grid_cell_w + parent->gap) * (float)grid_col + child->local_rect.x;
+            child->resolved_rect.y = cursor_y + child->local_rect.y;
+            child->resolved_rect.w = ui_layout_node_width(child, grid_cell_w);
+            child->resolved_rect.h = ui_layout_node_height(child, grid_row_h);
+            ++grid_slot;
+        }
+        else if (parent->axis == SLAYER3D_UI_LAYOUT_AXIS_ROW)
         {
             child->resolved_rect.x = cursor_x + child->local_rect.x;
             child->resolved_rect.y = content.y + child->local_rect.y;
@@ -612,6 +678,8 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->border_color = node->border_color;
         resolved->has_border_color = node->has_border_color;
         resolved->border_thickness = node->border_thickness;
+        ui_layout_copy_image(resolved->image, node->image);
+        resolved->preserve_aspect = node->preserve_aspect;
     }
 }
 
@@ -672,7 +740,7 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
                                            slayer3d_color text_color, bool has_text_color, float text_scale,
                                            slayer3d_ui_layout_text_align text_align, slayer3d_color fill_color,
                                            bool has_fill_color, slayer3d_color border_color, bool has_border_color,
-                                           float border_thickness)
+                                           float border_thickness, const char *image, bool preserve_aspect)
 {
     slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
     SDL_zero(*render);
@@ -699,6 +767,8 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
     render->selected = selected;
     render->popup = popup;
     render->option_index = option_index;
+    ui_layout_copy_image(render->image, image);
+    render->preserve_aspect = preserve_aspect;
 }
 
 static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
@@ -751,7 +821,7 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
                                    false, (slayer3d_ui_layout_rect){0}, "", node->font, false, true, -1,
                                    (slayer3d_color){0}, false, 0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO,
-                                   (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f);
+                                   (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f, NULL, false);
 
     const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
     for (int i = 0; i < node->option_count; ++i)
@@ -769,7 +839,7 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
                                        popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->options[i],
                                        node->font, selected, false, i, node->text_color, node->has_text_color,
                                        node->text_scale, node->text_align, (slayer3d_color){0}, false,
-                                       (slayer3d_color){0}, false, 0.0f);
+                                       (slayer3d_color){0}, false, 0.0f, NULL, false);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
                                    popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->action, selected, i);
     }
@@ -789,11 +859,11 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         const bool visible_in_clip = ui_layout_clip_allows_rect(node->has_clip_rect, node->clip_rect, node->rect);
         if (visible_in_clip)
         {
-            ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer,
-                                           node->has_clip_rect, node->clip_rect, node->text, node->font, node->selected,
-                                           false, -1, node->text_color, node->has_text_color, node->text_scale,
-                                           node->text_align, node->fill_color, node->has_fill_color, node->border_color,
-                                           node->has_border_color, node->border_thickness);
+            ui_layout_store_render_command(
+                model, node->id, node->id, node->type, node->rect, node->layer, node->has_clip_rect, node->clip_rect,
+                node->text, node->font, node->selected, false, -1, node->text_color, node->has_text_color,
+                node->text_scale, node->text_align, node->fill_color, node->has_fill_color, node->border_color,
+                node->has_border_color, node->border_thickness, node->image, node->preserve_aspect);
         }
 
         if (node->interactive && visible_in_clip)

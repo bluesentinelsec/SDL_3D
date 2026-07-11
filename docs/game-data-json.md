@@ -3835,14 +3835,19 @@ should use `ui.widgets`.
 ```
 
 Widgets support `panel`, `toolbar`, `row`, `column`, `button`, `label`,
-`dropdown`, `tab_strip`, `spacer`, `console`, and `log_view` nodes. `w` and `h`
-may be positive numbers or `"fill"`. Nodes may author `color` / `fill_color`,
-`border_color`, `border_thickness`, `text_color`, `text_scale`, and `align`
-(`left`, `center`, or `right`). Dynamic text supports `format` plus `bindings`;
-the number of `%s` placeholders must exactly match the number of bindings.
-Single numeric scene-state labels can use `text_format` plus `text_value_key`.
-Dropdown popup and option commands are synthesized from the authored dropdown
-node and keep the dropdown `owner_id` for input and rendering. See
+`dropdown`, `tab_strip`, `spacer`, `console`, `log_view`, and `image` nodes.
+`w` and `h` may be positive numbers or `"fill"`. Nodes may author `color` /
+`fill_color`, `border_color`, `border_thickness`, `text_color`, `text_scale`,
+and `align` (`left`, `center`, or `right`). Containers may author
+`layout: "row"`, `"column"`, or `"grid"`; grids require a positive integer
+`columns` count and place children row-major. `image` nodes reference an image
+asset via `image`, optionally with `preserve_aspect`, and inherit position,
+clipping, visibility, and layering from their parent like any other node.
+Dynamic text supports `format` plus `bindings`; the number of `%s`
+placeholders must exactly match the number of bindings. Single numeric
+scene-state labels can use `text_format` plus `text_value_key`. Dropdown popup
+and option commands are synthesized from the authored dropdown node and keep
+the dropdown `owner_id` for input and rendering. See
 [`ui-widgets.md`](ui-widgets.md) for the retained UI authoring contract.
 
 ```json
