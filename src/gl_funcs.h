@@ -185,7 +185,7 @@ typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint,
 typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
 typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
 typedef GLuint(SLAYER3D_GL_APIENTRY *PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
-typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWBUFFERPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWBUFFERSPROC)(GLsizei, const GLenum *);
 typedef void(SLAYER3D_GL_APIENTRY *PFNGLREADBUFFERPROC)(GLenum);
 typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENERATEMIPMAPPROC)(GLenum);
@@ -279,7 +279,9 @@ typedef struct slayer3d_gl_funcs
     PFNGLBINDBUFFERBASEPROC BindBufferBase;
     PFNGLUNIFORMBLOCKBINDINGPROC UniformBlockBinding;
     PFNGLGETUNIFORMBLOCKINDEXPROC GetUniformBlockIndex;
-    PFNGLDRAWBUFFERPROC DrawBuffer;
+    /* glDrawBuffers exists in both GL 3.3 and ES 3.0; the singular
+     * glDrawBuffer is desktop-only and absent from WebGL2. */
+    PFNGLDRAWBUFFERSPROC DrawBuffers;
     PFNGLREADBUFFERPROC ReadBuffer;
     PFNGLUNIFORM1FVPROC Uniform1fv;
     PFNGLGENERATEMIPMAPPROC GenerateMipmap;
@@ -389,7 +391,7 @@ static SLAYER3D_GL_FUNCS_MAYBE_UNUSED bool slayer3d_gl_load_funcs(slayer3d_gl_fu
     LOAD(BindBufferBase);
     LOAD(UniformBlockBinding);
     LOAD(GetUniformBlockIndex);
-    LOAD(DrawBuffer);
+    LOAD(DrawBuffers);
     LOAD(ReadBuffer);
     LOAD(Uniform1fv);
     LOAD(GenerateMipmap);

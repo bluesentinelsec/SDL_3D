@@ -559,6 +559,11 @@ if(EMSCRIPTEN)
     target_link_options(
         slayer3d_editor_web
         PRIVATE
+            # The GL renderer targets OpenGL ES 3.0, which requires a WebGL2
+            # context; without these Emscripten defaults to WebGL1 and GL
+            # context creation falls back to the software renderer.
+            "-sMIN_WEBGL_VERSION=2"
+            "-sMAX_WEBGL_VERSION=2"
             "-sALLOW_MEMORY_GROWTH=1"
             # Data-action validation recurses through the authored editor
             # shell, so keep the wasm stack explicit like the game-data test

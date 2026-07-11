@@ -27,9 +27,25 @@ static const unsigned int k_cube_indices[] = {
     0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5, 4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4,
 };
 
+/*
+ * GLSL prefix prepended to every built-in shader. The ES variant targets
+ * GLSL ES 3.00 (WebGL2): fragment shaders require an explicit default float
+ * precision, and opaque sampler types beyond sampler2D default to lowp (or
+ * have no default at all, as with sampler2DArray), so depth-comparison
+ * sampling needs them promoted to highp.
+ */
+#define SLAYER3D_GLSL_PREFIX_ES                                                                                        \
+    "#version 300 es\n"                                                                                               \
+    "precision highp float;\n"                                                                                        \
+    "precision highp int;\n"                                                                                          \
+    "precision highp sampler2D;\n"                                                                                    \
+    "precision highp sampler2DArray;\n"                                                                               \
+    "precision highp samplerCube;\n"
+#define SLAYER3D_GLSL_PREFIX_CORE "#version 330\n"
+
 static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
 {
-    return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
+    return (ctx != NULL && ctx->is_es) ? SLAYER3D_GLSL_PREFIX_ES : SLAYER3D_GLSL_PREFIX_CORE;
 }
 
 static bool csm_shadow_pass_enabled(void)
@@ -2051,7 +2067,9 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     GLuint hdr_tex;
     gl->GenTextures(1, &hdr_tex);
     gl->BindTexture(GL_TEXTURE_2D, hdr_tex);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w, h, 0, nc == 4 ? GL_RGBA : GL_RGB, GL_FLOAT, data);
+    /* ES 3.0 requires internal format and pixel format to agree. */
+    gl->TexImage2D(GL_TEXTURE_2D, 0, nc == 4 ? GL_RGBA16F : GL_RGB16F, w, h, 0, nc == 4 ? GL_RGBA : GL_RGB, GL_FLOAT,
+                   data);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F /* GL_CLAMP_TO_EDGE */);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
     gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -2076,7 +2094,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->EnableVertexAttribArray(0);
     gl->VertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), NULL);
 
-    const char *ver = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330 core\n";
+    const char *ver = ctx->is_es ? SLAYER3D_GLSL_PREFIX_ES : "#version 330 core\n";
 
     /* Capture projection + 6 view matrices */
     float cap_proj[16];
@@ -2105,7 +2123,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->GenTextures(1, &env_cubemap);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
     for (int i = 0; i < 6; i++)
-        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 512, 512, 0, GL_RGB, GL_FLOAT, NULL);
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGBA16F, 512, 512, 0, GL_RGBA, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
@@ -2139,7 +2157,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->GenTextures(1, &ctx->ibl_irradiance_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
     for (int i = 0; i < 6; i++)
-        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 32, 32, 0, GL_RGB, GL_FLOAT, NULL);
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGBA16F, 32, 32, 0, GL_RGBA, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
@@ -2169,7 +2187,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->GenTextures(1, &ctx->ibl_prefilter_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
     for (int i = 0; i < 6; i++)
-        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGB16F, 128, 128, 0, GL_RGB, GL_FLOAT, NULL);
+        gl->TexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)i, 0, GL_RGBA16F, 128, 128, 0, GL_RGBA, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, 0x812F);
     gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, 0x812F);
@@ -2246,10 +2264,17 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
 
 slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int height)
 {
+#ifdef __EMSCRIPTEN__
+    /* Request OpenGL ES 3.0, which Emscripten maps onto WebGL2. */
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+#else
     /* Request GL 3.3 Core. */
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+#endif
 
     SDL_GLContext glctx = SDL_GL_CreateContext(window);
     if (!glctx)
@@ -2288,7 +2313,11 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     slayer3d_gl_funcs *gl = &ctx->gl;
 
     /* Detect ES. */
+#ifdef __EMSCRIPTEN__
+    ctx->is_es = true;
+#else
     ctx->is_es = false;
+#endif
     ctx->sample_queries_supported = !ctx->is_es && gl->GenQueries != NULL && gl->DeleteQueries != NULL &&
                                     gl->BeginQuery != NULL && gl->EndQuery != NULL && gl->GetQueryObjectuiv != NULL;
     if (ctx->sample_queries_supported)
@@ -2298,7 +2327,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         ctx->sample_queries_supported = ctx->depth_prepass_query != 0u && ctx->geometry_query != 0u;
     }
 
-    const char *version_prefix = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
+    const char *version_prefix = gl_version_prefix_for_context(ctx);
 
     /* Compile shader programs. */
     /* PBR frag is split into chunks to stay under C99 string length limits. */
@@ -2502,8 +2531,12 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     gl->TexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_DEPTH_COMPONENT32F, 2048, 2048, 4, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
     gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    /* ES 3.0 lacks GL_CLAMP_TO_BORDER; the CSM shader guards out-of-map UVs
+     * itself, so edge clamping only affects the redundant border texels. */
+    const GLint shadow_wrap = ctx->is_es ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, shadow_wrap);
+    gl->TexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, shadow_wrap);
+    if (!ctx->is_es)
     {
         float border_color[] = {1.0f, 1.0f, 1.0f, 1.0f};
         gl->TexParameterfv(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_BORDER_COLOR, border_color);
@@ -2511,7 +2544,10 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     /* Attach layer 0 for now — CSM will render to each layer separately. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->shadow_fbo);
     gl->FramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, ctx->shadow_depth_tex, 0, 0);
-    gl->DrawBuffer(GL_NONE);
+    {
+        const GLenum no_color_buffer = GL_NONE;
+        gl->DrawBuffers(1, &no_color_buffer);
+    }
     gl->ReadBuffer(GL_NONE);
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo); /* restore */
 
