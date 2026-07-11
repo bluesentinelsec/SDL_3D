@@ -402,11 +402,22 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     if (!ui_widget_optional_bool(node, "preserve_aspect"))
         return validation_error(ctx, path, "UI widget preserve_aspect must be a boolean when authored");
     yyjson_val *scroll_key = obj_get(node, "scroll_key");
-    if (scroll_key != NULL && SDL_strcmp(type, "scroll") != 0)
-        return validation_error(ctx, path, "UI widget scroll_key is only supported by scroll widgets");
-    if (!ui_widget_optional_non_empty_string_len(node, "scroll_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+    yyjson_val *scroll_count_key = obj_get(node, "scroll_count_key");
+    if (scroll_key != NULL && SDL_strcmp(type, "scroll") != 0 && scroll_count_key == NULL)
     {
-        return validation_error(ctx, path, "UI widget scroll_key must be a non-empty string shorter than %d bytes",
+        return validation_error(ctx, path,
+                                "UI widget scroll_key requires a scroll widget or a scroll_count_key virtualized list");
+    }
+    if (scroll_count_key != NULL && scroll_key == NULL)
+        return validation_error(ctx, path, "UI widget scroll_count_key requires a scroll_key");
+    if (obj_get(node, "scroll_signal") != NULL && scroll_key == NULL)
+        return validation_error(ctx, path, "UI widget scroll_signal requires a scroll_key");
+    if (!ui_widget_optional_non_empty_string_len(node, "scroll_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "scroll_count_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "scroll_signal", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+    {
+        return validation_error(ctx, path,
+                                "UI widget scroll keys and signals must be non-empty strings shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_ACTION_MAX);
     }
     yyjson_val *columns = obj_get(node, "columns");

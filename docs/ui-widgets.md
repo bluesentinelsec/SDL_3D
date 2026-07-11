@@ -60,6 +60,30 @@ Nothing scroll-related is authored per child, and there is no authored
 maximum anywhere — rows hidden by `visible_if` (a collapsed section, an
 inactive tab) shrink the extent and the scrollbar follows automatically.
 
+### Virtualized Lists
+
+Fixed-slot browsers (six texture cells windowing hundreds of files) scroll by
+rebinding slot contents per index, not by moving pixels. Author `scroll_key`
+plus `scroll_count_key` on the container that holds the slots: it becomes a
+virtualized list that scrolls in item units. The container's resolved
+children are the visible window, `scroll_max` is `count - visible`, and the
+same proportional scrollbar is synthesized as for pixel scroll panes - one
+scrollbar implementation everywhere. `scroll_signal` names the signal hosts
+emit after a scrollbar drag changes the index so the slots rebind.
+
+```json
+{
+  "id": "ui.browser.grid",
+  "type": "panel",
+  "layout": "grid",
+  "columns": 2,
+  "scroll_key": "editor.texture.scroll.index",
+  "scroll_count_key": "editor.texture.count",
+  "scroll_signal": "signal.editor.texture.filter",
+  "children": [ "...six slot cells..." ]
+}
+```
+
 `scroll_key` names the scene-state float that owns the offset. Steppers and
 data-authored actions adjust that key freely; the host calls
 `slayer3d_game_data_sync_ui_scroll_limits()` once per update to pull the key

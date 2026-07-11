@@ -5948,7 +5948,7 @@
             "layer": 121
           },
           { "id": "ui.editor_shell.texture_viewer.list.panel", "type": "panel", "x": 10, "y": 118, "w": 218, "h": 390, "layer": 121, "clip_children": true, "children": [
-            { "id": "ui.editor_shell.texture_viewer.slot.grid", "type": "panel", "layout": "grid", "columns": 2, "x": 10, "y": 12, "w": 184, "h": 322, "gap": 8, "children": [
+            { "id": "ui.editor_shell.texture_viewer.slot.grid", "type": "panel", "layout": "grid", "columns": 2, "x": 10, "y": 12, "w": 184, "h": 322, "gap": 8, "scroll_key": "editor.texture.scroll.index", "scroll_count_key": "editor.texture.count", "scroll_signal": "signal.editor.texture.filter", "children": [
               { "id": "ui.editor_shell.texture_viewer.wall_metal.cell", "type": "panel", "w": 88, "h": 102, "children": [
                 { "id": "ui.editor_shell.texture_viewer.wall_metal.button", "type": "button", "x": 0, "y": 0, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select_slot.0", "selected_if": {"type": "scene_state.compare", "key": "editor.texture.selected_slot", "op": "==", "value": 0, "default": -1}, "visible_if": {"type": "scene_state.compare", "key": "editor.texture.slot.0.available", "op": "==", "value": true, "default": false}, "children": [
                   {"id": "ui.editor_shell.texture_viewer.wall_metal.thumbnail", "type": "image", "image": "image.editor_shell.texture.slot_0", "x": 8, "y": 8, "w": 62, "h": 62, "preserve_aspect": false}
@@ -5998,9 +5998,7 @@
                 {"id": "ui.editor_shell.texture_viewer.radioactive_crate.label", "type": "label", "x": -8, "y": 80, "w": 94, "h": 18, "format": "%s", "bindings": [{"type": "scene_state", "key": "editor.texture.slot.5.label", "default": ""}], "text_scale": 0.38, "align": "center", "visible_if": {"type": "scene_state.compare", "key": "editor.texture.slot.5.available", "op": "==", "value": true, "default": false}}
               ] }
             ] },
-            {"id": "ui.editor_shell.texture_viewer.empty.label", "type": "label", "x": 16, "y": 128, "w": 170, "h": 42, "format": "%s", "bindings": [{"type": "scene_state", "key": "editor.texture.empty.message", "default": "No textures found"}], "text_scale": 0.42, "align": "center", "layer": 122, "visible_if": {"type": "scene_state.compare", "key": "editor.texture.empty.visible", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.texture_viewer.scroll.track", "type": "button", "x": 198, "y": 12, "w": 10, "h": 318, "text": "", "interactive": true, "layer": 122},
-            {"id": "ui.editor_shell.texture_viewer.scroll.thumb", "type": "button", "x": 200, "y": 16, "w": 6, "h": 72, "text": "", "interactive": true, "scroll_y_key": "editor.texture.scroll.y", "layer": 123}
+            {"id": "ui.editor_shell.texture_viewer.empty.label", "type": "label", "x": 16, "y": 128, "w": 170, "h": 42, "format": "%s", "bindings": [{"type": "scene_state", "key": "editor.texture.empty.message", "default": "No textures found"}], "text_scale": 0.42, "align": "center", "layer": 122, "visible_if": {"type": "scene_state.compare", "key": "editor.texture.empty.visible", "op": "==", "value": true, "default": false}}
           ] }
         ]
       },
@@ -6081,7 +6079,7 @@
           },
           { "id": "ui.editor_shell.skybox_panel.active.label", "type": "label", "x": 12, "y": 48, "w": 214, "h": 20, "format": "Active: %s", "bindings": [{ "type": "scene_state", "key": "editor.sky.active", "default": "default" }], "text_scale": 0.40, "align": "left", "layer": 141 },
           { "id": "ui.editor_shell.skybox_panel.list.panel", "type": "panel", "x": 10, "y": 74, "w": 218, "h": 362, "layer": 141, "clip_children": true, "children": [
-            { "id": "ui.editor_shell.skybox_panel.slot.column", "type": "column", "layout": "column", "x": 8, "y": 8, "w": 182, "h": 318, "gap": 5, "children": [
+            { "id": "ui.editor_shell.skybox_panel.slot.column", "type": "column", "layout": "column", "x": 8, "y": 8, "w": 194, "h": 318, "gap": 5, "scroll_key": "editor.sky.scroll", "scroll_count_key": "editor.sky.count", "scroll_signal": "signal.editor.sky.scroll.sync", "children": [
               { "id": "ui.editor_shell.skybox_panel.slot0.button", "type": "button", "w": 182, "h": 48, "text": "", "interactive": true, "action": "editor.sky.select_slot.0", "selected_if": {"type": "scene_state.compare", "key": "editor.sky.selected_slot", "op": "==", "value": 0, "default": -1}, "visible_if": {"type": "scene_state.compare", "key": "editor.sky.slot.0.available", "op": "==", "value": true, "default": false}, "children": [
                 {"id": "ui.editor_shell.skybox_panel.slot0.thumbnail", "type": "image", "image": "image.editor_shell.sky.slot_0", "x": 0, "y": 4, "w": 40, "h": 40, "preserve_aspect": false},
                 {"id": "ui.editor_shell.skybox_panel.slot0.name", "type": "label", "x": 50, "y": 8, "w": 126, "h": 16, "format": "%s", "bindings": [{"type": "scene_state", "key": "editor.sky.slot.0.name", "default": ""}], "text_scale": 0.38, "align": "left"},
@@ -6118,9 +6116,7 @@
                 {"id": "ui.editor_shell.skybox_panel.slot5.kind.animated", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "animated", "text_scale": 0.32, "align": "left", "text_color": [140, 210, 150, 255], "visible_if": {"type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": ">", "value": 0, "default": 0}},
                 {"id": "ui.editor_shell.skybox_panel.slot5.kind.static", "type": "label", "x": 50, "y": 26, "w": 126, "h": 14, "text": "static", "text_scale": 0.32, "align": "left", "text_color": [170, 178, 194, 255], "visible_if": {"type": "scene_state.compare", "key": "editor.sky.slot.5.layer_count", "op": "==", "value": 0, "default": 0}}
               ] }
-            ] },
-            {"id": "ui.editor_shell.skybox_panel.scroll.up", "type": "button", "x": 194, "y": 8, "w": 20, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.up", "layer": 142},
-            {"id": "ui.editor_shell.skybox_panel.scroll.down", "type": "button", "x": 194, "y": 298, "w": 20, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.sky.scroll.down", "layer": 142}
+            ] }
           ] },
           { "id": "ui.editor_shell.skybox_panel.reset.button", "type": "button", "x": 12, "y": 444, "w": 102, "h": 30, "text": "Default", "text_scale": 0.44, "interactive": true, "action": "editor.sky.reset", "layer": 141 },
           { "id": "ui.editor_shell.skybox_panel.apply.button", "type": "button", "x": 124, "y": 444, "w": 102, "h": 30, "text": "Apply", "text_scale": 0.44, "interactive": true, "action": "editor.sky.apply.selected", "layer": 141 },

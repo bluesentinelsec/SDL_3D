@@ -274,6 +274,10 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     float pane_scroll = 0.0f;
     if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))
         desc.scroll_offset = pane_scroll;
+    float scroll_span = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "scroll_count_key", NULL), &scroll_span))
+        desc.scroll_span = SDL_max(scroll_span, 0.0f);
+    desc.scroll_signal = json_string(node, "scroll_signal", NULL);
     desc.open = ui_widget_bool(node, "open", false);
     const char *open_key = json_string(node, "open_key", NULL);
     if (open_key != NULL && open_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)
@@ -368,15 +372,28 @@ bool slayer3d_game_data_sync_ui_scroll_limits(slayer3d_game_data_runtime *runtim
     for (int i = 0, count = slayer3d_ui_layout_node_count(layout); i < count; ++i)
     {
         const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_resolved_node_at(layout, i);
-        if (node == NULL || node->type != SLAYER3D_UI_LAYOUT_NODE_SCROLL || node->scroll_key[0] == '\0')
+        if (node == NULL || node->scroll_key[0] == '\0' ||
+            (node->type != SLAYER3D_UI_LAYOUT_NODE_SCROLL && !node->scroll_virtual))
             continue;
 
         /* The pane already clamps what it renders; clamping the owning state
          * key keeps steppers and drags anchored to real content bounds, and
-         * the published limit lets data-authored logic bind against it. */
-        const float requested = slayer3d_properties_get_float(runtime->scene_state, node->scroll_key, 0.0f);
+         * the published limit lets data-authored logic bind against it.
+         * Virtualized lists store item indices, typically as ints - preserve
+         * the key's authored type. */
+        const slayer3d_value *existing = slayer3d_properties_get_value(runtime->scene_state, node->scroll_key);
+        const bool integer_key = existing != NULL && existing->type == SLAYER3D_VALUE_INT;
+        const float requested = integer_key
+                                    ? (float)slayer3d_properties_get_int(runtime->scene_state, node->scroll_key, 0)
+                                    : slayer3d_properties_get_float(runtime->scene_state, node->scroll_key, 0.0f);
         if (requested != node->scroll_offset)
-            slayer3d_properties_set_float(runtime->scene_state, node->scroll_key, node->scroll_offset);
+        {
+            if (integer_key)
+                slayer3d_properties_set_int(runtime->scene_state, node->scroll_key,
+                                            (int)SDL_lroundf(node->scroll_offset));
+            else
+                slayer3d_properties_set_float(runtime->scene_state, node->scroll_key, node->scroll_offset);
+        }
 
         char limit_key[SLAYER3D_UI_LAYOUT_ACTION_MAX + 8];
         SDL_snprintf(limit_key, sizeof(limit_key), "%s.limit", node->scroll_key);

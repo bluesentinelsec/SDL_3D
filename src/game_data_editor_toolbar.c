@@ -97,16 +97,13 @@ static bool editor_hit_is_console(const slayer3d_ui_layout_hit_region *hit)
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.console.");
 }
 
-static bool editor_hit_is_inspector_scrollbar(const slayer3d_ui_layout_hit_region *hit)
+static bool editor_hit_is_synthesized_scrollbar(const slayer3d_ui_layout_hit_region *hit)
 {
-    return editor_hit_id_has_prefix(hit,
-                                    "ui.editor_shell.left_inspector.scroll.pane" SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX);
-}
-
-static bool editor_hit_is_texture_scrollbar(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.scroll.track") ||
-           editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.scroll.thumb");
+    if (hit == NULL)
+        return false;
+    const size_t id_len = SDL_strlen(hit->id);
+    const size_t suffix_len = SDL_strlen(SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX);
+    return id_len >= suffix_len && SDL_strcmp(hit->id + id_len - suffix_len, SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX) == 0;
 }
 
 static bool editor_hit_is_console_scrollbar(const slayer3d_ui_layout_hit_region *hit)
@@ -237,58 +234,43 @@ static bool editor_handle_liquid_panel_drag(slayer3d_game_data_runtime *runtime,
     return false;
 }
 
-static bool editor_update_inspector_scroll_drag(slayer3d_game_data_runtime *runtime,
-                                                const slayer3d_ui_layout_model *layout, float mouse_y)
+/*
+ * One drag handler for every synthesized scrollbar. The layout owns thumb
+ * and travel math for pixel panes and virtualized lists alike; this just
+ * maps the pointer, writes the pane's owning state key in its authored
+ * type, and emits the pane's rebind signal when the offset changed.
+ */
+static bool editor_update_scrollbar_drag(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                         const char *pane_id, float mouse_y)
 {
-    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
+    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL || pane_id == NULL || pane_id[0] == '\0')
         return false;
 
-    /* The scroll pane owns extent, travel, and thumb math; drags just map
-     * the pointer through the pane's resolved geometry. */
+    const slayer3d_ui_layout_resolved_node *pane = slayer3d_ui_layout_find_resolved_node(layout, pane_id);
     float scroll = 0.0f;
-    if (!slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "ui.editor_shell.left_inspector.scroll.pane", mouse_y,
-                                                         &scroll))
+    if (pane == NULL || pane->scroll_key[0] == '\0' ||
+        !slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, pane_id, mouse_y, &scroll))
     {
         return false;
     }
-    slayer3d_properties_set_float(runtime->scene_state, "editor.inspector.scroll", scroll);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "inspector scrolled");
-    return true;
-}
 
-static bool editor_update_texture_scroll_drag(slayer3d_game_data_runtime *runtime,
-                                              const slayer3d_ui_layout_model *layout, float mouse_y)
-{
-    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
-        return false;
-
-    const slayer3d_ui_layout_hit_region *track =
-        editor_find_layout_hit_by_id(layout, "ui.editor_shell.texture_viewer.scroll.track");
-    if (track == NULL)
-        return false;
-
-    const int texture_count = slayer3d_properties_get_int(runtime->scene_state, "editor.texture.count", 0);
-    const int visible_slots = 6;
-    const int max_scroll_index = SDL_max(0, texture_count - visible_slots);
-    if (max_scroll_index <= 0)
+    const slayer3d_value *existing = slayer3d_properties_get_value(runtime->scene_state, pane->scroll_key);
+    const bool integer_key = pane->scroll_virtual || (existing != NULL && existing->type == SLAYER3D_VALUE_INT);
+    bool changed = false;
+    if (integer_key)
     {
-        slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", 0);
-        return true;
+        const int rounded = (int)SDL_lroundf(scroll);
+        changed = slayer3d_properties_get_int(runtime->scene_state, pane->scroll_key, 0) != rounded;
+        slayer3d_properties_set_int(runtime->scene_state, pane->scroll_key, rounded);
     }
-
-    const float thumb_h = 72.0f;
-    const float travel = track->rect.h - thumb_h;
-    if (travel <= 0.0f)
-        return false;
-
-    const float local_y = editor_clamp_float(mouse_y - track->rect.y - thumb_h * 0.5f, 0.0f, travel);
-    const float ratio = local_y / travel;
-    const int scroll_index = SDL_clamp((int)SDL_floorf(ratio * (float)max_scroll_index + 0.5f), 0, max_scroll_index);
-    const int previous = slayer3d_properties_get_int(runtime->scene_state, "editor.texture.scroll.index", 0);
-    slayer3d_properties_set_int(runtime->scene_state, "editor.texture.scroll.index", scroll_index);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture browser scrolled");
-    if (scroll_index != previous)
-        (void)editor_emit_signal_by_name(runtime, "signal.editor.texture.filter");
+    else
+    {
+        changed = slayer3d_properties_get_float(runtime->scene_state, pane->scroll_key, 0.0f) != scroll;
+        slayer3d_properties_set_float(runtime->scene_state, pane->scroll_key, scroll);
+    }
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "scrollbar dragged");
+    if (changed && pane->scroll_signal[0] != '\0')
+        (void)editor_emit_signal_by_name(runtime, pane->scroll_signal);
     return true;
 }
 
@@ -601,32 +583,19 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_ui_layout_destroy(layout);
         return true;
     }
-    if (slayer3d_properties_get_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false))
+    const char *scrollbar_drag_pane =
+        slayer3d_properties_get_string(runtime->scene_state, "editor.ui.scrollbar.drag.pane", "");
+    if (scrollbar_drag_pane[0] != '\0')
     {
         if (released || !left_down)
         {
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.ui.scrollbar.drag.pane", "");
         }
         else
         {
             if (out_consumed != NULL)
                 *out_consumed = true;
-            (void)editor_update_inspector_scroll_drag(runtime, layout, mouse_y);
-            slayer3d_ui_layout_destroy(layout);
-            return true;
-        }
-    }
-    if (slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false))
-    {
-        if (released || !left_down)
-        {
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false);
-        }
-        else
-        {
-            if (out_consumed != NULL)
-                *out_consumed = true;
-            (void)editor_update_texture_scroll_drag(runtime, layout, mouse_y);
+            (void)editor_update_scrollbar_drag(runtime, layout, scrollbar_drag_pane, mouse_y);
             slayer3d_ui_layout_destroy(layout);
             return true;
         }
@@ -691,21 +660,13 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         if (released || !left_down)
         {
             slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false);
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", false);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.ui.scrollbar.drag.pane", "");
             slayer3d_properties_set_bool(runtime->scene_state, "editor.console.scroll.drag.active", false);
         }
-        if (clicked && editor_hit_is_inspector_scrollbar(hit))
+        if (clicked && editor_hit_is_synthesized_scrollbar(hit))
         {
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", true);
-            (void)editor_update_inspector_scroll_drag(runtime, layout, mouse_y);
-            slayer3d_ui_layout_destroy(layout);
-            return true;
-        }
-        if (clicked && editor_hit_is_texture_scrollbar(hit))
-        {
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.scroll.drag.active", true);
-            (void)editor_update_texture_scroll_drag(runtime, layout, mouse_y);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.ui.scrollbar.drag.pane", hit->owner_id);
+            (void)editor_update_scrollbar_drag(runtime, layout, hit->owner_id, mouse_y);
             slayer3d_ui_layout_destroy(layout);
             return true;
         }

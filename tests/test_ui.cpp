@@ -481,6 +481,89 @@ TEST(SLAYER3DUI, ScrollPaneSynthesizesProportionalScrollbar)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, VirtualListSharesScrollbarWithoutMovingChildren)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    // Six visible slot children windowing 20 items, currently at index 7.
+    slayer3d_ui_layout_node_desc list{};
+    list.id = "list";
+    list.type = SLAYER3D_UI_LAYOUT_NODE_COLUMN;
+    list.axis = SLAYER3D_UI_LAYOUT_AXIS_COLUMN;
+    list.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    list.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    list.rect = {10.0f, 20.0f, 200.0f, 300.0f};
+    list.gap = 2.0f;
+    list.scroll_key = "list.index";
+    list.scroll_span = 20.0f;
+    list.scroll_offset = 7.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &list));
+
+    char ids[6][16];
+    for (int i = 0; i < 6; ++i)
+    {
+        SDL_snprintf(ids[i], sizeof(ids[i]), "slot.%d", i);
+        slayer3d_ui_layout_node_desc slot{};
+        slot.id = ids[i];
+        slot.parent_id = "list";
+        slot.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+        slot.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.rect = {0.0f, 0.0f, 180.0f, 48.0f};
+        ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &slot));
+    }
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    // Index units: max = 20 items - 6 visible; the offset is the index and
+    // slot geometry is untouched (hosts rebind slot contents instead).
+    const slayer3d_ui_layout_resolved_node *resolved = slayer3d_ui_layout_find_resolved_node(layout, "list");
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_TRUE(resolved->scroll_virtual);
+    EXPECT_FLOAT_EQ(resolved->content_extent, 20.0f);
+    EXPECT_FLOAT_EQ(resolved->scroll_max, 14.0f);
+    EXPECT_FLOAT_EQ(resolved->scroll_offset, 7.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "slot.0"), 10.0f, 20.0f, 180.0f, 48.0f);
+
+    // The same scrollbar synthesis as pixel panes, proportioned in items:
+    // thumb = 300 * 6/20 = 90, centered at index 7 of 14.
+    const slayer3d_ui_layout_render_command *thumb = find_render_command(layout, "list.scrollbar.thumb");
+    ASSERT_NE(thumb, nullptr);
+    EXPECT_FLOAT_EQ(thumb->rect.h, 90.0f);
+    EXPECT_FLOAT_EQ(thumb->rect.y, 20.0f + (300.0f - 90.0f) * 0.5f);
+    ASSERT_NE(find_hit_region(layout, "list.scrollbar"), nullptr);
+
+    // Pointer mapping returns item indices.
+    float offset = 0.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_scrollbar_offset_for_pointer(layout, "list", 20.0f + 150.0f, &offset));
+    EXPECT_FLOAT_EQ(offset, 7.0f);
+
+    // A window that covers the whole span suppresses the scrollbar.
+    slayer3d_ui_layout_clear(layout);
+    list.scroll_span = 6.0f;
+    list.scroll_offset = 3.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &list));
+    for (int i = 0; i < 6; ++i)
+    {
+        slayer3d_ui_layout_node_desc slot{};
+        slot.id = ids[i];
+        slot.parent_id = "list";
+        slot.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+        slot.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+        slot.rect = {0.0f, 0.0f, 180.0f, 48.0f};
+        ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &slot));
+    }
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    resolved = slayer3d_ui_layout_find_resolved_node(layout, "list");
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_FLOAT_EQ(resolved->scroll_max, 0.0f);
+    EXPECT_FLOAT_EQ(resolved->scroll_offset, 0.0f);
+    EXPECT_EQ(find_render_command(layout, "list.scrollbar"), nullptr);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 {
     slayer3d_ui_layout_model *layout = nullptr;

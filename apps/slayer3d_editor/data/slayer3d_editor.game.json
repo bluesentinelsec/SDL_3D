@@ -683,6 +683,7 @@
     "signal.editor.sky.select_slot.5",
     "signal.editor.sky.scroll.up",
     "signal.editor.sky.scroll.down",
+    "signal.editor.sky.scroll.sync",
     "signal.editor.sky.apply.selected",
     "signal.editor.sky.reset",
     "signal.editor.liquid.panel.toggle",
@@ -2004,6 +2005,12 @@
         "signal": "signal.editor.sky.scroll.down",
         "actions": [
           { "type": "editor.sky.scan", "scroll_delta": 1 }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.scroll.sync",
+        "actions": [
+          { "type": "editor.sky.scan", "rebind": true }
         ]
       },
       {

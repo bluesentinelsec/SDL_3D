@@ -22549,7 +22549,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             if (rect == nullptr || rect->name == nullptr)
                 return true;
             const std::string name = rect->name;
-            if (name.rfind("ui.editor_shell.texture_viewer.scroll.", 0) != 0)
+            if (name.rfind("ui.editor_shell.texture_viewer.slot.grid.scrollbar", 0) != 0)
                 return true;
             slayer3d_game_data_ui_rect resolved{};
             bool visible = false;
@@ -22718,11 +22718,20 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               texture_rects.end());
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.apply"),
               texture_rects.end());
+    // The scrollbar is synthesized from the virtualized grid: with all six
+    // project textures visible in six slots there is nothing to scroll, so
+    // no scrollbar exists (the old hand-authored track was always drawn).
     std::vector<std::string> scroll_rects = visible_rect_names();
-    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.track"),
+    EXPECT_EQ(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
               scroll_rects.end());
-    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.thumb"),
+    slayer3d_properties_set_int(slayer3d_game_data_mutable_scene_state(runtime), "editor.texture.count", 20);
+    scroll_rects = visible_rect_names();
+    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
               scroll_rects.end());
+    EXPECT_NE(
+        std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar.thumb"),
+        scroll_rects.end());
+    slayer3d_properties_set_int(slayer3d_game_data_mutable_scene_state(runtime), "editor.texture.count", 6);
     EXPECT_TRUE(visible_texture_status_labels().empty());
     std::vector<std::string> texture_labels = visible_texture_labels();
     EXPECT_NE(
@@ -23307,8 +23316,9 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_FLOAT_EQ(
         slayer3d_properties_get_float(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.scroll", 0.0f),
         pane_after_drag.scroll_max);
-    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
-                                              "editor.inspector.scroll.drag.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_mutable_scene_state(runtime),
+                                                "editor.ui.scrollbar.drag.pane", "unset"),
+                 "");
 
     RectSummary thumb_at_bottom = visible_frame("ui.editor_shell.left_inspector.scroll.pane.scrollbar.thumb");
     ASSERT_TRUE(thumb_at_bottom.found);

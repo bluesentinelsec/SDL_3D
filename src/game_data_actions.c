@@ -2017,6 +2017,13 @@ static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, 
         editor_sky_publish_slots(runtime);
         return true;
     }
+    /* Rebind the visible slot window at the current scroll index without
+     * rescanning the directory; scrollbar drags use this. */
+    if (json_bool(action, "rebind", false))
+    {
+        editor_sky_publish_slots(runtime);
+        return true;
+    }
 
     const char *directory = slayer3d_properties_get_string(state, "editor.asset_source.skyboxes.path", "");
     char *resolved_fallback = NULL;

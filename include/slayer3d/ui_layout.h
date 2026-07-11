@@ -133,6 +133,18 @@ extern "C"
         float scroll_offset;
         /** @brief Optional caller state key that owns this pane's scroll offset. */
         const char *scroll_key;
+        /**
+         * @brief Total item count for a virtualized list container.
+         *
+         * When positive on a container with a scroll_key, the container
+         * scrolls in item-index units: its resolved children are the visible
+         * window, scroll_max becomes max(span - child count, 0), and the same
+         * proportional scrollbar is synthesized as for pixel scroll panes.
+         * Children are not shifted - hosts rebind their contents per index.
+         */
+        float scroll_span;
+        /** @brief Optional signal emitted by hosts when a scrollbar drag changes the offset. */
+        const char *scroll_signal;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -173,6 +185,10 @@ extern "C"
         float content_extent;
         /** @brief Caller state key that owns this pane's scroll offset, when authored. */
         char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        /** @brief True when the node scrolls in item-index units (virtualized list). */
+        bool scroll_virtual;
+        /** @brief Signal hosts emit after a scrollbar drag changes the offset, when authored. */
+        char scroll_signal[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
