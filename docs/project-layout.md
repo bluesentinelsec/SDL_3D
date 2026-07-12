@@ -67,6 +67,9 @@ Brush-editor projects may also include a `slayer3d.project.json` manifest at
 the project root. Its optional `asset_sources` object points the standalone
 editor at texture, model, sprite, skybox, and effect directories. Keep those
 paths project-relative where possible so saved map references remain portable.
+Skybox directories should follow the
+[Skybox Asset Contract](skybox-assets.md), with `sphere.png` as the preferred
+authoritative sky-sphere panorama.
 
 ## Root File Responsibilities
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Generate default equirectangular sky-sphere panorama assets.
 
-The generated ``sphere.png`` files are 2:1 panoramas intended for a future
-single-mode sky-sphere renderer.  They deliberately avoid cubemap face splits,
-so the renderer can remove sky seams by construction instead of relying on
-six-face edge matching.
+The generated ``sphere.png`` files are 2:1 panoramas used by the editor and
+runner sky-sphere renderer.  They avoid cubemap face splits by construction:
+the horizontal axis wraps seamlessly, and the vertical axis is sampled as a
+clamped equirectangular panorama.
 """
 
 from __future__ import annotations

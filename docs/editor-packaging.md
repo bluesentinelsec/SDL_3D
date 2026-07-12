@@ -39,6 +39,7 @@ are recognized as skyboxes when they contain a seamless equirectangular
 `sphere.png` panorama. Legacy six-face cubemap directories (`px.png` ...
 `nz.png`) and animated layer directories (`layer_outer.png`, optional
 `layer_inner.png`) remain readable for old content.
+See [Skybox Asset Contract](skybox-assets.md) for the project media contract.
 
 ## Bundled Assets
 
