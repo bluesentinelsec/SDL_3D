@@ -18641,8 +18641,8 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
 
-    /* The canonical editor project bundles the built-in animated presets
-     * plus the static sky_17 skybox under data/skyboxes. */
+    /* The canonical editor project bundles the built-in animated skybox
+     * presets under data/skyboxes. */
     emit_signal("signal.editor.sky.refresh");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 8);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "afternoon");
