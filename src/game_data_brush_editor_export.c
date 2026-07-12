@@ -1811,6 +1811,15 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
     if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
         return true;
 
+    char sphere_buffer[512];
+    const char *sphere = NULL;
+    bool sphere_portable = skybox.sphere != NULL && skybox.sphere[0] != '\0';
+    if (sphere_portable)
+    {
+        sphere = export_sky_texture_reference(runtime, skybox.sphere, copies, sphere_buffer, sizeof(sphere_buffer));
+        sphere_portable = sphere != NULL;
+    }
+
     char face_buffers[6][512];
     const char *faces[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
     bool faces_portable = skybox.has_faces;
@@ -1827,11 +1836,16 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
     }
     const bool has_preset = skybox.preset != NULL && skybox.preset[0] != '\0';
     const int portable_layer_count = export_portable_sky_layer_count(runtime, &skybox);
-    if (!faces_portable && !has_preset && portable_layer_count == 0)
+    if (!sphere_portable && !faces_portable && !has_preset && portable_layer_count == 0)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "Skipping skybox export: active sky has no portable preset, face, or layer references");
+                    "Skipping skybox export: active sky has no portable preset, sphere, face, or layer references");
         return true;
+    }
+    if (skybox.sphere != NULL && !sphere_portable)
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "Skipping skybox sphere with non-portable reference during map export");
     }
     if (skybox.has_faces && !faces_portable)
     {
@@ -1840,6 +1854,8 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
     }
 
     const char *export_mode = skybox.mode;
+    if (sphere_portable || has_preset)
+        export_mode = "sphere";
     if (SDL_strcmp(export_mode, "layers") == 0 && portable_layer_count == 0 && !has_preset)
         export_mode = "cubemap";
 
@@ -1852,6 +1868,8 @@ static bool export_add_map_skybox(yyjson_mut_doc *doc, yyjson_mut_val *root, con
     {
         return false;
     }
+    if (sphere_portable && !yyjson_mut_obj_add_strcpy(doc, obj, "sphere", sphere))
+        return false;
     if (faces_portable)
     {
         static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};

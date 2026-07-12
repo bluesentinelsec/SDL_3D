@@ -35,9 +35,10 @@ records it as the map's global sky, which is saved into the `.slayermap.json`
 `skybox` block and restored on open. `Default` returns to the editor's
 built-in sky. Skyboxes are discovered from the authoritative project media root,
 normally `media/skyboxes/`. Nested subdirectories are scanned, and directories
-are recognized as skyboxes when they contain six cubemap faces (`px.png` ...
-`nz.png`) or animated layer images (`layer_outer.png`, optional
-`layer_inner.png`).
+are recognized as skyboxes when they contain a seamless equirectangular
+`sphere.png` panorama. Legacy six-face cubemap directories (`px.png` ...
+`nz.png`) and animated layer directories (`layer_outer.png`, optional
+`layer_inner.png`) remain readable for old content.
 
 ## Bundled Assets
 

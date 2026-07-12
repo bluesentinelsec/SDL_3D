@@ -18702,13 +18702,15 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
 
     emit_signal("signal.editor.sky.apply.selected");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "afternoon");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.mode", ""), "layers");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.mode", ""), "sphere");
     slayer3d_game_data_scene_skybox skybox{};
     ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
     EXPECT_STREQ(skybox.preset, "afternoon");
-    EXPECT_STREQ(skybox.mode, "layers");
-    EXPECT_TRUE(skybox.has_faces);
-    ASSERT_EQ(skybox.layer_count, 2);
+    EXPECT_STREQ(skybox.mode, "sphere");
+    EXPECT_FALSE(skybox.has_faces);
+    ASSERT_NE(skybox.sphere, nullptr);
+    EXPECT_NE(std::string(skybox.sphere).find("sphere.png"), std::string::npos);
+    ASSERT_EQ(skybox.layer_count, 0);
 
     /* Scrolling steps one row and clamps at the end of the list. */
     emit_signal("signal.editor.sky.scroll.down");
@@ -18982,8 +18984,7 @@ TEST(GameDataRuntime, EditorShellMapSaveMaterializesAssetsForPlayableUse)
      * map-level materials must be map-relative. */
     EXPECT_NE(map_json.find("\"preset\": \"afternoon\""), std::string::npos);
     EXPECT_TRUE(std::filesystem::exists(save_dir / "textures" / "lava.jpg"));
-    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "px.png"));
-    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "layer_outer.png"));
+    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "sphere.png"));
 
     /* The saved map materializes into a self-contained playable directory. */
     slayer3d_map_document *map = nullptr;
@@ -47345,7 +47346,7 @@ TEST(GameDataRuntime, SlayerMapValidatesSkyModesAndLayers)
     slayer3d_map_destroy(map);
 }
 
-TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsCubemap)
+TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsSphere)
 {
     const char *map_json = R"json({
   "format": "slayer3d.map",
@@ -47360,8 +47361,9 @@ TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsCubemap)
     ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
     slayer3d_map_sky sky{};
     ASSERT_TRUE(slayer3d_map_get_sky(map, &sky));
-    EXPECT_STREQ(sky.mode, "cubemap");
+    EXPECT_STREQ(sky.mode, "sphere");
     EXPECT_STREQ(sky.preset, "midnight");
+    EXPECT_EQ(sky.sphere, nullptr);
     EXPECT_FALSE(sky.has_faces);
     EXPECT_EQ(sky.layer_count, 0u);
     slayer3d_map_destroy(map);
@@ -47377,7 +47379,9 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidSkyRecords)
     };
     const Case cases[] = {
         {"bad_mode", R"json({ "mode": "volumetric", "preset": "sunset" })json",
-         "skybox mode must be one of none, cubemap, or layers"},
+         "skybox mode must be one of none, sphere, cubemap, or layers"},
+        {"sphere_mode_without_source", R"json({ "mode": "sphere", "size": 400 })json",
+         "sphere skybox requires preset, sphere, or asset"},
         {"empty_layers", R"json({ "mode": "layers", "layers": [] })json",
          "skybox layers must contain at least one layer"},
         {"layer_missing_texture", R"json({ "layers": [ { "opacity": 0.5 } ] })json",
@@ -47392,7 +47396,7 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidSkyRecords)
          "sky layer tint channels must be integers in [0, 255]"},
         {"layers_mode_without_layers", R"json({ "mode": "layers", "size": 400 })json",
          "layered skybox requires preset or layers"},
-        {"no_sky_sources", R"json({ "size": 400 })json", "skybox requires preset, asset, faces, or layers"},
+        {"no_sky_sources", R"json({ "size": 400 })json", "skybox requires preset, sphere, asset, faces, or layers"},
     };
 
     for (const Case &test_case : cases)
@@ -47460,10 +47464,8 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     { "id": "actor.player", "primitive": "capsule", "properties": { "type": "player-character" } }
   ],
   "skybox": {
-    "mode": "layers",
-    "layers": [
-      { "texture": "skyboxes/custom/layer_outer.png", "scroll": [0.01, 0.0] }
-    ]
+    "mode": "sphere",
+    "sphere": "skyboxes/custom/sphere.png"
   }
 })json";
 
@@ -47473,7 +47475,7 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     const std::filesystem::path map_dir = unique_test_dir("playable_sky_explicit_src");
     const std::filesystem::path map_path = map_dir / "level.slayermap.json";
     write_text(map_path, map_json);
-    write_text(map_dir / "skyboxes" / "custom" / "layer_outer.png", "png-placeholder");
+    write_text(map_dir / "skyboxes" / "custom" / "sphere.png", "png-placeholder");
 
     char error[512]{};
     slayer3d_map_document *map = nullptr;
@@ -47484,9 +47486,9 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     slayer3d_map_destroy(map);
 
     const std::string scene_json = read_text(dir / "scenes" / "play.scene.json");
-    EXPECT_NE(scene_json.find("\"mode\": \"layers\""), std::string::npos);
-    EXPECT_NE(scene_json.find("asset://skyboxes/custom/layer_outer.png"), std::string::npos);
-    EXPECT_TRUE(std::filesystem::exists(dir / "skyboxes" / "custom" / "layer_outer.png"));
+    EXPECT_NE(scene_json.find("\"mode\": \"sphere\""), std::string::npos);
+    EXPECT_NE(scene_json.find("asset://skyboxes/custom/sphere.png"), std::string::npos);
+    EXPECT_TRUE(std::filesystem::exists(dir / "skyboxes" / "custom" / "sphere.png"));
     remove_test_dir(dir);
     remove_test_dir(map_dir);
 }

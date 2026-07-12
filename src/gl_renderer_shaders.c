@@ -423,6 +423,8 @@ const char k_copy_frag[] = "in vec2 vTexCoord;\n"
 
 const char k_skybox_frag[] =
     "in vec2 vTexCoord;\n"
+    "uniform bool uPanorama;\n"
+    "uniform sampler2D uSkySphere;\n"
     "uniform sampler2D uFacePosX;\n"
     "uniform sampler2D uFaceNegX;\n"
     "uniform sampler2D uFacePosY;\n"
@@ -434,6 +436,14 @@ const char k_skybox_frag[] =
     "uniform vec3 uCameraForward;\n"
     "uniform vec2 uInvProjection;\n"
     "out vec4 fragColor;\n"
+    "\n"
+    "vec4 sampleSkySphere(vec3 direction) {\n"
+    "    const float pi = 3.14159265358979323846;\n"
+    "    const float tau = 6.28318530717958647692;\n"
+    "    float u = atan(direction.x, direction.z) / tau + 0.5;\n"
+    "    float v = 0.5 - asin(clamp(direction.y, -1.0, 1.0)) / pi;\n"
+    "    return texture(uSkySphere, vec2(u, v));\n"
+    "}\n"
     "\n"
     "vec4 sampleSkyboxAxis(vec3 direction, int axis) {\n"
     "    vec3 ad = abs(direction);\n"
@@ -505,7 +515,7 @@ const char k_skybox_frag[] =
     "    vec2 ndc = vec2(vTexCoord.x * 2.0 - 1.0, vTexCoord.y * 2.0 - 1.0);\n"
     "    vec3 direction = normalize(uCameraForward + (uCameraRight * ndc.x * uInvProjection.x) +\n"
     "                               (uCameraUp * ndc.y * uInvProjection.y));\n"
-    "    fragColor = sampleSkyboxFace(direction);\n"
+    "    fragColor = uPanorama ? sampleSkySphere(direction) : sampleSkyboxFace(direction);\n"
     "}\n";
 
 const char k_transition_frag[] =

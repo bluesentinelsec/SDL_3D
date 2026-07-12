@@ -840,16 +840,28 @@ static void replay_pending_skybox(slayer3d_gl_context *ctx)
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->UseProgram(ctx->skybox_program);
 
-    const slayer3d_texture2d *faces[6] = {skybox->pos_x, skybox->neg_x, skybox->pos_y,
-                                          skybox->neg_y, skybox->pos_z, skybox->neg_z};
-    const GLint sampler_locs[6] = {ctx->skybox_pos_x_loc, ctx->skybox_neg_x_loc, ctx->skybox_pos_y_loc,
-                                   ctx->skybox_neg_y_loc, ctx->skybox_pos_z_loc, ctx->skybox_neg_z_loc};
-    for (int i = 0; i < 6; ++i)
+    if (ctx->skybox_panorama_loc >= 0)
+        gl->Uniform1i(ctx->skybox_panorama_loc, skybox->panorama ? 1 : 0);
+    if (skybox->panorama)
     {
-        gl->ActiveTexture(GL_TEXTURE0 + (GLenum)i);
-        gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_skybox_texture(ctx, faces[i]));
-        if (sampler_locs[i] >= 0)
-            gl->Uniform1i(sampler_locs[i], i);
+        gl->ActiveTexture(GL_TEXTURE0);
+        gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_sky_sphere_texture(ctx, skybox->sphere));
+        if (ctx->skybox_sphere_loc >= 0)
+            gl->Uniform1i(ctx->skybox_sphere_loc, 0);
+    }
+    else
+    {
+        const slayer3d_texture2d *faces[6] = {skybox->pos_x, skybox->neg_x, skybox->pos_y,
+                                              skybox->neg_y, skybox->pos_z, skybox->neg_z};
+        const GLint sampler_locs[6] = {ctx->skybox_pos_x_loc, ctx->skybox_neg_x_loc, ctx->skybox_pos_y_loc,
+                                       ctx->skybox_neg_y_loc, ctx->skybox_pos_z_loc, ctx->skybox_neg_z_loc};
+        for (int i = 0; i < 6; ++i)
+        {
+            gl->ActiveTexture(GL_TEXTURE0 + (GLenum)i);
+            gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_skybox_texture(ctx, faces[i]));
+            if (sampler_locs[i] >= 0)
+                gl->Uniform1i(sampler_locs[i], i);
+        }
     }
     if (ctx->skybox_right_loc >= 0)
         gl->Uniform3f(ctx->skybox_right_loc, skybox->right[0], skybox->right[1], skybox->right[2]);
@@ -2494,6 +2506,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->copy_texture_loc = gl->GetUniformLocation(ctx->copy_program, "uScene");
 
     /* Skybox uniform locations. */
+    ctx->skybox_panorama_loc = gl->GetUniformLocation(ctx->skybox_program, "uPanorama");
+    ctx->skybox_sphere_loc = gl->GetUniformLocation(ctx->skybox_program, "uSkySphere");
     ctx->skybox_pos_x_loc = gl->GetUniformLocation(ctx->skybox_program, "uFacePosX");
     ctx->skybox_neg_x_loc = gl->GetUniformLocation(ctx->skybox_program, "uFaceNegX");
     ctx->skybox_pos_y_loc = gl->GetUniformLocation(ctx->skybox_program, "uFacePosY");
@@ -3148,6 +3162,61 @@ static bool gl_draw_skybox_textured(slayer3d_render_context *context, const slay
     return true;
 }
 
+static void gl_skybox_entry_set_camera(slayer3d_render_context *context, slayer3d_gl_skybox_entry *entry)
+{
+    const float *m = context->view.m;
+    slayer3d_vec3 right = slayer3d_vec3_normalize(slayer3d_vec3_make(m[0], m[4], m[8]));
+    slayer3d_vec3 up = slayer3d_vec3_normalize(slayer3d_vec3_make(m[1], m[5], m[9]));
+    slayer3d_vec3 forward = slayer3d_vec3_normalize(slayer3d_vec3_make(-m[2], -m[6], -m[10]));
+    entry->right[0] = right.x;
+    entry->right[1] = right.y;
+    entry->right[2] = right.z;
+    entry->up[0] = up.x;
+    entry->up[1] = up.y;
+    entry->up[2] = up.z;
+    entry->forward[0] = forward.x;
+    entry->forward[1] = forward.y;
+    entry->forward[2] = forward.z;
+
+    if (context->projection.m[15] == 1.0f || context->projection.m[0] == 0.0f || context->projection.m[5] == 0.0f)
+    {
+        entry->inv_projection[0] = 0.0f;
+        entry->inv_projection[1] = 0.0f;
+    }
+    else
+    {
+        entry->inv_projection[0] = 1.0f / context->projection.m[0];
+        entry->inv_projection[1] = 1.0f / context->projection.m[5];
+    }
+
+    entry->viewport_enabled = context->viewport_enabled;
+    entry->viewport_rect = context->viewport_rect;
+    entry->scissor_enabled = context->scissor_enabled;
+    entry->scissor_rect = context->scissor_rect;
+}
+
+static bool gl_draw_sky_sphere_textured(slayer3d_render_context *context, const slayer3d_sky_sphere_textured *sky)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (sky == NULL)
+        return SDL_InvalidParamError("sky");
+    if (sky->texture == NULL)
+        return SDL_SetError("Textured sky sphere requires a panorama texture.");
+
+    slayer3d_gl_context *ctx = context->gl;
+    if (ctx == NULL || ctx->skybox_program == 0u)
+        return false;
+
+    slayer3d_gl_skybox_entry *entry = &ctx->skybox;
+    SDL_zero(*entry);
+    entry->pending = true;
+    entry->panorama = true;
+    entry->sphere = sky->texture;
+    gl_skybox_entry_set_camera(context, entry);
+    return true;
+}
+
 /* ------------------------------------------------------------------ */
 /* Shadow pass                                                         */
 /* ------------------------------------------------------------------ */
@@ -3711,4 +3780,5 @@ void slayer3d_gl_backend_init(slayer3d_backend_interface *iface)
     iface->draw_mesh_unlit = gl_draw_mesh_unlit;
     iface->draw_mesh_lit = gl_draw_mesh_lit;
     iface->draw_skybox_textured = gl_draw_skybox_textured;
+    iface->draw_sky_sphere_textured = gl_draw_sky_sphere_textured;
 }

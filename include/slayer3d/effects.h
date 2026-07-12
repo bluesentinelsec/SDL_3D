@@ -197,12 +197,26 @@ extern "C"
         float size;
     } slayer3d_skybox_textured;
 
+    typedef struct slayer3d_sky_sphere_textured
+    {
+        const slayer3d_texture2d *texture;
+    } slayer3d_sky_sphere_textured;
+
     /*
      * Draw a textured skybox centered on the active camera.
      * All six face textures are required and should correspond to the
      * standard cubemap directions (+X, -X, +Y, -Y, +Z, -Z).
      */
     bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slayer3d_skybox_textured *skybox);
+
+    /**
+     * @brief Draw a seamless equirectangular sky panorama centered on the active camera.
+     *
+     * The texture is sampled as a 2:1 latitude/longitude panorama. This is the
+     * preferred runtime sky path for editor-authored skies because it avoids
+     * visible cubemap face boundaries.
+     */
+    bool slayer3d_draw_sky_sphere_textured(slayer3d_render_context *context, const slayer3d_sky_sphere_textured *sky);
 
     /**
      * @brief One Quake-style animated sky layer.

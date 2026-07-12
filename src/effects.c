@@ -3,6 +3,8 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include <math.h>
+
 #include "slayer3d/drawing3d.h"
 #include "slayer3d/math.h"
 
@@ -876,6 +878,18 @@ static void slayer3d_effects_sample_textured_skybox(const slayer3d_skybox_textur
     slayer3d_texture_sample_rgba(face, u, v, 0.0f, out_r, out_g, out_b, out_a);
 }
 
+static void slayer3d_effects_sample_textured_sky_sphere(const slayer3d_sky_sphere_textured *sky,
+                                                        slayer3d_vec3 direction, float *out_r, float *out_g,
+                                                        float *out_b, float *out_a)
+{
+    const float pi = 3.14159265358979323846f;
+    const float tau = 6.28318530717958647692f;
+    const float u = SDL_atan2f(direction.x, direction.z) / tau + 0.5f;
+    const float clamped_y = SDL_clamp(direction.y, -1.0f, 1.0f);
+    const float v = 0.5f - asinf(clamped_y) / pi;
+    slayer3d_texture_sample_rgba(sky->texture, u, v, 0.0f, out_r, out_g, out_b, out_a);
+}
+
 static bool slayer3d_draw_skybox_textured_software(slayer3d_render_context *context,
                                                    const slayer3d_skybox_textured *skybox)
 {
@@ -1039,6 +1053,99 @@ bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slaye
                                      slayer3d_vec3_make(c.x + s, c.y - s, c.z + s),
                                      slayer3d_vec3_make(c.x - s, c.y - s, c.z - s),
                                      slayer3d_vec3_make(c.x + s, c.y - s, c.z - s));
+}
+
+static bool slayer3d_draw_sky_sphere_textured_software(slayer3d_render_context *context,
+                                                       const slayer3d_sky_sphere_textured *sky)
+{
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    const slayer3d_vec3 right = slayer3d_effects_camera_right(context);
+    const slayer3d_vec3 up = slayer3d_effects_camera_up(context);
+    const slayer3d_vec3 forward = slayer3d_effects_camera_forward(context);
+    const int min_x = framebuffer.scissor_enabled ? framebuffer.scissor_rect.x : 0;
+    const int min_y = framebuffer.scissor_enabled ? framebuffer.scissor_rect.y : 0;
+    const int max_x =
+        framebuffer.scissor_enabled ? (framebuffer.scissor_rect.x + framebuffer.scissor_rect.w) : framebuffer.width;
+    const int max_y =
+        framebuffer.scissor_enabled ? (framebuffer.scissor_rect.y + framebuffer.scissor_rect.h) : framebuffer.height;
+
+    if (framebuffer.color_pixels == NULL || framebuffer.width <= 0 || framebuffer.height <= 0)
+        return SDL_SetError("Software sky sphere requires a valid framebuffer.");
+
+    if (context->projection.m[15] == 1.0f)
+    {
+        float r, g, b, a;
+        slayer3d_effects_sample_textured_sky_sphere(sky, forward, &r, &g, &b, &a);
+        for (int y = min_y; y < max_y; ++y)
+        {
+            for (int x = min_x; x < max_x; ++x)
+            {
+                const int index = (y * framebuffer.width) + x;
+                Uint8 *pixel = &framebuffer.color_pixels[index * 4];
+                if (framebuffer.depth_pixels != NULL && framebuffer.depth_pixels[index] < 1.0f)
+                    continue;
+                pixel[0] = slayer3d_effects_float_to_byte(r);
+                pixel[1] = slayer3d_effects_float_to_byte(g);
+                pixel[2] = slayer3d_effects_float_to_byte(b);
+                pixel[3] = slayer3d_effects_float_to_byte(a);
+                if (framebuffer.depth_pixels != NULL)
+                    framebuffer.depth_pixels[index] = 1.0f;
+            }
+        }
+        return true;
+    }
+
+    const float inv_proj_x = 1.0f / context->projection.m[0];
+    const float inv_proj_y = 1.0f / context->projection.m[5];
+    const float ndc_x_start = ((2.0f * 0.5f) / (float)framebuffer.width) - 1.0f;
+    const float ndc_x_step = 2.0f / (float)framebuffer.width;
+    const slayer3d_vec3 x_step = slayer3d_vec3_scale(right, ndc_x_step * inv_proj_x);
+
+    for (int y = min_y; y < max_y; ++y)
+    {
+        const float ndc_y = 1.0f - ((2.0f * ((float)y + 0.5f)) / (float)framebuffer.height);
+        const slayer3d_vec3 row_base = slayer3d_vec3_add(forward, slayer3d_vec3_scale(up, ndc_y * inv_proj_y));
+        slayer3d_vec3 ray = slayer3d_vec3_add(row_base, slayer3d_vec3_scale(right, ndc_x_start * inv_proj_x));
+        for (int x = min_x; x < max_x; ++x)
+        {
+            const int index = (y * framebuffer.width) + x;
+            Uint8 *pixel = &framebuffer.color_pixels[index * 4];
+            if (framebuffer.depth_pixels != NULL && framebuffer.depth_pixels[index] < 1.0f)
+            {
+                ray = slayer3d_vec3_add(ray, x_step);
+                continue;
+            }
+            float r, g, b, a;
+            slayer3d_effects_sample_textured_sky_sphere(sky, slayer3d_vec3_normalize(ray), &r, &g, &b, &a);
+            pixel[0] = slayer3d_effects_float_to_byte(r);
+            pixel[1] = slayer3d_effects_float_to_byte(g);
+            pixel[2] = slayer3d_effects_float_to_byte(b);
+            pixel[3] = slayer3d_effects_float_to_byte(a);
+            if (framebuffer.depth_pixels != NULL)
+                framebuffer.depth_pixels[index] = 1.0f;
+            ray = slayer3d_vec3_add(ray, x_step);
+        }
+    }
+    return true;
+}
+
+bool slayer3d_draw_sky_sphere_textured(slayer3d_render_context *context, const slayer3d_sky_sphere_textured *sky)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (sky == NULL)
+        return SDL_InvalidParamError("sky");
+    if (sky->texture == NULL)
+        return SDL_SetError("Textured sky sphere requires a panorama texture.");
+
+    if (context->backend == SLAYER3D_BACKEND_SOFTWARE)
+        return slayer3d_draw_sky_sphere_textured_software(context, sky);
+    if (context->backend_iface.draw_sky_sphere_textured != NULL &&
+        context->backend_iface.draw_sky_sphere_textured(context, sky))
+    {
+        return true;
+    }
+    return slayer3d_draw_sky_sphere_textured_software(context, sky);
 }
 
 /* Sky-layer dome tessellation. A (N+1)x(N+1) vertex grid forms a shallow

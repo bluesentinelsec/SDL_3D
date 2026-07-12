@@ -39,6 +39,8 @@ typedef struct slayer3d_gl_tex_entry
 typedef struct slayer3d_gl_skybox_entry
 {
     bool pending;
+    bool panorama;
+    const slayer3d_texture2d *sphere;
     const slayer3d_texture2d *pos_x;
     const slayer3d_texture2d *neg_x;
     const slayer3d_texture2d *pos_y;
@@ -284,6 +286,8 @@ struct slayer3d_gl_context
 
     GLint copy_texture_loc;
 
+    GLint skybox_panorama_loc;
+    GLint skybox_sphere_loc;
     GLint skybox_pos_x_loc;
     GLint skybox_neg_x_loc;
     GLint skybox_pos_y_loc;
@@ -460,6 +464,7 @@ struct slayer3d_gl_context
 
 GLuint slayer3d_gl_resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
 GLuint slayer3d_gl_resolve_skybox_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
+GLuint slayer3d_gl_resolve_sky_sphere_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
 void slayer3d_gl_tex_cache_free(slayer3d_gl_context *ctx);
 slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
     slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,

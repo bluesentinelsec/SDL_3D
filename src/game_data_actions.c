@@ -1738,6 +1738,7 @@ typedef struct editor_sky_scan_item
 {
     char name[96];
     char base[512];
+    bool has_sphere;
     bool has_faces;
     int layer_count;
 } editor_sky_scan_item;
@@ -1758,17 +1759,18 @@ static void editor_sky_child_name(const char *parent, const char *leaf, char *bu
         SDL_snprintf(buffer, buffer_size, "%s/%s", parent, leaf != NULL ? leaf : "");
 }
 
-static void editor_sky_scan_add_item(editor_sky_scan_list *list, const char *name, const char *base, bool has_faces,
-                                     int layer_count)
+static void editor_sky_scan_add_item(editor_sky_scan_list *list, const char *name, const char *base, bool has_sphere,
+                                     bool has_faces, int layer_count)
 {
     if (list == NULL || list->count >= EDITOR_SKY_ITEM_CAP || name == NULL || name[0] == '\0' || base == NULL ||
-        base[0] == '\0' || (!has_faces && layer_count == 0))
+        base[0] == '\0' || (!has_sphere && !has_faces && layer_count == 0))
     {
         return;
     }
     editor_sky_scan_item *item = &list->items[list->count++];
     SDL_strlcpy(item->name, name, sizeof(item->name));
     SDL_strlcpy(item->base, base, sizeof(item->base));
+    item->has_sphere = has_sphere;
     item->has_faces = has_faces;
     item->layer_count = layer_count;
 }
@@ -1788,17 +1790,20 @@ static bool editor_sky_fs_file_exists(const char *directory, const char *leaf)
     return exists;
 }
 
-static bool editor_sky_fs_directory_flags(const char *directory, bool *out_has_faces, int *out_layer_count)
+static bool editor_sky_fs_directory_flags(const char *directory, bool *out_has_sphere, bool *out_has_faces,
+                                          int *out_layer_count)
 {
+    const bool has_sphere = editor_sky_fs_file_exists(directory, "sphere.png");
     bool has_faces = true;
     for (size_t i = 0; i < SDL_arraysize(editor_sky_face_files); ++i)
         has_faces = has_faces && editor_sky_fs_file_exists(directory, editor_sky_face_files[i]);
     int layer_count = 0;
     if (editor_sky_fs_file_exists(directory, "layer_outer.png"))
         layer_count = editor_sky_fs_file_exists(directory, "layer_inner.png") ? 2 : 1;
+    *out_has_sphere = has_sphere;
     *out_has_faces = has_faces;
     *out_layer_count = layer_count;
-    return has_faces || layer_count > 0;
+    return has_sphere || has_faces || layer_count > 0;
 }
 
 static void editor_sky_scan_fs_directory(const char *directory, const char *relative_name, editor_sky_scan_list *list,
@@ -1844,11 +1849,12 @@ static void editor_sky_scan_fs_directory(const char *directory, const char *rela
     }
     if (relative_name != NULL && relative_name[0] != '\0')
     {
+        bool has_sphere = false;
         bool has_faces = false;
         int layer_count = 0;
-        if (editor_sky_fs_directory_flags(directory, &has_faces, &layer_count))
+        if (editor_sky_fs_directory_flags(directory, &has_sphere, &has_faces, &layer_count))
         {
-            editor_sky_scan_add_item(list, relative_name, directory, has_faces, layer_count);
+            editor_sky_scan_add_item(list, relative_name, directory, has_sphere, has_faces, layer_count);
             return;
         }
     }
@@ -1867,6 +1873,7 @@ typedef struct editor_sky_asset_enum_context
     const char *relative_name;
     int depth;
     bool face_seen[6];
+    bool sphere;
     bool layer_outer;
     bool layer_inner;
 } editor_sky_asset_enum_context;
@@ -1891,6 +1898,8 @@ static slayer3d_asset_enumeration_result editor_sky_asset_enumerate_entry(void *
             ctx->layer_outer = true;
         if (SDL_strcmp(name, "layer_inner.png") == 0)
             ctx->layer_inner = true;
+        if (SDL_strcmp(name, "sphere.png") == 0)
+            ctx->sphere = true;
         return SLAYER3D_ASSET_ENUM_CONTINUE;
     }
 
@@ -1934,7 +1943,7 @@ static void editor_sky_scan_asset_directory(slayer3d_game_data_runtime *runtime,
     for (size_t i = 0; i < SDL_arraysize(enumerate_ctx.face_seen); ++i)
         has_faces = has_faces && enumerate_ctx.face_seen[i];
     const int layer_count = enumerate_ctx.layer_outer ? (enumerate_ctx.layer_inner ? 2 : 1) : 0;
-    editor_sky_scan_add_item(list, relative_name, asset_directory, has_faces, layer_count);
+    editor_sky_scan_add_item(list, relative_name, asset_directory, enumerate_ctx.sphere, has_faces, layer_count);
 }
 
 static void editor_sky_item_key(char *buffer, size_t buffer_size, int index, const char *field)
@@ -1947,9 +1956,10 @@ static void editor_sky_slot_key(char *buffer, size_t buffer_size, int slot, cons
     SDL_snprintf(buffer, buffer_size, "editor.sky.slot.%d.%s", slot, field);
 }
 
-static void editor_sky_preview_path(char *buffer, size_t buffer_size, const char *base, bool has_faces)
+static void editor_sky_preview_path(char *buffer, size_t buffer_size, const char *base, bool has_sphere, bool has_faces)
 {
-    SDL_snprintf(buffer, buffer_size, "%s/%s", base, has_faces ? "pz.png" : "layer_outer.png");
+    SDL_snprintf(buffer, buffer_size, "%s/%s", base,
+                 has_sphere ? "sphere.png" : (has_faces ? "pz.png" : "layer_outer.png"));
 }
 
 static void editor_sky_publish_slots(slayer3d_game_data_runtime *runtime)
@@ -1972,6 +1982,7 @@ static void editor_sky_publish_slots(slayer3d_game_data_runtime *runtime)
         const char *name = "";
         const char *base = "";
         bool has_faces = false;
+        bool has_sphere = false;
         int layer_count = 0;
         if (index < count)
         {
@@ -1981,6 +1992,8 @@ static void editor_sky_publish_slots(slayer3d_game_data_runtime *runtime)
             base = slayer3d_properties_get_string(state, item_key, "");
             editor_sky_item_key(item_key, sizeof(item_key), index, "faces");
             has_faces = slayer3d_properties_get_bool(state, item_key, false);
+            editor_sky_item_key(item_key, sizeof(item_key), index, "sphere");
+            has_sphere = slayer3d_properties_get_bool(state, item_key, false);
             editor_sky_item_key(item_key, sizeof(item_key), index, "layer_count");
             layer_count = slayer3d_properties_get_int(state, item_key, 0);
         }
@@ -1991,13 +2004,15 @@ static void editor_sky_publish_slots(slayer3d_game_data_runtime *runtime)
         slayer3d_properties_set_string(state, slot_key, base);
         editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "faces");
         slayer3d_properties_set_bool(state, slot_key, has_faces);
+        editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "sphere");
+        slayer3d_properties_set_bool(state, slot_key, has_sphere);
         editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "layer_count");
         slayer3d_properties_set_int(state, slot_key, layer_count);
         editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "available");
         slayer3d_properties_set_bool(state, slot_key, available);
         char preview[640] = "";
         if (available)
-            editor_sky_preview_path(preview, sizeof(preview), base, has_faces);
+            editor_sky_preview_path(preview, sizeof(preview), base, has_sphere, has_faces);
         editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "path");
         slayer3d_properties_set_string(state, slot_key, preview);
     }
@@ -2064,6 +2079,8 @@ static bool execute_editor_sky_scan_action(slayer3d_game_data_runtime *runtime, 
         slayer3d_properties_set_string(state, item_key, item != NULL ? item->base : "");
         editor_sky_item_key(item_key, sizeof(item_key), i, "faces");
         slayer3d_properties_set_bool(state, item_key, item != NULL && item->has_faces);
+        editor_sky_item_key(item_key, sizeof(item_key), i, "sphere");
+        slayer3d_properties_set_bool(state, item_key, item != NULL && item->has_sphere);
         editor_sky_item_key(item_key, sizeof(item_key), i, "layer_count");
         slayer3d_properties_set_int(state, item_key, item != NULL ? item->layer_count : 0);
     }
@@ -2109,6 +2126,9 @@ static bool execute_editor_sky_select_action(slayer3d_game_data_runtime *runtime
     editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "faces");
     slayer3d_properties_set_bool(state, "editor.sky.selected.faces",
                                  slayer3d_properties_get_bool(state, slot_key, false));
+    editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "sphere");
+    slayer3d_properties_set_bool(state, "editor.sky.selected.sphere",
+                                 slayer3d_properties_get_bool(state, slot_key, false));
     editor_sky_slot_key(slot_key, sizeof(slot_key), slot, "layer_count");
     slayer3d_properties_set_int(state, "editor.sky.selected.layer_count",
                                 slayer3d_properties_get_int(state, slot_key, 0));
@@ -2134,7 +2154,8 @@ static const char *editor_sky_preset_leaf(const char *name)
     return leaf;
 }
 
-static char *editor_sky_build_override_json(const char *base, const char *preset, bool has_faces, int layer_count)
+static char *editor_sky_build_override_json(const char *base, const char *preset, bool has_sphere, bool has_faces,
+                                            int layer_count)
 {
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *obj = doc != NULL ? yyjson_mut_obj(doc) : NULL;
@@ -2142,11 +2163,17 @@ static char *editor_sky_build_override_json(const char *base, const char *preset
     if (ok)
     {
         yyjson_mut_doc_set_root(doc, obj);
-        ok = yyjson_mut_obj_add_strcpy(doc, obj, "mode", layer_count > 0 ? "layers" : "cubemap") &&
+        ok = yyjson_mut_obj_add_strcpy(doc, obj, "mode",
+                                       has_sphere ? "sphere" : (layer_count > 0 ? "layers" : "cubemap")) &&
              yyjson_mut_obj_add_strcpy(doc, obj, "preset", preset) && yyjson_mut_obj_add_real(doc, obj, "size", 400.0);
     }
     char face_path[640];
-    if (ok && has_faces)
+    if (ok && has_sphere)
+    {
+        SDL_snprintf(face_path, sizeof(face_path), "%s/sphere.png", base);
+        ok = yyjson_mut_obj_add_strcpy(doc, obj, "sphere", face_path);
+    }
+    if (ok && !has_sphere && has_faces)
     {
         static const char *const face_keys[6] = {"pos_x", "neg_x", "pos_y", "neg_y", "pos_z", "neg_z"};
         for (int i = 0; ok && i < 6; ++i)
@@ -2155,7 +2182,7 @@ static char *editor_sky_build_override_json(const char *base, const char *preset
             ok = yyjson_mut_obj_add_strcpy(doc, obj, face_keys[i], face_path);
         }
     }
-    if (ok && layer_count > 0)
+    if (ok && !has_sphere && layer_count > 0)
     {
         yyjson_mut_val *layers = yyjson_mut_arr(doc);
         ok = layers != NULL && yyjson_mut_obj_add_val(doc, obj, "layers", layers);
@@ -2198,15 +2225,16 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     }
 
     const char *base = slayer3d_properties_get_string(state, "editor.sky.selected.base", "");
+    const bool has_sphere = slayer3d_properties_get_bool(state, "editor.sky.selected.sphere", false);
     const bool has_faces = slayer3d_properties_get_bool(state, "editor.sky.selected.faces", false);
     const int layer_count = slayer3d_properties_get_int(state, "editor.sky.selected.layer_count", 0);
-    if (base == NULL || base[0] == '\0' || (!has_faces && layer_count == 0))
+    if (base == NULL || base[0] == '\0' || (!has_sphere && !has_faces && layer_count == 0))
     {
         editor_publish_console_message(runtime, "Skybox apply failed: selection is not a usable skybox");
         return true;
     }
 
-    char *json = editor_sky_build_override_json(base, editor_sky_preset_leaf(name), has_faces, layer_count);
+    char *json = editor_sky_build_override_json(base, editor_sky_preset_leaf(name), has_sphere, has_faces, layer_count);
     if (json == NULL || !slayer3d_game_data_set_scene_sky_override_json(runtime, json))
     {
         free(json);
@@ -2216,7 +2244,8 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     free(json);
 
     slayer3d_properties_set_string(state, "editor.sky.active", name);
-    slayer3d_properties_set_string(state, "editor.sky.mode", layer_count > 0 ? "layers" : "cubemap");
+    slayer3d_properties_set_string(state, "editor.sky.mode",
+                                   has_sphere ? "sphere" : (layer_count > 0 ? "layers" : "cubemap"));
     char message[192];
     SDL_snprintf(message, sizeof(message), "Skybox applied: %s%s", name, layer_count > 0 ? " (animated)" : "");
     editor_publish_console_message(runtime, message);

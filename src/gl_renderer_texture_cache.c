@@ -78,6 +78,15 @@ GLuint slayer3d_gl_resolve_skybox_texture(slayer3d_gl_context *ctx, const slayer
     return id != 0 ? id : tex_cache_upload(ctx, &ctx->skybox_tex_cache, tex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 }
 
+GLuint slayer3d_gl_resolve_sky_sphere_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
+{
+    if (tex == NULL)
+        return ctx->white_texture;
+
+    const GLuint id = tex_cache_lookup(ctx, &ctx->skybox_tex_cache, tex);
+    return id != 0 ? id : tex_cache_upload(ctx, &ctx->skybox_tex_cache, tex, GL_REPEAT, GL_CLAMP_TO_EDGE);
+}
+
 static void tex_cache_free_list(slayer3d_gl_context *ctx, slayer3d_gl_tex_entry **cache)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;

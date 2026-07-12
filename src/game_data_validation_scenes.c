@@ -657,10 +657,10 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
         return validation_error(ctx, skybox_path, "scene world.skybox must be an object");
 
     const char *mode = json_string(skybox, "mode");
-    if (mode != NULL && SDL_strcmp(mode, "none") != 0 && SDL_strcmp(mode, "cubemap") != 0 &&
-        SDL_strcmp(mode, "layers") != 0)
+    if (mode != NULL && SDL_strcmp(mode, "none") != 0 && SDL_strcmp(mode, "sphere") != 0 &&
+        SDL_strcmp(mode, "cubemap") != 0 && SDL_strcmp(mode, "layers") != 0)
     {
-        return validation_error(ctx, skybox_path, "scene world.skybox mode must be none, cubemap, or layers");
+        return validation_error(ctx, skybox_path, "scene world.skybox mode must be none, sphere, cubemap, or layers");
     }
     yyjson_val *preset = obj_get(skybox, "preset");
     if (preset != NULL && (!yyjson_is_str(preset) || yyjson_get_str(preset)[0] == '\0'))
@@ -728,8 +728,27 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
         }
     }
 
-    if (!any_face && preset == NULL && layers == NULL && (mode == NULL || SDL_strcmp(mode, "none") != 0))
-        return validation_error(ctx, skybox_path, "scene world.skybox requires preset, faces, or layers");
+    yyjson_val *sphere_value = obj_get(skybox, "sphere");
+    const char *sphere = json_string(skybox, "sphere");
+    if (sphere_value != NULL)
+    {
+        char sphere_path[PATH_BUFFER_SIZE];
+        format_path(sphere_path, sizeof(sphere_path), "%s.sphere", skybox_path);
+        if (sphere == NULL || sphere[0] == '\0')
+            return validation_error(ctx, sphere_path,
+                                    "scene world.skybox sphere must be a non-empty texture reference");
+        if (SDL_strchr(sphere, '/') == NULL && SDL_strchr(sphere, '\\') == NULL &&
+            !require_ref(ctx, &names->images, "image asset", sphere, sphere_path))
+        {
+            return false;
+        }
+    }
+
+    if (!any_face && preset == NULL && layers == NULL && sphere == NULL &&
+        (mode == NULL || SDL_strcmp(mode, "none") != 0))
+    {
+        return validation_error(ctx, skybox_path, "scene world.skybox requires preset, sphere, faces, or layers");
+    }
 
     yyjson_val *size = obj_get(skybox, "size");
     if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 1.0))

@@ -2026,14 +2026,16 @@ preserves transform, color, optional `effect_asset`, `effect_texture`,
 `emissive`, `preview`, and the full generic property bag. Games may use custom
 `kind`, `type`, and property fields for behavior the editor does not understand.
 
-Map-level `skybox` data may reference a configured skybox asset or explicit
-cube-face image references:
+Map-level `skybox` data may reference a configured skybox preset, a seamless
+equirectangular panorama, or legacy explicit cube-face image references:
 
 ```json
 {
   "skybox": {
     "id": "skybox.main",
-    "asset": "skybox.sky_17",
+    "mode": "sphere",
+    "preset": "afternoon",
+    "sphere": "skyboxes/afternoon/sphere.png",
     "size": 400,
     "properties": { "mood": "dusk" }
   }
@@ -2557,10 +2559,11 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
 }
 ```
 
-`world.skybox` is optional and references six `assets.images` entries using
-standard cubemap face names: `pos_x`, `neg_x`, `pos_y`, `neg_y`, `pos_z`, and
-`neg_z`. The generic presentation layer draws it before sector levels and other
-world primitives. Use `asset://` image paths for pack-file and embedded builds.
+`world.skybox` is optional and may reference a `sphere` panorama image, a
+`preset`, or legacy six-face cubemap image entries using standard face names:
+`pos_x`, `neg_x`, `pos_y`, `neg_y`, `pos_z`, and `neg_z`. The generic
+presentation layer draws it before sector levels and other world primitives.
+Use `asset://` image paths for pack-file and embedded builds.
 
 `level` references a top-level sector level. `variant` defaults to
 `lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.
