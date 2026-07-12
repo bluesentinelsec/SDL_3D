@@ -26,6 +26,7 @@
 
 /* Forward declarations. */
 typedef struct slayer3d_render_context slayer3d_render_context;
+typedef struct slayer3d_skybox_textured slayer3d_skybox_textured;
 typedef struct slayer3d_texture2d slayer3d_texture2d;
 struct slayer3d_light;
 
@@ -116,6 +117,7 @@ typedef struct slayer3d_backend_interface
     /* Drawing. */
     bool (*draw_mesh_unlit)(slayer3d_render_context *context, const slayer3d_draw_params_unlit *params);
     bool (*draw_mesh_lit)(slayer3d_render_context *context, const slayer3d_draw_params_lit *params);
+    bool (*draw_skybox_textured)(slayer3d_render_context *context, const slayer3d_skybox_textured *skybox);
 } slayer3d_backend_interface;
 
 /* Backend initializers — each populates the interface table. */

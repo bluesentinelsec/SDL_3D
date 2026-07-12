@@ -36,6 +36,25 @@ typedef struct slayer3d_gl_tex_entry
     struct slayer3d_gl_tex_entry *next;
 } slayer3d_gl_tex_entry;
 
+typedef struct slayer3d_gl_skybox_entry
+{
+    bool pending;
+    const slayer3d_texture2d *pos_x;
+    const slayer3d_texture2d *neg_x;
+    const slayer3d_texture2d *pos_y;
+    const slayer3d_texture2d *neg_y;
+    const slayer3d_texture2d *pos_z;
+    const slayer3d_texture2d *neg_z;
+    float right[3];
+    float up[3];
+    float forward[3];
+    float inv_projection[2];
+    bool viewport_enabled;
+    SDL_Rect viewport_rect;
+    bool scissor_enabled;
+    SDL_Rect scissor_rect;
+} slayer3d_gl_skybox_entry;
+
 /* std140 layout, must match GLSL SceneUBO. */
 typedef struct slayer3d_scene_ubo_data
 {
@@ -232,6 +251,7 @@ struct slayer3d_gl_context
     GLuint pbr_program;
     GLuint unlit_program;
     GLuint copy_program;
+    GLuint skybox_program;
     slayer3d_custom_shader_cache_entry *custom_shader_cache;
     GLuint depth_prepass_query;
     GLuint geometry_query;
@@ -263,6 +283,17 @@ struct slayer3d_gl_context
     GLint unlit_overlay_effect_columns_loc;
 
     GLint copy_texture_loc;
+
+    GLint skybox_pos_x_loc;
+    GLint skybox_neg_x_loc;
+    GLint skybox_pos_y_loc;
+    GLint skybox_neg_y_loc;
+    GLint skybox_pos_z_loc;
+    GLint skybox_neg_z_loc;
+    GLint skybox_right_loc;
+    GLint skybox_up_loc;
+    GLint skybox_forward_loc;
+    GLint skybox_inv_projection_loc;
 
     GLuint transition_program;
     GLint transition_scene_loc;
@@ -369,6 +400,8 @@ struct slayer3d_gl_context
     GLuint black_cubemap;
 
     slayer3d_gl_tex_entry *tex_cache;
+    slayer3d_gl_tex_entry *skybox_tex_cache;
+    slayer3d_gl_skybox_entry skybox;
 
     float *white_colors;
     int white_colors_capacity;
@@ -426,6 +459,7 @@ struct slayer3d_gl_context
 };
 
 GLuint slayer3d_gl_resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
+GLuint slayer3d_gl_resolve_skybox_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
 void slayer3d_gl_tex_cache_free(slayer3d_gl_context *ctx);
 slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
     slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,

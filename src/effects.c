@@ -1005,6 +1005,11 @@ bool slayer3d_draw_skybox_textured(slayer3d_render_context *context, const slaye
     {
         return slayer3d_draw_skybox_textured_software(context, skybox);
     }
+    if (context->backend_iface.draw_skybox_textured != NULL &&
+        context->backend_iface.draw_skybox_textured(context, skybox))
+    {
+        return true;
+    }
 
     c = slayer3d_effects_camera_position(context);
     s = skybox->size > 1.0f ? skybox->size : 400.0f;
