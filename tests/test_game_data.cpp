@@ -18755,6 +18755,189 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellAfternoonSkyboxFacesHaveContinuousBorders)
+{
+    enum FaceIndex
+    {
+        face_px,
+        face_nx,
+        face_py,
+        face_ny,
+        face_pz,
+        face_nz,
+        face_count
+    };
+    struct FaceImage
+    {
+        const char *name = nullptr;
+        slayer3d_image image{};
+    };
+
+    const std::filesystem::path skybox_root = slayer3d_editor_data_path().parent_path() / "skyboxes" / "afternoon";
+    ASSERT_TRUE(std::filesystem::exists(skybox_root)) << skybox_root;
+
+    FaceImage faces[face_count] = {
+        {"px", {}}, {"nx", {}}, {"py", {}}, {"ny", {}}, {"pz", {}}, {"nz", {}},
+    };
+    for (FaceImage &face : faces)
+    {
+        const std::filesystem::path path = skybox_root / (std::string(face.name) + ".png");
+        ASSERT_TRUE(slayer3d_load_image_from_file(path.string().c_str(), &face.image)) << SDL_GetError();
+        ASSERT_EQ(face.image.width, 512);
+        ASSERT_EQ(face.image.height, 512);
+    }
+
+    auto normalized = [](slayer3d_vec3 value) { return slayer3d_vec3_normalize(value); };
+    auto face_direction = [&](FaceIndex face, int x, int y) {
+        const float u = (float)x / (float)(faces[face].image.width - 1);
+        const float v = (float)y / (float)(faces[face].image.height - 1);
+        switch (face)
+        {
+        case face_px:
+            return normalized(slayer3d_vec3_make(2.0f * u - 1.0f, 1.0f - 2.0f * v, 1.0f));
+        case face_nx:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * u, 1.0f - 2.0f * v, -1.0f));
+        case face_nz:
+            return normalized(slayer3d_vec3_make(1.0f, 1.0f - 2.0f * v, 1.0f - 2.0f * u));
+        case face_pz:
+            return normalized(slayer3d_vec3_make(-1.0f, 1.0f - 2.0f * v, 2.0f * u - 1.0f));
+        case face_py:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * v, 1.0f, 2.0f * u - 1.0f));
+        case face_ny:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * v, -1.0f, 1.0f - 2.0f * u));
+        default:
+            return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+        }
+    };
+    auto face_axis = [](FaceIndex face) {
+        switch (face)
+        {
+        case face_px:
+        case face_nx:
+            return 2;
+        case face_py:
+        case face_ny:
+            return 1;
+        case face_pz:
+        case face_nz:
+            return 0;
+        default:
+            return 2;
+        }
+    };
+    auto face_for_axis = [](int axis, float sign) {
+        if (axis == 2)
+            return sign >= 0.0f ? face_px : face_nx;
+        if (axis == 1)
+            return sign >= 0.0f ? face_py : face_ny;
+        return sign >= 0.0f ? face_nz : face_pz;
+    };
+    auto face_uv = [](FaceIndex face, slayer3d_vec3 direction, float *out_u, float *out_v) {
+        const float abs_x = SDL_fabsf(direction.x);
+        const float abs_y = SDL_fabsf(direction.y);
+        const float abs_z = SDL_fabsf(direction.z);
+        switch (face)
+        {
+        case face_px:
+            *out_u = (direction.x / abs_z + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_z) * 0.5f;
+            break;
+        case face_nx:
+            *out_u = (1.0f - direction.x / abs_z) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_z) * 0.5f;
+            break;
+        case face_nz:
+            *out_u = (1.0f - direction.z / abs_x) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_x) * 0.5f;
+            break;
+        case face_pz:
+            *out_u = (direction.z / abs_x + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_x) * 0.5f;
+            break;
+        case face_py:
+            *out_u = (direction.z / abs_y + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.x / abs_y) * 0.5f;
+            break;
+        case face_ny:
+            *out_u = (1.0f - direction.z / abs_y) * 0.5f;
+            *out_v = (1.0f - direction.x / abs_y) * 0.5f;
+            break;
+        default:
+            *out_u = 0.5f;
+            *out_v = 0.5f;
+            break;
+        }
+    };
+    auto pixel = [](const slayer3d_image &image, int x, int y) {
+        return &image.pixels[((size_t)y * (size_t)image.width + (size_t)x) * 4u];
+    };
+
+    int max_delta = 0;
+    std::string worst_edge;
+    for (int face_index = 0; face_index < face_count; ++face_index)
+    {
+        const FaceIndex face = (FaceIndex)face_index;
+        const int width = faces[face].image.width;
+        const int height = faces[face].image.height;
+        const int current_axis = face_axis(face);
+        std::vector<std::pair<int, int>> edge_pixels;
+        for (int i = 1; i < width - 1; ++i)
+        {
+            edge_pixels.push_back({i, 0});
+            edge_pixels.push_back({i, height - 1});
+        }
+        for (int i = 1; i < height - 1; ++i)
+        {
+            edge_pixels.push_back({0, i});
+            edge_pixels.push_back({width - 1, i});
+        }
+
+        for (const auto &edge_pixel : edge_pixels)
+        {
+            const slayer3d_vec3 direction = face_direction(face, edge_pixel.first, edge_pixel.second);
+            const float axes[3] = {SDL_fabsf(direction.x), SDL_fabsf(direction.y), SDL_fabsf(direction.z)};
+            const float current_major = axes[current_axis];
+            int neighbor_axis = -1;
+            for (int axis = 0; axis < 3; ++axis)
+            {
+                if (axis != current_axis && SDL_fabsf(axes[axis] - current_major) < 0.0001f)
+                {
+                    neighbor_axis = axis;
+                    break;
+                }
+            }
+            ASSERT_GE(neighbor_axis, 0);
+
+            const float component[3] = {direction.x, direction.y, direction.z};
+            const FaceIndex neighbor = face_for_axis(neighbor_axis, component[neighbor_axis]);
+            float neighbor_u = 0.0f;
+            float neighbor_v = 0.0f;
+            face_uv(neighbor, direction, &neighbor_u, &neighbor_v);
+            const int neighbor_x = (int)SDL_roundf(neighbor_u * (float)(faces[neighbor].image.width - 1));
+            const int neighbor_y = (int)SDL_roundf(neighbor_v * (float)(faces[neighbor].image.height - 1));
+
+            const Uint8 *a = pixel(faces[face].image, edge_pixel.first, edge_pixel.second);
+            const Uint8 *b = pixel(faces[neighbor].image, neighbor_x, neighbor_y);
+            for (int channel = 0; channel < 3; ++channel)
+            {
+                const int delta = SDL_abs((int)a[channel] - (int)b[channel]);
+                if (delta > max_delta)
+                {
+                    max_delta = delta;
+                    worst_edge = std::string(faces[face].name) + " -> " + faces[neighbor].name;
+                }
+            }
+        }
+    }
+
+    for (FaceImage &face : faces)
+    {
+        slayer3d_free_image(&face.image);
+    }
+
+    EXPECT_LE(max_delta, 1) << worst_edge;
+}
+
 TEST(GameDataRuntime, EditorShellMapSaveMaterializesAssetsForPlayableUse)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
