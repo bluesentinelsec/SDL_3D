@@ -439,12 +439,26 @@
       "type": "object",
       "additionalProperties": true,
       "anyOf": [
+        {
+          "required": ["mode"],
+          "properties": {
+            "mode": { "const": "none" }
+          }
+        },
+        { "required": ["preset"] },
         { "required": ["asset"] },
+        { "required": ["sphere"] },
         { "required": ["faces"] }
       ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
+        "mode": {
+          "type": "string",
+          "enum": ["none", "sphere", "cubemap", "layers"]
+        },
+        "preset": { "type": "string", "minLength": 1 },
         "asset": { "type": "string", "minLength": 1 },
+        "sphere": { "type": "string", "minLength": 1 },
         "faces": { "$ref": "#/$defs/skyboxFaces" },
         "size": { "type": "number", "exclusiveMinimum": 1 },
         "properties": { "$ref": "#/$defs/properties" }

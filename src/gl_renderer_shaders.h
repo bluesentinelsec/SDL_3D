@@ -10,6 +10,7 @@ extern const char k_unlit_vert[];
 extern const char k_unlit_frag[];
 extern const char k_fullscreen_vert[];
 extern const char k_copy_frag[];
+extern const char k_skybox_frag[];
 extern const char k_transition_frag[];
 extern const char k_shadow_vert[];
 extern const char k_shadow_frag[];

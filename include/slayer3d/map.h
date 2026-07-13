@@ -463,14 +463,16 @@ extern "C"
      * @brief Global map sky/environment view. String pointers are owned by the map document.
      *
      * The mode is the authored mode string when present, otherwise it is
-     * inferred: maps with layers report "layers", maps with faces/asset/preset
-     * report "cubemap", and maps without sky data report "none".
+     * inferred: maps with a sphere/preset report "sphere", maps with layers
+     * report "layers", maps with faces/asset report "cubemap", and maps
+     * without sky data report "none".
      */
     typedef struct slayer3d_map_sky
     {
-        const char *mode;     /**< Effective sky mode: "none", "cubemap", or "layers". */
+        const char *mode;     /**< Effective sky mode: "none", "sphere", "cubemap", or "layers". */
         const char *preset;   /**< Optional built-in preset id such as "sunset". */
-        const char *asset;    /**< Optional single skybox asset reference. */
+        const char *asset;    /**< Optional legacy single skybox asset reference. */
+        const char *sphere;   /**< Optional equirectangular sky-sphere texture reference. */
         const char *faces[6]; /**< Cubemap faces (+X, -X, +Y, -Y, +Z, -Z) or NULLs. */
         bool has_faces;       /**< True when all six cubemap faces are authored. */
         float size;           /**< Skybox size, defaults to 400. */

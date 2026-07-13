@@ -113,10 +113,11 @@ For active-scene UI images, the same publisher also writes
 `asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
 fields so authored texture browsers can show per-thumbnail loading or failure
 states. UI image drawing skips matching pending/failed warmup requests instead
-of forcing a synchronous lazy load. Active-scene skybox drawing also skips until
-all six queued skybox image faces are ready. Editor texture swatches backed by
-pending or failed warmup thumbnails remain visible with status text, but their
-selection actions are ignored until the thumbnail is available.
+of forcing a synchronous lazy load. Active-scene sky drawing also skips until
+the queued sky-sphere panorama, cubemap faces, or layered sky images are ready.
+Editor texture swatches backed by pending or failed warmup thumbnails remain
+visible with status text, but their selection actions are ignored until the
+thumbnail is available.
 Render primitives that reference warmed image, sprite, or model assets also
 avoid forcing synchronous lazy loads while those requests are pending or failed.
 Texture-backed geometry draws untextured until its image is available; sprites

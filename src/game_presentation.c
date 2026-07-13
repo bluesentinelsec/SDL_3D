@@ -184,13 +184,24 @@ static void queue_skybox_image(slayer3d_game_data_asset_warmup_queue *queue, con
 typedef struct scene_sky_resolved
 {
     slayer3d_game_data_scene_skybox desc;
+    char sphere_path[SCENE_SKY_PATH_MAX];
     char face_paths[6][SCENE_SKY_PATH_MAX];
     char layer_paths[SCENE_SKY_PRESET_LAYER_COUNT][SCENE_SKY_PATH_MAX];
     const char *faces[6];
+    const char *sphere;
     bool has_faces;
     slayer3d_game_data_scene_sky_layer layers[SLAYER3D_GAME_DATA_SCENE_SKY_MAX_LAYERS];
     int layer_count;
 } scene_sky_resolved;
+
+static bool scene_sky_resolve_preset_sphere(scene_sky_resolved *sky, const char *media_dir)
+{
+    if (sky->desc.preset == NULL || sky->desc.preset[0] == '\0' || media_dir == NULL || media_dir[0] == '\0')
+        return false;
+    SDL_snprintf(sky->sphere_path, sizeof(sky->sphere_path), "%s/skyboxes/%s/sphere.png", media_dir, sky->desc.preset);
+    sky->sphere = sky->sphere_path;
+    return true;
+}
 
 static bool scene_sky_resolve_preset(scene_sky_resolved *sky, const char *media_dir)
 {
@@ -240,7 +251,11 @@ static bool resolve_active_scene_sky(const slayer3d_game_data_runtime *runtime, 
     if (runtime == NULL || !slayer3d_game_data_get_active_scene_skybox(runtime, &sky->desc))
         return false;
 
-    if (sky->desc.has_faces)
+    if (sky->desc.sphere != NULL)
+    {
+        sky->sphere = sky->desc.sphere;
+    }
+    else if (sky->desc.has_faces)
     {
         sky->faces[0] = sky->desc.pos_x;
         sky->faces[1] = sky->desc.neg_x;
@@ -249,6 +264,10 @@ static bool resolve_active_scene_sky(const slayer3d_game_data_runtime *runtime, 
         sky->faces[4] = sky->desc.pos_z;
         sky->faces[5] = sky->desc.neg_z;
         sky->has_faces = true;
+    }
+    else if (SDL_strcmp(sky->desc.mode, "sphere") == 0 || sky->desc.preset != NULL)
+    {
+        scene_sky_resolve_preset_sphere(sky, media_dir);
     }
     else
     {
@@ -265,7 +284,7 @@ static bool resolve_active_scene_sky(const slayer3d_game_data_runtime *runtime, 
         scene_sky_resolve_preset_layers(sky, media_dir);
     }
 
-    return sky->has_faces || sky->layer_count > 0;
+    return sky->sphere != NULL || sky->has_faces || sky->layer_count > 0;
 }
 
 static void queue_active_scene_skybox_images(const slayer3d_game_data_runtime *runtime,
@@ -275,6 +294,8 @@ static void queue_active_scene_skybox_images(const slayer3d_game_data_runtime *r
     if (runtime == NULL || queue == NULL || !resolve_active_scene_sky(runtime, media_dir, &sky))
         return;
 
+    if (sky.sphere != NULL)
+        queue_skybox_image(queue, sky.sphere);
     if (sky.has_faces)
     {
         for (int i = 0; i < 6; ++i)
@@ -752,6 +773,8 @@ static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, 
     if (!resolve_active_scene_sky(runtime, media_dir, &sky))
         return true;
 
+    if (sky.sphere != NULL && scene_sky_image_pending(asset_warmup, sky.sphere))
+        return true;
     if (sky.has_faces)
     {
         for (int i = 0; i < 6; ++i)
@@ -766,7 +789,20 @@ static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, 
             return true;
     }
 
-    if (sky.has_faces)
+    if (sky.sphere != NULL)
+    {
+        slayer3d_game_data_image_cache_entry *sphere =
+            slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, sky.sphere);
+        if (sphere == NULL)
+        {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load active scene sky sphere image asset");
+            return false;
+        }
+        slayer3d_sky_sphere_textured sky_sphere = {&sphere->texture};
+        if (!slayer3d_draw_sky_sphere_textured(renderer, &sky_sphere))
+            return false;
+    }
+    else if (sky.has_faces)
     {
         slayer3d_game_data_image_cache_entry *faces[6];
         for (int i = 0; i < 6; ++i)

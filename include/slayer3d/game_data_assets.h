@@ -86,10 +86,10 @@ extern "C"
     /**
      * @brief Authored scene skybox descriptor.
      *
-     * Face references are image asset ids or asset paths. The mode is the
+     * Texture references are image asset ids or asset paths. The mode is the
      * authored mode string when present, otherwise it is inferred from the
-     * authored data: layered records report "layers", face/preset records
-     * report "cubemap".
+     * authored data: sphere and preset records report "sphere", layered
+     * records report "layers", and face records report "cubemap".
      */
     typedef struct slayer3d_game_data_scene_skybox
     {
@@ -105,9 +105,11 @@ extern "C"
         const char *pos_z;
         /** @brief -Z face image asset id. */
         const char *neg_z;
+        /** @brief Optional equirectangular 2:1 panorama image asset id or path. */
+        const char *sphere;
         /** @brief Skybox cube half-size in world units. */
         float size;
-        /** @brief Effective sky mode: "none", "cubemap", or "layers". */
+        /** @brief Effective sky mode: "none", "sphere", "cubemap", or "layers". */
         const char *mode;
         /** @brief Optional built-in preset id resolved against the media skybox directory. */
         const char *preset;

@@ -18641,8 +18641,8 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
 
-    /* The canonical editor project bundles the built-in animated presets
-     * plus the static sky_17 skybox under data/skyboxes. */
+    /* The canonical editor project bundles the built-in animated skybox
+     * presets under data/skyboxes. */
     emit_signal("signal.editor.sky.refresh");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.sky.count", 0), 8);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.slot.0.name", ""), "afternoon");
@@ -18702,13 +18702,15 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
 
     emit_signal("signal.editor.sky.apply.selected");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "afternoon");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.mode", ""), "layers");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.mode", ""), "sphere");
     slayer3d_game_data_scene_skybox skybox{};
     ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
     EXPECT_STREQ(skybox.preset, "afternoon");
-    EXPECT_STREQ(skybox.mode, "layers");
-    EXPECT_TRUE(skybox.has_faces);
-    ASSERT_EQ(skybox.layer_count, 2);
+    EXPECT_STREQ(skybox.mode, "sphere");
+    EXPECT_FALSE(skybox.has_faces);
+    ASSERT_NE(skybox.sphere, nullptr);
+    EXPECT_NE(std::string(skybox.sphere).find("sphere.png"), std::string::npos);
+    ASSERT_EQ(skybox.layer_count, 0);
 
     /* Scrolling steps one row and clamps at the end of the list. */
     emit_signal("signal.editor.sky.scroll.down");
@@ -18755,6 +18757,189 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellAfternoonSkyboxFacesHaveContinuousBorders)
+{
+    enum FaceIndex
+    {
+        face_px,
+        face_nx,
+        face_py,
+        face_ny,
+        face_pz,
+        face_nz,
+        face_count
+    };
+    struct FaceImage
+    {
+        const char *name = nullptr;
+        slayer3d_image image{};
+    };
+
+    const std::filesystem::path skybox_root = slayer3d_editor_data_path().parent_path() / "skyboxes" / "afternoon";
+    ASSERT_TRUE(std::filesystem::exists(skybox_root)) << skybox_root;
+
+    FaceImage faces[face_count] = {
+        {"px", {}}, {"nx", {}}, {"py", {}}, {"ny", {}}, {"pz", {}}, {"nz", {}},
+    };
+    for (FaceImage &face : faces)
+    {
+        const std::filesystem::path path = skybox_root / (std::string(face.name) + ".png");
+        ASSERT_TRUE(slayer3d_load_image_from_file(path.string().c_str(), &face.image)) << SDL_GetError();
+        ASSERT_EQ(face.image.width, 512);
+        ASSERT_EQ(face.image.height, 512);
+    }
+
+    auto normalized = [](slayer3d_vec3 value) { return slayer3d_vec3_normalize(value); };
+    auto face_direction = [&](FaceIndex face, int x, int y) {
+        const float u = (float)x / (float)(faces[face].image.width - 1);
+        const float v = (float)y / (float)(faces[face].image.height - 1);
+        switch (face)
+        {
+        case face_px:
+            return normalized(slayer3d_vec3_make(2.0f * u - 1.0f, 1.0f - 2.0f * v, 1.0f));
+        case face_nx:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * u, 1.0f - 2.0f * v, -1.0f));
+        case face_nz:
+            return normalized(slayer3d_vec3_make(1.0f, 1.0f - 2.0f * v, 1.0f - 2.0f * u));
+        case face_pz:
+            return normalized(slayer3d_vec3_make(-1.0f, 1.0f - 2.0f * v, 2.0f * u - 1.0f));
+        case face_py:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * v, 1.0f, 2.0f * u - 1.0f));
+        case face_ny:
+            return normalized(slayer3d_vec3_make(1.0f - 2.0f * v, -1.0f, 1.0f - 2.0f * u));
+        default:
+            return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+        }
+    };
+    auto face_axis = [](FaceIndex face) {
+        switch (face)
+        {
+        case face_px:
+        case face_nx:
+            return 2;
+        case face_py:
+        case face_ny:
+            return 1;
+        case face_pz:
+        case face_nz:
+            return 0;
+        default:
+            return 2;
+        }
+    };
+    auto face_for_axis = [](int axis, float sign) {
+        if (axis == 2)
+            return sign >= 0.0f ? face_px : face_nx;
+        if (axis == 1)
+            return sign >= 0.0f ? face_py : face_ny;
+        return sign >= 0.0f ? face_nz : face_pz;
+    };
+    auto face_uv = [](FaceIndex face, slayer3d_vec3 direction, float *out_u, float *out_v) {
+        const float abs_x = SDL_fabsf(direction.x);
+        const float abs_y = SDL_fabsf(direction.y);
+        const float abs_z = SDL_fabsf(direction.z);
+        switch (face)
+        {
+        case face_px:
+            *out_u = (direction.x / abs_z + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_z) * 0.5f;
+            break;
+        case face_nx:
+            *out_u = (1.0f - direction.x / abs_z) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_z) * 0.5f;
+            break;
+        case face_nz:
+            *out_u = (1.0f - direction.z / abs_x) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_x) * 0.5f;
+            break;
+        case face_pz:
+            *out_u = (direction.z / abs_x + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.y / abs_x) * 0.5f;
+            break;
+        case face_py:
+            *out_u = (direction.z / abs_y + 1.0f) * 0.5f;
+            *out_v = (1.0f - direction.x / abs_y) * 0.5f;
+            break;
+        case face_ny:
+            *out_u = (1.0f - direction.z / abs_y) * 0.5f;
+            *out_v = (1.0f - direction.x / abs_y) * 0.5f;
+            break;
+        default:
+            *out_u = 0.5f;
+            *out_v = 0.5f;
+            break;
+        }
+    };
+    auto pixel = [](const slayer3d_image &image, int x, int y) {
+        return &image.pixels[((size_t)y * (size_t)image.width + (size_t)x) * 4u];
+    };
+
+    int max_delta = 0;
+    std::string worst_edge;
+    for (int face_index = 0; face_index < face_count; ++face_index)
+    {
+        const FaceIndex face = (FaceIndex)face_index;
+        const int width = faces[face].image.width;
+        const int height = faces[face].image.height;
+        const int current_axis = face_axis(face);
+        std::vector<std::pair<int, int>> edge_pixels;
+        for (int i = 1; i < width - 1; ++i)
+        {
+            edge_pixels.push_back({i, 0});
+            edge_pixels.push_back({i, height - 1});
+        }
+        for (int i = 1; i < height - 1; ++i)
+        {
+            edge_pixels.push_back({0, i});
+            edge_pixels.push_back({width - 1, i});
+        }
+
+        for (const auto &edge_pixel : edge_pixels)
+        {
+            const slayer3d_vec3 direction = face_direction(face, edge_pixel.first, edge_pixel.second);
+            const float axes[3] = {SDL_fabsf(direction.x), SDL_fabsf(direction.y), SDL_fabsf(direction.z)};
+            const float current_major = axes[current_axis];
+            int neighbor_axis = -1;
+            for (int axis = 0; axis < 3; ++axis)
+            {
+                if (axis != current_axis && SDL_fabsf(axes[axis] - current_major) < 0.0001f)
+                {
+                    neighbor_axis = axis;
+                    break;
+                }
+            }
+            ASSERT_GE(neighbor_axis, 0);
+
+            const float component[3] = {direction.x, direction.y, direction.z};
+            const FaceIndex neighbor = face_for_axis(neighbor_axis, component[neighbor_axis]);
+            float neighbor_u = 0.0f;
+            float neighbor_v = 0.0f;
+            face_uv(neighbor, direction, &neighbor_u, &neighbor_v);
+            const int neighbor_x = (int)SDL_roundf(neighbor_u * (float)(faces[neighbor].image.width - 1));
+            const int neighbor_y = (int)SDL_roundf(neighbor_v * (float)(faces[neighbor].image.height - 1));
+
+            const Uint8 *a = pixel(faces[face].image, edge_pixel.first, edge_pixel.second);
+            const Uint8 *b = pixel(faces[neighbor].image, neighbor_x, neighbor_y);
+            for (int channel = 0; channel < 3; ++channel)
+            {
+                const int delta = SDL_abs((int)a[channel] - (int)b[channel]);
+                if (delta > max_delta)
+                {
+                    max_delta = delta;
+                    worst_edge = std::string(faces[face].name) + " -> " + faces[neighbor].name;
+                }
+            }
+        }
+    }
+
+    for (FaceImage &face : faces)
+    {
+        slayer3d_free_image(&face.image);
+    }
+
+    EXPECT_LE(max_delta, 1) << worst_edge;
+}
+
 TEST(GameDataRuntime, EditorShellMapSaveMaterializesAssetsForPlayableUse)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
@@ -18799,8 +18984,7 @@ TEST(GameDataRuntime, EditorShellMapSaveMaterializesAssetsForPlayableUse)
      * map-level materials must be map-relative. */
     EXPECT_NE(map_json.find("\"preset\": \"afternoon\""), std::string::npos);
     EXPECT_TRUE(std::filesystem::exists(save_dir / "textures" / "lava.jpg"));
-    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "px.png"));
-    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "layer_outer.png"));
+    EXPECT_TRUE(std::filesystem::exists(save_dir / "skyboxes" / "afternoon" / "sphere.png"));
 
     /* The saved map materializes into a self-contained playable directory. */
     slayer3d_map_document *map = nullptr;
@@ -47164,7 +47348,7 @@ TEST(GameDataRuntime, SlayerMapValidatesSkyModesAndLayers)
     slayer3d_map_destroy(map);
 }
 
-TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsCubemap)
+TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsSphere)
 {
     const char *map_json = R"json({
   "format": "slayer3d.map",
@@ -47179,8 +47363,9 @@ TEST(GameDataRuntime, SlayerMapReportsPresetOnlySkyAsCubemap)
     ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &map, error, sizeof(error))) << error;
     slayer3d_map_sky sky{};
     ASSERT_TRUE(slayer3d_map_get_sky(map, &sky));
-    EXPECT_STREQ(sky.mode, "cubemap");
+    EXPECT_STREQ(sky.mode, "sphere");
     EXPECT_STREQ(sky.preset, "midnight");
+    EXPECT_EQ(sky.sphere, nullptr);
     EXPECT_FALSE(sky.has_faces);
     EXPECT_EQ(sky.layer_count, 0u);
     slayer3d_map_destroy(map);
@@ -47196,7 +47381,9 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidSkyRecords)
     };
     const Case cases[] = {
         {"bad_mode", R"json({ "mode": "volumetric", "preset": "sunset" })json",
-         "skybox mode must be one of none, cubemap, or layers"},
+         "skybox mode must be one of none, sphere, cubemap, or layers"},
+        {"sphere_mode_without_source", R"json({ "mode": "sphere", "size": 400 })json",
+         "sphere skybox requires preset, sphere, or asset"},
         {"empty_layers", R"json({ "mode": "layers", "layers": [] })json",
          "skybox layers must contain at least one layer"},
         {"layer_missing_texture", R"json({ "layers": [ { "opacity": 0.5 } ] })json",
@@ -47211,7 +47398,7 @@ TEST(GameDataRuntime, SlayerMapRejectsInvalidSkyRecords)
          "sky layer tint channels must be integers in [0, 255]"},
         {"layers_mode_without_layers", R"json({ "mode": "layers", "size": 400 })json",
          "layered skybox requires preset or layers"},
-        {"no_sky_sources", R"json({ "size": 400 })json", "skybox requires preset, asset, faces, or layers"},
+        {"no_sky_sources", R"json({ "size": 400 })json", "skybox requires preset, sphere, asset, faces, or layers"},
     };
 
     for (const Case &test_case : cases)
@@ -47279,10 +47466,8 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     { "id": "actor.player", "primitive": "capsule", "properties": { "type": "player-character" } }
   ],
   "skybox": {
-    "mode": "layers",
-    "layers": [
-      { "texture": "skyboxes/custom/layer_outer.png", "scroll": [0.01, 0.0] }
-    ]
+    "mode": "sphere",
+    "sphere": "skyboxes/custom/sphere.png"
   }
 })json";
 
@@ -47292,7 +47477,7 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     const std::filesystem::path map_dir = unique_test_dir("playable_sky_explicit_src");
     const std::filesystem::path map_path = map_dir / "level.slayermap.json";
     write_text(map_path, map_json);
-    write_text(map_dir / "skyboxes" / "custom" / "layer_outer.png", "png-placeholder");
+    write_text(map_dir / "skyboxes" / "custom" / "sphere.png", "png-placeholder");
 
     char error[512]{};
     slayer3d_map_document *map = nullptr;
@@ -47303,9 +47488,9 @@ TEST(GameDataRuntime, SlayerMapPlayableExportCopiesExplicitSkyWithoutPreset)
     slayer3d_map_destroy(map);
 
     const std::string scene_json = read_text(dir / "scenes" / "play.scene.json");
-    EXPECT_NE(scene_json.find("\"mode\": \"layers\""), std::string::npos);
-    EXPECT_NE(scene_json.find("asset://skyboxes/custom/layer_outer.png"), std::string::npos);
-    EXPECT_TRUE(std::filesystem::exists(dir / "skyboxes" / "custom" / "layer_outer.png"));
+    EXPECT_NE(scene_json.find("\"mode\": \"sphere\""), std::string::npos);
+    EXPECT_NE(scene_json.find("asset://skyboxes/custom/sphere.png"), std::string::npos);
+    EXPECT_TRUE(std::filesystem::exists(dir / "skyboxes" / "custom" / "sphere.png"));
     remove_test_dir(dir);
     remove_test_dir(map_dir);
 }

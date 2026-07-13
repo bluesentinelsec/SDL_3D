@@ -361,6 +361,7 @@ bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime
     out_skybox->neg_y = json_string(skybox, "neg_y", NULL);
     out_skybox->pos_z = json_string(skybox, "pos_z", NULL);
     out_skybox->neg_z = json_string(skybox, "neg_z", NULL);
+    out_skybox->sphere = json_string(skybox, "sphere", json_string(skybox, "asset", NULL));
     out_skybox->size = json_float(skybox, "size", 400.0f);
     out_skybox->preset = json_string(skybox, "preset", NULL);
     out_skybox->has_faces = out_skybox->pos_x != NULL && out_skybox->neg_x != NULL && out_skybox->pos_y != NULL &&
@@ -368,10 +369,14 @@ bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime
     scene_sky_read_layers(skybox, out_skybox);
 
     const char *mode = json_string(skybox, "mode", NULL);
-    if (mode != NULL &&
-        (SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "cubemap") == 0 || SDL_strcmp(mode, "layers") == 0))
+    if (mode != NULL && (SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "sphere") == 0 ||
+                         SDL_strcmp(mode, "cubemap") == 0 || SDL_strcmp(mode, "layers") == 0))
     {
         out_skybox->mode = mode;
+    }
+    else if (out_skybox->sphere != NULL)
+    {
+        out_skybox->mode = "sphere";
     }
     else if (out_skybox->layer_count > 0)
     {
@@ -384,7 +389,8 @@ bool slayer3d_game_data_get_active_scene_skybox(const slayer3d_game_data_runtime
 
     if (SDL_strcmp(out_skybox->mode, "none") == 0)
         return false;
-    return out_skybox->has_faces || out_skybox->preset != NULL || out_skybox->layer_count > 0;
+    return out_skybox->sphere != NULL || out_skybox->has_faces || out_skybox->preset != NULL ||
+           out_skybox->layer_count > 0;
 }
 
 bool slayer3d_game_data_active_scene_has_entity(const slayer3d_game_data_runtime *runtime, const char *entity_name)

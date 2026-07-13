@@ -1341,7 +1341,8 @@ static bool map_validate_sky_layers(map_validation_context *ctx, yyjson_val *lay
 
 static bool map_sky_mode_is_known(const char *mode)
 {
-    return SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "cubemap") == 0 || SDL_strcmp(mode, "layers") == 0;
+    return SDL_strcmp(mode, "none") == 0 || SDL_strcmp(mode, "sphere") == 0 || SDL_strcmp(mode, "cubemap") == 0 ||
+           SDL_strcmp(mode, "layers") == 0;
 }
 
 static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
@@ -1359,9 +1360,10 @@ static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
     const char *mode = map_json_string(skybox, "mode");
     if (!map_optional_non_empty_string(ctx, skybox, "mode", "$.skybox.mode", "skybox mode") ||
         (mode != NULL && !map_sky_mode_is_known(mode) &&
-         !map_error(ctx, "$.skybox.mode", "skybox mode must be one of none, cubemap, or layers")) ||
+         !map_error(ctx, "$.skybox.mode", "skybox mode must be one of none, sphere, cubemap, or layers")) ||
         !map_optional_non_empty_string(ctx, skybox, "id", "$.skybox.id", "skybox id") ||
         !map_optional_non_empty_string(ctx, skybox, "preset", "$.skybox.preset", "skybox preset") ||
+        !map_validate_asset_reference(ctx, skybox, "sphere", "$.skybox.sphere", "skybox sphere") ||
         !map_validate_asset_reference(ctx, skybox, "asset", "$.skybox.asset", "skybox asset") ||
         (faces != NULL && !map_validate_skybox_faces(ctx, faces, "$.skybox.faces")) ||
         (layers != NULL && !map_validate_sky_layers(ctx, layers, "$.skybox.layers")) ||
@@ -1374,6 +1376,11 @@ static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
     const bool sky_disabled = mode != NULL && SDL_strcmp(mode, "none") == 0;
     if (sky_disabled)
         return true;
+    if (mode != NULL && SDL_strcmp(mode, "sphere") == 0 && map_obj_get(skybox, "sphere") == NULL &&
+        map_obj_get(skybox, "asset") == NULL && map_json_string(skybox, "preset") == NULL)
+    {
+        return map_error(ctx, "$.skybox", "sphere skybox requires preset, sphere, or asset");
+    }
     if (mode != NULL && SDL_strcmp(mode, "cubemap") == 0 && faces == NULL && map_obj_get(skybox, "asset") == NULL &&
         map_json_string(skybox, "preset") == NULL)
     {
@@ -1381,10 +1388,10 @@ static bool map_validate_skybox(map_validation_context *ctx, yyjson_val *root)
     }
     if (mode != NULL && SDL_strcmp(mode, "layers") == 0 && layers == NULL && map_json_string(skybox, "preset") == NULL)
         return map_error(ctx, "$.skybox", "layered skybox requires preset or layers");
-    if (faces == NULL && layers == NULL && map_obj_get(skybox, "asset") == NULL &&
-        map_json_string(skybox, "preset") == NULL)
+    if (faces == NULL && layers == NULL && map_obj_get(skybox, "sphere") == NULL &&
+        map_obj_get(skybox, "asset") == NULL && map_json_string(skybox, "preset") == NULL)
     {
-        return map_error(ctx, "$.skybox", "skybox requires preset, asset, faces, or layers");
+        return map_error(ctx, "$.skybox", "skybox requires preset, sphere, asset, faces, or layers");
     }
     return true;
 }
@@ -1850,6 +1857,9 @@ bool slayer3d_map_get_sky(const slayer3d_map_document *document, slayer3d_map_sk
 
     out_sky->preset = map_json_string(skybox, "preset");
     out_sky->asset = map_json_string(skybox, "asset");
+    out_sky->sphere = map_json_string(skybox, "sphere");
+    if (out_sky->sphere == NULL)
+        out_sky->sphere = out_sky->asset;
     out_sky->has_faces = map_sky_faces_read(map_obj_get(skybox, "faces"), out_sky->faces);
     yyjson_val *size = map_obj_get(skybox, "size");
     if (yyjson_is_num(size) && yyjson_get_num(size) > 1.0)
@@ -1864,9 +1874,11 @@ bool slayer3d_map_get_sky(const slayer3d_map_document *document, slayer3d_map_sk
     const char *mode = map_json_string(skybox, "mode");
     if (mode != NULL && map_sky_mode_is_known(mode))
         out_sky->mode = mode;
+    else if (out_sky->sphere != NULL || out_sky->preset != NULL)
+        out_sky->mode = "sphere";
     else if (out_sky->layer_count > 0u)
         out_sky->mode = "layers";
-    else if (out_sky->has_faces || out_sky->asset != NULL || out_sky->preset != NULL)
+    else if (out_sky->has_faces || out_sky->asset != NULL)
         out_sky->mode = "cubemap";
     return SDL_strcmp(out_sky->mode, "none") != 0 || mode != NULL;
 }
@@ -4222,8 +4234,9 @@ static char *map_build_playable_game_json(const slayer3d_map_document *document,
     return json;
 }
 
-/* Copy the map's global sky into the generated scene's world.skybox using
- * the scene schema's flat face keys so the runner renders the authored sky. */
+/* Copy the map's global sky into the generated scene's world.skybox so the
+ * runner renders the authored sky with the preferred sphere mode or legacy
+ * cubemap/layer data. */
 static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *world,
                                        const slayer3d_map_document *document, const char *base_dir,
                                        map_playable_asset_manifest *manifest)
@@ -4243,10 +4256,18 @@ static bool map_scene_add_world_skybox(yyjson_mut_doc *doc, yyjson_mut_val *worl
     if (sky.preset != NULL)
     {
         /* Preset skies resolve against the runtime media directory. The map's
-         * face/layer references point into the authoring project and are not
-         * resolvable from the generated playable directory, so the preset id
-         * is the portable form for the runner. */
+         * authored texture references point into the authoring project and are
+         * not resolvable from the generated playable directory, so the preset
+         * id is the portable form for the runner. */
         return true;
+    }
+    if (sky.sphere != NULL)
+    {
+        char sphere_buffer[1024];
+        const char *sphere = map_playable_claim_asset(document, base_dir, manifest, sky.sphere, "skybox sphere",
+                                                      sphere_buffer, sizeof(sphere_buffer));
+        if (sphere != NULL && !yyjson_mut_obj_add_strcpy(doc, skybox, "sphere", sphere))
+            return false;
     }
     if (sky.has_faces)
     {
