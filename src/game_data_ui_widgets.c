@@ -283,6 +283,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.scroll_span = SDL_max(scroll_span, 0.0f);
     desc.scroll_signal = json_string(node, "scroll_signal", NULL);
     desc.scroll_step = json_float(node, "scroll_step", 0.0f);
+    desc.scrollbar_always = ui_widget_bool(node, "scrollbar_always", false);
     desc.open = ui_widget_bool(node, "open", false);
     const char *open_key = json_string(node, "open_key", NULL);
     if (open_key != NULL && open_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)

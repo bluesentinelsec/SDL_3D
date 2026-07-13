@@ -22718,12 +22718,14 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               texture_rects.end());
     EXPECT_NE(std::find(texture_rects.begin(), texture_rects.end(), "ui.editor_shell.texture_viewer.search.apply"),
               texture_rects.end());
-    // The scrollbar is synthesized from the virtualized grid: with all six
-    // project textures visible in six slots there is nothing to scroll, so
-    // no scrollbar exists (the old hand-authored track was always drawn).
+    // Asset browsers keep a persistent scrollbar affordance even when the
+    // current project textures fit in the visible slots.
     std::vector<std::string> scroll_rects = visible_rect_names();
-    EXPECT_EQ(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
+    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),
               scroll_rects.end());
+    EXPECT_NE(
+        std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar.thumb"),
+        scroll_rects.end());
     slayer3d_properties_set_int(slayer3d_game_data_mutable_scene_state(runtime), "editor.texture.count", 20);
     scroll_rects = visible_rect_names();
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.slot.grid.scrollbar"),

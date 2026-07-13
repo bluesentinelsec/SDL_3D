@@ -418,6 +418,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget scroll_count_key requires a scroll_key");
     if (obj_get(node, "scroll_signal") != NULL && scroll_key == NULL)
         return validation_error(ctx, path, "UI widget scroll_signal requires a scroll_key");
+    if (!ui_widget_optional_bool(node, "scrollbar_always"))
+        return validation_error(ctx, path, "UI widget scrollbar_always must be a boolean when authored");
     if (!ui_widget_optional_non_empty_string_len(node, "scroll_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "scroll_count_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "scroll_signal", SLAYER3D_UI_LAYOUT_ACTION_MAX))
@@ -671,6 +673,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.selected = parse_ui_widget_bool(node, "selected", false);
     desc.selected_index = parse_ui_widget_int(node, "selected_index", "selected_index", 0);
     desc.open = parse_ui_widget_bool(node, "open", false);
+    desc.scrollbar_always = parse_ui_widget_bool(node, "scrollbar_always", false);
     desc.option_height = parse_ui_widget_float(node, "option_height", 0.0f);
     const char *options[SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX];
     yyjson_val *option_values = obj_get(node, "options");
