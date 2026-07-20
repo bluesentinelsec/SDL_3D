@@ -306,6 +306,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         const char *default_dock = json_string(window, "default_dock", "none");
         const char *dock = ui_widget_scene_string(runtime, json_string(window, "dock_key", NULL), default_dock);
         desc.dock = ui_widget_dock_from_string(dock);
+        const char *front = ui_widget_scene_string(runtime, json_string(window, "front_key", NULL), NULL);
+        desc.window_front = front != NULL && desc.id != NULL && SDL_strcmp(front, desc.id) == 0;
         desc.dock_top = json_float(window, "dock_top", 0.0f);
         desc.dock_bottom = json_float(window, "dock_bottom", 0.0f);
         (void)ui_widget_scene_float(runtime, json_string(window, "dock_top_key", NULL), &desc.dock_top);

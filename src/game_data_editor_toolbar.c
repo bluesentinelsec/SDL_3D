@@ -114,6 +114,7 @@ typedef struct editor_ui_window_config
     const char *height_key;
     const char *resolved_height_key;
     const char *dock_key;
+    const char *front_key;
     const char *drag_handle;
     const char *resize_handle;
     const char *resize_edge;
@@ -182,6 +183,7 @@ static bool editor_ui_window_config_for_id(const slayer3d_game_data_runtime *run
     out_config->height_key = json_string(window, "height_key", NULL);
     out_config->resolved_height_key = json_string(window, "resolved_height_key", NULL);
     out_config->dock_key = json_string(window, "dock_key", NULL);
+    out_config->front_key = json_string(window, "front_key", NULL);
     out_config->drag_handle = json_string(window, "drag_handle", NULL);
     out_config->resize_handle = json_string(window, "resize_handle", NULL);
     out_config->resize_edge = json_string(window, "resize_edge", NULL);
@@ -466,6 +468,8 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
     editor_ui_window_config config;
     if (!editor_ui_window_config_for_id(runtime, window->id, &config))
         return false;
+    if (config.front_key != NULL)
+        slayer3d_properties_set_string(state, config.front_key, window->id);
     const bool starts_drag = config.drag_handle != NULL && SDL_strcmp(hit->id, config.drag_handle) == 0;
     const bool starts_resize = config.resize_handle != NULL && SDL_strcmp(hit->id, config.resize_handle) == 0 &&
                                window->dock != SLAYER3D_UI_LAYOUT_DOCK_LEFT &&

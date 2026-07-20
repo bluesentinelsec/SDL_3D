@@ -23121,6 +23121,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         float y = 0.0f;
         float w = 0.0f;
         float h = 0.0f;
+        slayer3d_color color{};
     };
     auto visible_frame = [&](const char *target_name) {
         struct Capture
@@ -23147,6 +23148,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                 capture->rect.y = resolved.y;
                 capture->rect.w = resolved.w;
                 capture->rect.h = resolved.h;
+                capture->rect.color = resolved.color;
             }
             return true;
         };
@@ -23257,6 +23259,37 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_ui_layout_destroy(layout);
         return result;
     };
+    auto expect_window_above = [&](const char *front_id, const char *other_prefix) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *front = slayer3d_ui_layout_find_resolved_node(layout, front_id);
+        ASSERT_NE(front, nullptr);
+        int highest_other_layer = -1000000;
+        const size_t prefix_length = SDL_strlen(other_prefix);
+        for (int i = 0; i < slayer3d_ui_layout_node_count(layout); ++i)
+        {
+            const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_resolved_node_at(layout, i);
+            if (node != nullptr && SDL_strncmp(node->id, other_prefix, prefix_length) == 0)
+                highest_other_layer = std::max(highest_other_layer, node->layer);
+        }
+        EXPECT_GT(front->layer, highest_other_layer);
+        const slayer3d_ui_layout_render_command *surface = nullptr;
+        for (int i = 0; i < slayer3d_ui_layout_render_command_count(layout); ++i)
+        {
+            const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+            if (command != nullptr && SDL_strcmp(command->id, front_id) == 0)
+            {
+                surface = command;
+                break;
+            }
+        }
+        ASSERT_NE(surface, nullptr);
+        EXPECT_TRUE(surface->window);
+        slayer3d_ui_layout_destroy(layout);
+    };
 
     emit_signal("signal.editor.scene.enter");
     seed_editor_shell_test_cube(runtime);
@@ -23266,6 +23299,14 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     ASSERT_TRUE(inspector.found);
     ASSERT_TRUE(console.found);
     EXPECT_LE(inspector.y + inspector.h, console.y);
+    EXPECT_EQ(console.color.a, 255);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.ui.window.front", ""),
+                 "ui.editor_shell.console.panel");
+    expect_window_above("ui.editor_shell.console.panel", "ui.editor_shell.left_inspector.");
+    emit_signal("signal.editor.inspector.open");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.ui.window.front", ""),
+                 "ui.editor_shell.left_inspector.panel");
+    expect_window_above("ui.editor_shell.left_inspector.panel", "ui.editor_shell.console.");
 
     std::vector<std::string> text_names = visible_text_names();
     EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.preview.value"),
@@ -25107,6 +25148,8 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     emit_signal("signal.editor.file.close");
     emit_signal("signal.editor.media.settings.close");
     emit_signal("signal.editor.palette.game_object");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.actor_viewer.panel");
     expect_visible_text("ui.editor_shell.actor_viewer.drag_hint", "drag");
     expect_visible_text("ui.editor_shell.actor_viewer.close.label", "close");
     slayer3d_ui_layout_rect initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
@@ -25203,6 +25246,8 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     expect_visible_text("ui.editor_shell.left_inspector.close", "close");
     expect_header_hit(20.0f, 96.0f, "ui.editor_shell.left_inspector.header");
     drag(20.0f, 96.0f, 500.0f, 650.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.left_inspector.panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "none");
     EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.y", 0.0f), 500.0f);
     slayer3d_ui_layout_rect inspector_rect = resolved_window_rect("ui.editor_shell.left_inspector.panel");
@@ -25215,6 +25260,8 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "right");
 
     emit_signal("signal.editor.console.open");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.console.panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "bottom");
     expect_visible_text("ui.editor_shell.console.drag_hint", "drag");
     expect_visible_text("ui.editor_shell.console.close", "close");

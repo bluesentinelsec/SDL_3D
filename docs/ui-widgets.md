@@ -163,7 +163,9 @@ floating position and `dock_key` owns `"none"`, `"left"`, `"right"`, or
 bottom dock stack and stack horizontally inward in authored order.
 Bottom-docked windows fill the available width and stack upward. Optional
 `dock_width` and `dock_height` values override a window's floating dimension
-on the corresponding dock axis.
+on the corresponding dock axis. Window roots paint an opaque surface by
+default and form stacking contexts, so one window's descendants cannot bleed
+through a window above it.
 
 ```json
 {
@@ -175,6 +177,7 @@ on the corresponding dock axis.
   "window": {
     "drag_handle": "ui.inspector.header",
     "dock_key": "editor.inspector.dock",
+    "front_key": "editor.ui.window.front",
     "default_dock": "left",
     "dock_top": 80,
     "dock_gap": 4,
@@ -184,6 +187,13 @@ on the corresponding dock axis.
   }
 }
 ```
+
+`front_key` names a scene-state string containing the id of the front-most
+root window. The host writes the clicked or opened window id to this key. The
+layout then raises that window's complete subtree above every other root
+window while preserving the relative order of its own controls. If no visible
+window matches the key, the last visible root window is the fallback front
+window.
 
 Window roots and drag/resize handles must be interactive. The host keeps a
 header press pending until `drag_threshold` is crossed, then undocks the

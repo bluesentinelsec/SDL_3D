@@ -154,6 +154,8 @@ extern "C"
         bool anchor_bottom;
         /** @brief Treat this root node as an independently movable UI window. */
         bool window;
+        /** @brief Raise this root window and its complete subtree above other root windows. */
+        bool window_front;
         /** @brief Dock side for a root window. Side docks stack inward; bottom docks stack upward. */
         slayer3d_ui_layout_dock dock;
         /** @brief Top inset of the canvas area occupied by a docked root window. */
@@ -201,6 +203,8 @@ extern "C"
         bool interactive;
         /** @brief True when this resolved node is an independently movable root window. */
         bool window;
+        /** @brief True when this root window owns the front-most window stacking context. */
+        bool window_front;
         /** @brief Resolved dock side for a root window. */
         slayer3d_ui_layout_dock dock;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
@@ -262,6 +266,8 @@ extern "C"
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         bool popup;
+        /** @brief True when this command paints a root window surface. */
+        bool window;
         char image[SLAYER3D_UI_LAYOUT_IMAGE_MAX];
         bool preserve_aspect;
     } slayer3d_ui_layout_render_command;

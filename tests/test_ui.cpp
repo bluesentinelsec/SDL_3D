@@ -697,6 +697,67 @@ TEST(SLAYER3DUI, DockedRootWindowsStackAroundTheCanvas)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, FrontRootWindowRaisesItsCompleteStackingContext)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc front{};
+    front.id = "front";
+    front.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    front.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.rect = {0.0f, 0.0f, 160.0f, 120.0f};
+    front.layer = 120;
+    front.window = true;
+    front.window_front = true;
+    front.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &front));
+
+    slayer3d_ui_layout_node_desc front_child{};
+    front_child.id = "front.child";
+    front_child.parent_id = "front";
+    front_child.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    front_child.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front_child.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front_child.rect = {8.0f, 8.0f, 80.0f, 40.0f};
+    front_child.layer = 121;
+    front_child.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &front_child));
+
+    slayer3d_ui_layout_node_desc back = front;
+    back.id = "back";
+    back.window_front = false;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &back));
+
+    slayer3d_ui_layout_node_desc back_child = front_child;
+    back_child.id = "back.child";
+    back_child.parent_id = "back";
+    back_child.layer = 430;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &back_child));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved_front = slayer3d_ui_layout_find_resolved_node(layout, "front");
+    const slayer3d_ui_layout_resolved_node *resolved_front_child =
+        slayer3d_ui_layout_find_resolved_node(layout, "front.child");
+    const slayer3d_ui_layout_resolved_node *resolved_back_child =
+        slayer3d_ui_layout_find_resolved_node(layout, "back.child");
+    ASSERT_NE(resolved_front, nullptr);
+    ASSERT_NE(resolved_front_child, nullptr);
+    ASSERT_NE(resolved_back_child, nullptr);
+    EXPECT_GT(resolved_front->layer, resolved_back_child->layer);
+    EXPECT_GT(resolved_front_child->layer, resolved_front->layer);
+
+    const slayer3d_ui_layout_render_command *front_surface = find_render_command(layout, "front");
+    ASSERT_NE(front_surface, nullptr);
+    EXPECT_TRUE(front_surface->window);
+    const slayer3d_ui_layout_hit_region *top = slayer3d_ui_layout_hit_test(layout, 12.0f, 12.0f);
+    ASSERT_NE(top, nullptr);
+    EXPECT_STREQ(top->id, "front.child");
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, AbsoluteFillUsesRemainingParentSpace)
 {
     slayer3d_ui_layout_model *layout = nullptr;

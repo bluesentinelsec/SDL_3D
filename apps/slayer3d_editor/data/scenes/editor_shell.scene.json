@@ -1148,6 +1148,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.liquid_panel.header",
           "dock_key": "editor.liquid.panel.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "right",
           "dock_top": 80,
           "dock_gap": 4,
@@ -1334,6 +1335,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.left_inspector.header",
           "dock_key": "editor.inspector.panel.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "left",
           "dock_top": 80,
           "dock_gap": 4,
@@ -5870,6 +5872,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.texture_viewer.header",
           "dock_key": "editor.texture.viewer.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "right",
           "dock_top": 80,
           "dock_gap": 4,
@@ -6042,6 +6045,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.skybox_panel.header",
           "dock_key": "editor.sky.panel.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "right",
           "dock_top": 80,
           "dock_gap": 4,
@@ -6156,6 +6160,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.actor_viewer.header",
           "dock_key": "editor.actor.viewer.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "right",
           "dock_top": 80,
           "dock_gap": 4,
@@ -6841,6 +6846,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.global_panel.header",
           "dock_key": "editor.global.panel.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "right",
           "dock_top": 80,
           "dock_gap": 4,
@@ -7415,6 +7421,7 @@
         "window": {
           "drag_handle": "ui.editor_shell.console.header",
           "dock_key": "editor.console.dock",
+          "front_key": "editor.ui.window.front",
           "default_dock": "bottom",
           "dock_top": 80,
           "dock_gap": 4,

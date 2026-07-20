@@ -455,8 +455,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         if (!root_node)
             return validation_error(ctx, path, "UI widget window is only valid on root widgets");
         static const char *const window_string_keys[] = {
-            "drag_handle",     "resize_handle", "resize_edge",         "dock_key", "default_dock", "dock_top_key",
-            "dock_bottom_key", "height_key",    "resolved_height_key",
+            "drag_handle",     "resize_handle", "resize_edge",         "dock_key",  "default_dock", "dock_top_key",
+            "dock_bottom_key", "height_key",    "resolved_height_key", "front_key",
         };
         for (size_t i = 0; i < SDL_arraysize(window_string_keys); ++i)
         {
