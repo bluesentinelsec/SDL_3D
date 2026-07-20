@@ -49,6 +49,12 @@ typedef struct ui_layout_node
     bool preserve_aspect;
     bool anchor_right;
     bool anchor_bottom;
+    bool window;
+    slayer3d_ui_layout_dock dock;
+    float dock_top;
+    float dock_bottom;
+    float dock_margin;
+    float dock_gap;
     float scroll_offset;
     char scroll_key[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     float scroll_span;
@@ -323,6 +329,16 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
         return false;
     if (desc->padding < 0.0f || desc->gap < 0.0f || desc->border_thickness < 0.0f)
         return false;
+    if (desc->dock < SLAYER3D_UI_LAYOUT_DOCK_NONE || desc->dock > SLAYER3D_UI_LAYOUT_DOCK_RIGHT ||
+        desc->dock_top < 0.0f || desc->dock_bottom < 0.0f || desc->dock_margin < 0.0f || desc->dock_gap < 0.0f)
+    {
+        return false;
+    }
+    if ((!desc->window && desc->dock != SLAYER3D_UI_LAYOUT_DOCK_NONE) ||
+        (desc->window && desc->parent_id != NULL && desc->parent_id[0] != '\0'))
+    {
+        return false;
+    }
     if (desc->text_scale < 0.0f || desc->text_align < SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO ||
         desc->text_align > SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT)
     {
@@ -386,6 +402,12 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->preserve_aspect = desc->preserve_aspect;
     node->anchor_right = desc->anchor_right;
     node->anchor_bottom = desc->anchor_bottom;
+    node->window = desc->window;
+    node->dock = desc->dock;
+    node->dock_top = desc->dock_top;
+    node->dock_bottom = desc->dock_bottom;
+    node->dock_margin = desc->dock_margin;
+    node->dock_gap = desc->dock_gap;
     node->scroll_offset = desc->scroll_offset;
     ui_layout_copy_action(node->scroll_key, desc->scroll_key);
     node->scroll_span = desc->scroll_span;
@@ -681,8 +703,10 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
         }
         else
         {
-            child->resolved_rect.w = ui_layout_node_width(child, content.w);
-            child->resolved_rect.h = ui_layout_node_height(child, content.h);
+            const float available_w = SDL_max(content.w - child->local_rect.x, 0.0f);
+            const float available_h = SDL_max(content.h - child->local_rect.y, 0.0f);
+            child->resolved_rect.w = ui_layout_node_width(child, available_w);
+            child->resolved_rect.h = ui_layout_node_height(child, available_h);
             child->resolved_rect.x = child->anchor_right
                                          ? content.x + content.w - child->local_rect.x - child->resolved_rect.w
                                          : content.x + child->local_rect.x;
@@ -720,6 +744,20 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
     return true;
 }
 
+static float ui_layout_docked_width_before(const slayer3d_ui_layout_model *model, int index,
+                                           slayer3d_ui_layout_dock dock, float available_width)
+{
+    float width = 0.0f;
+    for (int i = 0; i < index; ++i)
+    {
+        const ui_layout_node *other = &model->nodes[i];
+        if (other->parent_index >= 0 || !other->window || other->dock != dock)
+            continue;
+        width += ui_layout_node_width(other, available_width) + other->dock_gap;
+    }
+    return width;
+}
+
 static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, float viewport_w, float viewport_h)
 {
     ui_layout_node *node = &model->nodes[index];
@@ -737,11 +775,23 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
     else
     {
         node->resolved_rect.w = ui_layout_node_width(node, viewport_w);
-        node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
-        node->resolved_rect.x =
-            node->anchor_right ? viewport_w - node->local_rect.x - node->resolved_rect.w : node->local_rect.x;
-        node->resolved_rect.y =
-            node->anchor_bottom ? viewport_h - node->local_rect.y - node->resolved_rect.h : node->local_rect.y;
+        if (node->window && node->dock != SLAYER3D_UI_LAYOUT_DOCK_NONE)
+        {
+            const float prior_width = ui_layout_docked_width_before(model, index, node->dock, viewport_w);
+            node->resolved_rect.h = SDL_max(viewport_h - node->dock_top - node->dock_bottom, 0.0f);
+            node->resolved_rect.x = node->dock == SLAYER3D_UI_LAYOUT_DOCK_LEFT
+                                        ? node->dock_margin + prior_width
+                                        : viewport_w - node->dock_margin - prior_width - node->resolved_rect.w;
+            node->resolved_rect.y = node->dock_top;
+        }
+        else
+        {
+            node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
+            node->resolved_rect.x =
+                node->anchor_right ? viewport_w - node->local_rect.x - node->resolved_rect.w : node->local_rect.x;
+            node->resolved_rect.y =
+                node->anchor_bottom ? viewport_h - node->local_rect.y - node->resolved_rect.h : node->local_rect.y;
+        }
         node->resolved_layer = node->layer;
         node->has_resolved_clip_rect = false;
         node->resolved = true;
@@ -828,6 +878,8 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->clip_rect = node->resolved_clip_rect;
         resolved->layer = node->resolved_layer;
         resolved->interactive = node->interactive;
+        resolved->window = node->window;
+        resolved->dock = node->dock;
         ui_layout_copy_text(resolved->text, node->text);
         ui_layout_copy_font(resolved->font, node->font);
         ui_layout_copy_action(resolved->action, node->action);

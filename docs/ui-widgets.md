@@ -154,6 +154,45 @@ margins from the opposite edge of its parent (or the viewport, for roots).
 Docked panels author their margin once and track any viewport size, so a
 right-docked browser never encodes the canonical resolution in its position.
 
+### Movable And Docked Windows
+
+A root widget may author a `window` object. `drag_handle` names an interactive
+descendant that begins pointer capture, while `x_key` / `y_key` own the
+floating position and `dock_key` owns `"none"`, `"left"`, or `"right"`.
+Docked windows fill the vertical canvas area between `dock_top` and
+`dock_bottom` (or their state-key forms), and windows on the same side stack
+horizontally inward in authored order.
+
+```json
+{
+  "id": "ui.inspector.panel",
+  "type": "panel",
+  "x": 12, "y": 92, "x_key": "editor.inspector.x", "y_key": "editor.inspector.y",
+  "w": 308, "h": 500,
+  "interactive": true,
+  "window": {
+    "drag_handle": "ui.inspector.header",
+    "dock_key": "editor.inspector.dock",
+    "default_dock": "left",
+    "dock_top": 80,
+    "dock_bottom_key": "editor.console.visible_height",
+    "dock_gap": 4
+  }
+}
+```
+
+Window roots and drag/resize handles must be interactive. The host captures a
+drag until button release, writes only the authored state keys, and consumes
+all pointer input within the resolved window ancestry. Empty panel space and
+text inputs therefore cannot leak clicks, wheel events, or drags to the world
+canvas.
+
+For a bottom console, author `h_key` on the root and a top-edge
+`resize_handle`, `resize_edge: "top"`, `height_key`, and min/max heights in
+the window object. Visibility remains ordinary data-authored state, so hiding
+can preserve the current height with `scene_state.set` and
+`value_from_state`.
+
 ### Wheel And Scrollbar Behavior
 
 Every scrollable container - pixel `scroll` panes and virtualized lists -
