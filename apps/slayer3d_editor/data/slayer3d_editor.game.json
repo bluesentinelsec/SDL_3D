@@ -685,6 +685,8 @@
     "signal.editor.sky.scroll.down",
     "signal.editor.sky.scroll.sync",
     "signal.editor.console.scroll.sync",
+    "signal.editor.console.hide",
+    "signal.editor.console.show",
     "signal.editor.sky.apply.selected",
     "signal.editor.sky.reset",
     "signal.editor.liquid.panel.toggle",
@@ -1033,6 +1035,7 @@
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.x", "value": 870.0 },
           { "type": "scene_state.set", "key": "editor.liquid.panel.y", "value": 112.0 },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.dock", "value": "none" },
           { "type": "scene_state.set", "key": "editor.liquid.type", "value": "clean_water" },
           { "type": "scene_state.set", "key": "editor.liquid.type.label", "value": "Clean Water" },
           { "type": "scene_state.set", "key": "editor.liquid.material", "value": "mat.editor.liquid.clean_water" },
@@ -1057,7 +1060,13 @@
           },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.x", "value": 1030.0 },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.y", "value": 92.0 },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.dock", "value": "right" },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.x", "value": 930.0 },
+          { "type": "scene_state.set", "key": "editor.global.panel.y", "value": 92.0 },
+          { "type": "scene_state.set", "key": "editor.global.panel.dock", "value": "right" },
           { "type": "scene_state.set", "key": "editor.global.tab", "value": "Lighting" },
           { "type": "scene_state.set", "key": "editor.global.pending_preset", "value": "afternoon" },
           { "type": "scene_state.set", "key": "editor.global.pending_preset.label", "value": "Afternoon Daylight" },
@@ -1096,8 +1105,23 @@
           { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.inspector.panel.x", "value": 12.0 },
+          { "type": "scene_state.set", "key": "editor.inspector.panel.y", "value": 92.0 },
+          { "type": "scene_state.set", "key": "editor.inspector.panel.dock", "value": "left" },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Object" },
           { "type": "scene_state.set", "key": "editor.inspector.scroll", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.x", "value": 1030.0 },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.y", "value": 92.0 },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.dock", "value": "right" },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.x", "value": 1030.0 },
+          { "type": "scene_state.set", "key": "editor.sky.panel.y", "value": 92.0 },
+          { "type": "scene_state.set", "key": "editor.sky.panel.dock", "value": "right" },
+          { "type": "scene_state.set", "key": "editor.console.hidden", "value": false },
+          { "type": "scene_state.set", "key": "editor.console.height", "value": 120.0 },
+          { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 120.0 },
+          { "type": "scene_state.set", "key": "editor.ui.window.pointer.id", "value": "" },
+          { "type": "scene_state.set", "key": "editor.ui.window.pointer.mode", "value": "" },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.clip.active", "value": false },
           { "type": "scene_state.set", "key": "editor.clip.operation_active", "value": false },
@@ -1289,6 +1313,7 @@
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
@@ -1307,6 +1332,7 @@
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
@@ -1942,6 +1968,10 @@
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "select" },
           { "type": "scene_state.toggle", "key": "editor.sky.panel.active", "default": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.sky.panel.collapsed", "value": false },
           { "type": "editor.sky.scan" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "skybox panel toggled" }
@@ -2021,6 +2051,22 @@
         ]
       },
       {
+        "signal": "signal.editor.console.hide",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.console.height", "value_from_state": "editor.console.visible_height" },
+          { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.console.hidden", "value": true },
+          { "type": "scene_state.set", "key": "editor.console.focused", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.console.show",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.console.visible_height", "value_from_state": "editor.console.height" },
+          { "type": "scene_state.set", "key": "editor.console.hidden", "value": false }
+        ]
+      },
+      {
         "signal": "signal.editor.sky.apply.selected",
         "actions": [
           { "type": "editor.sky.apply" }
@@ -2039,6 +2085,8 @@
         "signal": "signal.editor.liquid.panel.toggle",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "liquid" },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": true },
@@ -5520,6 +5568,8 @@
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "file menu" }
         ]
@@ -5576,6 +5626,8 @@
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global lighting" }
         ]

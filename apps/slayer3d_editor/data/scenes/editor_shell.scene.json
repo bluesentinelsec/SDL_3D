@@ -1123,6 +1123,15 @@
         "y_key": "editor.liquid.panel.y",
         "w": 232,
         "h": 246,
+        "window": {
+          "drag_handle": "ui.editor_shell.liquid_panel.header",
+          "dock_key": "editor.liquid.panel.dock",
+          "default_dock": "none",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 430,
@@ -1131,6 +1140,7 @@
         "border_thickness": 1,
         "visible_if": { "type": "scene_state.compare", "key": "editor.liquid.panel.open", "op": "==", "value": true, "default": false },
         "children": [
+          { "id": "ui.editor_shell.liquid_panel.header", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 26, "interactive": true, "layer": 431 },
           { "id": "ui.editor_shell.liquid_panel.title", "type": "label", "x": 8, "y": 3, "w": 86, "h": 16, "text": "Liquid", "text_scale": 0.36, "layer": 431 },
           { "id": "ui.editor_shell.liquid_panel.drag_hint", "type": "label", "x": 96, "y": 3, "w": 40, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 431 },
           {
@@ -1295,8 +1305,19 @@
         "layout": "none",
         "x": 12,
         "y": 92,
+        "x_key": "editor.inspector.panel.x",
+        "y_key": "editor.inspector.panel.y",
         "w": 308,
         "h": 500,
+        "window": {
+          "drag_handle": "ui.editor_shell.left_inspector.header",
+          "dock_key": "editor.inspector.panel.dock",
+          "default_dock": "left",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 120,
@@ -1309,6 +1330,7 @@
             "y": 8,
             "w": 292,
             "h": 34,
+            "interactive": true,
             "layer": 124,
             "children": [
               { "id": "ui.editor_shell.left_inspector.title", "type": "label", "x": 14, "y": 6, "w": 120, "h": 20, "text": "Inspector" },
@@ -5830,11 +5852,22 @@
         "id": "ui.editor_shell.texture_viewer.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.texture.viewer.x",
+        "y_key": "editor.texture.viewer.y",
         "w": 238,
         "h": 520,
+        "window": {
+          "drag_handle": "ui.editor_shell.texture_viewer.header",
+          "dock_key": "editor.texture.viewer.dock",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
+        "interactive": true,
         "layer": 120,
         "visible_if": {
           "type": "all",
@@ -5851,6 +5884,7 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
               { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Textures" },
@@ -6016,11 +6050,22 @@
         "id": "ui.editor_shell.skybox_panel.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.sky.panel.x",
+        "y_key": "editor.sky.panel.y",
         "w": 238,
         "h": 520,
+        "window": {
+          "drag_handle": "ui.editor_shell.skybox_panel.header",
+          "dock_key": "editor.sky.panel.dock",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
+        "interactive": true,
         "layer": 140,
         "visible_if": {
           "type": "all",
@@ -6039,6 +6084,7 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 141,
             "children": [
               { "id": "ui.editor_shell.skybox_panel.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Skybox" },
@@ -6118,11 +6164,22 @@
         "id": "ui.editor_shell.actor_viewer.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.actor.viewer.x",
+        "y_key": "editor.actor.viewer.y",
         "w": 238,
         "h": 520,
+        "window": {
+          "drag_handle": "ui.editor_shell.actor_viewer.header",
+          "dock_key": "editor.actor.viewer.dock",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
+        "interactive": true,
         "layer": 120,
         "visible_if": {
           "type": "all",
@@ -6139,6 +6196,7 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
               { "id": "ui.editor_shell.actor_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Things" },
@@ -6817,11 +6875,21 @@
         "id": "ui.editor_shell.global_panel.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 930,
         "y": 92,
+        "x_key": "editor.global.panel.x",
+        "y_key": "editor.global.panel.y",
         "w": 338,
         "h": 430,
+        "window": {
+          "drag_handle": "ui.editor_shell.global_panel.header",
+          "dock_key": "editor.global.panel.dock",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_bottom_key": "editor.console.visible_height",
+          "dock_gap": 4,
+          "snap_distance": 32
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 120,
@@ -6837,6 +6905,7 @@
             "y": 8,
             "w": 322,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
               { "id": "ui.editor_shell.global_panel.title", "type": "label", "x": 10, "y": 6, "w": 180, "h": 20, "text": "Global", "text_scale": 0.46, "layer": 122 },
@@ -7383,33 +7452,106 @@
         ]
       },
       { "id": "ui.editor_shell.console.panel", "type": "panel", "x": 0, "anchor_y": "bottom",
-        "y": 0, "w": "fill", "h": 120, "clip_children": true, "interactive": true, "layer": 120, "children": [
+        "y": 0, "w": "fill", "h": 120, "h_key": "editor.console.visible_height",
+        "window": {
+          "resize_handle": "ui.editor_shell.console.resize_handle",
+          "resize_edge": "top",
+          "height_key": "editor.console.visible_height",
+          "min_height": 72,
+          "max_height": 360
+        },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": false, "default": false },
+        "clip_children": true, "interactive": true, "layer": 120, "children": [
+        { "id": "ui.editor_shell.console.resize_handle", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 6, "interactive": true, "layer": 123, "fill_color": [72, 84, 104, 255] },
         { "id": "ui.editor_shell.console.console.tab", "type": "button", "x": 16, "y": 8, "w": 104, "h": 28, "layer": 121, "selected": true, "children": [
           {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
         ] },
-        { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": 1254, "h": 78, "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
-          { "id": "ui.editor_shell.console.line0.row", "type": "panel", "w": 1238, "h": 14, "children": [
+        { "id": "ui.editor_shell.console.hide", "type": "button", "anchor_x": "right", "x": 16, "y": 8, "w": 52, "h": 28, "text": "hide", "text_scale": 0.34, "interactive": true, "action": "editor.console.hide", "layer": 122 },
+        { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": "fill", "h": "fill", "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
+          { "id": "ui.editor_shell.console.line0.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line0.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line0.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line0", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "> %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line0", "default": "Editor ready"}]}
+            {"id": "ui.editor_shell.console.line0", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "> %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line0", "default": "Editor ready"}]}
           ] },
-          { "id": "ui.editor_shell.console.line1.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line1.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line1.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line1.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line1", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line1", "default": ""}]}
+            {"id": "ui.editor_shell.console.line1", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line1", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line2.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line2.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line2.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line2.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line2", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line2", "default": ""}]}
+            {"id": "ui.editor_shell.console.line2", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line2", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line3.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line3.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line3.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line3.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line3", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line3", "default": ""}]}
+            {"id": "ui.editor_shell.console.line3", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line3", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line4.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line4.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line4.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line4.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line4", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line4", "default": ""}]}
+            {"id": "ui.editor_shell.console.line4", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line4", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line5.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 136.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line5.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line5.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line5", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line5", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line6.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 152.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line6.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line6.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line6", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line6", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line7.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 168.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line7.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line7.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line7", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line7", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line8.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 184.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line8.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line8.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line8", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line8", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line9.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 200.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line9.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line9.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line9", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line9", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line10.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 216.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line10.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line10.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line10", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line10", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line11.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 232.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line11.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line11.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line11", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line11", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line12.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 248.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line12.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line12.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line12", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line12", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line13.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 264.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line13.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line13.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line13", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line13", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line14.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 280.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line14.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line14.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line14", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line14", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line15.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 296.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line15.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line15.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line15", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line15", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line16.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 312.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line16.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line16.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line16", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line16", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line17.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 328.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line17.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line17.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line17", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line17", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line18.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 344.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line18.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line18.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line18", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line18", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line19.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 360.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line19.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line19.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line19", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line19", "default": ""}]}
           ] }
         ] }
       ] },
+      { "id": "ui.editor_shell.console.unhide", "type": "button", "anchor_x": "right", "anchor_y": "bottom", "x": 12, "y": 12, "w": 112, "h": 28, "text": "Show console", "text_scale": 0.34, "interactive": true, "action": "editor.console.show", "layer": 120,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": true, "default": false } },
 {
         "id": "ui.editor_shell.handoff.panel",
         "type": "panel",

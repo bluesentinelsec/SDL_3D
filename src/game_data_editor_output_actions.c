@@ -4,7 +4,6 @@
 #include <SDL3/SDL_log.h>
 
 #define EDITOR_CONSOLE_HISTORY_COUNT 64
-#define EDITOR_CONSOLE_VISIBLE_COUNT 5
 #define EDITOR_CONSOLE_THUMB_TRAVEL 24.0f
 
 static void editor_clear_console_selection_state(slayer3d_properties *scene_state)
@@ -14,7 +13,7 @@ static void editor_clear_console_selection_state(slayer3d_properties *scene_stat
     slayer3d_properties_set_bool(scene_state, "editor.console.selection.active", false);
     slayer3d_properties_set_bool(scene_state, "editor.console.selection.has", false);
     slayer3d_properties_set_string(scene_state, "editor.console.selection.clipboard", "");
-    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_MAX; ++i)
     {
         char selected_key[64];
         SDL_snprintf(selected_key, sizeof(selected_key), "editor.console.line%d.selected", i);
@@ -41,12 +40,13 @@ static void editor_refresh_console_selection_rows(slayer3d_properties *scene_sta
         }
     }
 
-    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    const int visible_count = editor_console_visible_count(scene_state);
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_MAX; ++i)
     {
         char selected_key[64];
         const int history_index = scroll + i;
-        const bool selected =
-            history_index < count && min_index >= 0 && history_index >= min_index && history_index <= max_index;
+        const bool selected = i < visible_count && history_index < count && min_index >= 0 &&
+                              history_index >= min_index && history_index <= max_index;
         SDL_snprintf(selected_key, sizeof(selected_key), "editor.console.line%d.selected", i);
         slayer3d_properties_set_bool(scene_state, selected_key, selected);
     }
@@ -138,19 +138,27 @@ void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime)
 
     const int count = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0), 0,
                                 EDITOR_CONSOLE_HISTORY_COUNT);
-    const int max_scroll = SDL_max(0, count - EDITOR_CONSOLE_VISIBLE_COUNT);
+    const int visible_count = editor_console_visible_count(runtime->scene_state);
+    const int max_scroll = SDL_max(0, count - visible_count);
     const int scroll =
         SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.scroll", 0), 0, max_scroll);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", scroll);
 
-    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_MAX; ++i)
     {
-        char source_key[64];
         char line_key[64];
-        SDL_snprintf(source_key, sizeof(source_key), "editor.console.history%d", scroll + i);
         SDL_snprintf(line_key, sizeof(line_key), "editor.console.line%d", i);
-        slayer3d_properties_set_string(runtime->scene_state, line_key,
-                                       slayer3d_properties_get_string(runtime->scene_state, source_key, ""));
+        if (i < visible_count)
+        {
+            char source_key[64];
+            SDL_snprintf(source_key, sizeof(source_key), "editor.console.history%d", scroll + i);
+            slayer3d_properties_set_string(runtime->scene_state, line_key,
+                                           slayer3d_properties_get_string(runtime->scene_state, source_key, ""));
+        }
+        else
+        {
+            slayer3d_properties_set_string(runtime->scene_state, line_key, "");
+        }
     }
 
     const float thumb_offset =
@@ -239,6 +247,11 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_int(runtime->scene_state, "editor.property.edit.selected_slot", -1);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", false);
     slayer3d_properties_set_int(runtime->scene_state, "editor.property.count", 0);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.console.hidden", false);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.console.height", 120.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.console.visible_height", 120.0f);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.ui.window.pointer.id", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.ui.window.pointer.mode", "");
     slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.undo_count", 0);
     slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.redo_count", 0);
 }

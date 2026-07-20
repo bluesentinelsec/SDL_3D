@@ -114,6 +114,23 @@ static bool ui_widget_scene_float(const slayer3d_game_data_runtime *runtime, con
     return false;
 }
 
+static const char *ui_widget_scene_string(const slayer3d_game_data_runtime *runtime, const char *key,
+                                          const char *fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    return slayer3d_properties_get_string(runtime->scene_state, key, fallback);
+}
+
+static slayer3d_ui_layout_dock ui_widget_dock_from_string(const char *dock)
+{
+    if (dock != NULL && SDL_strcmp(dock, "left") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    if (dock != NULL && SDL_strcmp(dock, "right") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    return SLAYER3D_UI_LAYOUT_DOCK_NONE;
+}
+
 static bool ui_widget_format_bound_text(const slayer3d_game_data_runtime *runtime,
                                         const slayer3d_game_data_ui_metrics *metrics, yyjson_val *node, char *buffer,
                                         size_t buffer_size)
@@ -239,6 +256,12 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.rect.y -= scroll_y;
     desc.rect.w = ui_widget_size_number(width, 1.0f);
     desc.rect.h = ui_widget_size_number(height, 1.0f);
+    float scene_w = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "w_key", NULL), &scene_w))
+        desc.rect.w = scene_w;
+    float scene_h = 0.0f;
+    if (ui_widget_scene_float(runtime, json_string(node, "h_key", NULL), &scene_h))
+        desc.rect.h = scene_h;
     desc.padding = json_float(node, "padding", 0.0f);
     desc.gap = json_float(node, "gap", 0.0f);
     desc.grid_columns = ui_widget_int(node, "columns", "grid_columns", 0);
@@ -274,6 +297,20 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.anchor_right = anchor_x != NULL && SDL_strcmp(anchor_x, "right") == 0;
     const char *anchor_y = json_string(node, "anchor_y", NULL);
     desc.anchor_bottom = anchor_y != NULL && SDL_strcmp(anchor_y, "bottom") == 0;
+    yyjson_val *window = obj_get(node, "window");
+    if (yyjson_is_obj(window))
+    {
+        desc.window = true;
+        const char *default_dock = json_string(window, "default_dock", "none");
+        const char *dock = ui_widget_scene_string(runtime, json_string(window, "dock_key", NULL), default_dock);
+        desc.dock = ui_widget_dock_from_string(dock);
+        desc.dock_top = json_float(window, "dock_top", 0.0f);
+        desc.dock_bottom = json_float(window, "dock_bottom", 0.0f);
+        (void)ui_widget_scene_float(runtime, json_string(window, "dock_top_key", NULL), &desc.dock_top);
+        (void)ui_widget_scene_float(runtime, json_string(window, "dock_bottom_key", NULL), &desc.dock_bottom);
+        desc.dock_margin = json_float(window, "dock_margin", 0.0f);
+        desc.dock_gap = json_float(window, "dock_gap", 0.0f);
+    }
     desc.scroll_key = json_string(node, "scroll_key", NULL);
     float pane_scroll = 0.0f;
     if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))

@@ -69,6 +69,14 @@ extern "C"
         SLAYER3D_UI_LAYOUT_SIZE_FILL,
     } slayer3d_ui_layout_size_mode;
 
+    /** @brief Dock side for a retained root window. */
+    typedef enum slayer3d_ui_layout_dock
+    {
+        SLAYER3D_UI_LAYOUT_DOCK_NONE = 0,
+        SLAYER3D_UI_LAYOUT_DOCK_LEFT,
+        SLAYER3D_UI_LAYOUT_DOCK_RIGHT,
+    } slayer3d_ui_layout_dock;
+
     /** @brief Optional retained UI text alignment. */
     typedef enum slayer3d_ui_layout_text_align
     {
@@ -143,6 +151,18 @@ extern "C"
         bool anchor_right;
         /** @brief Anchor the node's y to the bottom edge of its parent (or viewport). */
         bool anchor_bottom;
+        /** @brief Treat this root node as an independently movable UI window. */
+        bool window;
+        /** @brief Dock side for a root window; same-side windows stack horizontally. */
+        slayer3d_ui_layout_dock dock;
+        /** @brief Top inset of the canvas area occupied by a docked root window. */
+        float dock_top;
+        /** @brief Bottom inset of the canvas area occupied by a docked root window. */
+        float dock_bottom;
+        /** @brief Outer horizontal margin for docked root windows. */
+        float dock_margin;
+        /** @brief Horizontal gap between root windows docked to the same side. */
+        float dock_gap;
         /**
          * @brief Total item count for a virtualized list container.
          *
@@ -174,6 +194,10 @@ extern "C"
         slayer3d_ui_layout_rect clip_rect;
         int layer;
         bool interactive;
+        /** @brief True when this resolved node is an independently movable root window. */
+        bool window;
+        /** @brief Resolved dock side for a root window. */
+        slayer3d_ui_layout_dock dock;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         slayer3d_color text_color;
