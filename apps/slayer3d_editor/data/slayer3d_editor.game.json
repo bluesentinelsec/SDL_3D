@@ -299,6 +299,7 @@
     "signal.editor.escape",
     "signal.editor.inspector.open",
     "signal.editor.inspector.close",
+    "signal.editor.inspector.toggle",
     "signal.editor.inspector.tab.object",
     "signal.editor.inspector.tab.data",
     "signal.editor.visibility.hide_selected",
@@ -689,6 +690,7 @@
     "signal.editor.console.scroll.sync",
     "signal.editor.console.close",
     "signal.editor.console.open",
+    "signal.editor.console.toggle",
     "signal.editor.sky.apply.selected",
     "signal.editor.sky.reset",
     "signal.editor.liquid.panel.open",
@@ -2088,6 +2090,17 @@
         ]
       },
       {
+        "signal": "signal.editor.console.toggle",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.console.close" }],
+            "else": [{ "type": "signal.emit", "signal": "signal.editor.console.open" }]
+          }
+        ]
+      },
+      {
         "signal": "signal.editor.sky.apply.selected",
         "actions": [
           { "type": "editor.sky.apply" }
@@ -2373,6 +2386,17 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.inspector.open", "value": false },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector closed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.toggle",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.inspector.close" }],
+            "else": [{ "type": "signal.emit", "signal": "signal.editor.inspector.open" }]
+          }
         ]
       },
       {

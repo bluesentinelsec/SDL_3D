@@ -637,7 +637,7 @@
             "text": "Inspector",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.inspector.open",
+            "action": "editor.inspector.toggle",
             "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true }
           },
           {
@@ -648,7 +648,7 @@
             "text": "Console",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.console.open",
+            "action": "editor.console.toggle",
             "selected_if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true }
           }
         ]

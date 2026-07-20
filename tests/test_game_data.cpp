@@ -23626,6 +23626,14 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     EXPECT_TRUE(
         slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", false));
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.panel").found);
+    click_editor(open.x + open.w * 0.5f, open.y + open.h * 0.5f);
+    EXPECT_FALSE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", true));
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.panel").found);
+    click_editor(open.x + open.w * 0.5f, open.y + open.h * 0.5f);
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", false));
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.panel").found);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -25301,6 +25309,12 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     click(console_close.x + console_close.w * 0.5f, console_close.y + console_close.h * 0.5f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.console.open", true));
     slayer3d_ui_layout_rect console_open = resolved_window_rect("ui.editor_shell.toolbar.console.button");
+    click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 220.0f);
+    click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.console.open", true));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 1.0f), 0.0f);
     click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 220.0f);
