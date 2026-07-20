@@ -557,8 +557,6 @@
             "selected_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false }
           },
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
           {
             "id": "ui.editor_shell.toolbar.shape.button",
             "type": "dropdown",
@@ -608,10 +606,8 @@
             "action": "editor.palette.game_object",
             "selected_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false }
           },
-          { "id": "ui.editor_shell.toolbar.tools.button", "type": "button", "w": 76, "h": 28, "text": "Tools", "interactive": true },
           { "id": "ui.editor_shell.toolbar.view.button", "type": "button", "w": 70, "h": 28, "text": "View", "interactive": true },
           { "id": "ui.editor_shell.toolbar.run.button", "type": "button", "w": 64, "h": 28, "text": "Run", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.debug.button", "type": "button", "w": 80, "h": 28, "text": "Debug", "interactive": true },
           { "id": "ui.editor_shell.toolbar.help.button", "type": "button", "w": 70, "h": 28, "text": "Help", "interactive": true },
           {
             "id": "ui.editor_shell.toolbar.skybox.button",

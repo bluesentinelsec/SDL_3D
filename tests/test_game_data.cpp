@@ -24671,7 +24671,7 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    auto largest_ui_rect = [&](const char *name) {
+    auto find_largest_ui_rect = [&](const char *name, slayer3d_game_data_ui_rect *out_rect) {
         struct Capture
         {
             const char *name = nullptr;
@@ -24696,8 +24696,15 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
             return true;
         };
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
-        EXPECT_TRUE(capture.found) << name;
-        return capture.rect;
+        if (capture.found && out_rect != nullptr)
+            *out_rect = capture.rect;
+        return capture.found;
+    };
+    auto largest_ui_rect = [&](const char *name) {
+        slayer3d_game_data_ui_rect rect{};
+        const bool found = find_largest_ui_rect(name, &rect);
+        EXPECT_TRUE(found) << name;
+        return rect;
     };
     auto visible_text = [&]() {
         struct Capture
@@ -24723,16 +24730,20 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
 
     const slayer3d_game_data_ui_rect menu_toolbar = largest_ui_rect("ui.editor_shell.toolbar");
     for (const char *name : {"ui.editor_shell.toolbar.file.button", "ui.editor_shell.toolbar.edit.button",
-                             "ui.editor_shell.toolbar.selection.button", "ui.editor_shell.toolbar.groups.button",
-                             "ui.editor_shell.toolbar.global.button", "ui.editor_shell.toolbar.actors.button",
-                             "ui.editor_shell.toolbar.tools.button", "ui.editor_shell.toolbar.view.button",
-                             "ui.editor_shell.toolbar.run.button", "ui.editor_shell.toolbar.debug.button",
-                             "ui.editor_shell.toolbar.help.button"})
+                             "ui.editor_shell.toolbar.shape.button", "ui.editor_shell.toolbar.global.button",
+                             "ui.editor_shell.toolbar.actors.button", "ui.editor_shell.toolbar.view.button",
+                             "ui.editor_shell.toolbar.run.button", "ui.editor_shell.toolbar.help.button",
+                             "ui.editor_shell.toolbar.skybox.button", "ui.editor_shell.toolbar.liquid.button"})
     {
         const slayer3d_game_data_ui_rect button = largest_ui_rect(name);
         EXPECT_NEAR(button.y + button.h * 0.5f, menu_toolbar.y + menu_toolbar.h * 0.5f, 0.001f) << name;
         EXPECT_GE(button.x, menu_toolbar.x) << name;
         EXPECT_LE(button.x + button.w, menu_toolbar.x + menu_toolbar.w) << name;
+    }
+    for (const char *name : {"ui.editor_shell.toolbar.selection.button", "ui.editor_shell.toolbar.groups.button",
+                             "ui.editor_shell.toolbar.tools.button", "ui.editor_shell.toolbar.debug.button"})
+    {
+        EXPECT_FALSE(find_largest_ui_rect(name, nullptr)) << name;
     }
 
     const slayer3d_game_data_ui_rect tool_toolbar = largest_ui_rect("ui.editor_shell.tool_toolbar");
@@ -38552,8 +38563,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     struct ToolbarCapture
     {
         bool background = false;
-        bool buttons[9]{};
-        bool labels[9]{};
+        bool buttons[5]{};
+        bool labels[5]{};
         bool tool_background = false;
         bool tool_buttons[9]{};
         bool tool_labels[9]{};
@@ -38647,20 +38658,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "edit")
                 index = 1;
-            else if (key == "selection")
-                index = 2;
-            else if (key == "groups")
-                index = 3;
-            else if (key == "tools")
-                index = 4;
             else if (key == "view")
-                index = 5;
+                index = 2;
             else if (key == "run")
-                index = 6;
-            else if (key == "debug")
-                index = 7;
+                index = 3;
             else if (key == "help")
-                index = 8;
+                index = 4;
             if (index >= 0)
                 capture->buttons[index] = true;
         }
@@ -38730,20 +38733,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "edit")
                 index = 1;
-            else if (key == "selection")
-                index = 2;
-            else if (key == "groups")
-                index = 3;
-            else if (key == "tools")
-                index = 4;
             else if (key == "view")
-                index = 5;
+                index = 2;
             else if (key == "run")
-                index = 6;
-            else if (key == "debug")
-                index = 7;
+                index = 3;
             else if (key == "help")
-                index = 8;
+                index = 4;
             if (index >= 0)
                 capture->labels[index] = true;
         }
@@ -38780,7 +38775,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
                                                                 &toolbar_capture));
     EXPECT_TRUE(toolbar_capture.background);
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         EXPECT_TRUE(toolbar_capture.buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.labels[i]) << i;
