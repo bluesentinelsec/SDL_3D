@@ -1128,7 +1128,6 @@
           "dock_key": "editor.liquid.panel.dock",
           "default_dock": "right",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -1315,7 +1314,6 @@
           "dock_key": "editor.inspector.panel.dock",
           "default_dock": "left",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -5865,7 +5863,6 @@
           "dock_key": "editor.texture.viewer.dock",
           "default_dock": "right",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -6064,7 +6061,6 @@
           "dock_key": "editor.sky.panel.dock",
           "default_dock": "right",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -6179,7 +6175,6 @@
           "dock_key": "editor.actor.viewer.dock",
           "default_dock": "right",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -6891,7 +6886,6 @@
           "dock_key": "editor.global.panel.dock",
           "default_dock": "right",
           "dock_top": 80,
-          "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
           "snap_distance": 48,
           "drag_threshold": 4
@@ -7457,20 +7451,32 @@
           }
         ]
       },
-      { "id": "ui.editor_shell.console.panel", "type": "panel", "x": 0, "anchor_y": "bottom",
-        "y": 0, "w": "fill", "h": 120, "h_key": "editor.console.visible_height",
+      { "id": "ui.editor_shell.console.panel", "type": "panel",
+        "x": 160, "x_key": "editor.console.x", "y": 520, "y_key": "editor.console.y",
+        "w": 960, "h": 120, "h_key": "editor.console.height",
         "window": {
+          "drag_handle": "ui.editor_shell.console.header",
+          "dock_key": "editor.console.dock",
+          "default_dock": "bottom",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "dock_width": 360,
+          "snap_distance": 48,
+          "drag_threshold": 4,
           "resize_handle": "ui.editor_shell.console.resize_handle",
           "resize_edge": "top",
-          "height_key": "editor.console.visible_height",
+          "height_key": "editor.console.height",
+          "resolved_height_key": "editor.console.visible_height",
           "min_height": 72,
           "max_height": 360
         },
         "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": false, "default": false },
         "clip_children": true, "interactive": true, "layer": 120, "children": [
         { "id": "ui.editor_shell.console.resize_handle", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 6, "interactive": true, "layer": 123, "fill_color": [72, 84, 104, 255] },
-        { "id": "ui.editor_shell.console.console.tab", "type": "button", "x": 16, "y": 8, "w": 104, "h": 28, "layer": 121, "selected": true, "children": [
-          {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
+        { "id": "ui.editor_shell.console.header", "type": "panel", "x": 8, "y": 8, "w": "fill", "h": 28, "interactive": true, "layer": 121, "children": [
+          { "id": "ui.editor_shell.console.console.tab", "type": "panel", "x": 8, "y": 0, "w": 104, "h": 28, "layer": 121, "selected": true, "children": [
+            {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
+          ] }
         ] },
         { "id": "ui.editor_shell.console.hide", "type": "button", "anchor_x": "right", "x": 16, "y": 8, "w": 52, "h": 28, "text": "hide", "text_scale": 0.34, "interactive": true, "action": "editor.console.hide", "layer": 122 },
         { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": "fill", "h": "fill", "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
@@ -7583,6 +7589,20 @@
         "w": 12,
         "h": 520,
         "h_key": "editor.ui.window.pointer.canvas.h",
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.target.bottom",
+        "type": "panel",
+        "anchor_y": "bottom",
+        "x": 0,
+        "y": 0,
+        "w": "fill",
+        "h": 12,
         "fill_color": [56, 142, 220, 96],
         "border_color": [126, 206, 255, 210],
         "border_thickness": 1,

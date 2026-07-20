@@ -75,6 +75,7 @@ extern "C"
         SLAYER3D_UI_LAYOUT_DOCK_NONE = 0,
         SLAYER3D_UI_LAYOUT_DOCK_LEFT,
         SLAYER3D_UI_LAYOUT_DOCK_RIGHT,
+        SLAYER3D_UI_LAYOUT_DOCK_BOTTOM,
     } slayer3d_ui_layout_dock;
 
     /** @brief Optional retained UI text alignment. */
@@ -153,7 +154,7 @@ extern "C"
         bool anchor_bottom;
         /** @brief Treat this root node as an independently movable UI window. */
         bool window;
-        /** @brief Dock side for a root window; same-side windows stack horizontally. */
+        /** @brief Dock side for a root window. Side docks stack inward; bottom docks stack upward. */
         slayer3d_ui_layout_dock dock;
         /** @brief Top inset of the canvas area occupied by a docked root window. */
         float dock_top;
@@ -161,8 +162,12 @@ extern "C"
         float dock_bottom;
         /** @brief Outer horizontal margin for docked root windows. */
         float dock_margin;
-        /** @brief Horizontal gap between root windows docked to the same side. */
+        /** @brief Gap between root windows docked to the same side. */
         float dock_gap;
+        /** @brief Optional width while docked left or right; zero uses the floating width. */
+        float dock_width;
+        /** @brief Optional height while docked to the bottom; zero uses the floating height. */
+        float dock_height;
         /**
          * @brief Total item count for a virtualized list container.
          *
@@ -335,6 +340,19 @@ extern "C"
     /** @brief Find one resolved retained UI node by id, or NULL when absent. */
     const slayer3d_ui_layout_resolved_node *slayer3d_ui_layout_find_resolved_node(const slayer3d_ui_layout_model *model,
                                                                                   const char *id);
+
+    /**
+     * @brief Calculate the exact rectangle a root window would occupy at a dock.
+     *
+     * The calculation uses the same authored order, dimensions, margins, and
+     * gaps as layout resolution while treating the selected window as if it
+     * were docked at `dock`. This is intended for docking previews.
+     *
+     * @return true when `id` names a root window and `dock` is left, right, or bottom.
+     */
+    bool slayer3d_ui_layout_calculate_window_dock_rect(const slayer3d_ui_layout_model *model, const char *id,
+                                                       slayer3d_ui_layout_dock dock, float viewport_width,
+                                                       float viewport_height, slayer3d_ui_layout_rect *out_rect);
 
     /** @brief Return the number of flat retained UI render commands. */
     int slayer3d_ui_layout_render_command_count(const slayer3d_ui_layout_model *model);

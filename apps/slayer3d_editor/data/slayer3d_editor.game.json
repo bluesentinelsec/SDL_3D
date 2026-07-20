@@ -1120,6 +1120,9 @@
           { "type": "scene_state.set", "key": "editor.console.hidden", "value": false },
           { "type": "scene_state.set", "key": "editor.console.height", "value": 120.0 },
           { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 120.0 },
+          { "type": "scene_state.set", "key": "editor.console.x", "value": 160.0 },
+          { "type": "scene_state.set", "key": "editor.console.y", "value": 520.0 },
+          { "type": "scene_state.set", "key": "editor.console.dock", "value": "bottom" },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.id", "value": "" },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.mode", "value": "" },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.preview", "value": "none" },
@@ -1127,7 +1130,9 @@
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.preview.y", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.preview.w", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.preview.h", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.ui.window.pointer.canvas.x", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.canvas.y", "value": 80.0 },
+          { "type": "scene_state.set", "key": "editor.ui.window.pointer.canvas.w", "value": 1280.0 },
           { "type": "scene_state.set", "key": "editor.ui.window.pointer.canvas.h", "value": 520.0 },
           { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.clip.active", "value": false },
@@ -2060,7 +2065,6 @@
       {
         "signal": "signal.editor.console.hide",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.console.height", "value_from_state": "editor.console.visible_height" },
           { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.console.hidden", "value": true },
           { "type": "scene_state.set", "key": "editor.console.focused", "value": false }

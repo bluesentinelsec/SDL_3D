@@ -158,10 +158,12 @@ right-docked browser never encodes the canonical resolution in its position.
 
 A root widget may author a `window` object. `drag_handle` names an interactive
 descendant that begins pointer capture, while `x_key` / `y_key` own the
-floating position and `dock_key` owns `"none"`, `"left"`, or `"right"`.
-Docked windows fill the vertical canvas area between `dock_top` and
-`dock_bottom` (or their state-key forms), and windows on the same side stack
-horizontally inward in authored order.
+floating position and `dock_key` owns `"none"`, `"left"`, `"right"`, or
+`"bottom"`. Side-docked windows fill the vertical canvas area above the
+bottom dock stack and stack horizontally inward in authored order.
+Bottom-docked windows fill the available width and stack upward. Optional
+`dock_width` and `dock_height` values override a window's floating dimension
+on the corresponding dock axis.
 
 ```json
 {
@@ -175,33 +177,36 @@ horizontally inward in authored order.
     "dock_key": "editor.inspector.dock",
     "default_dock": "left",
     "dock_top": 80,
-    "dock_bottom_key": "editor.console.visible_height",
     "dock_gap": 4,
     "snap_distance": 48,
-    "drag_threshold": 4
+    "drag_threshold": 4,
+    "titlebar_visible_width": 48
   }
 }
 ```
 
 Window roots and drag/resize handles must be interactive. The host keeps a
 header press pending until `drag_threshold` is crossed, then undocks the
-window and captures the drag until button release. Floating windows use the
-full viewport for placement. Releasing within `snap_distance` of an edge
-docks the window on that side. The host writes only authored state keys and
-consumes all pointer input within the resolved window ancestry. Empty panel
-space and text inputs therefore cannot leak clicks, wheel events, or drags to
-the world canvas.
+window and captures the drag until button release. Floating bounds keep the
+drag handle vertically reachable and retain at least
+`titlebar_visible_width` horizontal pixels, while allowing a large window's
+body to extend beyond the viewport. Releasing within `snap_distance` of the
+left, right, or bottom edge docks the window on that side. The host writes
+only authored state keys and consumes all pointer input within the resolved
+window ancestry. Empty panel space and text inputs therefore cannot leak
+clicks, wheel events, or drags to the world canvas.
 
 Editors should render non-interactive feedback from the active drag state:
 edge target rails while dragging, an outline around a floating result, and
 the resolved dock slot when an edge is targeted. The preview should match
 the same authored ordering and gap rules used by final dock layout.
 
-For a bottom console, author `h_key` on the root and a top-edge
-`resize_handle`, `resize_edge: "top"`, `height_key`, and min/max heights in
-the window object. Visibility remains ordinary data-authored state, so hiding
-can preserve the current height with `scene_state.set` and
-`value_from_state`.
+For a bottom console, use the same window contract with
+`default_dock: "bottom"`. Author `h_key` on the root and a top-edge
+`resize_handle`, `resize_edge: "top"`, `height_key`, and min/max heights.
+`resolved_height_key` can publish the actual height for virtualized content
+when a side dock stretches the window. Visibility remains ordinary
+data-authored state.
 
 ### Wheel And Scrollbar Behavior
 

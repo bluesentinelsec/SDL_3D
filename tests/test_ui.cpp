@@ -637,7 +637,7 @@ TEST(SLAYER3DUI, AnchoredNodesTrackViewportEdges)
     slayer3d_ui_layout_destroy(layout);
 }
 
-TEST(SLAYER3DUI, DockedRootWindowsStackAcrossTheCanvas)
+TEST(SLAYER3DUI, DockedRootWindowsStackAroundTheCanvas)
 {
     slayer3d_ui_layout_model *layout = nullptr;
     ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
@@ -651,7 +651,6 @@ TEST(SLAYER3DUI, DockedRootWindowsStackAcrossTheCanvas)
     inspector.window = true;
     inspector.dock = SLAYER3D_UI_LAYOUT_DOCK_LEFT;
     inspector.dock_top = 80.0f;
-    inspector.dock_bottom = 120.0f;
     inspector.dock_gap = 4.0f;
     ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &inspector));
 
@@ -664,12 +663,36 @@ TEST(SLAYER3DUI, DockedRootWindowsStackAcrossTheCanvas)
     global.id = "global";
     global.rect.w = 200.0f;
     global.dock = SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    global.dock_height = 90.0f;
     ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &global));
 
+    slayer3d_ui_layout_node_desc console = inspector;
+    console.id = "console";
+    console.rect = {160.0f, 520.0f, 960.0f, 120.0f};
+    console.dock = SLAYER3D_UI_LAYOUT_DOCK_BOTTOM;
+    console.dock_gap = 4.0f;
+    console.dock_width = 360.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &console));
+
+    slayer3d_ui_layout_node_desc timeline = console;
+    timeline.id = "timeline";
+    timeline.rect.h = 80.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &timeline));
+
     ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
-    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "inspector"), 0.0f, 80.0f, 300.0f, 520.0f);
-    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "things"), 304.0f, 80.0f, 240.0f, 520.0f);
-    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "global"), 1080.0f, 80.0f, 200.0f, 520.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "inspector"), 0.0f, 80.0f, 300.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "things"), 304.0f, 80.0f, 240.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "global"), 1080.0f, 80.0f, 200.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "console"), 0.0f, 600.0f, 1280.0f, 120.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "timeline"), 0.0f, 516.0f, 1280.0f, 80.0f);
+
+    slayer3d_ui_layout_rect preview{};
+    EXPECT_TRUE(slayer3d_ui_layout_calculate_window_dock_rect(layout, "global", SLAYER3D_UI_LAYOUT_DOCK_BOTTOM, 1280.0f,
+                                                              720.0f, &preview));
+    EXPECT_FLOAT_EQ(preview.x, 0.0f);
+    EXPECT_FLOAT_EQ(preview.y, 630.0f);
+    EXPECT_FLOAT_EQ(preview.w, 1280.0f);
+    EXPECT_FLOAT_EQ(preview.h, 90.0f);
 
     slayer3d_ui_layout_destroy(layout);
 }

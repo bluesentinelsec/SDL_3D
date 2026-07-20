@@ -128,6 +128,8 @@ static slayer3d_ui_layout_dock ui_widget_dock_from_string(const char *dock)
         return SLAYER3D_UI_LAYOUT_DOCK_LEFT;
     if (dock != NULL && SDL_strcmp(dock, "right") == 0)
         return SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    if (dock != NULL && SDL_strcmp(dock, "bottom") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_BOTTOM;
     return SLAYER3D_UI_LAYOUT_DOCK_NONE;
 }
 
@@ -310,6 +312,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         (void)ui_widget_scene_float(runtime, json_string(window, "dock_bottom_key", NULL), &desc.dock_bottom);
         desc.dock_margin = json_float(window, "dock_margin", 0.0f);
         desc.dock_gap = json_float(window, "dock_gap", 0.0f);
+        desc.dock_width = json_float(window, "dock_width", 0.0f);
+        desc.dock_height = json_float(window, "dock_height", 0.0f);
     }
     desc.scroll_key = json_string(node, "scroll_key", NULL);
     float pane_scroll = 0.0f;

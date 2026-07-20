@@ -455,8 +455,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         if (!root_node)
             return validation_error(ctx, path, "UI widget window is only valid on root widgets");
         static const char *const window_string_keys[] = {
-            "drag_handle",  "resize_handle", "resize_edge",     "dock_key",
-            "default_dock", "dock_top_key",  "dock_bottom_key", "height_key",
+            "drag_handle",     "resize_handle", "resize_edge",         "dock_key", "default_dock", "dock_top_key",
+            "dock_bottom_key", "height_key",    "resolved_height_key",
         };
         for (size_t i = 0; i < SDL_arraysize(window_string_keys); ++i)
         {
@@ -469,16 +469,18 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         }
         const char *default_dock = json_string(window, "default_dock");
         if (default_dock != NULL && SDL_strcmp(default_dock, "none") != 0 && SDL_strcmp(default_dock, "left") != 0 &&
-            SDL_strcmp(default_dock, "right") != 0)
+            SDL_strcmp(default_dock, "right") != 0 && SDL_strcmp(default_dock, "bottom") != 0)
         {
-            return validation_error(ctx, path, "UI window default_dock must be none, left, or right");
+            return validation_error(ctx, path, "UI window default_dock must be none, left, right, or bottom");
         }
         const char *resize_edge = json_string(window, "resize_edge");
         if (resize_edge != NULL && SDL_strcmp(resize_edge, "top") != 0)
             return validation_error(ctx, path, "UI window resize_edge must be top");
         static const char *const nonnegative_keys[] = {
-            "dock_top",      "dock_bottom",    "dock_margin", "dock_gap",
-            "snap_distance", "drag_threshold", "min_height",  "max_height",
+            "dock_top",      "dock_bottom",    "dock_margin",
+            "dock_gap",      "dock_width",     "dock_height",
+            "snap_distance", "drag_threshold", "titlebar_visible_width",
+            "min_height",    "max_height",
         };
         for (size_t i = 0; i < SDL_arraysize(nonnegative_keys); ++i)
         {
