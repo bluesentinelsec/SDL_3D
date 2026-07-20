@@ -221,13 +221,11 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.search.display", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.edit.focus", "");
     slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.search.pending", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.collapsed", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", false);
     slayer3d_properties_set_int(runtime->scene_state, "editor.actor.selected_index", -1);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", "");
@@ -237,6 +235,7 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_index", -1);
     slayer3d_properties_set_int(runtime->scene_state, "editor.texture.selected_slot", -1);
     slayer3d_properties_set_string(runtime->scene_state, "editor.texture.material", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.open", true);
     slayer3d_properties_set_string(runtime->scene_state, "editor.inspector.tab", "Object");
     slayer3d_properties_set_float(runtime->scene_state, "editor.inspector.scroll", 0.0f);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.inspector.scroll.drag.active", false);
@@ -247,7 +246,7 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_int(runtime->scene_state, "editor.property.edit.selected_slot", -1);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.property.edit.replace_on_text", false);
     slayer3d_properties_set_int(runtime->scene_state, "editor.property.count", 0);
-    slayer3d_properties_set_bool(runtime->scene_state, "editor.console.hidden", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.console.open", true);
     slayer3d_properties_set_float(runtime->scene_state, "editor.console.height", 120.0f);
     slayer3d_properties_set_float(runtime->scene_state, "editor.console.visible_height", 120.0f);
     slayer3d_properties_set_float(runtime->scene_state, "editor.console.x", 160.0f);

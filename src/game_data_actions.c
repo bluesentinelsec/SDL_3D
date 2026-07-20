@@ -4596,9 +4596,7 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         {
             slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
             slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.active", false);
-            slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.viewer.collapsed", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.sky.panel.active", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.open", false);
             (void)slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);

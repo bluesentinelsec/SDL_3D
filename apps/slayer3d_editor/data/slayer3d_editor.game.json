@@ -36,7 +36,7 @@
             "bindings": [{ "device": "keyboard", "key": "ESCAPE" }]
           },
           {
-            "name": "action.editor.inspector.toggle",
+            "name": "action.editor.inspector.open",
             "bindings": [{ "device": "keyboard", "key": "I" }]
           },
           {
@@ -297,7 +297,8 @@
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
     "signal.editor.escape",
-    "signal.editor.inspector.toggle",
+    "signal.editor.inspector.open",
+    "signal.editor.inspector.close",
     "signal.editor.inspector.tab.object",
     "signal.editor.inspector.tab.data",
     "signal.editor.visibility.hide_selected",
@@ -672,8 +673,9 @@
     "signal.editor.texture.paint.face",
     "signal.editor.texture.paint.mode.brush",
     "signal.editor.texture.paint.mode.face",
-    "signal.editor.texture.viewer.toggle",
-    "signal.editor.sky.panel.toggle",
+    "signal.editor.texture.viewer.close",
+    "signal.editor.sky.panel.open",
+    "signal.editor.sky.panel.close",
     "signal.editor.sky.refresh",
     "signal.editor.sky.select_slot.0",
     "signal.editor.sky.select_slot.1",
@@ -685,11 +687,11 @@
     "signal.editor.sky.scroll.down",
     "signal.editor.sky.scroll.sync",
     "signal.editor.console.scroll.sync",
-    "signal.editor.console.hide",
-    "signal.editor.console.show",
+    "signal.editor.console.close",
+    "signal.editor.console.open",
     "signal.editor.sky.apply.selected",
     "signal.editor.sky.reset",
-    "signal.editor.liquid.panel.toggle",
+    "signal.editor.liquid.panel.open",
     "signal.editor.liquid.close",
     "signal.editor.liquid.paint.selection",
     "signal.editor.liquid.type.clean_water",
@@ -726,7 +728,7 @@
     "signal.editor.actor.select_slot.17",
     "signal.editor.actor.select_slot.18",
     "signal.editor.actor.refresh",
-    "signal.editor.actor.viewer.toggle",
+    "signal.editor.actor.viewer.close",
     "signal.editor.actor.group.placeholders.toggle",
     "signal.editor.actor.group.models.toggle",
     "signal.editor.things.category.actors",
@@ -747,7 +749,7 @@
     "signal.editor.media.settings.close",
     "signal.editor.media.folder_dialog",
     "signal.editor.media.path.apply",
-    "signal.editor.global.toggle",
+    "signal.editor.global.open",
     "signal.editor.global.close",
     "signal.editor.global.tab.lighting",
     "signal.editor.global.tab.data",
@@ -807,8 +809,8 @@
       {
         "type": "sensor.input_pressed",
         "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
-        "action": "action.editor.inspector.toggle",
-        "on_pressed": "signal.editor.inspector.toggle"
+        "action": "action.editor.inspector.open",
+        "on_pressed": "signal.editor.inspector.open"
       },
       {
         "type": "sensor.input_pressed",
@@ -1059,7 +1061,6 @@
             }
           },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.x", "value": 1030.0 },
           { "type": "scene_state.set", "key": "editor.texture.viewer.y", "value": 92.0 },
           { "type": "scene_state.set", "key": "editor.texture.viewer.dock", "value": "right" },
@@ -1104,7 +1105,7 @@
           { "type": "scene_state.set", "key": "editor.global.property.count", "value": 0 },
           { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
-          { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.inspector.open", "value": true },
           { "type": "scene_state.set", "key": "editor.inspector.panel.x", "value": 12.0 },
           { "type": "scene_state.set", "key": "editor.inspector.panel.y", "value": 92.0 },
           { "type": "scene_state.set", "key": "editor.inspector.panel.dock", "value": "left" },
@@ -1117,7 +1118,7 @@
           { "type": "scene_state.set", "key": "editor.sky.panel.x", "value": 1030.0 },
           { "type": "scene_state.set", "key": "editor.sky.panel.y", "value": 92.0 },
           { "type": "scene_state.set", "key": "editor.sky.panel.dock", "value": "right" },
-          { "type": "scene_state.set", "key": "editor.console.hidden", "value": false },
+          { "type": "scene_state.set", "key": "editor.console.open", "value": true },
           { "type": "scene_state.set", "key": "editor.console.height", "value": 120.0 },
           { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 120.0 },
           { "type": "scene_state.set", "key": "editor.console.x", "value": 160.0 },
@@ -1327,9 +1328,7 @@
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
-          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
           { "type": "scene_state.set", "key": "editor.texture.scroll.index", "value": 0 },
@@ -1346,9 +1345,7 @@
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": true },
-          { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.things.category", "value": "Actors" },
           {
             "type": "editor.actor.scan",
@@ -1510,10 +1507,11 @@
         ]
       },
       {
-        "signal": "signal.editor.actor.viewer.toggle",
+        "signal": "signal.editor.actor.viewer.close",
         "actions": [
-          { "type": "scene_state.toggle", "key": "editor.actor.viewer.collapsed", "default": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor viewer toggled" }
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "editor.tool.set_mode", "mode": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "things closed" }
         ]
       },
       {
@@ -1614,7 +1612,6 @@
             "if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
             "then": [
               { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
-              { "type": "scene_state.set", "key": "editor.actor.viewer.collapsed", "value": false },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "actor viewer closed" }
             ]
           }
@@ -1969,24 +1966,32 @@
         ]
       },
       {
-        "signal": "signal.editor.texture.viewer.toggle",
+        "signal": "signal.editor.texture.viewer.close",
         "actions": [
-          { "type": "scene_state.toggle", "key": "editor.texture.viewer.collapsed", "default": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture viewer toggled" }
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "editor.tool.set_mode", "mode": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "textures closed" }
         ]
       },
       {
-        "signal": "signal.editor.sky.panel.toggle",
+        "signal": "signal.editor.sky.panel.open",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "select" },
-          { "type": "scene_state.toggle", "key": "editor.sky.panel.active", "default": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": true },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
-          { "type": "scene_state.set", "key": "editor.sky.panel.collapsed", "value": false },
           { "type": "editor.sky.scan" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "skybox panel toggled" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "skybox opened" }
+        ]
+      },
+      {
+        "signal": "signal.editor.sky.panel.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "editor.tool.set_mode", "mode": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "skybox closed" }
         ]
       },
       {
@@ -2063,18 +2068,18 @@
         ]
       },
       {
-        "signal": "signal.editor.console.hide",
+        "signal": "signal.editor.console.close",
         "actions": [
           { "type": "scene_state.set", "key": "editor.console.visible_height", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.console.hidden", "value": true },
+          { "type": "scene_state.set", "key": "editor.console.open", "value": false },
           { "type": "scene_state.set", "key": "editor.console.focused", "value": false }
         ]
       },
       {
-        "signal": "signal.editor.console.show",
+        "signal": "signal.editor.console.open",
         "actions": [
           { "type": "scene_state.set", "key": "editor.console.visible_height", "value_from_state": "editor.console.height" },
-          { "type": "scene_state.set", "key": "editor.console.hidden", "value": false }
+          { "type": "scene_state.set", "key": "editor.console.open", "value": true }
         ]
       },
       {
@@ -2093,7 +2098,7 @@
         ]
       },
       {
-        "signal": "signal.editor.liquid.panel.toggle",
+        "signal": "signal.editor.liquid.panel.open",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "liquid" },
           { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
@@ -2349,11 +2354,18 @@
         ]
       },
       {
-        "signal": "signal.editor.inspector.toggle",
+        "signal": "signal.editor.inspector.open",
         "actions": [
-          { "type": "scene_state.toggle", "key": "editor.inspector.collapsed", "default": false },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector toggled" },
+          { "type": "scene_state.set", "key": "editor.inspector.open", "value": true },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector opened" },
           { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.inspector.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.inspector.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector closed" }
         ]
       },
       {
@@ -5631,9 +5643,9 @@
         ]
       },
       {
-        "signal": "signal.editor.global.toggle",
+        "signal": "signal.editor.global.open",
         "actions": [
-          { "type": "scene_state.toggle", "key": "editor.global.panel.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": true },
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
@@ -5648,6 +5660,7 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.data.edit.focus", "value": "" },
+          { "type": "editor.tool.set_mode", "mode": "select" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "global panel closed" }
         ]
       },

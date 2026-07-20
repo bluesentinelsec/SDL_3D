@@ -401,16 +401,19 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
 
             if (dragging && config.x_key != NULL && config.y_key != NULL)
             {
-                const float offset_x = slayer3d_properties_get_float(state, "editor.ui.window.pointer.offset_x", 0.0f);
-                const float offset_y = slayer3d_properties_get_float(state, "editor.ui.window.pointer.offset_y", 0.0f);
+                const float start_x = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_x", mouse_x);
+                const float start_y = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_y", mouse_y);
+                const float origin_x =
+                    slayer3d_properties_get_float(state, "editor.ui.window.pointer.origin_x", window->rect.x);
+                const float origin_y =
+                    slayer3d_properties_get_float(state, "editor.ui.window.pointer.origin_y", window->rect.y);
                 float viewport_w = 0.0f;
                 float viewport_h = 0.0f;
                 slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
                 const float floating_w = config.floating_width > 0.0f ? config.floating_width : window->rect.w;
                 const float floating_h = config.floating_height > 0.0f ? config.floating_height : window->rect.h;
-                float x = mouse_x - offset_x;
-                float y = mouse_y - offset_y;
-                editor_clamp_ui_window_to_titlebar(layout, &config, window, viewport_w, viewport_h, &x, &y);
+                const float x = origin_x + mouse_x - start_x;
+                const float y = origin_y + mouse_y - start_y;
                 slayer3d_properties_set_float(state, config.x_key, x);
                 slayer3d_properties_set_float(state, config.y_key, y);
                 editor_update_ui_window_preview(runtime, layout, &config, x, y, floating_w, floating_h, mouse_x,
@@ -431,14 +434,26 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
             return true;
         }
 
-        if (released && SDL_strcmp(mode, "drag") == 0 && config.dock_key != NULL)
+        if (released && SDL_strcmp(mode, "drag") == 0)
         {
             const char *preview = slayer3d_properties_get_string(state, "editor.ui.window.pointer.preview", "none");
             const char *dock = SDL_strcmp(preview, "left") == 0     ? "left"
                                : SDL_strcmp(preview, "right") == 0  ? "right"
                                : SDL_strcmp(preview, "bottom") == 0 ? "bottom"
                                                                     : "none";
-            slayer3d_properties_set_string(state, config.dock_key, dock);
+            if (config.dock_key != NULL)
+                slayer3d_properties_set_string(state, config.dock_key, dock);
+            if (SDL_strcmp(dock, "none") == 0 && config.x_key != NULL && config.y_key != NULL)
+            {
+                float viewport_w = 0.0f;
+                float viewport_h = 0.0f;
+                float x = slayer3d_properties_get_float(state, config.x_key, window->rect.x);
+                float y = slayer3d_properties_get_float(state, config.y_key, window->rect.y);
+                slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+                editor_clamp_ui_window_to_titlebar(layout, &config, window, viewport_w, viewport_h, &x, &y);
+                slayer3d_properties_set_float(state, config.x_key, x);
+                slayer3d_properties_set_float(state, config.y_key, y);
+            }
         }
         editor_end_ui_window_pointer_capture(state);
         return true;
@@ -464,8 +479,8 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
     {
         slayer3d_properties_set_float(state, "editor.ui.window.pointer.start_x", mouse_x);
         slayer3d_properties_set_float(state, "editor.ui.window.pointer.start_y", mouse_y);
-        slayer3d_properties_set_float(state, "editor.ui.window.pointer.offset_x", mouse_x - window->rect.x);
-        slayer3d_properties_set_float(state, "editor.ui.window.pointer.offset_y", mouse_y - window->rect.y);
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.origin_x", window->rect.x);
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.origin_y", window->rect.y);
         slayer3d_properties_set_string(state, "editor.ui.window.pointer.preview", "none");
     }
     return true;

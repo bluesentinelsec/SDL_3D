@@ -11,7 +11,7 @@
       "action.editor.tool.cycle",
       "action.editor.selection.clear",
       "action.editor.escape",
-      "action.editor.inspector.toggle",
+      "action.editor.inspector.open",
       "action.editor.command.commit",
       "action.editor.command.undo",
       "action.editor.command.redo",
@@ -592,7 +592,7 @@
             "text": "Global",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.global.toggle",
+            "action": "editor.global.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false }
           },
           {
@@ -615,7 +615,7 @@
             "text": "Skybox",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.sky.panel.toggle",
+            "action": "editor.sky.panel.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false }
           },
           {
@@ -626,8 +626,30 @@
             "text": "Liquid",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.liquid.panel.toggle",
+            "action": "editor.liquid.panel.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.liquid.panel.open", "op": "==", "value": true, "default": false }
+          },
+          {
+            "id": "ui.editor_shell.toolbar.inspector.button",
+            "type": "button",
+            "w": 86,
+            "h": 28,
+            "text": "Inspector",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.inspector.open",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.toolbar.console.button",
+            "type": "button",
+            "w": 82,
+            "h": 28,
+            "text": "Console",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.console.open",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true }
           }
         ]
       },
@@ -838,8 +860,8 @@
             "y": 6,
             "w": 44,
             "h": 24,
-            "text": "hide",
-            "text_scale": 0.38,
+            "text": "close",
+            "text_scale": 0.34,
             "interactive": true,
             "action": "editor.file.close",
             "layer": 501
@@ -948,8 +970,8 @@
             "y": 6,
             "w": 44,
             "h": 24,
-            "text": "hide",
-            "text_scale": 0.38,
+            "text": "close",
+            "text_scale": 0.34,
             "interactive": true,
             "action": "editor.media.settings.close",
             "layer": 501
@@ -1321,7 +1343,7 @@
         "clip_children": true,
         "interactive": true,
         "layer": 120,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true },
         "children": [
           {
             "id": "ui.editor_shell.left_inspector.header",
@@ -1336,7 +1358,7 @@
               { "id": "ui.editor_shell.left_inspector.title", "type": "label", "x": 14, "y": 6, "w": 120, "h": 20, "text": "Inspector" },
               { "id": "ui.editor_shell.left_inspector.scroll.up", "type": "button", "x": 184, "y": 5, "w": 24, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.up" },
               { "id": "ui.editor_shell.left_inspector.scroll.down", "type": "button", "x": 212, "y": 5, "w": 24, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.down" },
-              { "id": "ui.editor_shell.left_inspector.toggle", "type": "button", "x": 242, "y": 5, "w": 42, "h": 24, "text": "hide", "text_scale": 0.38, "interactive": true, "action": "editor.inspector.toggle" }
+              { "id": "ui.editor_shell.left_inspector.close", "type": "button", "x": 242, "y": 5, "w": 42, "h": 24, "text": "close", "text_scale": 0.32, "interactive": true, "action": "editor.inspector.close" }
             ]
           },
           {
@@ -5835,20 +5857,6 @@
         ]
       },
       {
-        "id": "ui.editor_shell.left_inspector.collapsed",
-        "type": "button",
-        "x": 12,
-        "y": 92,
-        "w": 102,
-        "h": 32,
-        "layer": 120,
-        "text": "Inspector",
-        "text_scale": 0.42,
-        "interactive": true,
-        "action": "editor.inspector.toggle",
-        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false }
-      },
-      {
         "id": "ui.editor_shell.texture_viewer.panel",
         "type": "panel",
         "layout": "none",
@@ -5869,13 +5877,7 @@
         },
         "interactive": true,
         "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
-          ]
-        },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
         "children": [
           {
             "id": "ui.editor_shell.texture_viewer.header",
@@ -5901,16 +5903,16 @@
                 "action": "editor.texture.refresh"
               },
               {
-                "id": "ui.editor_shell.texture_viewer.collapse.button",
+                "id": "ui.editor_shell.texture_viewer.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.texture.viewer.toggle"
+                "action": "editor.texture.viewer.close"
               }
             ]
           },
@@ -6026,27 +6028,6 @@
         ]
       },
       {
-        "id": "ui.editor_shell.texture_viewer.collapsed",
-        "type": "button",
-        "anchor_x": "right",
-        "x": 12,
-        "y": 92,
-        "w": 152,
-        "h": 32,
-        "text": "Textures",
-        "text_scale": 0.48,
-        "interactive": true,
-        "action": "editor.texture.viewer.toggle",
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
         "id": "ui.editor_shell.skybox_panel.panel",
         "type": "panel",
         "layout": "none",
@@ -6071,7 +6052,6 @@
           "type": "all",
           "conditions": [
             { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
             { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
             { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false }
           ]
@@ -6101,16 +6081,16 @@
                 "action": "editor.sky.refresh"
               },
               {
-                "id": "ui.editor_shell.skybox_panel.collapse.button",
+                "id": "ui.editor_shell.skybox_panel.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.sky.panel.toggle"
+                "action": "editor.sky.panel.close"
               }
             ]
           },
@@ -6181,13 +6161,7 @@
         },
         "interactive": true,
         "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": false, "default": false }
-          ]
-        },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
         "children": [
           {
             "id": "ui.editor_shell.actor_viewer.header",
@@ -6213,16 +6187,16 @@
                 "action": "editor.actor.refresh"
               },
               {
-                "id": "ui.editor_shell.actor_viewer.collapse.button",
+                "id": "ui.editor_shell.actor_viewer.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.actor.viewer.toggle"
+                "action": "editor.actor.viewer.close"
               }
             ]
           },
@@ -6851,27 +6825,6 @@
         ]
       },
       {
-        "id": "ui.editor_shell.actor_viewer.collapsed",
-        "type": "button",
-        "anchor_x": "right",
-        "x": 12,
-        "y": 92,
-        "w": 152,
-        "h": 32,
-        "text": "Things",
-        "text_scale": 0.48,
-        "interactive": true,
-        "action": "editor.actor.viewer.toggle",
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
         "id": "ui.editor_shell.global_panel.panel",
         "type": "panel",
         "layout": "none",
@@ -6916,8 +6869,8 @@
                 "y": 5,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.38,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
                 "action": "editor.global.close",
                 "layer": 122
@@ -7470,7 +7423,7 @@
           "min_height": 72,
           "max_height": 360
         },
-        "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": false, "default": false },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true },
         "clip_children": true, "interactive": true, "layer": 120, "children": [
         { "id": "ui.editor_shell.console.resize_handle", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 6, "interactive": true, "layer": 123, "fill_color": [72, 84, 104, 255] },
         { "id": "ui.editor_shell.console.header", "type": "panel", "x": 8, "y": 8, "w": "fill", "h": 28, "interactive": true, "layer": 121, "children": [
@@ -7478,7 +7431,7 @@
             {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
           ] }
         ] },
-        { "id": "ui.editor_shell.console.hide", "type": "button", "anchor_x": "right", "x": 16, "y": 8, "w": 52, "h": 28, "text": "hide", "text_scale": 0.34, "interactive": true, "action": "editor.console.hide", "layer": 122 },
+        { "id": "ui.editor_shell.console.close", "type": "button", "anchor_x": "right", "x": 16, "y": 8, "w": 52, "h": 28, "text": "close", "text_scale": 0.30, "interactive": true, "action": "editor.console.close", "layer": 122 },
         { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": "fill", "h": "fill", "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
           { "id": "ui.editor_shell.console.line0.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line0.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line0.selected", "op": "==", "value": true, "default": false}},
@@ -7562,8 +7515,6 @@
           ] }
         ] }
       ] },
-      { "id": "ui.editor_shell.console.unhide", "type": "button", "anchor_x": "right", "anchor_y": "bottom", "x": 12, "y": 12, "w": 112, "h": 28, "text": "Show console", "text_scale": 0.34, "interactive": true, "action": "editor.console.show", "layer": 120,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": true, "default": false } },
       {
         "id": "ui.editor_shell.window_drag.target.left",
         "type": "panel",
