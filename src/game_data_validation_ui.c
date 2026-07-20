@@ -318,7 +318,7 @@ static bool ui_widget_name_set_add(ui_widget_name_set *set, const char *id)
 }
 
 static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path,
-                                    ui_widget_name_set *ids, validation_names *names)
+                                    ui_widget_name_set *ids, validation_names *names, bool root_node)
 {
     if (!yyjson_is_obj(node))
         return validation_error(ctx, path, "UI widget nodes must be objects");
@@ -438,12 +438,69 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI grid widgets require a positive integer columns count");
     if (!ui_widget_optional_non_empty_string_len(node, "x_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "y_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "w_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "h_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "open_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "selected_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
     {
         return validation_error(ctx, path, "UI widget state keys must be non-empty strings shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_ACTION_MAX);
+    }
+    yyjson_val *window = obj_get(node, "window");
+    if (window != NULL)
+    {
+        if (!yyjson_is_obj(window))
+            return validation_error(ctx, path, "UI widget window must be an object");
+        if (!root_node)
+            return validation_error(ctx, path, "UI widget window is only valid on root widgets");
+        static const char *const window_string_keys[] = {
+            "drag_handle",     "resize_handle", "resize_edge",         "dock_key",  "default_dock", "dock_top_key",
+            "dock_bottom_key", "height_key",    "resolved_height_key", "front_key",
+        };
+        for (size_t i = 0; i < SDL_arraysize(window_string_keys); ++i)
+        {
+            if (!ui_widget_optional_non_empty_string_len(window, window_string_keys[i], SLAYER3D_UI_LAYOUT_ACTION_MAX))
+            {
+                return validation_error(ctx, path,
+                                        "UI window strings and state keys must be non-empty and shorter than %d bytes",
+                                        SLAYER3D_UI_LAYOUT_ACTION_MAX);
+            }
+        }
+        const char *default_dock = json_string(window, "default_dock");
+        if (default_dock != NULL && SDL_strcmp(default_dock, "none") != 0 && SDL_strcmp(default_dock, "left") != 0 &&
+            SDL_strcmp(default_dock, "right") != 0 && SDL_strcmp(default_dock, "bottom") != 0)
+        {
+            return validation_error(ctx, path, "UI window default_dock must be none, left, right, or bottom");
+        }
+        const char *resize_edge = json_string(window, "resize_edge");
+        if (resize_edge != NULL && SDL_strcmp(resize_edge, "top") != 0)
+            return validation_error(ctx, path, "UI window resize_edge must be top");
+        static const char *const nonnegative_keys[] = {
+            "dock_top",      "dock_bottom",    "dock_margin",
+            "dock_gap",      "dock_width",     "dock_height",
+            "snap_distance", "drag_threshold", "titlebar_visible_width",
+            "min_height",    "max_height",
+        };
+        for (size_t i = 0; i < SDL_arraysize(nonnegative_keys); ++i)
+        {
+            yyjson_val *value = obj_get(window, nonnegative_keys[i]);
+            if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+                return validation_error(ctx, path, "UI window numeric properties must be non-negative");
+        }
+        if (obj_get(window, "resize_handle") != NULL && obj_get(window, "height_key") == NULL)
+            return validation_error(ctx, path, "A resizable UI window requires height_key");
+        if (obj_get(window, "drag_handle") != NULL &&
+            (obj_get(node, "x_key") == NULL || obj_get(node, "y_key") == NULL))
+        {
+            return validation_error(ctx, path, "A draggable UI window requires x_key and y_key");
+        }
+        const float min_height =
+            yyjson_is_num(obj_get(window, "min_height")) ? (float)yyjson_get_num(obj_get(window, "min_height")) : 0.0f;
+        const float max_height =
+            yyjson_is_num(obj_get(window, "max_height")) ? (float)yyjson_get_num(obj_get(window, "max_height")) : 0.0f;
+        if (min_height > 0.0f && max_height > 0.0f && min_height > max_height)
+            return validation_error(ctx, path, "UI window min_height must not exceed max_height");
     }
     if (!ui_widget_optional_non_empty_string_len(node, "action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
         return validation_error(ctx, path, "UI widget action must be a non-empty string shorter than %d bytes",
@@ -538,7 +595,7 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     {
         char child_path[PATH_BUFFER_SIZE];
         format_path(child_path, sizeof(child_path), "%s.children[%zu]", path, i);
-        if (!validate_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, ids, names))
+        if (!validate_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, ids, names, false))
             return false;
     }
     return true;
@@ -710,7 +767,7 @@ static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, co
     {
         char widget_path[PATH_BUFFER_SIZE];
         format_path(widget_path, sizeof(widget_path), "%s[%zu]", path, i);
-        ok = validate_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, &ids, names);
+        ok = validate_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, &ids, names, true);
     }
     ui_widget_name_set_destroy(&ids);
     if (!ok)

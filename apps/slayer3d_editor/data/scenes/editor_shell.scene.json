@@ -11,7 +11,7 @@
       "action.editor.tool.cycle",
       "action.editor.selection.clear",
       "action.editor.escape",
-      "action.editor.inspector.toggle",
+      "action.editor.inspector.open",
       "action.editor.command.commit",
       "action.editor.command.undo",
       "action.editor.command.redo",
@@ -557,8 +557,6 @@
             "selected_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false }
           },
           { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.selection.button", "type": "button", "w": 100, "h": 28, "text": "Selection", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.groups.button", "type": "button", "w": 86, "h": 28, "text": "Groups", "interactive": true },
           {
             "id": "ui.editor_shell.toolbar.shape.button",
             "type": "dropdown",
@@ -594,7 +592,7 @@
             "text": "Global",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.global.toggle",
+            "action": "editor.global.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.global.panel.open", "op": "==", "value": true, "default": false }
           },
           {
@@ -608,10 +606,6 @@
             "action": "editor.palette.game_object",
             "selected_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false }
           },
-          { "id": "ui.editor_shell.toolbar.tools.button", "type": "button", "w": 76, "h": 28, "text": "Tools", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.view.button", "type": "button", "w": 70, "h": 28, "text": "View", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.run.button", "type": "button", "w": 64, "h": 28, "text": "Run", "interactive": true },
-          { "id": "ui.editor_shell.toolbar.debug.button", "type": "button", "w": 80, "h": 28, "text": "Debug", "interactive": true },
           { "id": "ui.editor_shell.toolbar.help.button", "type": "button", "w": 70, "h": 28, "text": "Help", "interactive": true },
           {
             "id": "ui.editor_shell.toolbar.skybox.button",
@@ -621,7 +615,7 @@
             "text": "Skybox",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.sky.panel.toggle",
+            "action": "editor.sky.panel.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false }
           },
           {
@@ -632,8 +626,30 @@
             "text": "Liquid",
             "text_scale": 0.42,
             "interactive": true,
-            "action": "editor.liquid.panel.toggle",
+            "action": "editor.liquid.panel.open",
             "selected_if": { "type": "scene_state.compare", "key": "editor.liquid.panel.open", "op": "==", "value": true, "default": false }
+          },
+          {
+            "id": "ui.editor_shell.toolbar.inspector.button",
+            "type": "button",
+            "w": 86,
+            "h": 28,
+            "text": "Inspector",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.inspector.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true }
+          },
+          {
+            "id": "ui.editor_shell.toolbar.console.button",
+            "type": "button",
+            "w": 82,
+            "h": 28,
+            "text": "Console",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.console.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true }
           }
         ]
       },
@@ -644,17 +660,11 @@
         "x": 0,
         "y": 38,
         "w": "fill",
-        "h": 42,
-        "padding": 7,
+        "h": 38,
+        "padding": 5,
         "gap": 4,
         "layer": 110,
         "children": [
-          {
-            "id": "ui.editor_shell.tool_toolbar.leading_spacer",
-            "type": "spacer",
-            "w": 49,
-            "h": 28
-          },
           {
             "id": "ui.editor_shell.tool_toolbar.select.button",
             "type": "button",
@@ -850,8 +860,8 @@
             "y": 6,
             "w": 44,
             "h": 24,
-            "text": "hide",
-            "text_scale": 0.38,
+            "text": "close",
+            "text_scale": 0.34,
             "interactive": true,
             "action": "editor.file.close",
             "layer": 501
@@ -960,8 +970,8 @@
             "y": 6,
             "w": 44,
             "h": 24,
-            "text": "hide",
-            "text_scale": 0.38,
+            "text": "close",
+            "text_scale": 0.34,
             "interactive": true,
             "action": "editor.media.settings.close",
             "layer": 501
@@ -1135,6 +1145,16 @@
         "y_key": "editor.liquid.panel.y",
         "w": 232,
         "h": 246,
+        "window": {
+          "drag_handle": "ui.editor_shell.liquid_panel.header",
+          "dock_key": "editor.liquid.panel.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 430,
@@ -1143,6 +1163,7 @@
         "border_thickness": 1,
         "visible_if": { "type": "scene_state.compare", "key": "editor.liquid.panel.open", "op": "==", "value": true, "default": false },
         "children": [
+          { "id": "ui.editor_shell.liquid_panel.header", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 26, "interactive": true, "layer": 431 },
           { "id": "ui.editor_shell.liquid_panel.title", "type": "label", "x": 8, "y": 3, "w": 86, "h": 16, "text": "Liquid", "text_scale": 0.36, "layer": 431 },
           { "id": "ui.editor_shell.liquid_panel.drag_hint", "type": "label", "x": 96, "y": 3, "w": 40, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 431 },
           {
@@ -1307,12 +1328,24 @@
         "layout": "none",
         "x": 12,
         "y": 92,
+        "x_key": "editor.inspector.panel.x",
+        "y_key": "editor.inspector.panel.y",
         "w": 308,
         "h": 500,
+        "window": {
+          "drag_handle": "ui.editor_shell.left_inspector.header",
+          "dock_key": "editor.inspector.panel.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "left",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 120,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.open", "op": "==", "value": true, "default": true },
         "children": [
           {
             "id": "ui.editor_shell.left_inspector.header",
@@ -1321,12 +1354,14 @@
             "y": 8,
             "w": 292,
             "h": 34,
+            "interactive": true,
             "layer": 124,
             "children": [
-              { "id": "ui.editor_shell.left_inspector.title", "type": "label", "x": 14, "y": 6, "w": 120, "h": 20, "text": "Inspector" },
+              { "id": "ui.editor_shell.left_inspector.title", "type": "label", "x": 14, "y": 6, "w": 96, "h": 20, "text": "Inspector" },
+              { "id": "ui.editor_shell.left_inspector.drag_hint", "type": "label", "x": 118, "y": 8, "w": 44, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 124 },
               { "id": "ui.editor_shell.left_inspector.scroll.up", "type": "button", "x": 184, "y": 5, "w": 24, "h": 24, "text": "^", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.up" },
               { "id": "ui.editor_shell.left_inspector.scroll.down", "type": "button", "x": 212, "y": 5, "w": 24, "h": 24, "text": "v", "text_scale": 0.42, "interactive": true, "action": "editor.inspector.scroll.down" },
-              { "id": "ui.editor_shell.left_inspector.toggle", "type": "button", "x": 242, "y": 5, "w": 42, "h": 24, "text": "hide", "text_scale": 0.38, "interactive": true, "action": "editor.inspector.toggle" }
+              { "id": "ui.editor_shell.left_inspector.close", "type": "button", "x": 242, "y": 5, "w": 42, "h": 24, "text": "close", "text_scale": 0.32, "interactive": true, "action": "editor.inspector.close" }
             ]
           },
           {
@@ -5825,36 +5860,28 @@
         ]
       },
       {
-        "id": "ui.editor_shell.left_inspector.collapsed",
-        "type": "button",
-        "x": 12,
-        "y": 92,
-        "w": 102,
-        "h": 32,
-        "layer": 120,
-        "text": "Inspector",
-        "text_scale": 0.42,
-        "interactive": true,
-        "action": "editor.inspector.toggle",
-        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false }
-      },
-      {
         "id": "ui.editor_shell.texture_viewer.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.texture.viewer.x",
+        "y_key": "editor.texture.viewer.y",
         "w": 238,
         "h": 520,
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
-          ]
+        "window": {
+          "drag_handle": "ui.editor_shell.texture_viewer.header",
+          "dock_key": "editor.texture.viewer.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
+        "interactive": true,
+        "layer": 120,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
         "children": [
           {
             "id": "ui.editor_shell.texture_viewer.header",
@@ -5863,9 +5890,11 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Textures" },
+              { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 64, "h": 20, "text": "Textures", "text_scale": 0.40 },
+              { "id": "ui.editor_shell.texture_viewer.drag_hint", "type": "label", "x": 78, "y": 8, "w": 34, "h": 16, "text": "drag", "text_scale": 0.24, "layer": 121 },
               {
                 "id": "ui.editor_shell.texture_viewer.refresh.button",
                 "type": "button",
@@ -5879,16 +5908,16 @@
                 "action": "editor.texture.refresh"
               },
               {
-                "id": "ui.editor_shell.texture_viewer.collapse.button",
+                "id": "ui.editor_shell.texture_viewer.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.texture.viewer.toggle"
+                "action": "editor.texture.viewer.close"
               }
             ]
           },
@@ -6004,41 +6033,31 @@
         ]
       },
       {
-        "id": "ui.editor_shell.texture_viewer.collapsed",
-        "type": "button",
-        "anchor_x": "right",
-        "x": 12,
-        "y": 92,
-        "w": 152,
-        "h": 32,
-        "text": "Textures",
-        "text_scale": 0.48,
-        "interactive": true,
-        "action": "editor.texture.viewer.toggle",
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
         "id": "ui.editor_shell.skybox_panel.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.sky.panel.x",
+        "y_key": "editor.sky.panel.y",
         "w": 238,
         "h": 520,
+        "window": {
+          "drag_handle": "ui.editor_shell.skybox_panel.header",
+          "dock_key": "editor.sky.panel.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
+        },
+        "interactive": true,
         "layer": 140,
         "visible_if": {
           "type": "all",
           "conditions": [
             { "type": "scene_state.compare", "key": "editor.sky.panel.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.sky.panel.collapsed", "op": "==", "value": false, "default": false },
             { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": false, "default": false },
             { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": false, "default": false }
           ]
@@ -6051,9 +6070,11 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 141,
             "children": [
-              { "id": "ui.editor_shell.skybox_panel.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Skybox" },
+              { "id": "ui.editor_shell.skybox_panel.title", "type": "label", "x": 12, "y": 6, "w": 64, "h": 20, "text": "Skybox", "text_scale": 0.40 },
+              { "id": "ui.editor_shell.skybox_panel.drag_hint", "type": "label", "x": 78, "y": 8, "w": 34, "h": 16, "text": "drag", "text_scale": 0.24, "layer": 141 },
               {
                 "id": "ui.editor_shell.skybox_panel.refresh.button",
                 "type": "button",
@@ -6067,16 +6088,16 @@
                 "action": "editor.sky.refresh"
               },
               {
-                "id": "ui.editor_shell.skybox_panel.collapse.button",
+                "id": "ui.editor_shell.skybox_panel.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.sky.panel.toggle"
+                "action": "editor.sky.panel.close"
               }
             ]
           },
@@ -6130,19 +6151,25 @@
         "id": "ui.editor_shell.actor_viewer.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 1030,
         "y": 92,
+        "x_key": "editor.actor.viewer.x",
+        "y_key": "editor.actor.viewer.y",
         "w": 238,
         "h": 520,
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": false, "default": false }
-          ]
+        "window": {
+          "drag_handle": "ui.editor_shell.actor_viewer.header",
+          "dock_key": "editor.actor.viewer.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
+        "interactive": true,
+        "layer": 120,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
         "children": [
           {
             "id": "ui.editor_shell.actor_viewer.header",
@@ -6151,9 +6178,11 @@
             "y": 8,
             "w": 222,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.actor_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Things" },
+              { "id": "ui.editor_shell.actor_viewer.title", "type": "label", "x": 12, "y": 6, "w": 64, "h": 20, "text": "Things", "text_scale": 0.40 },
+              { "id": "ui.editor_shell.actor_viewer.drag_hint", "type": "label", "x": 78, "y": 8, "w": 34, "h": 16, "text": "drag", "text_scale": 0.24, "layer": 121 },
               {
                 "id": "ui.editor_shell.actor_viewer.refresh.button",
                 "type": "button",
@@ -6167,16 +6196,16 @@
                 "action": "editor.actor.refresh"
               },
               {
-                "id": "ui.editor_shell.actor_viewer.collapse.button",
+                "id": "ui.editor_shell.actor_viewer.close.button",
                 "type": "button",
                 "x": 168,
                 "y": 4,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.42,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
-                "action": "editor.actor.viewer.toggle"
+                "action": "editor.actor.viewer.close"
               }
             ]
           },
@@ -6805,35 +6834,25 @@
         ]
       },
       {
-        "id": "ui.editor_shell.actor_viewer.collapsed",
-        "type": "button",
-        "anchor_x": "right",
-        "x": 12,
-        "y": 92,
-        "w": 152,
-        "h": 32,
-        "text": "Things",
-        "text_scale": 0.48,
-        "interactive": true,
-        "action": "editor.actor.viewer.toggle",
-        "layer": 120,
-        "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.active", "op": "==", "value": true, "default": false },
-            { "type": "scene_state.compare", "key": "editor.actor.viewer.collapsed", "op": "==", "value": true, "default": false }
-          ]
-        }
-      },
-      {
         "id": "ui.editor_shell.global_panel.panel",
         "type": "panel",
         "layout": "none",
-        "anchor_x": "right",
-        "x": 12,
+        "x": 930,
         "y": 92,
+        "x_key": "editor.global.panel.x",
+        "y_key": "editor.global.panel.y",
         "w": 338,
         "h": 430,
+        "window": {
+          "drag_handle": "ui.editor_shell.global_panel.header",
+          "dock_key": "editor.global.panel.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "right",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "snap_distance": 48,
+          "drag_threshold": 4
+        },
         "clip_children": true,
         "interactive": true,
         "layer": 120,
@@ -6849,9 +6868,11 @@
             "y": 8,
             "w": 322,
             "h": 34,
+            "interactive": true,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.global_panel.title", "type": "label", "x": 10, "y": 6, "w": 180, "h": 20, "text": "Global", "text_scale": 0.46, "layer": 122 },
+              { "id": "ui.editor_shell.global_panel.title", "type": "label", "x": 10, "y": 6, "w": 86, "h": 20, "text": "Global", "text_scale": 0.46, "layer": 122 },
+              { "id": "ui.editor_shell.global_panel.drag_hint", "type": "label", "x": 102, "y": 8, "w": 44, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 122 },
               {
                 "id": "ui.editor_shell.global_panel.close.button",
                 "type": "button",
@@ -6859,8 +6880,8 @@
                 "y": 5,
                 "w": 46,
                 "h": 24,
-                "text": "hide",
-                "text_scale": 0.38,
+                "text": "close",
+                "text_scale": 0.34,
                 "interactive": true,
                 "action": "editor.global.close",
                 "layer": 122
@@ -7394,35 +7415,211 @@
           }
         ]
       },
-      { "id": "ui.editor_shell.console.panel", "type": "panel", "x": 0, "anchor_y": "bottom",
-        "y": 0, "w": "fill", "h": 120, "clip_children": true, "interactive": true, "layer": 120, "children": [
-        { "id": "ui.editor_shell.console.console.tab", "type": "button", "x": 16, "y": 8, "w": 104, "h": 28, "layer": 121, "selected": true, "children": [
-          {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
+      { "id": "ui.editor_shell.console.panel", "type": "panel",
+        "x": 160, "x_key": "editor.console.x", "y": 520, "y_key": "editor.console.y",
+        "w": 960, "h": 120, "h_key": "editor.console.height",
+        "window": {
+          "drag_handle": "ui.editor_shell.console.header",
+          "dock_key": "editor.console.dock",
+          "front_key": "editor.ui.window.front",
+          "default_dock": "bottom",
+          "dock_top": 80,
+          "dock_gap": 4,
+          "dock_width": 360,
+          "snap_distance": 48,
+          "drag_threshold": 4,
+          "resize_handle": "ui.editor_shell.console.resize_handle",
+          "resize_edge": "top",
+          "height_key": "editor.console.height",
+          "resolved_height_key": "editor.console.visible_height",
+          "min_height": 72,
+          "max_height": 360
+        },
+        "visible_if": { "type": "scene_state.compare", "key": "editor.console.open", "op": "==", "value": true, "default": true },
+        "clip_children": true, "interactive": true, "layer": 120, "children": [
+        { "id": "ui.editor_shell.console.resize_handle", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": 6, "interactive": true, "layer": 123, "fill_color": [72, 84, 104, 255] },
+        { "id": "ui.editor_shell.console.header", "type": "panel", "x": 8, "y": 8, "w": "fill", "h": 28, "interactive": true, "layer": 121, "children": [
+          { "id": "ui.editor_shell.console.console.tab", "type": "panel", "x": 8, "y": 0, "w": 104, "h": 28, "layer": 121, "selected": true, "children": [
+            {"id": "ui.editor_shell.console.console.label", "type": "label", "w": "fill", "h": "fill", "text": "Console"}
+          ] },
+          { "id": "ui.editor_shell.console.drag_hint", "type": "label", "x": 120, "y": 6, "w": 44, "h": 16, "text": "drag", "text_scale": 0.26, "layer": 121 }
         ] },
-        { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": 1254, "h": 78, "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
-          { "id": "ui.editor_shell.console.line0.row", "type": "panel", "w": 1238, "h": 14, "children": [
+        { "id": "ui.editor_shell.console.close", "type": "button", "anchor_x": "right", "x": 16, "y": 8, "w": 52, "h": 28, "text": "close", "text_scale": 0.30, "interactive": true, "action": "editor.console.close", "layer": 122 },
+        { "id": "ui.editor_shell.console.line.list", "type": "column", "layout": "column", "x": 18, "y": 42, "w": "fill", "h": "fill", "gap": 2, "scroll_key": "editor.console.scroll", "scroll_count_key": "editor.console.count", "scroll_step": 3, "scroll_signal": "signal.editor.console.scroll.sync", "children": [
+          { "id": "ui.editor_shell.console.line0.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line0.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line0.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line0", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "> %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line0", "default": "Editor ready"}]}
+            {"id": "ui.editor_shell.console.line0", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "> %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line0", "default": "Editor ready"}]}
           ] },
-          { "id": "ui.editor_shell.console.line1.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line1.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line1.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line1.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line1", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line1", "default": ""}]}
+            {"id": "ui.editor_shell.console.line1", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line1", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line2.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line2.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line2.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line2.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line2", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line2", "default": ""}]}
+            {"id": "ui.editor_shell.console.line2", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line2", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line3.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line3.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line3.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line3.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line3", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line3", "default": ""}]}
+            {"id": "ui.editor_shell.console.line3", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line3", "default": ""}]}
           ] },
-          { "id": "ui.editor_shell.console.line4.row", "type": "panel", "w": 1238, "h": 14, "children": [
+          { "id": "ui.editor_shell.console.line4.row", "type": "panel", "w": "fill", "h": 14, "children": [
             {"id": "ui.editor_shell.console.line4.selection", "type": "panel", "x": 0, "y": 0, "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line4.selected", "op": "==", "value": true, "default": false}},
-            {"id": "ui.editor_shell.console.line4", "type": "label", "x": 12, "y": 0, "w": 1214, "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line4", "default": ""}]}
+            {"id": "ui.editor_shell.console.line4", "type": "label", "x": 12, "y": 0, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line4", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line5.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 136.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line5.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line5.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line5", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line5", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line6.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 152.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line6.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line6.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line6", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line6", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line7.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 168.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line7.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line7.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line7", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line7", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line8.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 184.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line8.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line8.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line8", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line8", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line9.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 200.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line9.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line9.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line9", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line9", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line10.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 216.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line10.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line10.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line10", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line10", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line11.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 232.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line11.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line11.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line11", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line11", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line12.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 248.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line12.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line12.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line12", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line12", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line13.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 264.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line13.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line13.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line13", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line13", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line14.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 280.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line14.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line14.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line14", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line14", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line15.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 296.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line15.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line15.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line15", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line15", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line16.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 312.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line16.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line16.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line16", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line16", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line17.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 328.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line17.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line17.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line17", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line17", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line18.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 344.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line18.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line18.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line18", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line18", "default": ""}]}
+          ] },
+          { "id": "ui.editor_shell.console.line19.row", "type": "panel", "w": "fill", "h": 14, "visible_if": {"type": "scene_state.compare", "key": "editor.console.visible_height", "op": ">=", "value": 360.0, "default": 120.0}, "children": [
+            {"id": "ui.editor_shell.console.line19.selection", "type": "panel", "w": "fill", "h": "fill", "color": [70, 120, 220, 90], "visible_if": {"type": "scene_state.compare", "key": "editor.console.line19.selected", "op": "==", "value": true, "default": false}},
+            {"id": "ui.editor_shell.console.line19", "type": "label", "x": 12, "w": "fill", "h": "fill", "format": "  %s", "text_scale": 0.4, "align": "left", "bindings": [{"type": "scene_state", "key": "editor.console.line19", "default": ""}]}
           ] }
         ] }
       ] },
-{
+      {
+        "id": "ui.editor_shell.window_drag.target.left",
+        "type": "panel",
+        "x": 0,
+        "y": 80,
+        "y_key": "editor.ui.window.pointer.canvas.y",
+        "w": 12,
+        "h": 520,
+        "h_key": "editor.ui.window.pointer.canvas.h",
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.target.right",
+        "type": "panel",
+        "anchor_x": "right",
+        "x": 0,
+        "y": 80,
+        "y_key": "editor.ui.window.pointer.canvas.y",
+        "w": 12,
+        "h": 520,
+        "h_key": "editor.ui.window.pointer.canvas.h",
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.target.bottom",
+        "type": "panel",
+        "anchor_y": "bottom",
+        "x": 0,
+        "y": 0,
+        "w": "fill",
+        "h": 12,
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.floating_preview",
+        "type": "panel",
+        "x": 0,
+        "y": 0,
+        "x_key": "editor.ui.window.pointer.preview.x",
+        "y_key": "editor.ui.window.pointer.preview.y",
+        "w": 1,
+        "h": 1,
+        "w_key": "editor.ui.window.pointer.preview.w",
+        "h_key": "editor.ui.window.pointer.preview.h",
+        "fill_color": [0, 0, 0, 0],
+        "border_color": [126, 206, 255, 230],
+        "border_thickness": 2,
+        "layer": 891,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" },
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.preview", "op": "==", "value": "none", "default": "none" }
+          ]
+        }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.dock_preview",
+        "type": "panel",
+        "x": 0,
+        "y": 80,
+        "x_key": "editor.ui.window.pointer.preview.x",
+        "y_key": "editor.ui.window.pointer.preview.y",
+        "w": 1,
+        "h": 520,
+        "w_key": "editor.ui.window.pointer.preview.w",
+        "h_key": "editor.ui.window.pointer.preview.h",
+        "fill_color": [56, 142, 220, 54],
+        "border_color": [126, 206, 255, 245],
+        "border_thickness": 2,
+        "layer": 892,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" },
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.preview", "op": "!=", "value": "none", "default": "none" }
+          ]
+        }
+      },
+      {
         "id": "ui.editor_shell.handoff.panel",
         "type": "panel",
         "x": 18,

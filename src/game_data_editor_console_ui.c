@@ -11,8 +11,15 @@
 #include <SDL3/SDL_stdinc.h>
 
 #define EDITOR_CONSOLE_HISTORY_COUNT 64
-#define EDITOR_CONSOLE_VISIBLE_COUNT 5
 #define EDITOR_CONSOLE_COPY_BUFFER_SIZE 32768
+
+int editor_console_visible_count(const slayer3d_properties *scene_state)
+{
+    const float height = scene_state != NULL
+                             ? slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 120.0f)
+                             : 120.0f;
+    return SDL_clamp((int)SDL_floorf((height - 40.0f) / 16.0f), 1, EDITOR_CONSOLE_VISIBLE_MAX);
+}
 
 bool editor_set_console_scroll(slayer3d_game_data_runtime *runtime, int scroll)
 {
@@ -20,7 +27,7 @@ bool editor_set_console_scroll(slayer3d_game_data_runtime *runtime, int scroll)
         return false;
     const int count = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0), 0,
                                 EDITOR_CONSOLE_HISTORY_COUNT);
-    const int max_scroll = SDL_max(0, count - EDITOR_CONSOLE_VISIBLE_COUNT);
+    const int max_scroll = SDL_max(0, count - editor_console_visible_count(runtime->scene_state));
     scroll = SDL_clamp(scroll, 0, max_scroll);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", scroll);
     editor_refresh_console_lines(runtime);
@@ -58,7 +65,7 @@ static int editor_console_visible_line_at(const slayer3d_ui_layout_model *layout
     if (layout == NULL)
         return -1;
 
-    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_COUNT; ++i)
+    for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_MAX; ++i)
     {
         char row_id[64];
         SDL_snprintf(row_id, sizeof(row_id), "ui.editor_shell.console.line%d.row", i);
@@ -81,7 +88,7 @@ static int editor_console_history_index_at(const slayer3d_game_data_runtime *run
     const int count = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0), 0,
                                 EDITOR_CONSOLE_HISTORY_COUNT);
     const int scroll = SDL_clamp(slayer3d_properties_get_int(runtime->scene_state, "editor.console.scroll", 0), 0,
-                                 SDL_max(0, count - EDITOR_CONSOLE_VISIBLE_COUNT));
+                                 SDL_max(0, count - editor_console_visible_count(runtime->scene_state)));
     const int history_index = scroll + line;
     return history_index >= 0 && history_index < count ? history_index : -1;
 }

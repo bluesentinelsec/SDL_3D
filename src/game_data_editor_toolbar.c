@@ -106,6 +106,390 @@ static bool editor_hit_is_synthesized_scrollbar(const slayer3d_ui_layout_hit_reg
     return id_len >= suffix_len && SDL_strcmp(hit->id + id_len - suffix_len, SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX) == 0;
 }
 
+typedef struct editor_ui_window_config
+{
+    const char *id;
+    const char *x_key;
+    const char *y_key;
+    const char *height_key;
+    const char *resolved_height_key;
+    const char *dock_key;
+    const char *front_key;
+    const char *drag_handle;
+    const char *resize_handle;
+    const char *resize_edge;
+    float floating_width;
+    float floating_height;
+    float dock_top;
+    float dock_bottom;
+    float snap_distance;
+    float drag_threshold;
+    float titlebar_visible_width;
+    float min_height;
+    float max_height;
+} editor_ui_window_config;
+
+static yyjson_val *editor_find_ui_widget_node(yyjson_val *node, const char *id)
+{
+    if (!yyjson_is_obj(node) || id == NULL)
+        return NULL;
+    const char *node_id = json_string(node, "id", NULL);
+    if (node_id != NULL && SDL_strcmp(node_id, id) == 0)
+        return node;
+
+    yyjson_val *children = obj_get(node, "children");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+    {
+        yyjson_val *found = editor_find_ui_widget_node(yyjson_arr_get(children, i), id);
+        if (found != NULL)
+            return found;
+    }
+    return NULL;
+}
+
+static yyjson_val *editor_find_active_ui_widget(const slayer3d_game_data_runtime *runtime, const char *id)
+{
+    yyjson_val *roots[2] = {runtime_root(runtime), NULL};
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    roots[1] = scene != NULL ? scene->root : NULL;
+
+    for (size_t root_index = 0; root_index < SDL_arraysize(roots); ++root_index)
+    {
+        yyjson_val *widgets = obj_get(obj_get(roots[root_index], "ui"), "widgets");
+        for (size_t i = 0; yyjson_is_arr(widgets) && i < yyjson_arr_size(widgets); ++i)
+        {
+            yyjson_val *found = editor_find_ui_widget_node(yyjson_arr_get(widgets, i), id);
+            if (found != NULL)
+                return found;
+        }
+    }
+    return NULL;
+}
+
+static bool editor_ui_window_config_for_id(const slayer3d_game_data_runtime *runtime, const char *id,
+                                           editor_ui_window_config *out_config)
+{
+    if (out_config == NULL)
+        return false;
+    SDL_zero(*out_config);
+    yyjson_val *node = editor_find_active_ui_widget(runtime, id);
+    yyjson_val *window = obj_get(node, "window");
+    if (!yyjson_is_obj(window))
+        return false;
+
+    out_config->id = json_string(node, "id", NULL);
+    out_config->x_key = json_string(node, "x_key", NULL);
+    out_config->y_key = json_string(node, "y_key", NULL);
+    out_config->height_key = json_string(window, "height_key", NULL);
+    out_config->resolved_height_key = json_string(window, "resolved_height_key", NULL);
+    out_config->dock_key = json_string(window, "dock_key", NULL);
+    out_config->front_key = json_string(window, "front_key", NULL);
+    out_config->drag_handle = json_string(window, "drag_handle", NULL);
+    out_config->resize_handle = json_string(window, "resize_handle", NULL);
+    out_config->resize_edge = json_string(window, "resize_edge", NULL);
+    out_config->floating_width = json_float(node, "w", 0.0f);
+    out_config->floating_height = json_float(node, "h", 0.0f);
+    const char *width_key = json_string(node, "w_key", NULL);
+    const char *height_key = json_string(node, "h_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && width_key != NULL)
+    {
+        out_config->floating_width =
+            slayer3d_properties_get_float(runtime->scene_state, width_key, out_config->floating_width);
+    }
+    if (runtime != NULL && runtime->scene_state != NULL && height_key != NULL)
+    {
+        out_config->floating_height =
+            slayer3d_properties_get_float(runtime->scene_state, height_key, out_config->floating_height);
+    }
+    out_config->dock_top = json_float(window, "dock_top", 0.0f);
+    out_config->dock_bottom = json_float(window, "dock_bottom", 0.0f);
+    const char *dock_bottom_key = json_string(window, "dock_bottom_key", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL && dock_bottom_key != NULL)
+    {
+        out_config->dock_bottom =
+            slayer3d_properties_get_float(runtime->scene_state, dock_bottom_key, out_config->dock_bottom);
+    }
+    out_config->snap_distance = json_float(window, "snap_distance", 48.0f);
+    out_config->drag_threshold = json_float(window, "drag_threshold", 4.0f);
+    out_config->titlebar_visible_width = json_float(window, "titlebar_visible_width", 48.0f);
+    out_config->min_height = json_float(window, "min_height", 72.0f);
+    out_config->max_height = json_float(window, "max_height", 360.0f);
+    return out_config->id != NULL;
+}
+
+static const slayer3d_ui_layout_resolved_node *editor_resolved_window_for_hit(const slayer3d_ui_layout_model *layout,
+                                                                              const slayer3d_ui_layout_hit_region *hit)
+{
+    if (layout == NULL || hit == NULL)
+        return NULL;
+    const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_find_resolved_node(layout, hit->owner_id);
+    while (node != NULL)
+    {
+        if (node->window)
+            return node;
+        node = node->parent_index >= 0 ? slayer3d_ui_layout_resolved_node_at(layout, node->parent_index) : NULL;
+    }
+    return NULL;
+}
+
+static void editor_end_ui_window_pointer_capture(slayer3d_properties *scene_state)
+{
+    if (scene_state == NULL)
+        return;
+    slayer3d_properties_set_string(scene_state, "editor.ui.window.pointer.id", "");
+    slayer3d_properties_set_string(scene_state, "editor.ui.window.pointer.mode", "");
+    slayer3d_properties_set_string(scene_state, "editor.ui.window.pointer.preview", "none");
+}
+
+static const char *editor_ui_window_dock_preview(const editor_ui_window_config *config, float mouse_x, float mouse_y,
+                                                 float viewport_w, float viewport_h)
+{
+    if (config == NULL)
+        return "none";
+
+    const float left_distance = mouse_x;
+    const float right_distance = viewport_w - mouse_x;
+    const float bottom_distance = viewport_h - mouse_y;
+    float closest = config->snap_distance + 1.0f;
+    const char *preview = "none";
+    if (left_distance <= config->snap_distance && left_distance < closest)
+    {
+        closest = left_distance;
+        preview = "left";
+    }
+    if (right_distance <= config->snap_distance && right_distance < closest)
+    {
+        closest = right_distance;
+        preview = "right";
+    }
+    if (bottom_distance <= config->snap_distance && bottom_distance < closest)
+        preview = "bottom";
+    return preview;
+}
+
+static slayer3d_ui_layout_dock editor_ui_window_dock_from_string(const char *dock)
+{
+    if (dock != NULL && SDL_strcmp(dock, "left") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    if (dock != NULL && SDL_strcmp(dock, "right") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    if (dock != NULL && SDL_strcmp(dock, "bottom") == 0)
+        return SLAYER3D_UI_LAYOUT_DOCK_BOTTOM;
+    return SLAYER3D_UI_LAYOUT_DOCK_NONE;
+}
+
+static void editor_update_ui_window_preview(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                            const editor_ui_window_config *config, float floating_x, float floating_y,
+                                            float floating_w, float floating_h, float mouse_x, float mouse_y,
+                                            float viewport_w, float viewport_h)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || config == NULL)
+        return;
+
+    slayer3d_properties *state = runtime->scene_state;
+    const char *preview = editor_ui_window_dock_preview(config, mouse_x, mouse_y, viewport_w, viewport_h);
+    slayer3d_ui_layout_rect preview_rect = {floating_x, floating_y, floating_w, floating_h};
+    const slayer3d_ui_layout_dock dock = editor_ui_window_dock_from_string(preview);
+    if (dock != SLAYER3D_UI_LAYOUT_DOCK_NONE)
+    {
+        (void)slayer3d_ui_layout_calculate_window_dock_rect(layout, config->id, dock, viewport_w, viewport_h,
+                                                            &preview_rect);
+    }
+
+    slayer3d_properties_set_string(state, "editor.ui.window.pointer.preview", preview);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.preview.x", preview_rect.x);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.preview.y", preview_rect.y);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.preview.w", preview_rect.w);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.preview.h", preview_rect.h);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.canvas.x", 0.0f);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.canvas.y", config->dock_top);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.canvas.w", viewport_w);
+    slayer3d_properties_set_float(state, "editor.ui.window.pointer.canvas.h",
+                                  SDL_max(viewport_h - config->dock_top - config->dock_bottom, 0.0f));
+}
+
+static void editor_clamp_ui_window_to_titlebar(const slayer3d_ui_layout_model *layout,
+                                               const editor_ui_window_config *config,
+                                               const slayer3d_ui_layout_resolved_node *window, float viewport_w,
+                                               float viewport_h, float *in_out_x, float *in_out_y)
+{
+    if (layout == NULL || config == NULL || window == NULL || in_out_x == NULL || in_out_y == NULL)
+        return;
+
+    const slayer3d_ui_layout_resolved_node *titlebar =
+        config->drag_handle != NULL ? slayer3d_ui_layout_find_resolved_node(layout, config->drag_handle) : NULL;
+    if (titlebar == NULL)
+        return;
+
+    const float local_x = titlebar->rect.x - window->rect.x;
+    const float local_y = titlebar->rect.y - window->rect.y;
+    const float visible_width = SDL_min(config->titlebar_visible_width, titlebar->rect.w);
+    const float min_x = visible_width - local_x - titlebar->rect.w;
+    const float max_x = viewport_w - visible_width - local_x;
+    const float min_y = -local_y;
+    const float max_y = viewport_h - local_y - titlebar->rect.h;
+    *in_out_x = editor_clamp_float(*in_out_x, min_x, SDL_max(max_x, min_x));
+    *in_out_y = editor_clamp_float(*in_out_y, min_y, SDL_max(max_y, min_y));
+}
+
+static void editor_sync_ui_window_resolved_state(slayer3d_game_data_runtime *runtime,
+                                                 const slayer3d_ui_layout_model *layout)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
+        return;
+
+    bool refresh_console = false;
+    const int node_count = slayer3d_ui_layout_node_count(layout);
+    for (int i = 0; i < node_count; ++i)
+    {
+        const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_resolved_node_at(layout, i);
+        if (node == NULL || !node->window)
+            continue;
+        editor_ui_window_config config;
+        if (!editor_ui_window_config_for_id(runtime, node->id, &config) || config.resolved_height_key == NULL)
+            continue;
+        const float prior =
+            slayer3d_properties_get_float(runtime->scene_state, config.resolved_height_key, node->rect.h);
+        if (SDL_fabsf(prior - node->rect.h) < 0.01f)
+            continue;
+        slayer3d_properties_set_float(runtime->scene_state, config.resolved_height_key, node->rect.h);
+        refresh_console =
+            refresh_console || SDL_strcmp(config.resolved_height_key, "editor.console.visible_height") == 0;
+    }
+    if (refresh_console)
+        editor_refresh_console_lines(runtime);
+}
+
+/*
+ * Root windows own their pointer capture. The layout resolves placement and
+ * stacking; this controller only writes the authored geometry and dock keys.
+ */
+static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_model *layout,
+                                            const slayer3d_ui_layout_hit_region *hit, float mouse_x, float mouse_y,
+                                            bool clicked, bool left_down, bool released)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || layout == NULL)
+        return false;
+
+    slayer3d_properties *state = runtime->scene_state;
+    const char *active_id = slayer3d_properties_get_string(state, "editor.ui.window.pointer.id", "");
+    const char *mode = slayer3d_properties_get_string(state, "editor.ui.window.pointer.mode", "");
+    if (active_id[0] != '\0')
+    {
+        editor_ui_window_config config;
+        const slayer3d_ui_layout_resolved_node *window = slayer3d_ui_layout_find_resolved_node(layout, active_id);
+        if (!editor_ui_window_config_for_id(runtime, active_id, &config) || window == NULL)
+        {
+            editor_end_ui_window_pointer_capture(state);
+            return true;
+        }
+
+        if (left_down)
+        {
+            bool dragging = SDL_strcmp(mode, "drag") == 0;
+            if (SDL_strcmp(mode, "drag_pending") == 0)
+            {
+                const float start_x = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_x", mouse_x);
+                const float start_y = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_y", mouse_y);
+                const float dx = mouse_x - start_x;
+                const float dy = mouse_y - start_y;
+                if (dx * dx + dy * dy < config.drag_threshold * config.drag_threshold)
+                    return true;
+                slayer3d_properties_set_string(state, "editor.ui.window.pointer.mode", "drag");
+                if (config.dock_key != NULL)
+                    slayer3d_properties_set_string(state, config.dock_key, "none");
+                dragging = true;
+            }
+
+            if (dragging && config.x_key != NULL && config.y_key != NULL)
+            {
+                const float start_x = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_x", mouse_x);
+                const float start_y = slayer3d_properties_get_float(state, "editor.ui.window.pointer.start_y", mouse_y);
+                const float origin_x =
+                    slayer3d_properties_get_float(state, "editor.ui.window.pointer.origin_x", window->rect.x);
+                const float origin_y =
+                    slayer3d_properties_get_float(state, "editor.ui.window.pointer.origin_y", window->rect.y);
+                float viewport_w = 0.0f;
+                float viewport_h = 0.0f;
+                slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+                const float floating_w = config.floating_width > 0.0f ? config.floating_width : window->rect.w;
+                const float floating_h = config.floating_height > 0.0f ? config.floating_height : window->rect.h;
+                const float x = origin_x + mouse_x - start_x;
+                const float y = origin_y + mouse_y - start_y;
+                slayer3d_properties_set_float(state, config.x_key, x);
+                slayer3d_properties_set_float(state, config.y_key, y);
+                editor_update_ui_window_preview(runtime, layout, &config, x, y, floating_w, floating_h, mouse_x,
+                                                mouse_y, viewport_w, viewport_h);
+            }
+            else if (SDL_strcmp(mode, "resize") == 0 && config.height_key != NULL && config.resize_edge != NULL &&
+                     SDL_strcmp(config.resize_edge, "top") == 0)
+            {
+                const float bottom = window->rect.y + window->rect.h;
+                const float height = editor_clamp_float(bottom - mouse_y, config.min_height, config.max_height);
+                slayer3d_properties_set_float(state, config.height_key, height);
+                if (window->dock == SLAYER3D_UI_LAYOUT_DOCK_NONE && config.y_key != NULL)
+                    slayer3d_properties_set_float(state, config.y_key, bottom - height);
+                if (config.resolved_height_key != NULL)
+                    slayer3d_properties_set_float(state, config.resolved_height_key, height);
+                editor_refresh_console_lines(runtime);
+            }
+            return true;
+        }
+
+        if (released && SDL_strcmp(mode, "drag") == 0)
+        {
+            const char *preview = slayer3d_properties_get_string(state, "editor.ui.window.pointer.preview", "none");
+            const char *dock = SDL_strcmp(preview, "left") == 0     ? "left"
+                               : SDL_strcmp(preview, "right") == 0  ? "right"
+                               : SDL_strcmp(preview, "bottom") == 0 ? "bottom"
+                                                                    : "none";
+            if (config.dock_key != NULL)
+                slayer3d_properties_set_string(state, config.dock_key, dock);
+            if (SDL_strcmp(dock, "none") == 0 && config.x_key != NULL && config.y_key != NULL)
+            {
+                float viewport_w = 0.0f;
+                float viewport_h = 0.0f;
+                float x = slayer3d_properties_get_float(state, config.x_key, window->rect.x);
+                float y = slayer3d_properties_get_float(state, config.y_key, window->rect.y);
+                slayer3d_game_data_ui_viewport(runtime, &viewport_w, &viewport_h);
+                editor_clamp_ui_window_to_titlebar(layout, &config, window, viewport_w, viewport_h, &x, &y);
+                slayer3d_properties_set_float(state, config.x_key, x);
+                slayer3d_properties_set_float(state, config.y_key, y);
+            }
+        }
+        editor_end_ui_window_pointer_capture(state);
+        return true;
+    }
+
+    const slayer3d_ui_layout_resolved_node *window = editor_resolved_window_for_hit(layout, hit);
+    if (!clicked || window == NULL)
+        return false;
+
+    editor_ui_window_config config;
+    if (!editor_ui_window_config_for_id(runtime, window->id, &config))
+        return false;
+    if (config.front_key != NULL)
+        slayer3d_properties_set_string(state, config.front_key, window->id);
+    const bool starts_drag = config.drag_handle != NULL && SDL_strcmp(hit->id, config.drag_handle) == 0;
+    const bool starts_resize = config.resize_handle != NULL && SDL_strcmp(hit->id, config.resize_handle) == 0 &&
+                               window->dock != SLAYER3D_UI_LAYOUT_DOCK_LEFT &&
+                               window->dock != SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    if (!starts_drag && !starts_resize)
+        return false;
+
+    slayer3d_properties_set_string(state, "editor.ui.window.pointer.id", window->id);
+    slayer3d_properties_set_string(state, "editor.ui.window.pointer.mode", starts_drag ? "drag_pending" : "resize");
+    if (starts_drag)
+    {
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.start_x", mouse_x);
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.start_y", mouse_y);
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.origin_x", window->rect.x);
+        slayer3d_properties_set_float(state, "editor.ui.window.pointer.origin_y", window->rect.y);
+        slayer3d_properties_set_string(state, "editor.ui.window.pointer.preview", "none");
+    }
+    return true;
+}
+
 static bool editor_hit_is_property_control(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.property.") ||
@@ -179,53 +563,6 @@ float editor_clamp_float(float value, float min_value, float max_value)
     if (value > max_value)
         return max_value;
     return value;
-}
-
-static bool editor_screen_rect_contains(float x, float y, float w, float h, float mouse_x, float mouse_y)
-{
-    return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
-}
-
-static void editor_set_liquid_panel_position(slayer3d_game_data_runtime *runtime, float x, float y)
-{
-    if (runtime == NULL || runtime->scene_state == NULL)
-        return;
-    slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.x", editor_clamp_float(x, 0.0f, 1048.0f));
-    slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.y", editor_clamp_float(y, 80.0f, 520.0f));
-}
-
-static bool editor_handle_liquid_panel_drag(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
-                                            bool clicked, bool left_down, bool released)
-{
-    if (runtime == NULL || runtime->scene_state == NULL ||
-        !slayer3d_properties_get_bool(runtime->scene_state, "editor.liquid.panel.open", false))
-    {
-        return false;
-    }
-
-    if (released || !left_down)
-        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.drag.active", false);
-
-    const float panel_x = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.x", 870.0f);
-    const float panel_y = slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.y", 112.0f);
-    if (clicked && editor_screen_rect_contains(panel_x, panel_y, 150.0f, 24.0f, mouse_x, mouse_y))
-    {
-        slayer3d_properties_set_bool(runtime->scene_state, "editor.liquid.panel.drag.active", true);
-        slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.drag.offset_x", mouse_x - panel_x);
-        slayer3d_properties_set_float(runtime->scene_state, "editor.liquid.panel.drag.offset_y", mouse_y - panel_y);
-        return true;
-    }
-
-    if (left_down && slayer3d_properties_get_bool(runtime->scene_state, "editor.liquid.panel.drag.active", false))
-    {
-        const float offset_x =
-            slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.drag.offset_x", 0.0f);
-        const float offset_y =
-            slayer3d_properties_get_float(runtime->scene_state, "editor.liquid.panel.drag.offset_y", 0.0f);
-        editor_set_liquid_panel_position(runtime, mouse_x - offset_x, mouse_y - offset_y);
-        return true;
-    }
-    return false;
 }
 
 /*
@@ -486,7 +823,7 @@ static const char *const editor_signal_action_names[] = {
 static const char *const editor_signal_action_prefixes[] = {
     "editor.texture.",   "editor.palette.",  "editor.actor.",  "editor.things.",     "editor.file.",
     "editor.inspector.", "editor.property.", "editor.global.", "editor.visibility.", "editor.lock.",
-    "editor.stair.",     "editor.sky.",      "editor.liquid.",
+    "editor.stair.",     "editor.sky.",      "editor.liquid.", "editor.console.",
 };
 
 static bool editor_action_routes_to_signal(const char *action)
@@ -541,6 +878,15 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
+    editor_sync_ui_window_resolved_state(runtime, layout);
+    if (editor_handle_ui_window_pointer(runtime, layout, hit, mouse_x, mouse_y, clicked, left_down, released))
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    const bool window_event_active = editor_resolved_window_for_hit(layout, hit) != NULL;
     const bool property_focus_active = editor_property_edit_has_focus(runtime);
     const bool texture_focus_active = editor_texture_edit_has_focus(runtime);
     const bool global_focus_active = editor_global_edit_has_focus(runtime);
@@ -665,17 +1011,10 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     }
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
-    if (editor_handle_liquid_panel_drag(runtime, mouse_x, mouse_y, clicked, left_down, released))
-    {
-        if (out_consumed != NULL)
-            *out_consumed = true;
-        slayer3d_ui_layout_destroy(layout);
-        return true;
-    }
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
         editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_liquid_panel(hit) ||
         editor_hit_is_skybox_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
-        console_event_active)
+        console_event_active || window_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

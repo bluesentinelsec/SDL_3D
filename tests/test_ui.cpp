@@ -637,6 +637,155 @@ TEST(SLAYER3DUI, AnchoredNodesTrackViewportEdges)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, DockedRootWindowsStackAroundTheCanvas)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc inspector{};
+    inspector.id = "inspector";
+    inspector.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    inspector.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    inspector.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    inspector.rect = {12.0f, 92.0f, 300.0f, 500.0f};
+    inspector.window = true;
+    inspector.dock = SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    inspector.dock_top = 80.0f;
+    inspector.dock_gap = 4.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &inspector));
+
+    slayer3d_ui_layout_node_desc things = inspector;
+    things.id = "things";
+    things.rect.w = 240.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &things));
+
+    slayer3d_ui_layout_node_desc global = inspector;
+    global.id = "global";
+    global.rect.w = 200.0f;
+    global.dock = SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    global.dock_height = 90.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &global));
+
+    slayer3d_ui_layout_node_desc console = inspector;
+    console.id = "console";
+    console.rect = {160.0f, 520.0f, 960.0f, 120.0f};
+    console.dock = SLAYER3D_UI_LAYOUT_DOCK_BOTTOM;
+    console.dock_gap = 4.0f;
+    console.dock_width = 360.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &console));
+
+    slayer3d_ui_layout_node_desc timeline = console;
+    timeline.id = "timeline";
+    timeline.rect.h = 80.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &timeline));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "inspector"), 0.0f, 80.0f, 300.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "things"), 304.0f, 80.0f, 240.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "global"), 1080.0f, 80.0f, 200.0f, 436.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "console"), 0.0f, 600.0f, 1280.0f, 120.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "timeline"), 0.0f, 516.0f, 1280.0f, 80.0f);
+
+    slayer3d_ui_layout_rect preview{};
+    EXPECT_TRUE(slayer3d_ui_layout_calculate_window_dock_rect(layout, "global", SLAYER3D_UI_LAYOUT_DOCK_BOTTOM, 1280.0f,
+                                                              720.0f, &preview));
+    EXPECT_FLOAT_EQ(preview.x, 0.0f);
+    EXPECT_FLOAT_EQ(preview.y, 630.0f);
+    EXPECT_FLOAT_EQ(preview.w, 1280.0f);
+    EXPECT_FLOAT_EQ(preview.h, 90.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, FrontRootWindowRaisesItsCompleteStackingContext)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc front{};
+    front.id = "front";
+    front.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    front.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.rect = {0.0f, 0.0f, 160.0f, 120.0f};
+    front.layer = 120;
+    front.window = true;
+    front.window_front = true;
+    front.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &front));
+
+    slayer3d_ui_layout_node_desc front_child{};
+    front_child.id = "front.child";
+    front_child.parent_id = "front";
+    front_child.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    front_child.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front_child.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front_child.rect = {8.0f, 8.0f, 80.0f, 40.0f};
+    front_child.layer = 121;
+    front_child.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &front_child));
+
+    slayer3d_ui_layout_node_desc back = front;
+    back.id = "back";
+    back.window_front = false;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &back));
+
+    slayer3d_ui_layout_node_desc back_child = front_child;
+    back_child.id = "back.child";
+    back_child.parent_id = "back";
+    back_child.layer = 430;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &back_child));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved_front = slayer3d_ui_layout_find_resolved_node(layout, "front");
+    const slayer3d_ui_layout_resolved_node *resolved_front_child =
+        slayer3d_ui_layout_find_resolved_node(layout, "front.child");
+    const slayer3d_ui_layout_resolved_node *resolved_back_child =
+        slayer3d_ui_layout_find_resolved_node(layout, "back.child");
+    ASSERT_NE(resolved_front, nullptr);
+    ASSERT_NE(resolved_front_child, nullptr);
+    ASSERT_NE(resolved_back_child, nullptr);
+    EXPECT_GT(resolved_front->layer, resolved_back_child->layer);
+    EXPECT_GT(resolved_front_child->layer, resolved_front->layer);
+
+    const slayer3d_ui_layout_render_command *front_surface = find_render_command(layout, "front");
+    ASSERT_NE(front_surface, nullptr);
+    EXPECT_TRUE(front_surface->window);
+    const slayer3d_ui_layout_hit_region *top = slayer3d_ui_layout_hit_test(layout, 12.0f, 12.0f);
+    ASSERT_NE(top, nullptr);
+    EXPECT_STREQ(top->id, "front.child");
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, AbsoluteFillUsesRemainingParentSpace)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "panel";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {10.0f, 20.0f, 200.0f, 100.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    slayer3d_ui_layout_node_desc content{};
+    content.id = "content";
+    content.parent_id = "panel";
+    content.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    content.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    content.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    content.rect = {12.0f, 10.0f, 1.0f, 1.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &content));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "content"), 22.0f, 30.0f, 188.0f, 90.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 {
     slayer3d_ui_layout_model *layout = nullptr;

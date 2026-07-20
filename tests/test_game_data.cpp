@@ -1103,7 +1103,7 @@ void lasso_select_editor_shell_edges(slayer3d_game_data_runtime *runtime, slayer
     SDL_Event down{};
     down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     down.button.button = SDL_BUTTON_LEFT;
-    down.button.x = 8.0f;
+    down.button.x = 312.0f;
     down.button.y = 88.0f;
     slayer3d_input_process_event(input, &down);
     slayer3d_input_update(input, ++frame_counter);
@@ -18323,13 +18323,18 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         return capture.material;
     };
 
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.collapsed", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "Editor ready");
+    const int inspector_close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.inspector.close");
+    ASSERT_GE(inspector_close_signal, 0);
+    slayer3d_signal_emit(bus, inspector_close_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", true));
     press_key(SDL_SCANCODE_I, 4);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.collapsed", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "inspector toggled");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "inspector toggled");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "inspector opened");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "inspector opened");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line1", ""), "Editor ready");
 
     slayer3d_signal_emit(bus, tool_cycle_signal, nullptr);
@@ -18652,7 +18657,7 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.asset_source.skyboxes.status", ""),
                  "8 skyboxes found");
 
-    emit_signal("signal.editor.sky.panel.toggle");
+    emit_signal("signal.editor.sky.panel.open");
     struct SkyThumbnailSummary
     {
         std::string name;
@@ -18680,8 +18685,8 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
         EXPECT_FLOAT_EQ(resolved.w, 40.0f);
         EXPECT_FLOAT_EQ(resolved.h, 40.0f);
         EXPECT_TRUE(resolved.has_clip_rect);
-        EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
-        EXPECT_FLOAT_EQ(resolved.clip_y, 166.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_x, 1052.0f);
+        EXPECT_FLOAT_EQ(resolved.clip_y, 154.0f);
         EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
         EXPECT_FLOAT_EQ(resolved.clip_h, 362.0f);
         EXPECT_GE(resolved.x, resolved.clip_x);
@@ -18694,8 +18699,8 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect_sky_thumbnail, &sky_thumbnail_capture));
     ASSERT_EQ(sky_thumbnail_capture.thumbnails.size(), 6U);
     EXPECT_STREQ(sky_thumbnail_capture.thumbnails[0].name.c_str(), "ui.editor_shell.skybox_panel.slot0.thumbnail");
-    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].x, 1048.0f);
-    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].y, 178.0f);
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].x, 1060.0f);
+    EXPECT_FLOAT_EQ(sky_thumbnail_capture.thumbnails[0].y, 166.0f);
 
     emit_signal("signal.editor.sky.select_slot.0");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.selected.name", ""), "afternoon");
@@ -19192,17 +19197,65 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     for (int i = 0; i < world.brushes[0].face_count; ++i)
         EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
 
-    emit_signal("signal.editor.liquid.panel.toggle");
+    emit_signal("signal.editor.sky.panel.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    emit_signal("signal.editor.liquid.panel.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "liquid");
+    emit_signal("signal.editor.global.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+    emit_signal("signal.editor.palette.material");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", true));
+    emit_signal("signal.editor.sky.panel.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
     emit_signal("signal.editor.palette.game_object");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", false));
 
-    emit_signal("signal.editor.liquid.panel.toggle");
+    emit_signal("signal.editor.liquid.panel.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", true));
+    emit_signal("signal.editor.sky.panel.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
+    emit_signal("signal.editor.global.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", true));
+    emit_signal("signal.editor.liquid.panel.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", true));
     emit_signal("signal.editor.liquid.close");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.liquid.panel.open", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
+    emit_signal("signal.editor.inspector.close");
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    emit_signal("signal.editor.actor.viewer.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    emit_signal("signal.editor.palette.material");
+    emit_signal("signal.editor.texture.viewer.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    emit_signal("signal.editor.sky.panel.open");
+    emit_signal("signal.editor.sky.panel.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.sky.panel.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    emit_signal("signal.editor.inspector.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -20030,7 +20083,6 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     ASSERT_NE(scene_state, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.active", false));
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.actor.viewer.collapsed", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "actor_player");
 
     auto visible_palette_text = [&]() {
@@ -22700,8 +22752,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
             // thumbnail); assert the structural floor, not a magic depth.
             EXPECT_GT(resolved.layer, 121);
             EXPECT_TRUE(resolved.has_clip_rect);
-            EXPECT_FLOAT_EQ(resolved.clip_x, 1040.0f);
-            EXPECT_FLOAT_EQ(resolved.clip_y, 210.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_x, 1052.0f);
+            EXPECT_FLOAT_EQ(resolved.clip_y, 198.0f);
             EXPECT_FLOAT_EQ(resolved.clip_w, 218.0f);
             EXPECT_FLOAT_EQ(resolved.clip_h, 390.0f);
             EXPECT_GE(resolved.x, resolved.clip_x);
@@ -22860,7 +22912,6 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", "open"), "");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", false));
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.palette.material.page", -1), 0);
     std::vector<TextureThumbnailSummary> thumbnail_summaries = visible_thumbnails();
@@ -22876,17 +22927,17 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     const TextureThumbnailSummary *wall_thumbnail =
         find_thumbnail("ui.editor_shell.texture_viewer.wall_metal.thumbnail");
     ASSERT_NE(wall_thumbnail, nullptr);
-    EXPECT_FLOAT_EQ(wall_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(wall_thumbnail->y, 230.0f);
+    EXPECT_FLOAT_EQ(wall_thumbnail->x, 1070.0f);
+    EXPECT_FLOAT_EQ(wall_thumbnail->y, 218.0f);
     const TextureThumbnailSummary *rock_thumbnail =
         find_thumbnail("ui.editor_shell.texture_viewer.rock_floor.thumbnail");
     ASSERT_NE(rock_thumbnail, nullptr);
-    EXPECT_FLOAT_EQ(rock_thumbnail->x, 1154.0f);
-    EXPECT_FLOAT_EQ(rock_thumbnail->y, 230.0f);
+    EXPECT_FLOAT_EQ(rock_thumbnail->x, 1166.0f);
+    EXPECT_FLOAT_EQ(rock_thumbnail->y, 218.0f);
     const TextureThumbnailSummary *lava_thumbnail = find_thumbnail("ui.editor_shell.texture_viewer.lava.thumbnail");
     ASSERT_NE(lava_thumbnail, nullptr);
-    EXPECT_FLOAT_EQ(lava_thumbnail->x, 1058.0f);
-    EXPECT_FLOAT_EQ(lava_thumbnail->y, 450.0f);
+    EXPECT_FLOAT_EQ(lava_thumbnail->x, 1070.0f);
+    EXPECT_FLOAT_EQ(lava_thumbnail->y, 438.0f);
     std::vector<std::string> thumbnails;
     for (const TextureThumbnailSummary &thumbnail : thumbnail_summaries)
         thumbnails.emplace_back(thumbnail.name);
@@ -22948,8 +22999,8 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     emit_signal("signal.editor.texture.focus.search");
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
-    motion.motion.x = 1064.0f;
-    motion.motion.y = 236.0f;
+    motion.motion.x = 1076.0f;
+    motion.motion.y = 224.0f;
     slayer3d_input_process_event(input, &motion);
     SDL_Event key_event{};
     key_event.type = SDL_EVENT_KEY_DOWN;
@@ -22997,20 +23048,20 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_NE(std::find(status_labels.begin(), status_labels.end(), "ui.editor_shell.texture_viewer.lava.failed"),
               status_labels.end());
 
-    click_texture_viewer(1185.0f, 297.0f);
+    click_texture_viewer(1197.0f, 285.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
                  "mat.editor.texture.rock_floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
                  "mat.editor.texture.rock_floor");
 
-    click_texture_viewer(1089.0f, 297.0f);
+    click_texture_viewer(1101.0f, 285.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
                  "mat.editor.texture.rock_floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
                  "mat.editor.texture.rock_floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "texture loading");
 
-    click_texture_viewer(1089.0f, 517.0f);
+    click_texture_viewer(1101.0f, 505.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
                  "mat.editor.texture.rock_floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
@@ -23022,12 +23073,13 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     emit_signal("signal.editor.texture.paint.mode.face");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "face");
 
-    emit_signal("signal.editor.texture.viewer.toggle");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", false));
+    emit_signal("signal.editor.texture.viewer.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_TRUE(visible_thumbnails().empty());
     EXPECT_TRUE(visible_texture_status_labels().empty());
-    emit_signal("signal.editor.texture.viewer.toggle");
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
+    emit_signal("signal.editor.palette.material");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", false));
     thumbnails = visible_thumbnail_names();
     EXPECT_EQ(thumbnails.size(), 6U);
 
@@ -23069,6 +23121,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         float y = 0.0f;
         float w = 0.0f;
         float h = 0.0f;
+        slayer3d_color color{};
     };
     auto visible_frame = [&](const char *target_name) {
         struct Capture
@@ -23095,6 +23148,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
                 capture->rect.y = resolved.y;
                 capture->rect.w = resolved.w;
                 capture->rect.h = resolved.h;
+                capture->rect.color = resolved.color;
             }
             return true;
         };
@@ -23205,6 +23259,37 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
         slayer3d_ui_layout_destroy(layout);
         return result;
     };
+    auto expect_window_above = [&](const char *front_id, const char *other_prefix) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *front = slayer3d_ui_layout_find_resolved_node(layout, front_id);
+        ASSERT_NE(front, nullptr);
+        int highest_other_layer = -1000000;
+        const size_t prefix_length = SDL_strlen(other_prefix);
+        for (int i = 0; i < slayer3d_ui_layout_node_count(layout); ++i)
+        {
+            const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_resolved_node_at(layout, i);
+            if (node != nullptr && SDL_strncmp(node->id, other_prefix, prefix_length) == 0)
+                highest_other_layer = std::max(highest_other_layer, node->layer);
+        }
+        EXPECT_GT(front->layer, highest_other_layer);
+        const slayer3d_ui_layout_render_command *surface = nullptr;
+        for (int i = 0; i < slayer3d_ui_layout_render_command_count(layout); ++i)
+        {
+            const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+            if (command != nullptr && SDL_strcmp(command->id, front_id) == 0)
+            {
+                surface = command;
+                break;
+            }
+        }
+        ASSERT_NE(surface, nullptr);
+        EXPECT_TRUE(surface->window);
+        slayer3d_ui_layout_destroy(layout);
+    };
 
     emit_signal("signal.editor.scene.enter");
     seed_editor_shell_test_cube(runtime);
@@ -23214,6 +23299,14 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     ASSERT_TRUE(inspector.found);
     ASSERT_TRUE(console.found);
     EXPECT_LE(inspector.y + inspector.h, console.y);
+    EXPECT_EQ(console.color.a, 255);
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.ui.window.front", ""),
+                 "ui.editor_shell.console.panel");
+    expect_window_above("ui.editor_shell.console.panel", "ui.editor_shell.left_inspector.");
+    emit_signal("signal.editor.inspector.open");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.ui.window.front", ""),
+                 "ui.editor_shell.left_inspector.panel");
+    expect_window_above("ui.editor_shell.left_inspector.panel", "ui.editor_shell.console.");
 
     std::vector<std::string> text_names = visible_text_names();
     EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.preview.value"),
@@ -23521,17 +23614,25 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world_after));
     EXPECT_EQ(world_after.brush_count, world_before.brush_count);
 
-    RectSummary toggle = visible_frame("ui.editor_shell.left_inspector.toggle");
-    ASSERT_TRUE(toggle.found);
-    click_editor(toggle.x + toggle.w * 0.5f, toggle.y + toggle.h * 0.5f);
-    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
-                                             "editor.inspector.collapsed", false));
+    RectSummary close = visible_frame("ui.editor_shell.left_inspector.close");
+    ASSERT_TRUE(close.found);
+    click_editor(close.x + close.w * 0.5f, close.y + close.h * 0.5f);
+    EXPECT_FALSE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", true));
     EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.panel").found);
-    RectSummary collapsed = visible_frame("ui.editor_shell.left_inspector.collapsed");
-    ASSERT_TRUE(collapsed.found);
-    click_editor(collapsed.x + collapsed.w * 0.5f, collapsed.y + collapsed.h * 0.5f);
-    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime),
-                                              "editor.inspector.collapsed", true));
+    RectSummary open = visible_frame("ui.editor_shell.toolbar.inspector.button");
+    ASSERT_TRUE(open.found);
+    click_editor(open.x + open.w * 0.5f, open.y + open.h * 0.5f);
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", false));
+    EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.panel").found);
+    click_editor(open.x + open.w * 0.5f, open.y + open.h * 0.5f);
+    EXPECT_FALSE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", true));
+    EXPECT_FALSE(visible_frame("ui.editor_shell.left_inspector.panel").found);
+    click_editor(open.x + open.w * 0.5f, open.y + open.h * 0.5f);
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", false));
     EXPECT_TRUE(visible_frame("ui.editor_shell.left_inspector.panel").found);
 
     slayer3d_game_data_destroy(runtime);
@@ -24303,6 +24404,18 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.focused", false));
 
+    slayer3d_properties_set_float(scene_state, "editor.console.height", 200.0f);
+    slayer3d_properties_set_float(scene_state, "editor.console.visible_height", 200.0f);
+    editor_refresh_console_lines(runtime);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line9", ""), "console history probe 60");
+    emit_signal("signal.editor.console.close");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.console.open", true));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.height", 0.0f), 200.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 1.0f), 0.0f);
+    emit_signal("signal.editor.console.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 200.0f);
+
     const std::filesystem::path save_dir = unique_test_dir("editor_file_menu");
     const std::filesystem::path save_path = save_dir / "map.json";
     slayer3d_properties_set_string(scene_state, "editor.save_as.path", save_path.string().c_str());
@@ -24723,10 +24836,7 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
 
     const slayer3d_game_data_ui_rect menu_toolbar = largest_ui_rect("ui.editor_shell.toolbar");
     for (const char *name : {"ui.editor_shell.toolbar.file.button", "ui.editor_shell.toolbar.edit.button",
-                             "ui.editor_shell.toolbar.selection.button", "ui.editor_shell.toolbar.groups.button",
                              "ui.editor_shell.toolbar.global.button", "ui.editor_shell.toolbar.actors.button",
-                             "ui.editor_shell.toolbar.tools.button", "ui.editor_shell.toolbar.view.button",
-                             "ui.editor_shell.toolbar.run.button", "ui.editor_shell.toolbar.debug.button",
                              "ui.editor_shell.toolbar.help.button"})
     {
         const slayer3d_game_data_ui_rect button = largest_ui_rect(name);
@@ -24762,7 +24872,9 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
         EXPECT_GE(button.x, tool_toolbar.x) << tool_button_names[i];
         EXPECT_LE(button.x + button.w, tool_toolbar.x + tool_toolbar.w) << tool_button_names[i];
     }
-    EXPECT_NEAR(first_x - tool_toolbar.x, tool_toolbar.x + tool_toolbar.w - last_right, 1.0f);
+    const slayer3d_game_data_ui_rect menu_first = largest_ui_rect("ui.editor_shell.toolbar.file.button");
+    EXPECT_NEAR(first_x - tool_toolbar.x, menu_first.x - menu_toolbar.x, 0.001f);
+    EXPECT_NEAR(tool_toolbar.h, menu_toolbar.h, 0.001f);
 
     const std::vector<std::string> labels = visible_text();
     EXPECT_TRUE(contains_text(labels, "Select (space)"));
@@ -24791,7 +24903,7 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
-    const int global_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.toggle");
+    const int global_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.global.open");
     ASSERT_GE(global_signal, 0);
     slayer3d_signal_emit(bus, global_signal, nullptr);
 
@@ -24839,6 +24951,28 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     ASSERT_NE(hit, nullptr);
     ASSERT_NE(hit->id, nullptr);
     EXPECT_NE(std::string(hit->id).find("ui.editor_shell.global_panel."), std::string::npos);
+    const slayer3d_ui_layout_resolved_node *global_window =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.global_panel.panel");
+    ASSERT_NE(global_window, nullptr);
+    EXPECT_TRUE(global_window->window);
+    EXPECT_EQ(global_window->dock, SLAYER3D_UI_LAYOUT_DOCK_RIGHT);
+    EXPECT_FLOAT_EQ(global_window->rect.x, 942.0f);
+    EXPECT_FLOAT_EQ(global_window->rect.y, 80.0f);
+    EXPECT_FLOAT_EQ(global_window->rect.h, 520.0f);
+    slayer3d_ui_layout_destroy(layout);
+
+    slayer3d_properties_set_string(scene_state, "editor.inspector.panel.dock", "right");
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *inspector_window =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.left_inspector.panel");
+    global_window = slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.global_panel.panel");
+    ASSERT_NE(inspector_window, nullptr);
+    ASSERT_NE(global_window, nullptr);
+    EXPECT_FLOAT_EQ(inspector_window->rect.x, 972.0f);
+    EXPECT_FLOAT_EQ(global_window->rect.x, 630.0f);
+    EXPECT_FLOAT_EQ(inspector_window->rect.h, 520.0f);
+    EXPECT_FLOAT_EQ(global_window->rect.h, 520.0f);
     slayer3d_ui_layout_destroy(layout);
 
     const int plan_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.file.plan_lighting");
@@ -24857,6 +24991,342 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingPanelConsumesInputAndShowsDef
     ASSERT_GE(close_signal, 0);
     slayer3d_signal_emit(bus, close_signal, nullptr);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", true));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(bus, nullptr);
+    ASSERT_NE(input, nullptr);
+    ASSERT_NE(scene_state, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    int input_tick = 1;
+    auto input_frame = [&]() {
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
+    auto pointer_down = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        SDL_Event button{};
+        button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        button.button.button = SDL_BUTTON_LEFT;
+        button.button.x = x;
+        button.button.y = y;
+        slayer3d_input_process_event(input, &button);
+        input_frame();
+    };
+    auto pointer_move = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        input_frame();
+    };
+    auto pointer_up = [&](float x, float y) {
+        SDL_Event button{};
+        button.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        button.button.button = SDL_BUTTON_LEFT;
+        button.button.x = x;
+        button.button.y = y;
+        slayer3d_input_process_event(input, &button);
+        input_frame();
+    };
+    auto drag = [&](float start_x, float start_y, float end_x, float end_y) {
+        pointer_down(start_x, start_y);
+        constexpr int steps = 12;
+        for (int i = 1; i <= steps; ++i)
+        {
+            const float t = static_cast<float>(i) / static_cast<float>(steps);
+            pointer_move(start_x + (end_x - start_x) * t, start_y + (end_y - start_y) * t);
+        }
+        pointer_up(end_x, end_y);
+    };
+    auto resolved_window_rect = [&](const char *id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *window = slayer3d_ui_layout_find_resolved_node(layout, id);
+        EXPECT_NE(window, nullptr);
+        const slayer3d_ui_layout_rect rect = window != nullptr ? window->rect : slayer3d_ui_layout_rect{};
+        slayer3d_ui_layout_destroy(layout);
+        return rect;
+    };
+    auto expect_header_hit = [&](float x, float y, const char *header_id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
+        EXPECT_NE(hit, nullptr);
+        if (hit != nullptr)
+            EXPECT_STREQ(hit->id, header_id);
+        slayer3d_ui_layout_destroy(layout);
+    };
+    auto expect_visible_text = [&](const char *id, const char *expected) {
+        struct TextCapture
+        {
+            const char *id = nullptr;
+            const char *expected = nullptr;
+            bool found = false;
+        } capture{id, expected, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<TextCapture *>(userdata);
+            if (text != nullptr && text->name != nullptr && text->text != nullptr &&
+                SDL_strcmp(text->name, capture->id) == 0 && SDL_strcmp(text->text, capture->expected) == 0)
+            {
+                capture->found = true;
+            }
+            return true;
+        };
+        slayer3d_game_data_ui_metrics metrics{};
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, collect, &capture));
+        EXPECT_TRUE(capture.found) << id << " should render '" << expected << "'";
+    };
+    auto expect_window_floats_and_redocks = [&](const char *signal, const char *id, const char *header_id,
+                                                const char *drag_hint_id, const char *close_label_id,
+                                                const char *dock_key) {
+        emit_signal(signal);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "right");
+        expect_visible_text(drag_hint_id, "drag");
+        expect_visible_text(close_label_id, "close");
+        slayer3d_ui_layout_rect rect = resolved_window_rect(id);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 640.0f, 650.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "none");
+        rect = resolved_window_rect(id);
+        EXPECT_GT(rect.y, 500.0f);
+        EXPECT_GT(rect.y + rect.h, 720.0f);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 640.0f, 718.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "bottom");
+        rect = resolved_window_rect(id);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 640.0f, 360.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "none");
+        rect = resolved_window_rect(id);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 1278.0f, 360.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "right");
+    };
+
+    auto click = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        SDL_Event button{};
+        button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        button.button.button = SDL_BUTTON_LEFT;
+        button.button.x = x;
+        button.button.y = y;
+        slayer3d_input_process_event(input, &button);
+        input_frame();
+        button.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        slayer3d_input_process_event(input, &button);
+        input_frame();
+    };
+
+    emit_signal("signal.editor.file.close");
+    emit_signal("signal.editor.media.settings.close");
+    emit_signal("signal.editor.palette.game_object");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.actor_viewer.panel");
+    expect_visible_text("ui.editor_shell.actor_viewer.drag_hint", "drag");
+    expect_visible_text("ui.editor_shell.actor_viewer.close.label", "close");
+    slayer3d_ui_layout_rect initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
+    const float initial_drag_x = initial_things_rect.x + 12.0f;
+    const float initial_drag_y = initial_things_rect.y + 16.0f;
+    pointer_down(initial_drag_x, initial_drag_y);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", ""), "drag_pending");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+    pointer_up(initial_drag_x, initial_drag_y);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", "active"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+
+    pointer_down(initial_drag_x, initial_drag_y);
+    const float drag_points[][2] = {{980.0f, 130.0f}, {860.0f, 160.0f}, {740.0f, 190.0f}, {640.0f, 220.0f}};
+    for (const auto &point : drag_points)
+    {
+        pointer_move(point[0], point[1]);
+        EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.x", 0.0f),
+                    initial_things_rect.x + point[0] - initial_drag_x, 0.01f);
+        EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f),
+                    initial_things_rect.y + point[1] - initial_drag_y, 0.01f);
+    }
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", ""), "drag");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.preview", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 80.0f);
+
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *floating_preview =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.floating_preview");
+    EXPECT_NE(floating_preview, nullptr);
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.target.left"), nullptr);
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.target.right"), nullptr);
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.target.bottom"), nullptr);
+    EXPECT_EQ(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.dock_preview"), nullptr);
+    slayer3d_ui_layout_destroy(layout);
+
+    pointer_move(2.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.preview", ""), "left");
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *dock_preview =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.dock_preview");
+    ASSERT_NE(dock_preview, nullptr);
+    EXPECT_FLOAT_EQ(dock_preview->rect.x, 312.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.y, 80.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.w, 238.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.h, 520.0f);
+    EXPECT_EQ(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.floating_preview"), nullptr);
+    slayer3d_ui_layout_destroy(layout);
+    pointer_up(2.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "left");
+    emit_signal("signal.editor.console.close");
+
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *inspector =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.left_inspector.panel");
+    const slayer3d_ui_layout_resolved_node *things =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.actor_viewer.panel");
+    ASSERT_NE(inspector, nullptr);
+    ASSERT_NE(things, nullptr);
+    EXPECT_FLOAT_EQ(inspector->rect.x, 0.0f);
+    EXPECT_FLOAT_EQ(things->rect.x, 312.0f);
+    slayer3d_ui_layout_destroy(layout);
+
+    expect_header_hit(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
+    drag(324.0f, 96.0f, 640.0f, 650.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 500.0f);
+    slayer3d_ui_layout_rect things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
+    expect_header_hit(things_rect.x + 12.0f, things_rect.y + 16.0f, "ui.editor_shell.actor_viewer.header");
+    drag(things_rect.x + 12.0f, things_rect.y + 16.0f, 640.0f, 718.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "bottom");
+    things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
+    expect_header_hit(things_rect.x + 12.0f, things_rect.y + 16.0f, "ui.editor_shell.actor_viewer.header");
+    drag(things_rect.x + 12.0f, things_rect.y + 16.0f, 1278.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+
+    expect_window_floats_and_redocks("signal.editor.sky.panel.open", "ui.editor_shell.skybox_panel.panel",
+                                     "ui.editor_shell.skybox_panel.header", "ui.editor_shell.skybox_panel.drag_hint",
+                                     "ui.editor_shell.skybox_panel.close.label", "editor.sky.panel.dock");
+    expect_window_floats_and_redocks("signal.editor.liquid.panel.open", "ui.editor_shell.liquid_panel",
+                                     "ui.editor_shell.liquid_panel.header", "ui.editor_shell.liquid_panel.drag_hint",
+                                     "ui.editor_shell.liquid_panel.close", "editor.liquid.panel.dock");
+    expect_window_floats_and_redocks("signal.editor.palette.material", "ui.editor_shell.texture_viewer.panel",
+                                     "ui.editor_shell.texture_viewer.header",
+                                     "ui.editor_shell.texture_viewer.drag_hint",
+                                     "ui.editor_shell.texture_viewer.close.label", "editor.texture.viewer.dock");
+
+    expect_visible_text("ui.editor_shell.left_inspector.drag_hint", "drag");
+    expect_visible_text("ui.editor_shell.left_inspector.close", "close");
+    expect_header_hit(20.0f, 96.0f, "ui.editor_shell.left_inspector.header");
+    drag(20.0f, 96.0f, 500.0f, 650.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.left_inspector.panel");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.y", 0.0f), 500.0f);
+    slayer3d_ui_layout_rect inspector_rect = resolved_window_rect("ui.editor_shell.left_inspector.panel");
+    expect_header_hit(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, "ui.editor_shell.left_inspector.header");
+    drag(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, 640.0f, 718.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "bottom");
+    inspector_rect = resolved_window_rect("ui.editor_shell.left_inspector.panel");
+    expect_header_hit(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, "ui.editor_shell.left_inspector.header");
+    drag(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, 1278.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "right");
+
+    emit_signal("signal.editor.console.open");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
+                 "ui.editor_shell.console.panel");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "bottom");
+    expect_visible_text("ui.editor_shell.console.drag_hint", "drag");
+    expect_visible_text("ui.editor_shell.console.close", "close");
+    slayer3d_ui_layout_rect console_rect = resolved_window_rect("ui.editor_shell.console.panel");
+    expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
+    drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 640.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "none");
+    console_rect = resolved_window_rect("ui.editor_shell.console.panel");
+    expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
+    drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 2.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "left");
+    input_frame();
+    console_rect = resolved_window_rect("ui.editor_shell.console.panel");
+    EXPECT_FLOAT_EQ(console_rect.w, 360.0f);
+    EXPECT_FLOAT_EQ(console_rect.h, 640.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 640.0f);
+    expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
+    drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 640.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "none");
+    console_rect = resolved_window_rect("ui.editor_shell.console.panel");
+    expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
+    drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 1278.0f, 360.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "right");
+    input_frame();
+    console_rect = resolved_window_rect("ui.editor_shell.console.panel");
+    EXPECT_FLOAT_EQ(console_rect.w, 360.0f);
+    EXPECT_FLOAT_EQ(console_rect.h, 640.0f);
+    expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
+    drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 640.0f, 718.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "bottom");
+    input_frame();
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 120.0f);
+
+    drag(640.0f, 602.0f, 640.0f, 500.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 220.0f);
+    slayer3d_ui_layout_rect console_close = resolved_window_rect("ui.editor_shell.console.close");
+    click(console_close.x + console_close.w * 0.5f, console_close.y + console_close.h * 0.5f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.console.open", true));
+    slayer3d_ui_layout_rect console_open = resolved_window_rect("ui.editor_shell.toolbar.console.button");
+    click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 220.0f);
+    click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.console.open", true));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 1.0f), 0.0f);
+    click(console_open.x + console_open.w * 0.5f, console_open.y + console_open.h * 0.5f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.console.open", false));
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 220.0f);
+
+    emit_signal("signal.editor.global.open");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", false));
+    expect_visible_text("ui.editor_shell.global_panel.drag_hint", "drag");
+    expect_visible_text("ui.editor_shell.global_panel.close.label", "close");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 0);
+    click(640.0f, 340.0f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -24882,7 +25352,7 @@ TEST(GameDataRuntime, EditorShellDojoSurvivalHorrorLightingPresetAppliesDarkScen
         slayer3d_signal_emit(bus, signal, nullptr);
     };
 
-    emit_signal("signal.editor.global.toggle");
+    emit_signal("signal.editor.global.open");
     emit_signal("signal.editor.global.preset.survival_horror");
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -25010,7 +25480,7 @@ TEST(GameDataRuntime, EditorShellDojoGlobalLightingControlsExportToMapJson)
         slayer3d_signal_emit(bus, signal, nullptr);
     };
 
-    emit_signal("signal.editor.global.toggle");
+    emit_signal("signal.editor.global.open");
     emit_signal("signal.editor.global.preset.midnight");
     emit_signal("signal.editor.global.tab.data");
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
@@ -25685,7 +26155,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeLassoSelectsProjectedEdges)
     SDL_Event down{};
     down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     down.button.button = SDL_BUTTON_LEFT;
-    down.button.x = 8.0f;
+    down.button.x = 312.0f;
     down.button.y = 88.0f;
     slayer3d_input_process_event(input, &down);
     slayer3d_input_update(input, 1);
@@ -26716,7 +27186,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
     SDL_Event down{};
     down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     down.button.button = SDL_BUTTON_LEFT;
-    down.button.x = 8.0f;
+    down.button.x = 312.0f;
     down.button.y = 88.0f;
     slayer3d_input_process_event(input, &down);
     slayer3d_input_update(input, 1);
@@ -26883,7 +27353,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoUsesSelectedBrushSources)
     SDL_Event down{};
     down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     down.button.button = SDL_BUTTON_LEFT;
-    down.button.x = 8.0f;
+    down.button.x = 312.0f;
     down.button.y = 88.0f;
     slayer3d_input_process_event(input, &down);
     slayer3d_input_update(input, 1);
@@ -27598,7 +28068,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeClickTogglesAndClearsVertexSelect
     SDL_Event empty_down{};
     empty_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     empty_down.button.button = SDL_BUTTON_LEFT;
-    empty_down.button.x = 8.0f;
+    empty_down.button.x = 312.0f;
     empty_down.button.y = 88.0f;
     slayer3d_input_process_event(input, &empty_down);
     slayer3d_input_update(input, 1);
@@ -29891,9 +30361,9 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolShiftAdjustsPendingFootprintDepth)
     ASSERT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.state", ""), "adjusting_depth");
 
     motion.motion.x = 780.0f;
-    motion.motion.y = 670.0f;
+    motion.motion.y = 592.0f;
     motion.motion.xrel = 0.0f;
-    motion.motion.yrel = 384.0f;
+    motion.motion.yrel = 306.0f;
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 8);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -38566,10 +39036,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         slayer3d_game_data_ui_rect inspector_row_rect{};
         bool inspector_tabs[2]{};
         bool inspector_rows[4]{};
-        bool inspector_collapsed = false;
+        bool inspector_open_button = false;
         bool inspector_title = false;
         bool inspector_tab_labels[2]{};
-        bool inspector_collapsed_label = false;
+        bool console_open_button = false;
         bool console_panel = false;
         bool console_tab = false;
         bool console_rows[3]{};
@@ -38598,8 +39068,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->inspector_header = true;
             capture->inspector_header_rect = *rect;
         }
-        if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.collapsed") == 0)
-            capture->inspector_collapsed = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.toolbar.inspector.button") == 0)
+            capture->inspector_open_button = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.toolbar.console.button") == 0)
+            capture->console_open_button = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.console.panel") == 0)
             capture->console_panel = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.sidebar") == 0)
@@ -38647,20 +39119,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "edit")
                 index = 1;
-            else if (key == "selection")
-                index = 2;
-            else if (key == "groups")
-                index = 3;
-            else if (key == "tools")
-                index = 4;
-            else if (key == "view")
-                index = 5;
-            else if (key == "run")
-                index = 6;
-            else if (key == "debug")
-                index = 7;
             else if (key == "help")
-                index = 8;
+                index = 2;
             if (index >= 0)
                 capture->buttons[index] = true;
         }
@@ -38703,8 +39163,6 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->old_inspector = true;
         if (name == "ui.editor_shell.left_inspector.title")
             capture->inspector_title = true;
-        if (name == "ui.editor_shell.left_inspector.collapsed.label")
-            capture->inspector_collapsed_label = true;
         if (name == "ui.editor_shell.console.console.label")
             capture->console_tab_label = true;
         else if (name == "ui.editor_shell.tool_toolbar.grid.label")
@@ -38730,20 +39188,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "edit")
                 index = 1;
-            else if (key == "selection")
-                index = 2;
-            else if (key == "groups")
-                index = 3;
-            else if (key == "tools")
-                index = 4;
-            else if (key == "view")
-                index = 5;
-            else if (key == "run")
-                index = 6;
-            else if (key == "debug")
-                index = 7;
             else if (key == "help")
-                index = 8;
+                index = 2;
             if (index >= 0)
                 capture->labels[index] = true;
         }
@@ -38780,7 +39226,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
                                                                 &toolbar_capture));
     EXPECT_TRUE(toolbar_capture.background);
-    for (int i = 0; i < 9; ++i)
+    for (int i = 0; i < 3; ++i)
     {
         EXPECT_TRUE(toolbar_capture.buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.labels[i]) << i;
@@ -38810,8 +39256,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_GT(toolbar_capture.inspector_row_rect.y, toolbar_capture.inspector_header_rect.y);
     EXPECT_LE(toolbar_capture.inspector_row_rect.x + toolbar_capture.inspector_row_rect.w,
               toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
-    EXPECT_FALSE(toolbar_capture.inspector_collapsed);
-    EXPECT_FALSE(toolbar_capture.inspector_collapsed_label);
+    EXPECT_TRUE(toolbar_capture.inspector_open_button);
+    EXPECT_TRUE(toolbar_capture.console_open_button);
     EXPECT_TRUE(toolbar_capture.console_panel);
     EXPECT_TRUE(toolbar_capture.console_tab);
     EXPECT_TRUE(toolbar_capture.console_tab_label);
@@ -38823,16 +39269,15 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_FALSE(toolbar_capture.old_sidebar);
     EXPECT_FALSE(toolbar_capture.old_inspector);
 
-    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", true);
-    ToolbarCapture collapsed_capture;
-    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &collapsed_capture));
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", false);
+    ToolbarCapture closed_capture;
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &closed_capture));
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
-                                                                &collapsed_capture));
-    EXPECT_FALSE(collapsed_capture.inspector_panel);
-    EXPECT_FALSE(collapsed_capture.inspector_header);
-    EXPECT_TRUE(collapsed_capture.inspector_collapsed);
-    EXPECT_FALSE(collapsed_capture.inspector_collapsed_label);
-    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", false);
+                                                                &closed_capture));
+    EXPECT_FALSE(closed_capture.inspector_panel);
+    EXPECT_FALSE(closed_capture.inspector_header);
+    EXPECT_TRUE(closed_capture.inspector_open_button);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.open", true);
 
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
@@ -47610,7 +48055,7 @@ TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
     }
   ],
   "editor": {
-    "inspector": { "collapsed": false }
+    "inspector": { "open": true }
   },
   "x_game_specific": {
     "scripting": {

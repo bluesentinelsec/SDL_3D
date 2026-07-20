@@ -2093,6 +2093,8 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
     }
     if (command->has_fill_color)
         return command->fill_color;
+    if (command->window)
+        return (slayer3d_color){10, 15, 23, 255};
     if (command->popup)
         return (slayer3d_color){14, 20, 30, 248};
     if (command->option_index >= 0 && command->selected)
