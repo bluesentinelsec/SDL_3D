@@ -176,16 +176,26 @@ horizontally inward in authored order.
     "default_dock": "left",
     "dock_top": 80,
     "dock_bottom_key": "editor.console.visible_height",
-    "dock_gap": 4
+    "dock_gap": 4,
+    "snap_distance": 48,
+    "drag_threshold": 4
   }
 }
 ```
 
-Window roots and drag/resize handles must be interactive. The host captures a
-drag until button release, writes only the authored state keys, and consumes
-all pointer input within the resolved window ancestry. Empty panel space and
-text inputs therefore cannot leak clicks, wheel events, or drags to the world
-canvas.
+Window roots and drag/resize handles must be interactive. The host keeps a
+header press pending until `drag_threshold` is crossed, then undocks the
+window and captures the drag until button release. Floating windows use the
+full viewport for placement. Releasing within `snap_distance` of an edge
+docks the window on that side. The host writes only authored state keys and
+consumes all pointer input within the resolved window ancestry. Empty panel
+space and text inputs therefore cannot leak clicks, wheel events, or drags to
+the world canvas.
+
+Editors should render non-interactive feedback from the active drag state:
+edge target rails while dragging, an outline around a floating result, and
+the resolved dock slot when an edge is targeted. The preview should match
+the same authored ordering and gap rules used by final dock layout.
 
 For a bottom console, author `h_key` on the root and a top-edge
 `resize_handle`, `resize_edge: "top"`, `height_key`, and min/max heights in

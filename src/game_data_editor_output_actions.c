@@ -252,6 +252,7 @@ static void reset_editor_scene_state_for_new_document(slayer3d_game_data_runtime
     slayer3d_properties_set_float(runtime->scene_state, "editor.console.visible_height", 120.0f);
     slayer3d_properties_set_string(runtime->scene_state, "editor.ui.window.pointer.id", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.ui.window.pointer.mode", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.ui.window.pointer.preview", "none");
     slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.undo_count", 0);
     slayer3d_properties_set_int(runtime->scene_state, "editor.transaction.redo_count", 0);
 }

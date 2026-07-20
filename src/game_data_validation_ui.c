@@ -477,7 +477,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         if (resize_edge != NULL && SDL_strcmp(resize_edge, "top") != 0)
             return validation_error(ctx, path, "UI window resize_edge must be top");
         static const char *const nonnegative_keys[] = {
-            "dock_top", "dock_bottom", "dock_margin", "dock_gap", "snap_distance", "min_height", "max_height",
+            "dock_top",      "dock_bottom",    "dock_margin", "dock_gap",
+            "snap_distance", "drag_threshold", "min_height",  "max_height",
         };
         for (size_t i = 0; i < SDL_arraysize(nonnegative_keys); ++i)
         {

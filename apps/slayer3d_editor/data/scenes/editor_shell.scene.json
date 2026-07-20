@@ -1126,11 +1126,12 @@
         "window": {
           "drag_handle": "ui.editor_shell.liquid_panel.header",
           "dock_key": "editor.liquid.panel.dock",
-          "default_dock": "none",
+          "default_dock": "right",
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "clip_children": true,
         "interactive": true,
@@ -1316,7 +1317,8 @@
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "clip_children": true,
         "interactive": true,
@@ -5865,7 +5867,8 @@
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "interactive": true,
         "layer": 120,
@@ -6063,7 +6066,8 @@
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "interactive": true,
         "layer": 140,
@@ -6177,7 +6181,8 @@
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "interactive": true,
         "layer": 120,
@@ -6888,7 +6893,8 @@
           "dock_top": 80,
           "dock_bottom_key": "editor.console.visible_height",
           "dock_gap": 4,
-          "snap_distance": 32
+          "snap_distance": 48,
+          "drag_threshold": 4
         },
         "clip_children": true,
         "interactive": true,
@@ -7552,7 +7558,84 @@
       ] },
       { "id": "ui.editor_shell.console.unhide", "type": "button", "anchor_x": "right", "anchor_y": "bottom", "x": 12, "y": 12, "w": 112, "h": 28, "text": "Show console", "text_scale": 0.34, "interactive": true, "action": "editor.console.show", "layer": 120,
         "visible_if": { "type": "scene_state.compare", "key": "editor.console.hidden", "op": "==", "value": true, "default": false } },
-{
+      {
+        "id": "ui.editor_shell.window_drag.target.left",
+        "type": "panel",
+        "x": 0,
+        "y": 80,
+        "y_key": "editor.ui.window.pointer.canvas.y",
+        "w": 12,
+        "h": 520,
+        "h_key": "editor.ui.window.pointer.canvas.h",
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.target.right",
+        "type": "panel",
+        "anchor_x": "right",
+        "x": 0,
+        "y": 80,
+        "y_key": "editor.ui.window.pointer.canvas.y",
+        "w": 12,
+        "h": 520,
+        "h_key": "editor.ui.window.pointer.canvas.h",
+        "fill_color": [56, 142, 220, 96],
+        "border_color": [126, 206, 255, 210],
+        "border_thickness": 1,
+        "layer": 890,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.floating_preview",
+        "type": "panel",
+        "x": 0,
+        "y": 0,
+        "x_key": "editor.ui.window.pointer.preview.x",
+        "y_key": "editor.ui.window.pointer.preview.y",
+        "w": 1,
+        "h": 1,
+        "w_key": "editor.ui.window.pointer.preview.w",
+        "h_key": "editor.ui.window.pointer.preview.h",
+        "fill_color": [0, 0, 0, 0],
+        "border_color": [126, 206, 255, 230],
+        "border_thickness": 2,
+        "layer": 891,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" },
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.preview", "op": "==", "value": "none", "default": "none" }
+          ]
+        }
+      },
+      {
+        "id": "ui.editor_shell.window_drag.dock_preview",
+        "type": "panel",
+        "x": 0,
+        "y": 80,
+        "x_key": "editor.ui.window.pointer.preview.x",
+        "y_key": "editor.ui.window.pointer.preview.y",
+        "w": 1,
+        "h": 520,
+        "w_key": "editor.ui.window.pointer.preview.w",
+        "h_key": "editor.ui.window.pointer.preview.h",
+        "fill_color": [56, 142, 220, 54],
+        "border_color": [126, 206, 255, 245],
+        "border_thickness": 2,
+        "layer": 892,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.mode", "op": "==", "value": "drag", "default": "" },
+            { "type": "scene_state.compare", "key": "editor.ui.window.pointer.preview", "op": "!=", "value": "none", "default": "none" }
+          ]
+        }
+      },
+      {
         "id": "ui.editor_shell.handoff.panel",
         "type": "panel",
         "x": 18,

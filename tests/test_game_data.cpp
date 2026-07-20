@@ -24949,31 +24949,77 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
         ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
-    auto drag = [&](float start_x, float start_y, float end_x, float end_y) {
+    auto pointer_down = [&](float x, float y) {
         SDL_Event motion{};
         motion.type = SDL_EVENT_MOUSE_MOTION;
-        motion.motion.x = start_x;
-        motion.motion.y = start_y;
+        motion.motion.x = x;
+        motion.motion.y = y;
         slayer3d_input_process_event(input, &motion);
         SDL_Event button{};
         button.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
         button.button.button = SDL_BUTTON_LEFT;
-        button.button.x = start_x;
-        button.button.y = start_y;
-        slayer3d_input_process_event(input, &button);
-        input_frame();
-
-        motion.motion.x = end_x;
-        motion.motion.y = end_y;
-        slayer3d_input_process_event(input, &motion);
-        input_frame();
-
-        button.type = SDL_EVENT_MOUSE_BUTTON_UP;
-        button.button.x = end_x;
-        button.button.y = end_y;
+        button.button.x = x;
+        button.button.y = y;
         slayer3d_input_process_event(input, &button);
         input_frame();
     };
+    auto pointer_move = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        input_frame();
+    };
+    auto pointer_up = [&](float x, float y) {
+        SDL_Event button{};
+        button.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        button.button.button = SDL_BUTTON_LEFT;
+        button.button.x = x;
+        button.button.y = y;
+        slayer3d_input_process_event(input, &button);
+        input_frame();
+    };
+    auto drag = [&](float start_x, float start_y, float end_x, float end_y) {
+        pointer_down(start_x, start_y);
+        pointer_move(end_x, end_y);
+        pointer_up(end_x, end_y);
+    };
+    auto resolved_window_rect = [&](const char *id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *window = slayer3d_ui_layout_find_resolved_node(layout, id);
+        EXPECT_NE(window, nullptr);
+        const slayer3d_ui_layout_rect rect = window != nullptr ? window->rect : slayer3d_ui_layout_rect{};
+        slayer3d_ui_layout_destroy(layout);
+        return rect;
+    };
+    auto expect_header_hit = [&](float x, float y, const char *header_id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
+        EXPECT_NE(hit, nullptr);
+        if (hit != nullptr)
+            EXPECT_STREQ(hit->id, header_id);
+        slayer3d_ui_layout_destroy(layout);
+    };
+    auto expect_window_floats_and_redocks = [&](const char *signal, const char *id, const char *header_id,
+                                                const char *dock_key) {
+        emit_signal(signal);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "right");
+        slayer3d_ui_layout_rect rect = resolved_window_rect(id);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 640.0f, 220.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "none");
+        rect = resolved_window_rect(id);
+        EXPECT_GT(rect.y, 80.0f);
+        expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
+        drag(rect.x + 12.0f, rect.y + 16.0f, 1278.0f, rect.y + 16.0f);
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "right");
+    };
+
     auto click = [&](float x, float y) {
         SDL_Event motion{};
         motion.type = SDL_EVENT_MOUSE_MOTION;
@@ -24993,11 +25039,49 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     };
 
     emit_signal("signal.editor.file.close");
+    emit_signal("signal.editor.media.settings.close");
     emit_signal("signal.editor.palette.game_object");
-    drag(1054.0f, 96.0f, 2.0f, 96.0f);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "left");
+    pointer_down(1054.0f, 96.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", ""), "drag_pending");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+    pointer_up(1054.0f, 96.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", "active"), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+
+    pointer_down(1054.0f, 96.0f);
+    pointer_move(640.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.mode", ""), "drag");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.preview", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 80.0f);
 
     slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *floating_preview =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.floating_preview");
+    EXPECT_NE(floating_preview, nullptr);
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.target.left"), nullptr);
+    EXPECT_NE(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.target.right"), nullptr);
+    EXPECT_EQ(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.dock_preview"), nullptr);
+    slayer3d_ui_layout_destroy(layout);
+
+    pointer_move(2.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.pointer.preview", ""), "left");
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *dock_preview =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.dock_preview");
+    ASSERT_NE(dock_preview, nullptr);
+    EXPECT_FLOAT_EQ(dock_preview->rect.x, 312.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.y, 80.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.w, 238.0f);
+    EXPECT_FLOAT_EQ(dock_preview->rect.h, 520.0f);
+    EXPECT_EQ(slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.window_drag.floating_preview"), nullptr);
+    slayer3d_ui_layout_destroy(layout);
+    pointer_up(2.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "left");
+
     ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
     ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
     const slayer3d_ui_layout_resolved_node *inspector =
@@ -25010,7 +25094,29 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_FLOAT_EQ(things->rect.x, 312.0f);
     slayer3d_ui_layout_destroy(layout);
 
-    drag(20.0f, 96.0f, 1278.0f, 96.0f);
+    expect_header_hit(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
+    drag(324.0f, 96.0f, 640.0f, 180.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 80.0f);
+    slayer3d_ui_layout_rect things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
+    expect_header_hit(things_rect.x + 12.0f, things_rect.y + 16.0f, "ui.editor_shell.actor_viewer.header");
+    drag(things_rect.x + 12.0f, things_rect.y + 16.0f, 1278.0f, things_rect.y + 16.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
+
+    expect_window_floats_and_redocks("signal.editor.sky.panel.toggle", "ui.editor_shell.skybox_panel.panel",
+                                     "ui.editor_shell.skybox_panel.header", "editor.sky.panel.dock");
+    expect_window_floats_and_redocks("signal.editor.liquid.panel.toggle", "ui.editor_shell.liquid_panel",
+                                     "ui.editor_shell.liquid_panel.header", "editor.liquid.panel.dock");
+    expect_window_floats_and_redocks("signal.editor.palette.material", "ui.editor_shell.texture_viewer.panel",
+                                     "ui.editor_shell.texture_viewer.header", "editor.texture.viewer.dock");
+
+    expect_header_hit(20.0f, 96.0f, "ui.editor_shell.left_inspector.header");
+    drag(20.0f, 96.0f, 500.0f, 196.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "none");
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.y", 0.0f), 80.0f);
+    const slayer3d_ui_layout_rect inspector_rect = resolved_window_rect("ui.editor_shell.left_inspector.panel");
+    expect_header_hit(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, "ui.editor_shell.left_inspector.header");
+    drag(inspector_rect.x + 20.0f, inspector_rect.y + 16.0f, 1278.0f, inspector_rect.y + 16.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.inspector.panel.dock", ""), "right");
 
     drag(640.0f, 602.0f, 640.0f, 500.0f);
