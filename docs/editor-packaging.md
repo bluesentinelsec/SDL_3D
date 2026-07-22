@@ -162,6 +162,10 @@ artifacts in the build root. The managed game loop drives the browser build
 through `emscripten_set_main_loop_arg` rather than the native blocking loop;
 native desktop behavior is unchanged.
 
+The web editor defaults to windowed canvas presentation. Browser fullscreen
+requires a user gesture, so it is not requested automatically during startup;
+the desktop editor continues to default to exclusive fullscreen.
+
 ### Current Browser Limitations
 
 - Saves write to the in-memory Emscripten filesystem, so edits do not persist

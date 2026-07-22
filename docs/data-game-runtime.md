@@ -267,9 +267,10 @@ untitled `.slayermap.json` save target in SDL's per-user preferences directory:
 build/debug/slayer3d_editor
 ```
 
-The editor defaults to exclusive fullscreen. Pass `--window-mode windowed` or
-`--window-mode fullscreen-borderless` to override that launch; the third
-accepted value is the default, `--window-mode fullscreen`.
+The desktop editor defaults to exclusive fullscreen, while the Emscripten web
+editor defaults to windowed canvas presentation because browser fullscreen
+requires a user gesture. Override the platform default with `--window-mode`
+and one of `fullscreen`, `windowed`, or `fullscreen-borderless`.
 
 ```sh
 build/debug/slayer3d_editor new --project apps/slayer3d_editor --output /tmp/level.slayermap.json --overwrite
