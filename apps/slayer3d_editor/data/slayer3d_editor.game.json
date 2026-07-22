@@ -11,7 +11,10 @@
     "logical_height": 720,
     "backend": "opengl",
     "window": { "renderer": "opengl", "vsync": true },
-    "quit": { "action": "action.exit" },
+    "quit": {
+      "action": "action.exit",
+      "request_signal": "signal.editor.file.exit"
+    },
     "input_policy": { "global_actions": [] }
   },
   "input": {
@@ -747,6 +750,7 @@
     "signal.editor.file.save_as",
     "signal.editor.file.validate",
     "signal.editor.file.plan_lighting",
+    "signal.editor.file.exit",
     "signal.editor.media.settings.toggle",
     "signal.editor.media.settings.close",
     "signal.editor.media.folder_dialog",

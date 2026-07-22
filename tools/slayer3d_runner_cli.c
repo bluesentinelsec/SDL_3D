@@ -17,23 +17,23 @@ void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream)
             "Usage:\n"
             "  %s\n"
             "  %s --map <level.slayermap.json> [--media <media-dir>] [--state <key=value> ...] "
-            "[--state-json <object>] [--state-file <path-or-asset>]\n"
+            "[--state-json <object>] [--state-file <path-or-asset>] [--window-mode <mode>]\n"
             "  %s --root <asset-root> [--root <asset-root> ...] "
             "(--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
-            "[--state-file <path-or-asset>]\n"
+            "[--state-file <path-or-asset>] [--window-mode <mode>]\n"
             "  %s --pack <game.slayer3dpak> (--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
-            "[--state-file <path-or-asset>]\n",
+            "[--state-file <path-or-asset>] [--window-mode <mode>]\n",
             program, program, program, program);
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
     fprintf(out,
             "  %s --embedded (--data <asset://game.json> | --test-run-manifest <path-or-asset>) "
             "[--media <media-dir>] [--scene <scene>] "
             "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
-            "[--state-file <path-or-asset>]\n",
+            "[--state-file <path-or-asset>] [--window-mode <mode>]\n",
             program);
 #endif
 }
@@ -54,6 +54,21 @@ static bool copy_string_list(const char ***out_values, int *out_count, const cha
         copy[i] = values[i];
     *out_values = copy;
     *out_count = count;
+    return true;
+}
+
+static bool runner_window_mode_parse(const char *value, slayer3d_window_mode *out_mode)
+{
+    if (value == NULL || out_mode == NULL)
+        return false;
+    if (SDL_strcmp(value, "fullscreen") == 0)
+        *out_mode = SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    else if (SDL_strcmp(value, "windowed") == 0)
+        *out_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
+    else if (SDL_strcmp(value, "fullscreen-borderless") == 0)
+        *out_mode = SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    else
+        return false;
     return true;
 }
 
@@ -103,6 +118,8 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     struct arg_str *scene = arg_str0(NULL, "scene", "<scene>", "start directly in an authored scene");
     struct arg_str *player_start =
         arg_str0(NULL, "player-start", "<name>", "apply an editor player start before first scene enter");
+    struct arg_str *window_mode =
+        arg_str0(NULL, "window-mode", "<mode>", "fullscreen, windowed, or fullscreen-borderless");
     struct arg_str *state = arg_strn(NULL, "state", "<key=value>", 0, argc > 0 ? argc : 1, "scene-state override");
     struct arg_str *state_json =
         arg_strn(NULL, "state-json", "<json-object>", 0, argc > 0 ? argc : 1, "scene-state JSON object");
@@ -118,9 +135,10 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
 #endif
         data,         test_run_manifest,
         media,        scene,
-        player_start, state,
-        state_json,   state_file,
-        help,         end,
+        player_start, window_mode,
+        state,        state_json,
+        state_file,   help,
+        end,
     };
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_runner";
     FILE *out = stream != NULL ? stream : stderr;
@@ -211,6 +229,16 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     {
         args->player_start = player_start->sval[0];
         args->player_start_explicit = true;
+    }
+    if (window_mode->count > 0)
+    {
+        if (!runner_window_mode_parse(window_mode->sval[0], &args->window_mode))
+        {
+            fprintf(out, "%s: --window-mode must be one of fullscreen, windowed, or fullscreen-borderless\n", program);
+            arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        args->window_mode_explicit = true;
     }
 
     if (args->map_path != NULL)

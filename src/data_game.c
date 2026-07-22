@@ -1247,6 +1247,7 @@ void slayer3d_data_game_runtime_destroy(slayer3d_data_game_runtime *runtime)
 
     disconnect_managed_network(runtime);
     disconnect_haptics_policies(runtime);
+    slayer3d_game_data_app_flow_stop(&runtime->app_flow);
     slayer3d_game_data_particle_cache_free(&runtime->particle_cache);
     slayer3d_game_data_mesh_primitive_cache_free(&runtime->mesh_primitive_cache);
     slayer3d_game_data_asset_warmup_queue_free(&runtime->asset_warmup);

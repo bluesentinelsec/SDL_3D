@@ -267,6 +267,10 @@ untitled `.slayermap.json` save target in SDL's per-user preferences directory:
 build/debug/slayer3d_editor
 ```
 
+The editor defaults to exclusive fullscreen. Pass `--window-mode windowed` or
+`--window-mode fullscreen-borderless` to override that launch; the third
+accepted value is the default, `--window-mode fullscreen`.
+
 ```sh
 build/debug/slayer3d_editor new --project apps/slayer3d_editor --output /tmp/level.slayermap.json --overwrite
 ```
@@ -388,6 +392,9 @@ This keeps the shell data-authored while still giving users a stable CLI:
 `--project` selects the editor project, `--input` selects a `.slayermap.json`
 file for `open`, `--output` selects the save target, and `--media-path`
 selects the one authoritative project media directory for the current session.
+`--window-mode` selects `fullscreen`, `windowed`, or
+`fullscreen-borderless` for the current process without changing authored game
+data.
 Deprecated per-tool overrides remain for compatibility, but should not be used
 for new editor workflows.
 

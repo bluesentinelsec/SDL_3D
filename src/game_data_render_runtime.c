@@ -20,6 +20,7 @@ bool slayer3d_game_data_get_app_control(const slayer3d_game_data_runtime *runtim
     {
         out_control->start_signal_id = -1;
         out_control->quit_action_id = -1;
+        out_control->quit_request_signal_id = -1;
         out_control->pause_action_id = -1;
         out_control->startup_transition = NULL;
         out_control->quit_transition = NULL;
@@ -42,6 +43,8 @@ bool slayer3d_game_data_get_app_control(const slayer3d_game_data_runtime *runtim
     out_control->pause_action_id = slayer3d_game_data_find_action(runtime, json_string(pause, "action", NULL));
     out_control->startup_transition = json_string(app, "startup_transition", NULL);
     out_control->quit_action_id = slayer3d_game_data_find_action(runtime, json_string(quit, "action", NULL));
+    out_control->quit_request_signal_id =
+        slayer3d_game_data_find_signal(runtime, json_string(quit, "request_signal", NULL));
     out_control->quit_transition = json_string(quit, "transition", NULL);
     out_control->quit_signal_id = slayer3d_game_data_find_signal(runtime, json_string(quit, "quit_signal", NULL));
     out_control->window_apply_signal_id =

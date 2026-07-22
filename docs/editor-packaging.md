@@ -22,6 +22,21 @@ slayer3d_editor new --project path/to/project --output path/to/level.slayermap.j
 slayer3d_editor open --project path/to/project --input path/to/level.slayermap.json
 ```
 
+The desktop editor starts in exclusive fullscreen mode by default. Use the
+launch-only `--window-mode` option to compare presentation modes without
+changing project data:
+
+```sh
+slayer3d_editor --window-mode fullscreen
+slayer3d_editor --window-mode windowed
+slayer3d_editor --window-mode fullscreen-borderless
+```
+
+`fullscreen` selects an exclusive display mode, while
+`fullscreen-borderless` uses the desktop display mode in a borderless window.
+The File menu's `Exit` command requests the managed app shutdown path, allowing
+normal shutdown callbacks and engine cleanup to complete.
+
 Set `SLAYER3D_EDITOR_PROJECT` to a project directory when testing another
 project as the temporary no-argument default.
 

@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "slayer3d/render_context.h"
+
 #include "slayer3d_tool_cli.h"
 
 #ifdef __cplusplus
@@ -36,6 +38,8 @@ extern "C"
         const char *media_dir;
         const char *scene;
         const char *player_start;
+        slayer3d_window_mode window_mode;
+        bool window_mode_explicit;
         bool data_asset_path_explicit;
         bool scene_explicit;
         bool player_start_explicit;

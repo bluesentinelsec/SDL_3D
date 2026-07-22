@@ -843,7 +843,7 @@
         "x": 4,
         "y": 38,
         "w": 308,
-        "h": 262,
+        "h": 296,
         "clip_children": true,
         "interactive": true,
         "layer": 500,
@@ -942,6 +942,19 @@
             "text_scale": 0.40,
             "interactive": true,
             "action": "editor.media.settings.toggle",
+            "layer": 501
+          },
+          {
+            "id": "ui.editor_shell.file_menu.exit.button",
+            "type": "button",
+            "x": 12,
+            "y": 242,
+            "w": 284,
+            "h": 26,
+            "text": "Exit",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.file.exit",
             "layer": 501
           }
         ]

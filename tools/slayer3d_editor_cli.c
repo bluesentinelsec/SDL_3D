@@ -34,10 +34,11 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
     fprintf(
         out,
         "Usage:\n"
-        "  %s [--media-path <dir>]\n"
-        "  %s new --project <project-dir-or-json> --output <level.json> [--media-path <dir>] [--overwrite]\n"
+        "  %s [--media-path <dir>] [--window-mode <mode>]\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--media-path <dir>] "
+        "[--window-mode <mode>] [--overwrite]\n"
         "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--media-path <dir>] "
-        "[--overwrite]\n"
+        "[--window-mode <mode>] [--overwrite]\n"
         "  %s lighting-plan --input <map.slayermap.json> [--preview|--final] [--max-dynamic-lights <n>] "
         "[--max-static-lights <n>] [--no-dynamic-preview] [--manifest|--static-artifact] [--output <file>]\n"
         "  %s lighting-artifact-validate --input <lighting-static.json>\n"
@@ -51,6 +52,7 @@ void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
         "\n"
         "Media defaults to ./media when present. --media-path overrides the session media root for textures, models, "
         "sprites, skyboxes, liquids, and effects.\n"
+        "Window mode defaults to fullscreen. Supported modes: fullscreen, windowed, fullscreen-borderless.\n"
         "\n"
         "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
         program, program, program, program, program);
@@ -582,6 +584,12 @@ static char *project_manifest_path(const char *project_arg, char *error_buffer, 
     return NULL;
 }
 
+static bool editor_window_mode_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "fullscreen") == 0 || SDL_strcmp(value, "windowed") == 0 ||
+                             SDL_strcmp(value, "fullscreen-borderless") == 0);
+}
+
 slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args, FILE *stream)
 {
     struct arg_str *project = arg_str0(NULL, "project", "<project>", "project directory or slayer3d.project.json");
@@ -589,6 +597,8 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
     struct arg_str *media_path =
         arg_str0(NULL, "media-path", "<dir>", "authoritative media directory for this editor session");
+    struct arg_str *window_mode =
+        arg_str0(NULL, "window-mode", "<mode>", "fullscreen, windowed, or fullscreen-borderless (default: fullscreen)");
     struct arg_int *max_dynamic_lights =
         arg_int0(NULL, "max-dynamic-lights", "<n>", "dynamic/runtime light budget for lighting-plan");
     struct arg_int *max_static_lights =
@@ -608,6 +618,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
                         input,
                         output,
                         media_path,
+                        window_mode,
                         max_dynamic_lights,
                         max_static_lights,
                         preview_quality,
@@ -630,6 +641,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     }
 
     SDL_zero(*args);
+    args->window_mode = "fullscreen";
     if (argc <= 1 || argv == NULL || argv[1] == NULL)
     {
         args->command = SLAYER3D_EDITOR_COMMAND_NEW;
@@ -721,6 +733,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     args->input_path = input->count > 0 ? input->sval[0] : NULL;
     args->output_path = output->count > 0 ? output->sval[0] : NULL;
     args->media_path = media_path->count > 0 ? media_path->sval[0] : NULL;
+    args->window_mode = window_mode->count > 0 ? window_mode->sval[0] : "fullscreen";
     args->overwrite = overwrite->count > 0;
     args->lighting_preview_quality = preview_quality->count > 0;
     args->lighting_final_quality = final_quality->count > 0;
@@ -734,7 +747,9 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     {
         if (project->count > 0 || input->count > 0 || output->count > 0 || overwrite->count > 0)
         {
-            fprintf(out, "%s: default editor launch only accepts --media-path; use 'new' or 'open' for map paths.\n",
+            fprintf(out,
+                    "%s: default editor launch only accepts --media-path and --window-mode; use 'new' or 'open' for "
+                    "map paths.\n",
                     program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
@@ -742,6 +757,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         if (args->media_path != NULL && args->media_path[0] == '\0')
         {
             fprintf(out, "%s: --media-path must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (!editor_window_mode_valid(args->window_mode))
+        {
+            fprintf(out, "%s: --window-mode must be one of fullscreen, windowed, or fullscreen-borderless.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
@@ -769,7 +790,7 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
             arg_freetable(argtable, SDL_arraysize(argtable));
             return SLAYER3D_TOOL_CLI_ERROR;
         }
-        if (project->count > 0 || media_path->count > 0 || overwrite->count > 0)
+        if (project->count > 0 || media_path->count > 0 || window_mode->count > 0 || overwrite->count > 0)
         {
             fprintf(out, "%s: 'lighting-plan' only accepts --input, --output, and lighting budget/quality options.\n",
                     program);
@@ -820,7 +841,8 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         }
         if (project->count > 0 || output->count > 0 || media_path->count > 0 || max_dynamic_lights->count > 0 ||
             max_static_lights->count > 0 || preview_quality->count > 0 || final_quality->count > 0 ||
-            no_dynamic_preview->count > 0 || manifest->count > 0 || static_artifact->count > 0 || overwrite->count > 0)
+            no_dynamic_preview->count > 0 || manifest->count > 0 || static_artifact->count > 0 ||
+            window_mode->count > 0 || overwrite->count > 0)
         {
             fprintf(out, "%s: 'lighting-artifact-validate' only accepts --input.\n", program);
             arg_freetable(argtable, SDL_arraysize(argtable));
@@ -869,6 +891,12 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     if (args->media_path != NULL && args->media_path[0] == '\0')
     {
         fprintf(out, "%s: --media-path must be non-empty when present.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+    if (!editor_window_mode_valid(args->window_mode))
+    {
+        fprintf(out, "%s: --window-mode must be one of fullscreen, windowed, or fullscreen-borderless.\n", program);
         arg_freetable(argtable, SDL_arraysize(argtable));
         return SLAYER3D_TOOL_CLI_ERROR;
     }
@@ -1257,6 +1285,8 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->test_run_path = project->test_run_path;
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
+    out_launch->window_mode =
+        args->window_mode != NULL && args->window_mode[0] != '\0' ? args->window_mode : "fullscreen";
     out_launch->asset_sources = &project->asset_sources;
     char *media_relative_path = NULL;
     char *media_root = editor_resolve_session_media_root(args, project, &media_relative_path);
@@ -1566,7 +1596,8 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     SDL_zero(*out_invocation);
     if (launch == NULL || launch->root == NULL || launch->root[0] == '\0' || launch->data_asset_path == NULL ||
         launch->data_asset_path[0] == '\0' || launch->save_path == NULL || launch->save_path[0] == '\0' ||
-        launch->project_dir == NULL || launch->asset_sources == NULL)
+        launch->project_dir == NULL || launch->window_mode == NULL || !editor_window_mode_valid(launch->window_mode) ||
+        launch->asset_sources == NULL)
     {
         return false;
     }
@@ -1578,7 +1609,7 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     }
 
     const int state_count = 4 + 2 + 3 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
-    int argc = 5 + (editor_invocation_extra_asset_root_count(out_invocation) * 2) + (state_count * 2);
+    int argc = 7 + (editor_invocation_extra_asset_root_count(out_invocation) * 2) + (state_count * 2);
     if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
 
@@ -1612,6 +1643,12 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
 
     int index = 0;
     if (!editor_add_arg(out_invocation, &index, (char *)(program != NULL ? program : "slayer3d_editor")))
+    {
+        slayer3d_editor_runner_invocation_destroy(out_invocation);
+        return false;
+    }
+    if (!editor_add_arg(out_invocation, &index, "--window-mode") ||
+        !editor_add_arg(out_invocation, &index, (char *)launch->window_mode))
     {
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;

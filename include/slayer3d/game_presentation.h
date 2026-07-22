@@ -359,6 +359,9 @@ extern "C"
         slayer3d_game_data_scene_flow scene_flow;   /**< Data-authored scene transition flow. */
         slayer3d_transition transition;             /**< App-level startup/quit transition. */
         slayer3d_game_data_app_control app;         /**< Resolved app controls from game data. */
+        slayer3d_signal_bus *signal_bus;            /**< Borrowed bus used by app lifecycle signal hooks. */
+        int quit_request_connection_id;             /**< Connection for the authored quit request signal. */
+        bool quit_request_received;                 /**< True after the authored quit request signal fires. */
         bool quit_pending;                          /**< True after quit has been requested. */
         bool scene_input_armed;                     /**< True once menu input is idle after scene entry. */
         const char *skip_scene;                     /**< Active scene tracked for pending skip input. */
@@ -952,6 +955,14 @@ extern "C"
      * Reads app controls and starts the authored startup transition when present.
      */
     bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Disconnect app lifecycle signal hooks.
+     *
+     * Call before destroying the game-data runtime or the flow storage. Safe to
+     * call for an initialized flow that was never started.
+     */
+    void slayer3d_game_data_app_flow_stop(slayer3d_game_data_app_flow *flow);
 
     /**
      * @brief Return true when quit has been requested and is waiting on a transition.

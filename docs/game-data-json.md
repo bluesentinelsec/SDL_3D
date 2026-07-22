@@ -357,7 +357,11 @@ The optional `app` object configures the managed loop before the window exists:
     "audio": { "enabled": true },
     "startup_transition": "startup",
     "pause": { "action": "action.pause" },
-    "quit": { "action": "action.exit", "transition": "quit" },
+    "quit": {
+      "action": "action.exit",
+      "request_signal": "signal.app.quit_request",
+      "transition": "quit"
+    },
     "input_policy": {
       "global_actions": ["action.exit"]
     }
@@ -385,7 +389,9 @@ delayed until that transition finishes. `quit.enabled_if` uses the same data
 condition syntax as scene logic, which lets editor shells keep `Esc` local to a
 modal palette while the palette is open. Use `app.input_policy.global_actions`
 for lifecycle actions such as quit that should work even when a scene restricts
-its local `input.actions` list.
+its local `input.actions` list. `quit.request_signal` provides the equivalent
+data-authored path for retained UI and logic: emitting that signal requests the
+same managed shutdown flow as `quit.action`.
 
 ## UI Rectangles
 
