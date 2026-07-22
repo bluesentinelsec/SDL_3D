@@ -4834,6 +4834,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     ASSERT_TRUE(slayer3d_game_data_get_app_control(runtime, &app));
     EXPECT_EQ(app.start_signal_id, -1);
     EXPECT_GE(app.quit_action_id, 0);
+    EXPECT_EQ(app.quit_request_signal_id, -1);
     EXPECT_GE(app.pause_action_id, 0);
     EXPECT_EQ(app.startup_transition, nullptr);
     EXPECT_STREQ(app.quit_transition, "quit");
@@ -24156,6 +24157,9 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                                                       file_open_region.rect.y + file_open_region.rect.h * 0.5f);
     EXPECT_EQ(file_open_button_hit.id, "ui.editor_shell.file_menu.open.button");
     EXPECT_EQ(file_open_button_hit.action, "editor.file.open_dialog");
+    HitRegionSummary file_exit_region = retained_ui_region("ui.editor_shell.file_menu.exit.button");
+    ASSERT_TRUE(file_exit_region.found);
+    EXPECT_EQ(file_exit_region.hit.action, "editor.file.exit");
     std::vector<std::string> file_rects = visible_file_rects();
     slayer3d_color file_panel_color = resolved_file_panel_color();
     EXPECT_EQ(file_panel_color.a, 255);
@@ -24172,6 +24176,8 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.save_as.button"),
               file_rects.end());
     EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.validate.button"),
+              file_rects.end());
+    EXPECT_NE(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.exit.button"),
               file_rects.end());
     EXPECT_EQ(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.plan_lighting.button"),
               file_rects.end());
@@ -24514,6 +24520,41 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(save_dir);
+}
+
+TEST(GameDataRuntime, EditorShellDojoFileExitRequestsManagedShutdown)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_app_control app{};
+    ASSERT_TRUE(slayer3d_game_data_get_app_control(runtime, &app));
+    const int exit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.file.exit");
+    ASSERT_GE(exit_signal, 0);
+    EXPECT_EQ(app.quit_request_signal_id, exit_signal);
+
+    slayer3d_game_data_app_flow flow{};
+    slayer3d_game_data_app_flow_init(&flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
+    slayer3d_game_context ctx{};
+    ctx.session = session;
+
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), exit_signal, nullptr);
+    EXPECT_FALSE(ctx.quit_requested);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
+    EXPECT_TRUE(slayer3d_game_data_app_flow_quit_pending(&flow));
+    EXPECT_TRUE(ctx.quit_requested);
+
+    slayer3d_game_data_app_flow_stop(&flow);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorShellDojoTextureViewerScrollsVisibleTextureSlots)

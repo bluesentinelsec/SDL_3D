@@ -73,6 +73,15 @@ static void app_flow_request_quit(slayer3d_game_data_app_flow *flow, slayer3d_ga
                               transition.duration, transition.done_signal_id);
 }
 
+static void app_flow_on_quit_request(void *userdata, int signal_id, const slayer3d_properties *payload)
+{
+    slayer3d_game_data_app_flow *flow = (slayer3d_game_data_app_flow *)userdata;
+    (void)signal_id;
+    (void)payload;
+    if (flow != NULL)
+        flow->quit_request_received = true;
+}
+
 static bool app_flow_request_scene(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
                                    const char *scene_name)
 {
@@ -371,8 +380,20 @@ void slayer3d_game_data_app_flow_init(slayer3d_game_data_app_flow *flow)
     slayer3d_transition_reset(&flow->transition);
     flow->app.start_signal_id = -1;
     flow->app.quit_action_id = -1;
+    flow->app.quit_request_signal_id = -1;
     flow->app.pause_action_id = -1;
     flow->app.quit_signal_id = -1;
+}
+
+void slayer3d_game_data_app_flow_stop(slayer3d_game_data_app_flow *flow)
+{
+    if (flow == NULL)
+        return;
+    if (flow->signal_bus != NULL && flow->quit_request_connection_id > 0)
+        slayer3d_signal_disconnect(flow->signal_bus, flow->quit_request_connection_id);
+    flow->signal_bus = NULL;
+    flow->quit_request_connection_id = 0;
+    flow->quit_request_received = false;
 }
 
 bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime)
@@ -380,6 +401,7 @@ bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer
     if (flow == NULL || runtime == NULL)
         return false;
 
+    slayer3d_game_data_app_flow_stop(flow);
     slayer3d_game_data_scene_flow_init(&flow->scene_flow);
     slayer3d_transition_reset(&flow->transition);
     flow->quit_pending = false;
@@ -389,6 +411,18 @@ bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer
     slayer3d_game_data_timeline_state_init(&flow->timeline);
     if (!slayer3d_game_data_get_app_control(runtime, &flow->app))
         return false;
+
+    if (flow->app.quit_request_signal_id >= 0)
+    {
+        flow->signal_bus = runtime->session != NULL ? slayer3d_game_session_get_signal_bus(runtime->session) : NULL;
+        flow->quit_request_connection_id =
+            slayer3d_signal_connect(flow->signal_bus, flow->app.quit_request_signal_id, app_flow_on_quit_request, flow);
+        if (flow->quit_request_connection_id <= 0)
+        {
+            slayer3d_game_data_app_flow_stop(flow);
+            return SDL_SetError("Unable to connect app quit request signal");
+        }
+    }
 
     slayer3d_game_data_transition_desc transition;
     if (flow->app.startup_transition != NULL &&
@@ -419,6 +453,14 @@ bool slayer3d_game_data_app_flow_update(slayer3d_game_data_app_flow *flow, slaye
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(ctx->session);
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(ctx->session);
+    yyjson_val *quit = obj_get(obj_get(runtime_root(runtime), "app"), "quit");
+    const bool quit_enabled = eval_data_condition(runtime, obj_get(quit, "enabled_if"), NULL);
+    if (flow->quit_request_received)
+    {
+        flow->quit_request_received = false;
+        if (quit_enabled)
+            app_flow_request_quit(flow, ctx, runtime);
+    }
     bool skip_applied = false;
     bool skip_blocks_menus = false;
     bool skip_blocks_scene_shortcuts = false;
@@ -435,8 +477,6 @@ bool slayer3d_game_data_app_flow_update(slayer3d_game_data_app_flow *flow, slaye
 
     if (!skip_consumed && !activity_wake_consumed)
     {
-        yyjson_val *quit = obj_get(obj_get(runtime_root(runtime), "app"), "quit");
-        const bool quit_enabled = eval_data_condition(runtime, obj_get(quit, "enabled_if"), NULL);
         if (quit_enabled && flow->app.quit_action_id >= 0 &&
             slayer3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
             slayer3d_input_is_pressed(input, flow->app.quit_action_id))

@@ -102,6 +102,10 @@ bool validate_app_refs(validation_context *ctx, yyjson_val *root, validation_nam
         return false;
     if (!validate_data_condition(ctx, obj_get(quit, "enabled_if"), "$.app.quit.enabled_if", names))
         return false;
+    const char *request_signal = json_string(quit, "request_signal");
+    if (request_signal != NULL &&
+        !require_ref(ctx, &names->signals, "signal", request_signal, "$.app.quit.request_signal"))
+        return false;
     const char *quit_signal = json_string(quit, "quit_signal");
     if (quit_signal != NULL && !require_ref(ctx, &names->signals, "signal", quit_signal, "$.app.quit.quit_signal"))
         return false;

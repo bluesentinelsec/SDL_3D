@@ -507,6 +507,8 @@ int slayer3d_runner_main(int argc, char **argv)
         SDL_free(state.generated_map_output_dir);
         return 1;
     }
+    if (state.args.window_mode_explicit)
+        state.config.display_mode = state.args.window_mode;
 
     /* Runner-hosted games are interactive apps: browser builds must yield to
      * the browser between frames instead of blocking the tab. */

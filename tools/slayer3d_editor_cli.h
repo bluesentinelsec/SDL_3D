@@ -33,6 +33,7 @@ extern "C"
         const char *input_path;
         const char *output_path;
         const char *media_path;
+        const char *window_mode;
         char *owned_project;
         char *owned_output_path;
         bool overwrite;
@@ -88,6 +89,7 @@ extern "C"
         const char *test_run_path;
         const char *project_dir;
         const char *data_root_relative_path;
+        const char *window_mode;
         const slayer3d_editor_asset_sources *asset_sources;
         slayer3d_editor_asset_sources owned_asset_sources;
         bool owns_asset_sources;

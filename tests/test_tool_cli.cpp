@@ -33,6 +33,15 @@ std::vector<char *> argv_from(std::initializer_list<const char *> args)
     return argv;
 }
 
+const char *expected_editor_default_window_mode()
+{
+#if defined(__EMSCRIPTEN__)
+    return "windowed";
+#else
+    return "fullscreen";
+#endif
+}
+
 std::filesystem::path unique_cli_test_path(const char *name)
 {
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -169,6 +178,38 @@ TEST(ToolCli, RunnerParsesSlayerMapMode)
     EXPECT_STREQ(args.media_dir, "media");
     ASSERT_EQ(args.state_assignment_count, 1);
     EXPECT_STREQ(args.state_assignments[0], "debug=true");
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerParsesWindowModes)
+{
+    struct WindowModeCase
+    {
+        const char *argument;
+        slayer3d_window_mode expected;
+    };
+    const WindowModeCase cases[] = {{"fullscreen", SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE},
+                                    {"windowed", SLAYER3D_WINDOW_MODE_WINDOWED},
+                                    {"fullscreen-borderless", SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS}};
+    for (const WindowModeCase &test_case : cases)
+    {
+        std::vector<char *> argv = argv_from({"slayer3d_runner", "--root", "game/data", "--data",
+                                              "asset://game.game.json", "--window-mode", test_case.argument});
+        slayer3d_runner_args args;
+        ASSERT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK)
+            << test_case.argument;
+        EXPECT_TRUE(args.window_mode_explicit);
+        EXPECT_EQ(args.window_mode, test_case.expected);
+        slayer3d_runner_args_destroy(&args);
+    }
+}
+
+TEST(ToolCli, RunnerRejectsInvalidWindowMode)
+{
+    std::vector<char *> argv = argv_from(
+        {"slayer3d_runner", "--root", "game/data", "--data", "asset://game.game.json", "--window-mode", "borderless"});
+    slayer3d_runner_args args;
+    EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_runner_args_destroy(&args);
 }
 
@@ -317,6 +358,7 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     EXPECT_NE(joined.find("--root\n" + (project_dir / "data").string()), std::string::npos);
     EXPECT_NE(joined.find("--root\n" + project_dir.string()), std::string::npos);
     EXPECT_NE(joined.find("--data\nasset://editor.game.json"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("--window-mode\n") + expected_editor_default_window_mode()), std::string::npos);
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find("editor.input.path="), std::string::npos);
     EXPECT_NE(joined.find("editor.save.path=" + output), std::string::npos);
@@ -627,6 +669,8 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     ASSERT_NE(args.output_path, nullptr);
     EXPECT_NE(std::string(args.project).find("apps/slayer3d_editor"), std::string::npos);
     EXPECT_NE(std::string(args.output_path).find(".slayermap.json"), std::string::npos);
+    const char *expected_window_mode = expected_editor_default_window_mode();
+    EXPECT_STREQ(args.window_mode, expected_window_mode);
 
     char error[512]{};
     slayer3d_editor_project loaded_project;
@@ -649,6 +693,7 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     EXPECT_EQ(joined.find("--embedded"), std::string::npos);
     EXPECT_NE(joined.find("--root"), std::string::npos);
     EXPECT_NE(joined.find("asset://slayer3d_editor.game.json"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("--window-mode\n") + expected_window_mode), std::string::npos);
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
     EXPECT_NE(joined.find("editor.project.dir=" + std::string(launch.project_dir)), std::string::npos);
@@ -656,6 +701,27 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     slayer3d_editor_runner_invocation_destroy(&invocation);
     slayer3d_editor_launch_destroy(&launch);
     slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorParsesWindowModes)
+{
+    for (const char *mode : {"fullscreen", "windowed", "fullscreen-borderless"})
+    {
+        std::vector<char *> argv = argv_from({"slayer3d_editor", "--window-mode", mode});
+        slayer3d_editor_args args;
+        ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK)
+            << mode;
+        EXPECT_STREQ(args.window_mode, mode);
+        slayer3d_editor_args_destroy(&args);
+    }
+}
+
+TEST(ToolCli, EditorRejectsInvalidWindowMode)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "--window-mode", "exclusive"});
+    slayer3d_editor_args args;
+    EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_editor_args_destroy(&args);
 }
 

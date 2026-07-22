@@ -20,6 +20,8 @@ extern "C"
         int start_signal_id;
         /** @brief Input action that requests app quit, or -1. */
         int quit_action_id;
+        /** @brief Signal that requests the normal app quit flow, or -1. */
+        int quit_request_signal_id;
         /** @brief Input action that requests pause/unpause, or -1. */
         int pause_action_id;
         /** @brief Transition name to play at startup, or NULL. */
