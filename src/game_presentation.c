@@ -7,6 +7,7 @@
 
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "slayer3d/collision.h"
 #include "slayer3d/drawing3d.h"
@@ -26,6 +27,49 @@ typedef struct scene_world_viewport
     SDL_Rect rect;
     bool draw_viewmodel;
 } scene_world_viewport;
+
+typedef struct game_presentation_profile
+{
+    Uint64 last_counter;
+    double assets_ms;
+    double settings_ms;
+    double world_ms;
+    double ui_ms;
+    int frames;
+} game_presentation_profile;
+
+static void record_game_presentation_profile(Uint64 frame_start, Uint64 assets_end, Uint64 settings_end,
+                                             Uint64 world_end, Uint64 ui_end)
+{
+    static game_presentation_profile profile;
+    const double frequency = (double)SDL_GetPerformanceFrequency();
+    if (frequency <= 0.0)
+        return;
+
+    const double milliseconds = 1000.0 / frequency;
+    profile.assets_ms += (double)(assets_end - frame_start) * milliseconds;
+    profile.settings_ms += (double)(settings_end - assets_end) * milliseconds;
+    profile.world_ms += (double)(world_end - settings_end) * milliseconds;
+    profile.ui_ms += (double)(ui_end - world_end) * milliseconds;
+    profile.frames++;
+    if (profile.last_counter == 0)
+        profile.last_counter = frame_start;
+
+    if ((double)(ui_end - profile.last_counter) < frequency)
+        return;
+
+    const double frames = profile.frames > 0 ? (double)profile.frames : 1.0;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SLAYER3D presentation profile: assets=%.2fms settings=%.2fms world=%.2fms ui=%.2fms",
+                profile.assets_ms / frames, profile.settings_ms / frames, profile.world_ms / frames,
+                profile.ui_ms / frames);
+    profile.last_counter = ui_end;
+    profile.assets_ms = 0.0;
+    profile.settings_ms = 0.0;
+    profile.world_ms = 0.0;
+    profile.ui_ms = 0.0;
+    profile.frames = 0;
+}
 
 static slayer3d_camera3d default_camera(void)
 {
@@ -1168,6 +1212,11 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     if (frame == NULL || frame->runtime == NULL || frame->renderer == NULL)
         return false;
 
+    const bool profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
+    const Uint64 frame_start = profile_frames ? SDL_GetPerformanceCounter() : 0;
+    Uint64 assets_end = 0;
+    Uint64 settings_end = 0;
+    Uint64 world_end = 0;
     bool ok = true;
     queue_active_scene_assets(frame);
     if (frame->asset_warmup != NULL)
@@ -1183,9 +1232,13 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
                                                             frame->font_cache, frame->image_cache, frame->sprite_cache,
                                                             frame->model_cache, frame->mesh_primitive_cache, assets, 0);
     }
+    if (profile_frames)
+        assets_end = SDL_GetPerformanceCounter();
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
     slayer3d_game_data_model_cache_begin_pose_frame(frame->model_cache);
+    if (profile_frames)
+        settings_end = SDL_GetPerformanceCounter();
 
     if (slayer3d_game_data_active_scene_renders_world(frame->runtime))
     {
@@ -1197,6 +1250,8 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
             ok = draw_world_for_camera(frame, &camera, true) && ok;
         }
     }
+    if (profile_frames)
+        world_end = SDL_GetPerformanceCounter();
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
     ok = slayer3d_game_data_draw_ui_layered(frame->runtime, frame->renderer, frame->font_cache, frame->image_cache,
@@ -1206,5 +1261,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     if (frame->app_flow != NULL)
         slayer3d_game_data_app_flow_draw(frame->app_flow, frame->renderer);
     ok = run_frame_hook(frame, frame->after_ui) && ok;
+    if (profile_frames)
+        record_game_presentation_profile(frame_start, assets_end, settings_end, world_end, SDL_GetPerformanceCounter());
     return ok;
 }

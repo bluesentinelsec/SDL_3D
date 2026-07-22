@@ -27,6 +27,18 @@
             }
         },
         {
+            "name": "editor",
+            "displayName": "Optimized Editor",
+            "description": "Build the interactive editor with optimizations and without test or demo targets.",
+            "inherits": "release",
+            "binaryDir": "${sourceDir}/build/editor",
+            "cacheVariables": {
+                "SLAYER3D_BUILD_TESTS": "OFF",
+                "SLAYER3D_BUILD_DEMOS": "OFF",
+                "SLAYER3D_BUILD_BENCHMARKS": "OFF"
+            }
+        },
+        {
             "name": "sanitizers",
             "displayName": "Sanitizers",
             "inherits": "default",
@@ -45,6 +57,13 @@
         {
             "name": "release",
             "configurePreset": "release"
+        },
+        {
+            "name": "editor",
+            "configurePreset": "editor",
+            "targets": [
+                "slayer3d_editor"
+            ]
         },
         {
             "name": "sanitizers",

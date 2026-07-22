@@ -56,16 +56,37 @@ For a distributable desktop build, prefer static engine and SDL linkage where
 the platform toolchain supports it:
 
 ```sh
-cmake --preset default \
+cmake --preset editor \
   -DBUILD_SHARED_LIBS=OFF \
   -DSLAYER3D_SDL_LINKAGE=static
-cmake --build --preset default --target slayer3d_editor
+cmake --build --preset editor
 ```
+
+The `editor` preset is a Release build scoped to the interactive editor. The
+`default` preset is intentionally an unoptimized Debug build for engine
+development. Debug builds should remain interactive, but their frame cost is not
+representative of a distributed editor build.
 
 The Windows MSVC static CI job verifies that `slayer3d_editor.exe` does not
 import `SDL3.dll` when configured with static SDL linkage. macOS and Linux
 package builds should use the same intent, but exact system library linkage is
 toolchain and dependency-manager dependent.
+
+## Frame Profiling
+
+Set `SLAYER3D_PROFILE_FRAMES=1` before launching the editor to log averaged
+frame-stage timings once per second. On PowerShell:
+
+```powershell
+$env:SLAYER3D_PROFILE_FRAMES = "1"
+build/editor/slayer3d_editor.exe
+```
+
+Each sample reports FPS and milliseconds spent polling events, running fixed
+ticks, submitting render work, and presenting. Presentation, UI collection, and
+managed render-wrapper samples further divide the render cost. Compare profiles
+from the same map and window size, and include the build preset: Debug and
+optimized timings are not directly comparable.
 
 ## Install Layout
 
