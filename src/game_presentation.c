@@ -20,14 +20,6 @@
 #include "game_presentation_internal.h"
 #include "render_context_internal.h"
 
-typedef struct scene_world_viewport
-{
-    const char *name;
-    const char *camera;
-    SDL_Rect rect;
-    bool draw_viewmodel;
-} scene_world_viewport;
-
 typedef struct game_presentation_profile
 {
     Uint64 last_counter;
@@ -970,6 +962,57 @@ static const char *editor_debug_label_font_id(const slayer3d_game_data_runtime *
     return json_string(first, "id", NULL);
 }
 
+static bool draw_scene_viewport_label(const slayer3d_game_data_frame_desc *frame,
+                                      const game_data_scene_world_viewport *viewport)
+{
+    if (frame == NULL || viewport == NULL || viewport->label == NULL || viewport->label[0] == '\0' ||
+        frame->font_cache == NULL)
+    {
+        return true;
+    }
+
+    const char *font_id = viewport->label_font;
+    if (font_id == NULL)
+        font_id = editor_debug_label_font_id(frame->runtime);
+    if (font_id == NULL)
+        return true;
+
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(frame->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL,
+                                                      font_id, &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
+
+    slayer3d_font *font = slayer3d_game_data_find_or_load_font(frame->runtime, frame->font_cache, font_id);
+    if (font == NULL)
+        return true;
+
+    const float scale = json_float(viewport->label_style, "scale", 0.72f);
+    const float padding_x = json_float(viewport->label_style, "padding_x", 8.0f);
+    const float padding_y = json_float(viewport->label_style, "padding_y", 4.0f);
+    const float bottom_offset = json_float(viewport->label_style, "bottom_offset", 8.0f);
+    const slayer3d_color text_color =
+        json_color(viewport->label_style, "text_color", (slayer3d_color){220, 228, 236, 255});
+    const slayer3d_color background_color =
+        json_color(viewport->label_style, "background_color", (slayer3d_color){7, 12, 18, 205});
+
+    float text_width = 0.0f;
+    float text_height = 0.0f;
+    slayer3d_measure_text(font, viewport->label, &text_width, &text_height);
+    text_width *= scale;
+    text_height *= scale;
+    const float width = text_width + padding_x * 2.0f;
+    const float height = text_height + padding_y * 2.0f;
+    const float x = (float)viewport->rect.x + ((float)viewport->rect.w - width) * 0.5f;
+    const float y = (float)(viewport->rect.y + viewport->rect.h) - height - bottom_offset;
+
+    return slayer3d_draw_rect_overlay(frame->renderer, x, y, width, height, background_color) &&
+           slayer3d_draw_text_overlay_scaled(frame->renderer, font, viewport->label, x + padding_x, y + padding_y,
+                                             scale, text_color);
+}
+
 static bool editor_debug_project_world_to_screen(slayer3d_render_context *renderer, const slayer3d_camera3d *camera,
                                                  slayer3d_vec3 point, float *out_x, float *out_y)
 {
@@ -1070,40 +1113,84 @@ static bool draw_active_editor_debug_labels(const slayer3d_game_data_runtime *ru
     return context.ok;
 }
 
-static bool scene_world_viewport_rect(yyjson_val *viewport, SDL_Rect *out_rect)
+static slayer3d_vec3 scene_viewport_grid_tangent(slayer3d_vec3 normal)
 {
-    if (viewport == NULL || out_rect == NULL)
-        return false;
-    yyjson_val *rect = obj_get(viewport, "rect");
-    if (!yyjson_is_arr(rect) || yyjson_arr_size(rect) != 4)
-        return false;
-    const double x = yyjson_get_num(yyjson_arr_get(rect, 0));
-    const double y = yyjson_get_num(yyjson_arr_get(rect, 1));
-    const double w = yyjson_get_num(yyjson_arr_get(rect, 2));
-    const double h = yyjson_get_num(yyjson_arr_get(rect, 3));
-    if (!(w > 0.0) || !(h > 0.0))
-        return false;
-    *out_rect = (SDL_Rect){(int)SDL_lround(x), (int)SDL_lround(y), (int)SDL_lround(w), (int)SDL_lround(h)};
-    return true;
+    const slayer3d_vec3 axes[3] = {
+        slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
+    };
+    slayer3d_vec3 best = axes[0];
+    float best_length = 0.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const slayer3d_vec3 projected =
+            slayer3d_vec3_sub(axes[i], slayer3d_vec3_scale(normal, slayer3d_vec3_dot(axes[i], normal)));
+        const float length = slayer3d_vec3_length_squared(projected);
+        if (length > best_length)
+        {
+            best = projected;
+            best_length = length;
+        }
+    }
+    return best_length > 0.000001f ? slayer3d_vec3_normalize(best) : axes[0];
 }
 
-static bool scene_world_viewport_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *viewport,
-                                           scene_world_viewport *out_viewport)
+static bool draw_scene_viewport_grid(const slayer3d_game_data_frame_desc *frame,
+                                     const game_data_scene_world_viewport *viewport)
 {
-    if (runtime == NULL || !yyjson_is_obj(viewport) || out_viewport == NULL)
+    if (frame == NULL || viewport == NULL || !yyjson_is_obj(viewport->grid) ||
+        !json_bool(viewport->grid, "enabled", true) || !yyjson_is_obj(viewport->work_plane))
+    {
+        return true;
+    }
+
+    slayer3d_vec3 normal = json_vec3(viewport->work_plane, "normal", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
         return false;
-    yyjson_val *active_if = obj_get(viewport, "active_if");
-    if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+    normal = slayer3d_vec3_normalize(normal);
+    const float distance = json_float(viewport->work_plane, "distance", 0.0f);
+    const slayer3d_vec3 tangent = scene_viewport_grid_tangent(normal);
+    const slayer3d_vec3 bitangent = slayer3d_vec3_normalize(slayer3d_vec3_cross(normal, tangent));
+    const slayer3d_vec3 origin = slayer3d_vec3_scale(normal, distance);
+    const float extent = json_float(viewport->grid, "extent", 256.0f);
+    float spacing = json_float(viewport->grid, "spacing", 1.0f);
+    const char *spacing_key = json_string(viewport->grid, "spacing_key", NULL);
+    if (spacing_key != NULL && frame->runtime->scene_state != NULL)
+        spacing = slayer3d_properties_get_float(frame->runtime->scene_state, spacing_key, spacing);
+    if (extent <= 0.0f || spacing <= 0.0f)
         return false;
-    SDL_zero(*out_viewport);
-    out_viewport->name = json_string(viewport, "name", NULL);
-    out_viewport->camera = json_string(viewport, "camera", NULL);
-    out_viewport->draw_viewmodel = json_bool(viewport, "viewmodel", false);
-    return out_viewport->camera != NULL && scene_world_viewport_rect(viewport, &out_viewport->rect);
+
+    const int max_lines_per_axis = 512;
+    while (extent * 2.0f / spacing > (float)max_lines_per_axis)
+        spacing *= 2.0f;
+    const int first = (int)SDL_ceilf(-extent / spacing);
+    const int last = (int)SDL_floorf(extent / spacing);
+    const slayer3d_color color = json_color(viewport->grid, "color", (slayer3d_color){70, 90, 105, 115});
+    bool ok = true;
+    for (int line = first; line <= last; ++line)
+    {
+        const float offset = (float)line * spacing;
+        const slayer3d_vec3 tangent_offset = slayer3d_vec3_scale(tangent, offset);
+        const slayer3d_vec3 bitangent_offset = slayer3d_vec3_scale(bitangent, offset);
+        ok = slayer3d_draw_line_3d(
+                 frame->renderer,
+                 slayer3d_vec3_add(slayer3d_vec3_add(origin, tangent_offset), slayer3d_vec3_scale(bitangent, -extent)),
+                 slayer3d_vec3_add(slayer3d_vec3_add(origin, tangent_offset), slayer3d_vec3_scale(bitangent, extent)),
+                 color) &&
+             ok;
+        ok = slayer3d_draw_line_3d(
+                 frame->renderer,
+                 slayer3d_vec3_add(slayer3d_vec3_add(origin, bitangent_offset), slayer3d_vec3_scale(tangent, -extent)),
+                 slayer3d_vec3_add(slayer3d_vec3_add(origin, bitangent_offset), slayer3d_vec3_scale(tangent, extent)),
+                 color) &&
+             ok;
+    }
+    return ok;
 }
 
 static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, const slayer3d_camera3d *camera,
-                                  bool draw_viewmodel)
+                                  const game_data_scene_world_viewport *viewport, bool draw_viewmodel)
 {
     if (frame == NULL || camera == NULL)
         return false;
@@ -1111,9 +1198,13 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
     if (slayer3d_begin_mode_3d(frame->renderer, *camera))
     {
         ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
-                                      frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
-             ok;
+        if (camera->projection == SLAYER3D_CAMERA_PERSPECTIVE && (viewport == NULL || viewport->draw_skybox))
+        {
+            ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
+                                          frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
+                 ok;
+        }
+        ok = draw_scene_viewport_grid(frame, viewport) && ok;
         ok = slayer3d_game_data_draw_sector_levels_with_assets(
                  frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                  camera) &&
@@ -1171,32 +1262,36 @@ static bool draw_active_scene_world_viewports(const slayer3d_game_data_frame_des
 {
     if (out_drawn != NULL)
         *out_drawn = false;
-    const scene_entry *scene = active_scene_entry_const(frame != NULL ? frame->runtime : NULL);
-    yyjson_val *viewports = obj_get(scene != NULL ? scene->root : NULL, "world_viewports");
-    if (!yyjson_is_arr(viewports))
+    game_data_scene_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX];
+    int viewport_count = 0;
+    if (frame == NULL || !game_data_resolve_active_scene_world_viewports(frame->runtime, viewports,
+                                                                         SDL_arraysize(viewports), &viewport_count))
+    {
+        return false;
+    }
+    if (viewport_count == 0)
         return true;
 
     bool ok = true;
     bool drawn = false;
-    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    for (int i = 0; i < viewport_count; ++i)
     {
-        scene_world_viewport viewport;
-        if (!scene_world_viewport_from_json(frame->runtime, yyjson_arr_get(viewports, i), &viewport))
-            continue;
+        const game_data_scene_world_viewport *viewport = &viewports[i];
 
         slayer3d_camera3d camera;
-        if (!slayer3d_game_data_get_camera(frame->runtime, viewport.camera, &camera))
+        if (!slayer3d_game_data_get_camera(frame->runtime, viewport->camera, &camera))
         {
             ok = false;
             continue;
         }
-        if (!slayer3d_set_render_viewport(frame->renderer, &viewport.rect) ||
-            !slayer3d_set_scissor_rect(frame->renderer, &viewport.rect))
+        if (!slayer3d_set_render_viewport(frame->renderer, &viewport->rect) ||
+            !slayer3d_set_scissor_rect(frame->renderer, &viewport->rect))
         {
             ok = false;
             continue;
         }
-        ok = draw_world_for_camera(frame, &camera, viewport.draw_viewmodel) && ok;
+        ok = draw_world_for_camera(frame, &camera, viewport, viewport->draw_viewmodel) && ok;
+        ok = draw_scene_viewport_label(frame, viewport) && ok;
         drawn = true;
     }
 
@@ -1247,7 +1342,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
         if (!drew_viewports)
         {
             const slayer3d_camera3d camera = active_camera_or_fallback(frame->runtime, frame->fallback_camera);
-            ok = draw_world_for_camera(frame, &camera, true) && ok;
+            ok = draw_world_for_camera(frame, &camera, NULL, true) && ok;
         }
     }
     if (profile_frames)

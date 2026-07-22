@@ -2327,6 +2327,50 @@ TEST_F(GLRendererTest, TexturedSkyboxShowsTopFaceWithBackfaceCulling)
     EXPECT_LT(px_out[1], 80);
 }
 
+TEST_F(GLRendererTest, SkySpheresRenderInEachSubmittedViewport)
+{
+    const Uint8 red[] = {255, 0, 0, 255};
+    const Uint8 green[] = {0, 255, 0, 255};
+    slayer3d_texture2d red_texture = MakeTextureFromPixels(red, 1, 1);
+    slayer3d_texture2d green_texture = MakeTextureFromPixels(green, 1, 1);
+    const slayer3d_sky_sphere_textured skies[] = {{&red_texture}, {&green_texture}};
+    const SDL_Rect viewports[] = {{0, 0, 160, 240}, {160, 0, 160, 240}};
+
+    slayer3d_camera3d camera{};
+    camera.position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    camera.target = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    camera.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    camera.fovy = 60.0f;
+    camera.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
+    for (int i = 0; i < 2; ++i)
+    {
+        ASSERT_TRUE(slayer3d_set_render_viewport(ctx, &viewports[i]));
+        ASSERT_TRUE(slayer3d_set_scissor_rect(ctx, &viewports[i]));
+        ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, camera));
+        ASSERT_TRUE(slayer3d_draw_sky_sphere_textured(ctx, &skies[i])) << SDL_GetError();
+        slayer3d_end_mode_3d(ctx);
+    }
+    ASSERT_TRUE(slayer3d_set_render_viewport(ctx, nullptr));
+    ASSERT_TRUE(slayer3d_set_scissor_rect(ctx, nullptr));
+
+    unsigned char left[4];
+    unsigned char right[4];
+    readPixel(80, 120, left);
+    readPixel(240, 120, right);
+
+    slayer3d_free_texture(&red_texture);
+    slayer3d_free_texture(&green_texture);
+
+    EXPECT_GT(left[0], 200);
+    EXPECT_LT(left[1], 40);
+    EXPECT_LT(left[2], 40);
+    EXPECT_LT(right[0], 40);
+    EXPECT_GT(right[1], 200);
+    EXPECT_LT(right[2], 40);
+}
+
 TEST_F(GLRendererTest, TexturedSkyboxMatchesSeamConsistentDirections)
 {
     const Uint8 red[] = {255, 0, 0, 255};

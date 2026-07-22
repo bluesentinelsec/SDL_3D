@@ -20,7 +20,7 @@
 #include <string.h>
 
 static void draw_entry_capture_viewport(slayer3d_draw_entry *entry, const slayer3d_render_context *context);
-static void replay_pending_skybox(slayer3d_gl_context *ctx);
+static void replay_pending_skyboxes(slayer3d_gl_context *ctx);
 
 static const float k_cube_vertices[] = {
     -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1,
@@ -823,16 +823,14 @@ static void apply_skybox_viewport(slayer3d_gl_context *ctx, const slayer3d_gl_sk
     gl->Scissor(world_scissor.x, world_scissor.y, world_scissor.w, world_scissor.h);
 }
 
-static void replay_pending_skybox(slayer3d_gl_context *ctx)
+static void replay_pending_skyboxes(slayer3d_gl_context *ctx)
 {
-    if (ctx == NULL || !ctx->skybox.pending || ctx->skybox_program == 0u)
+    if (ctx == NULL || ctx->skybox_count == 0 || ctx->skybox_program == 0u)
         return;
 
     slayer3d_gl_funcs *gl = &ctx->gl;
-    const slayer3d_gl_skybox_entry *skybox = &ctx->skybox;
 
     gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    apply_skybox_viewport(ctx, skybox);
     gl->Disable(GL_DEPTH_TEST);
     gl->DepthMask(GL_FALSE);
     gl->Disable(GL_CULL_FACE);
@@ -840,39 +838,44 @@ static void replay_pending_skybox(slayer3d_gl_context *ctx)
     gl->BindVertexArray(ctx->fullscreen_vao);
     gl->UseProgram(ctx->skybox_program);
 
-    if (ctx->skybox_panorama_loc >= 0)
-        gl->Uniform1i(ctx->skybox_panorama_loc, skybox->panorama ? 1 : 0);
-    if (skybox->panorama)
+    for (int entry_index = 0; entry_index < ctx->skybox_count; ++entry_index)
     {
-        gl->ActiveTexture(GL_TEXTURE0);
-        gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_sky_sphere_texture(ctx, skybox->sphere));
-        if (ctx->skybox_sphere_loc >= 0)
-            gl->Uniform1i(ctx->skybox_sphere_loc, 0);
-    }
-    else
-    {
-        const slayer3d_texture2d *faces[6] = {skybox->pos_x, skybox->neg_x, skybox->pos_y,
-                                              skybox->neg_y, skybox->pos_z, skybox->neg_z};
-        const GLint sampler_locs[6] = {ctx->skybox_pos_x_loc, ctx->skybox_neg_x_loc, ctx->skybox_pos_y_loc,
-                                       ctx->skybox_neg_y_loc, ctx->skybox_pos_z_loc, ctx->skybox_neg_z_loc};
-        for (int i = 0; i < 6; ++i)
+        const slayer3d_gl_skybox_entry *skybox = &ctx->skybox_list[entry_index];
+        apply_skybox_viewport(ctx, skybox);
+        if (ctx->skybox_panorama_loc >= 0)
+            gl->Uniform1i(ctx->skybox_panorama_loc, skybox->panorama ? 1 : 0);
+        if (skybox->panorama)
         {
-            gl->ActiveTexture(GL_TEXTURE0 + (GLenum)i);
-            gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_skybox_texture(ctx, faces[i]));
-            if (sampler_locs[i] >= 0)
-                gl->Uniform1i(sampler_locs[i], i);
+            gl->ActiveTexture(GL_TEXTURE0);
+            gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_sky_sphere_texture(ctx, skybox->sphere));
+            if (ctx->skybox_sphere_loc >= 0)
+                gl->Uniform1i(ctx->skybox_sphere_loc, 0);
         }
-    }
-    if (ctx->skybox_right_loc >= 0)
-        gl->Uniform3f(ctx->skybox_right_loc, skybox->right[0], skybox->right[1], skybox->right[2]);
-    if (ctx->skybox_up_loc >= 0)
-        gl->Uniform3f(ctx->skybox_up_loc, skybox->up[0], skybox->up[1], skybox->up[2]);
-    if (ctx->skybox_forward_loc >= 0)
-        gl->Uniform3f(ctx->skybox_forward_loc, skybox->forward[0], skybox->forward[1], skybox->forward[2]);
-    if (ctx->skybox_inv_projection_loc >= 0)
-        gl->Uniform2f(ctx->skybox_inv_projection_loc, skybox->inv_projection[0], skybox->inv_projection[1]);
+        else
+        {
+            const slayer3d_texture2d *faces[6] = {skybox->pos_x, skybox->neg_x, skybox->pos_y,
+                                                  skybox->neg_y, skybox->pos_z, skybox->neg_z};
+            const GLint sampler_locs[6] = {ctx->skybox_pos_x_loc, ctx->skybox_neg_x_loc, ctx->skybox_pos_y_loc,
+                                           ctx->skybox_neg_y_loc, ctx->skybox_pos_z_loc, ctx->skybox_neg_z_loc};
+            for (int i = 0; i < 6; ++i)
+            {
+                gl->ActiveTexture(GL_TEXTURE0 + (GLenum)i);
+                gl->BindTexture(GL_TEXTURE_2D, slayer3d_gl_resolve_skybox_texture(ctx, faces[i]));
+                if (sampler_locs[i] >= 0)
+                    gl->Uniform1i(sampler_locs[i], i);
+            }
+        }
+        if (ctx->skybox_right_loc >= 0)
+            gl->Uniform3f(ctx->skybox_right_loc, skybox->right[0], skybox->right[1], skybox->right[2]);
+        if (ctx->skybox_up_loc >= 0)
+            gl->Uniform3f(ctx->skybox_up_loc, skybox->up[0], skybox->up[1], skybox->up[2]);
+        if (ctx->skybox_forward_loc >= 0)
+            gl->Uniform3f(ctx->skybox_forward_loc, skybox->forward[0], skybox->forward[1], skybox->forward[2]);
+        if (ctx->skybox_inv_projection_loc >= 0)
+            gl->Uniform2f(ctx->skybox_inv_projection_loc, skybox->inv_projection[0], skybox->inv_projection[1]);
 
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
+        gl->DrawArrays(GL_TRIANGLES, 0, 3);
+    }
     gl->ActiveTexture(GL_TEXTURE0);
     gl->DepthMask(GL_TRUE);
     gl->Enable(GL_DEPTH_TEST);
@@ -2843,6 +2846,7 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
 
     slayer3d_gl_free_draw_list(ctx);
     SDL_free(ctx->draw_list);
+    SDL_free(ctx->skybox_list);
     slayer3d_gl_mesh_cache_free(ctx);
     custom_shader_cache_free(ctx);
 
@@ -2951,7 +2955,7 @@ static bool gl_clear(slayer3d_render_context *context, slayer3d_color color)
     slayer3d_gl_funcs *gl = &ctx->gl;
 
     slayer3d_gl_free_draw_list(ctx);
-    ctx->skybox.pending = false;
+    ctx->skybox_count = 0;
 
     ctx->frame_index++;
     ctx->current_ctx = context;
@@ -3109,6 +3113,27 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     return true;
 }
 
+static slayer3d_gl_skybox_entry *gl_append_skybox_entry(slayer3d_gl_context *ctx)
+{
+    if (ctx->skybox_count == ctx->skybox_capacity)
+    {
+        const int capacity = ctx->skybox_capacity != 0 ? ctx->skybox_capacity * 2 : 4;
+        slayer3d_gl_skybox_entry *list =
+            SDL_realloc(ctx->skybox_list, (size_t)capacity * sizeof(slayer3d_gl_skybox_entry));
+        if (list == NULL)
+        {
+            SDL_OutOfMemory();
+            return NULL;
+        }
+        ctx->skybox_list = list;
+        ctx->skybox_capacity = capacity;
+    }
+
+    slayer3d_gl_skybox_entry *entry = &ctx->skybox_list[ctx->skybox_count++];
+    SDL_zero(*entry);
+    return entry;
+}
+
 static bool gl_draw_skybox_textured(slayer3d_render_context *context, const slayer3d_skybox_textured *skybox)
 {
     if (context == NULL)
@@ -3120,9 +3145,9 @@ static bool gl_draw_skybox_textured(slayer3d_render_context *context, const slay
     if (ctx == NULL || ctx->skybox_program == 0u)
         return false;
 
-    slayer3d_gl_skybox_entry *entry = &ctx->skybox;
-    SDL_zero(*entry);
-    entry->pending = true;
+    slayer3d_gl_skybox_entry *entry = gl_append_skybox_entry(ctx);
+    if (entry == NULL)
+        return false;
     entry->pos_x = skybox->pos_x;
     entry->neg_x = skybox->neg_x;
     entry->pos_y = skybox->pos_y;
@@ -3208,9 +3233,9 @@ static bool gl_draw_sky_sphere_textured(slayer3d_render_context *context, const 
     if (ctx == NULL || ctx->skybox_program == 0u)
         return false;
 
-    slayer3d_gl_skybox_entry *entry = &ctx->skybox;
-    SDL_zero(*entry);
-    entry->pending = true;
+    slayer3d_gl_skybox_entry *entry = gl_append_skybox_entry(ctx);
+    if (entry == NULL)
+        return false;
     entry->panorama = true;
     entry->sphere = sky->texture;
     gl_skybox_entry_set_camera(context, entry);
@@ -3480,7 +3505,7 @@ static bool gl_present(slayer3d_render_context *context)
     /* Geometry pass: replay all entries into main FBO using the caller's
      * configured backface-culling state. Post-process passes disable culling,
      * so this must be restored explicitly every frame. */
-    replay_pending_skybox(ctx);
+    replay_pending_skyboxes(ctx);
     replay_draw_list_depth_prepass(ctx);
     apply_geometry_cull_state(ctx);
     replay_draw_list_geometry_measured(ctx);
@@ -3640,7 +3665,7 @@ static bool gl_present(slayer3d_render_context *context)
      * after the FBO blit, bypassing all post-processing. */
     replay_overlay_list(ctx, vp_x, vp_y, vp_w, vp_h);
     slayer3d_gl_free_overlay_list(ctx);
-    ctx->skybox.pending = false;
+    ctx->skybox_count = 0;
 
     SDL_GL_SwapWindow(ctx->window);
     return true;
@@ -3667,7 +3692,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
         return;
     }
     /* Flush any pending draw list so pixels are up to date. */
-    if (ctx->draw_count > 0 || ctx->skybox.pending)
+    if (ctx->draw_count > 0 || ctx->skybox_count > 0)
     {
         slayer3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
@@ -3758,7 +3783,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
             gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
-        replay_pending_skybox(ctx);
+        replay_pending_skyboxes(ctx);
         if (ctx->draw_count > 0)
         {
             replay_draw_list_depth_prepass(ctx);

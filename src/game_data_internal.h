@@ -41,6 +41,9 @@
 #define SLAYER3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
+#ifndef SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX
+#define SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX 16
+#endif
 #include "game_data_editor_types.h"
 
 typedef struct slayer3d_game_data_runtime
@@ -286,6 +289,24 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
                                                       slayer3d_ui_layout_model *layout);
 /* Read the published logical UI viewport, falling back to 1280×720. */
 void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height);
+
+typedef struct game_data_scene_world_viewport
+{
+    const char *name;
+    const char *camera;
+    const char *label;
+    const char *label_font;
+    SDL_Rect rect;
+    bool draw_skybox;
+    bool draw_viewmodel;
+    yyjson_val *label_style;
+    yyjson_val *work_plane;
+    yyjson_val *grid;
+} game_data_scene_world_viewport;
+
+bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
+                                                    game_data_scene_world_viewport *out_viewports, int capacity,
+                                                    int *out_count);
 bool slayer3d_game_data_ui_binding_to_string(const slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_ui_metrics *metrics, yyjson_val *binding,
                                              char *buffer, size_t buffer_size);

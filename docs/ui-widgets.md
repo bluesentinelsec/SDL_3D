@@ -276,8 +276,9 @@ Dropdowns author `options`, optional `values`, `open_key`, and
 `selected_value_key`. The layout resolver emits the dropdown button plus
 synthesized popup and option commands. The popup and options use the dropdown as
 their `owner_id`, so input dispatch and rendering stay attached to the authored
-control even though the popup is a flat command. When `selected_value_key` is a
-numeric scene-state value, author numeric `values`.
+control even though the popup is a flat command. `values` may contain strings,
+booleans, integers, or floats; the selected option follows the matching typed
+scene-state value named by `selected_value_key`.
 
 ## Visibility And Selection
 

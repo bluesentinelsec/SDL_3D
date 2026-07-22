@@ -328,43 +328,30 @@ static const char *editor_camera_mode_for_camera(yyjson_val *component, const ch
     return NULL;
 }
 
-static bool editor_camera_rect_contains_mouse(yyjson_val *viewport, float mouse_x, float mouse_y)
-{
-    yyjson_val *rect = obj_get(viewport, "rect");
-    if (!yyjson_is_arr(rect) || yyjson_arr_size(rect) < 4)
-        return false;
-    const float x = (float)yyjson_get_num(yyjson_arr_get(rect, 0));
-    const float y = (float)yyjson_get_num(yyjson_arr_get(rect, 1));
-    const float w = (float)yyjson_get_num(yyjson_arr_get(rect, 2));
-    const float h = (float)yyjson_get_num(yyjson_arr_get(rect, 3));
-    return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
-}
-
 static const char *editor_camera_hovered_orthographic_mode(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                                           const slayer3d_input_manager *input, const char *mode)
+                                                           const slayer3d_input_manager *input)
 {
-    if (runtime == NULL || component == NULL || input == NULL ||
-        !editor_camera_mode_equals(mode, json_string(component, "quad_mode", "quad_view")))
-    {
+    if (runtime == NULL || component == NULL || input == NULL)
         return NULL;
-    }
 
     float mouse_x = 0.0f;
     float mouse_y = 0.0f;
     if (!slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
         return NULL;
 
-    const scene_entry *scene = active_scene_entry_const(runtime);
-    yyjson_val *viewports = obj_get(scene != NULL ? scene->root : NULL, "world_viewports");
-    for (size_t i = 0; yyjson_is_arr(viewports) && i < yyjson_arr_size(viewports); ++i)
+    game_data_scene_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX];
+    int count = 0;
+    if (!game_data_resolve_active_scene_world_viewports(runtime, viewports, SDL_arraysize(viewports), &count))
+        return NULL;
+    for (int i = 0; i < count; ++i)
     {
-        yyjson_val *viewport = yyjson_arr_get(viewports, i);
-        yyjson_val *active_if = obj_get(viewport, "active_if");
-        if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+        const SDL_Rect rect = viewports[i].rect;
+        if (mouse_x < (float)rect.x || mouse_y < (float)rect.y || mouse_x >= (float)(rect.x + rect.w) ||
+            mouse_y >= (float)(rect.y + rect.h))
+        {
             continue;
-        if (!editor_camera_rect_contains_mouse(viewport, mouse_x, mouse_y))
-            continue;
-        return editor_camera_mode_for_camera(component, json_string(viewport, "camera", NULL));
+        }
+        return editor_camera_mode_for_camera(component, viewports[i].camera);
     }
 
     return NULL;
@@ -515,7 +502,7 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
         update_editor_camera_orthographic_controller(runtime, component, actor, input, dt, mode);
         return;
     }
-    const char *hovered_orthographic_mode = editor_camera_hovered_orthographic_mode(runtime, component, input, mode);
+    const char *hovered_orthographic_mode = editor_camera_hovered_orthographic_mode(runtime, component, input);
     if (hovered_orthographic_mode != NULL)
     {
         yyjson_val *orthographic_controls_if = obj_get(component, "orthographic_controls_if");

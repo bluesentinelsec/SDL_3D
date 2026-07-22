@@ -265,6 +265,7 @@ target_sources(
         src/game_data_scene_flow_runtime.c
         src/game_data_scene_load_runtime.c
         src/game_data_scene_lookup.c
+        src/game_data_scene_viewports.c
         src/game_data_sensor_runtime.c
         src/game_data_sector_noise_actions.c
         src/game_data_scripts.c

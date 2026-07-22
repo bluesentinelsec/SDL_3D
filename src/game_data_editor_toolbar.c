@@ -166,6 +166,134 @@ static yyjson_val *editor_find_active_ui_widget(const slayer3d_game_data_runtime
     return NULL;
 }
 
+static yyjson_val *editor_find_open_bound_dropdown_node(const slayer3d_game_data_runtime *runtime, yyjson_val *node)
+{
+    if (!yyjson_is_obj(node))
+        return NULL;
+    const char *open_key = json_string(node, "open_key", NULL);
+    if (open_key != NULL && yyjson_is_arr(obj_get(node, "values")) &&
+        slayer3d_properties_get_bool(runtime->scene_state, open_key, false))
+    {
+        return node;
+    }
+    yyjson_val *children = obj_get(node, "children");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+    {
+        yyjson_val *found = editor_find_open_bound_dropdown_node(runtime, yyjson_arr_get(children, i));
+        if (found != NULL)
+            return found;
+    }
+    return NULL;
+}
+
+static yyjson_val *editor_find_open_bound_dropdown(const slayer3d_game_data_runtime *runtime)
+{
+    yyjson_val *roots[2] = {runtime_root(runtime), NULL};
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    roots[1] = scene != NULL ? scene->root : NULL;
+    for (size_t root_index = 0; root_index < SDL_arraysize(roots); ++root_index)
+    {
+        yyjson_val *widgets = obj_get(obj_get(roots[root_index], "ui"), "widgets");
+        for (size_t i = 0; yyjson_is_arr(widgets) && i < yyjson_arr_size(widgets); ++i)
+        {
+            yyjson_val *found = editor_find_open_bound_dropdown_node(runtime, yyjson_arr_get(widgets, i));
+            if (found != NULL)
+                return found;
+        }
+    }
+    return NULL;
+}
+
+static void editor_close_bound_dropdowns_node(slayer3d_properties *state, yyjson_val *node, const char *except_id)
+{
+    if (!yyjson_is_obj(node))
+        return;
+    const char *id = json_string(node, "id", NULL);
+    const char *open_key = json_string(node, "open_key", NULL);
+    if (open_key != NULL && (except_id == NULL || id == NULL || SDL_strcmp(id, except_id) != 0))
+        slayer3d_properties_set_bool(state, open_key, false);
+    yyjson_val *children = obj_get(node, "children");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+        editor_close_bound_dropdowns_node(state, yyjson_arr_get(children, i), except_id);
+}
+
+static void editor_close_bound_dropdowns(const slayer3d_game_data_runtime *runtime, const char *except_id)
+{
+    yyjson_val *roots[2] = {runtime_root(runtime), NULL};
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    roots[1] = scene != NULL ? scene->root : NULL;
+    for (size_t root_index = 0; root_index < SDL_arraysize(roots); ++root_index)
+    {
+        yyjson_val *widgets = obj_get(obj_get(roots[root_index], "ui"), "widgets");
+        for (size_t i = 0; yyjson_is_arr(widgets) && i < yyjson_arr_size(widgets); ++i)
+            editor_close_bound_dropdowns_node(runtime->scene_state, yyjson_arr_get(widgets, i), except_id);
+    }
+}
+
+static bool editor_set_bound_dropdown_value(slayer3d_properties *state, yyjson_val *widget, int option_index)
+{
+    const char *key = json_string(widget, "selected_value_key", NULL);
+    yyjson_val *values = obj_get(widget, "values");
+    if (state == NULL || key == NULL || !yyjson_is_arr(values) || option_index < 0 ||
+        option_index >= (int)yyjson_arr_size(values))
+    {
+        return false;
+    }
+    yyjson_val *value = yyjson_arr_get(values, (size_t)option_index);
+    if (yyjson_is_str(value))
+        slayer3d_properties_set_string(state, key, yyjson_get_str(value));
+    else if (yyjson_is_bool(value))
+        slayer3d_properties_set_bool(state, key, yyjson_get_bool(value));
+    else if (yyjson_is_int(value))
+        slayer3d_properties_set_int(state, key, (int)yyjson_get_sint(value));
+    else if (yyjson_is_num(value))
+        slayer3d_properties_set_float(state, key, (float)yyjson_get_num(value));
+    else
+        return false;
+    return true;
+}
+
+static bool editor_handle_bound_dropdown(slayer3d_game_data_runtime *runtime, const slayer3d_ui_layout_hit_region *hit,
+                                         bool clicked)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    yyjson_val *open_widget = editor_find_open_bound_dropdown(runtime);
+    yyjson_val *hit_widget = NULL;
+    if (hit != NULL)
+    {
+        hit_widget = editor_find_active_ui_widget(runtime, hit->owner_id);
+        if (hit_widget == NULL)
+            hit_widget = editor_find_active_ui_widget(runtime, hit->id);
+    }
+    const char *open_key = json_string(hit_widget, "open_key", NULL);
+    const char *widget_id = json_string(hit_widget, "id", NULL);
+    if (open_key == NULL || !yyjson_is_arr(obj_get(hit_widget, "values")))
+    {
+        if (clicked && open_widget != NULL)
+        {
+            slayer3d_properties_set_bool(runtime->scene_state, json_string(open_widget, "open_key", ""), false);
+            return true;
+        }
+        return false;
+    }
+
+    if (!clicked)
+        return true;
+    if (hit->option_index >= 0)
+    {
+        (void)editor_set_bound_dropdown_value(runtime->scene_state, hit_widget, hit->option_index);
+        slayer3d_properties_set_bool(runtime->scene_state, open_key, false);
+        return true;
+    }
+
+    const bool next_open = !slayer3d_properties_get_bool(runtime->scene_state, open_key, false);
+    editor_close_bound_dropdowns(runtime, widget_id);
+    slayer3d_properties_set_bool(runtime->scene_state, open_key, next_open);
+    return true;
+}
+
 static bool editor_ui_window_config_for_id(const slayer3d_game_data_runtime *runtime, const char *id,
                                            editor_ui_window_config *out_config)
 {
@@ -1011,6 +1139,13 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     }
     const bool console_event_active =
         editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
+    if (editor_handle_bound_dropdown(runtime, hit, clicked))
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
         editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_liquid_panel(hit) ||
         editor_hit_is_skybox_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||

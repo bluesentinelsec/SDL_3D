@@ -38975,6 +38975,182 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
     remove_test_dir(save_dir);
 }
 
+TEST(GameDataRuntime, EditorShellResolvesResponsiveViewportLayouts)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 1280.0f, 720.0f));
+
+    slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+    slayer3d_properties_set_bool(state, "editor.inspector.open", false);
+    slayer3d_properties_set_bool(state, "editor.console.open", false);
+    slayer3d_properties_set_bool(state, "editor.global.panel.open", false);
+    slayer3d_properties_set_bool(state, "editor.things.panel.open", false);
+    slayer3d_properties_set_bool(state, "editor.sky.panel.open", false);
+    slayer3d_properties_set_bool(state, "editor.liquid.panel.open", false);
+    slayer3d_properties_set_bool(state, "editor.texture.panel.open", false);
+
+    slayer3d_game_data_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX]{};
+    int count = 0;
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 1);
+    EXPECT_STREQ(viewports[0].name, "perspective");
+    EXPECT_STREQ(viewports[0].camera, "camera.editor_shell.viewport");
+    EXPECT_STREQ(viewports[0].label, "Perspective");
+    EXPECT_TRUE(viewports[0].draw_skybox);
+    EXPECT_EQ(viewports[0].rect.x, 0);
+    EXPECT_EQ(viewports[0].rect.y, 80);
+    EXPECT_EQ(viewports[0].rect.w, 1280);
+    EXPECT_EQ(viewports[0].rect.h, 640);
+
+    slayer3d_properties_set_string(state, "editor.view.layout", "two_panes");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 2);
+    EXPECT_STREQ(viewports[0].camera, "camera.editor_shell.viewport");
+    EXPECT_STREQ(viewports[1].camera, "camera.editor_shell.ortho_top");
+    EXPECT_STREQ(viewports[1].label, "Top");
+    EXPECT_TRUE(viewports[0].draw_skybox);
+    EXPECT_FALSE(viewports[1].draw_skybox);
+    EXPECT_EQ(viewports[0].rect.y, viewports[1].rect.y);
+    EXPECT_EQ(viewports[0].rect.h, viewports[1].rect.h);
+    EXPECT_EQ(viewports[1].rect.x - (viewports[0].rect.x + viewports[0].rect.w), 2);
+
+    slayer3d_properties_set_string(state, "editor.view.layout", "three_panes");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 3);
+    EXPECT_STREQ(viewports[0].name, "perspective");
+    EXPECT_STREQ(viewports[1].name, "top");
+    EXPECT_STREQ(viewports[2].name, "front");
+    EXPECT_EQ(viewports[0].rect.h, 640);
+    EXPECT_EQ(viewports[2].rect.y - (viewports[1].rect.y + viewports[1].rect.h), 2);
+
+    slayer3d_properties_set_string(state, "editor.view.layout", "four_panes");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 4);
+    EXPECT_STREQ(viewports[0].name, "perspective");
+    EXPECT_STREQ(viewports[1].name, "top");
+    EXPECT_STREQ(viewports[2].name, "side");
+    EXPECT_STREQ(viewports[3].name, "front");
+    EXPECT_STREQ(viewports[0].label, "Perspective");
+    EXPECT_STREQ(viewports[1].label, "Top");
+    EXPECT_STREQ(viewports[2].label, "Side");
+    EXPECT_STREQ(viewports[3].label, "Front");
+    EXPECT_TRUE(viewports[0].draw_skybox);
+    EXPECT_FALSE(viewports[1].draw_skybox);
+    EXPECT_FALSE(viewports[2].draw_skybox);
+    EXPECT_FALSE(viewports[3].draw_skybox);
+    EXPECT_EQ(viewports[2].rect.x, viewports[0].rect.x);
+    EXPECT_EQ(viewports[3].rect.x, viewports[1].rect.x);
+    EXPECT_EQ(viewports[2].rect.y, viewports[3].rect.y);
+
+    slayer3d_properties_set_string(state, "editor.view.layout", "not_authored");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 1);
+    EXPECT_STREQ(viewports[0].name, "perspective");
+
+    slayer3d_properties_set_bool(state, "editor.inspector.open", true);
+    slayer3d_properties_set_string(state, "editor.inspector.panel.dock", "left");
+    slayer3d_properties_set_bool(state, "editor.console.open", true);
+    slayer3d_properties_set_string(state, "editor.console.dock", "bottom");
+    slayer3d_properties_set_string(state, "editor.view.layout", "four_panes");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 4);
+    EXPECT_GT(viewports[0].rect.x, 0);
+    EXPECT_LT(viewports[2].rect.y + viewports[2].rect.h, 720);
+
+    const int docked_x = viewports[0].rect.x;
+    slayer3d_properties_set_string(state, "editor.inspector.panel.dock", "none");
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    EXPECT_LT(viewports[0].rect.x, docked_x);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellViewDropdownSelectsViewportLayout)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 1280.0f, 720.0f));
+
+    slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties_set_bool(state, "editor.inspector.open", false);
+    slayer3d_properties_set_bool(state, "editor.console.open", false);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    auto click = [&](float x, float y, Uint64 frame) {
+        SDL_Event event{};
+        event.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = x;
+        event.button.y = y;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        event.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame + 1);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
+
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *button =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.toolbar.view.button");
+    ASSERT_NE(button, nullptr);
+    click(button->rect.x + button->rect.w * 0.5f, button->rect.y + button->rect.h * 0.5f, 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(state, "editor.view.menu.open", false));
+
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+    const slayer3d_ui_layout_hit_region *four_panes = nullptr;
+    for (int i = 0; i < slayer3d_ui_layout_hit_region_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(layout, i);
+        if (hit != nullptr && hit->option_index == 3 &&
+            std::string(hit->owner_id) == "ui.editor_shell.toolbar.view.button")
+        {
+            four_panes = hit;
+            break;
+        }
+    }
+    ASSERT_NE(four_panes, nullptr);
+    click(four_panes->rect.x + four_panes->rect.w * 0.5f, four_panes->rect.y + four_panes->rect.h * 0.5f, 3);
+    EXPECT_FALSE(slayer3d_properties_get_bool(state, "editor.view.menu.open", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "editor.view.layout", ""), "four_panes");
+
+    slayer3d_game_data_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX]{};
+    int count = 0;
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    EXPECT_EQ(count, 4);
+
+    slayer3d_ui_layout_destroy(layout);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 {
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();

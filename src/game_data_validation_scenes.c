@@ -8,6 +8,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_standard_options.h"
+#include "slayer3d/game_presentation.h"
 
 #define GAME_DATA_MENU_TEXT_MAX_BYTES 255
 
@@ -25,6 +26,31 @@ static bool is_non_empty_string(yyjson_val *object, const char *key)
 {
     const char *value = json_string(object, key);
     return value != NULL && value[0] != '\0';
+}
+
+static int scene_json_int(yyjson_val *object, const char *key, int fallback)
+{
+    yyjson_val *value = obj_get(object, key);
+    return yyjson_is_int(value) ? (int)yyjson_get_sint(value) : fallback;
+}
+
+static bool validate_scene_world_viewport_docks(validation_context *ctx, yyjson_val *value, const char *path)
+{
+    if (value == NULL || yyjson_is_bool(value))
+        return true;
+    if (!yyjson_is_arr(value))
+        return validation_error(ctx, path, "avoid_docked_ui must be a boolean or dock-name array");
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        const char *dock = yyjson_is_str(entry) ? yyjson_get_str(entry) : NULL;
+        if (dock == NULL ||
+            (SDL_strcmp(dock, "left") != 0 && SDL_strcmp(dock, "right") != 0 && SDL_strcmp(dock, "bottom") != 0))
+        {
+            return validation_error(ctx, path, "avoid_docked_ui entries must be left, right, or bottom");
+        }
+    }
+    return true;
 }
 
 static bool validate_timeline_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -759,42 +785,252 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
 static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                         validation_names *names);
 
+static bool validate_scene_world_viewport_label_style(validation_context *ctx, yyjson_val *style, const char *path)
+{
+    if (style == NULL)
+        return true;
+    if (!yyjson_is_obj(style))
+        return validation_error(ctx, path, "scene world viewport label_style must be an object");
+
+    static const char *const non_negative_keys[] = {"padding_x", "padding_y", "bottom_offset"};
+    for (size_t i = 0; i < SDL_arraysize(non_negative_keys); ++i)
+    {
+        yyjson_val *value = obj_get(style, non_negative_keys[i]);
+        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+            return validation_error(ctx, path, "scene world viewport label_style %s must be non-negative",
+                                    non_negative_keys[i]);
+    }
+    yyjson_val *scale = obj_get(style, "scale");
+    if (scale != NULL && (!yyjson_is_num(scale) || yyjson_get_num(scale) <= 0.0))
+        return validation_error(ctx, path, "scene world viewport label_style scale must be positive");
+
+    static const char *const color_keys[] = {"text_color", "background_color"};
+    for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
+    {
+        yyjson_val *color = obj_get(style, color_keys[i]);
+        if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+            return validation_error(ctx, path, "scene world viewport label_style %s must be a vec3 or vec4 color",
+                                    color_keys[i]);
+    }
+    return true;
+}
+
 static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                            validation_names *names)
 {
     yyjson_val *viewports = obj_get(scene_root, "world_viewports");
     if (viewports == NULL)
         return true;
-    if (!yyjson_is_arr(viewports))
-        return validation_error(ctx, json_path, "scene world_viewports must be an array");
+    if (yyjson_is_arr(viewports))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+        {
+            char path[PATH_BUFFER_SIZE];
+            format_path(path, sizeof(path), "%s.world_viewports[%zu]", json_path, i);
+            yyjson_val *viewport = yyjson_arr_get(viewports, i);
+            if (!yyjson_is_obj(viewport))
+                return validation_error(ctx, path, "scene world viewport entries must be objects");
+            const char *name = json_string(viewport, "name");
+            if (name == NULL || name[0] == '\0')
+                return validation_error(ctx, path, "scene world viewport requires a non-empty name");
+            if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport, "camera"), path))
+                return false;
+            yyjson_val *label = obj_get(viewport, "label");
+            if (label != NULL && (!yyjson_is_str(label) || yyjson_get_len(label) == 0))
+                return validation_error(ctx, path, "scene world viewport label must be a non-empty string");
+            if (obj_get(viewport, "label_font") != NULL &&
+                !require_ref(ctx, &names->fonts, "font asset", json_string(viewport, "label_font"), path))
+                return false;
+            if (!validate_scene_world_viewport_label_style(ctx, obj_get(viewport, "label_style"), path))
+                return false;
+            yyjson_val *rect = obj_get(viewport, "rect");
+            if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
+                yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+            {
+                return validation_error(
+                    ctx, path, "scene world viewport rect must be [x, y, width, height] with positive dimensions");
+            }
+            yyjson_val *viewmodel = obj_get(viewport, "viewmodel");
+            if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
+                return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
+            yyjson_val *skybox = obj_get(viewport, "skybox");
+            if (skybox != NULL && !yyjson_is_bool(skybox))
+                return validation_error(ctx, path, "scene world viewport skybox must be a boolean");
+            char condition_path[PATH_BUFFER_SIZE];
+            format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+            if (!validate_scene_ui_condition(ctx, obj_get(viewport, "active_if"), condition_path, names))
+                return false;
+        }
+        return true;
+    }
+    if (!yyjson_is_obj(viewports))
+        return validation_error(ctx, json_path, "scene world_viewports must be an array or layout object");
 
-    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    const char *layout_key = json_string(viewports, "layout_key");
+    const char *default_layout = json_string(viewports, "default_layout");
+    if (layout_key == NULL || layout_key[0] == '\0' || default_layout == NULL || default_layout[0] == '\0')
+        return validation_error(ctx, json_path,
+                                "scene world_viewports layout requires non-empty layout_key and default_layout");
+    yyjson_val *gap = obj_get(viewports, "gap");
+    if (gap != NULL && (!yyjson_is_num(gap) || yyjson_get_num(gap) < 0.0))
+        return validation_error(ctx, json_path, "scene world_viewports gap must be a non-negative number");
+    yyjson_val *avoid = obj_get(viewports, "avoid_docked_ui");
+    if (!validate_scene_world_viewport_docks(ctx, avoid, json_path))
+        return false;
+    if (obj_get(viewports, "label_font") != NULL &&
+        !require_ref(ctx, &names->fonts, "font asset", json_string(viewports, "label_font"), json_path))
+        return false;
+    if (!validate_scene_world_viewport_label_style(ctx, obj_get(viewports, "label_style"), json_path))
+        return false;
+
+    yyjson_val *bounds = obj_get(viewports, "bounds");
+    if (bounds != NULL && !yyjson_is_obj(bounds))
+        return validation_error(ctx, json_path, "scene world_viewports bounds must be an object");
+    static const char *const bound_keys[] = {"x", "y", "width", "height"};
+    for (size_t i = 0; yyjson_is_obj(bounds) && i < SDL_arraysize(bound_keys); ++i)
+    {
+        yyjson_val *value = obj_get(bounds, bound_keys[i]);
+        if (value == NULL)
+            continue;
+        const bool fill = yyjson_is_str(value) && SDL_strcmp(yyjson_get_str(value), "fill") == 0;
+        const bool number =
+            yyjson_is_num(value) && yyjson_get_num(value) >= 0.0 && ((i < 2) || yyjson_get_num(value) > 0.0);
+        if (!fill && !number)
+            return validation_error(ctx, json_path,
+                                    "scene world_viewports bounds values must be non-negative numbers or 'fill'");
+    }
+
+    yyjson_val *views = obj_get(viewports, "views");
+    if (!yyjson_is_arr(views) || yyjson_arr_size(views) == 0 ||
+        yyjson_arr_size(views) > SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX)
+    {
+        return validation_error(ctx, json_path, "scene world_viewports views must be a non-empty bounded array");
+    }
+    for (size_t i = 0; i < yyjson_arr_size(views); ++i)
     {
         char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "%s.world_viewports[%zu]", json_path, i);
-        yyjson_val *viewport = yyjson_arr_get(viewports, i);
-        if (!yyjson_is_obj(viewport))
-            return validation_error(ctx, path, "scene world viewport entries must be objects");
-        const char *name = json_string(viewport, "name");
-        if (name == NULL || name[0] == '\0')
-            return validation_error(ctx, path, "scene world viewport requires a non-empty name");
-        if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport, "camera"), path))
-            return false;
-        yyjson_val *rect = obj_get(viewport, "rect");
-        if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
-            yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+        format_path(path, sizeof(path), "%s.world_viewports.views[%zu]", json_path, i);
+        yyjson_val *view = yyjson_arr_get(views, i);
+        const char *name = json_string(view, "name");
+        if (!yyjson_is_obj(view) || name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "scene world viewport view requires a non-empty name");
+        for (size_t prior = 0; prior < i; ++prior)
         {
-            return validation_error(ctx, path,
-                                    "scene world viewport rect must be [x, y, width, height] with positive dimensions");
+            if (SDL_strcmp(json_string(yyjson_arr_get(views, prior), "name"), name) == 0)
+                return validation_error(ctx, path, "scene world viewport view name '%s' is duplicated", name);
         }
-        yyjson_val *viewmodel = obj_get(viewport, "viewmodel");
+        if (!require_ref(ctx, &names->cameras, "camera", json_string(view, "camera"), path))
+            return false;
+        yyjson_val *label = obj_get(view, "label");
+        if (label != NULL && (!yyjson_is_str(label) || yyjson_get_len(label) == 0))
+            return validation_error(ctx, path, "scene world viewport label must be a non-empty string");
+        if (obj_get(view, "label_font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(view, "label_font"), path))
+            return false;
+        if (!validate_scene_world_viewport_label_style(ctx, obj_get(view, "label_style"), path))
+            return false;
+        yyjson_val *viewmodel = obj_get(view, "viewmodel");
         if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
             return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
-        char condition_path[PATH_BUFFER_SIZE];
-        format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
-        if (!validate_scene_ui_condition(ctx, obj_get(viewport, "active_if"), condition_path, names))
-            return false;
+        yyjson_val *skybox = obj_get(view, "skybox");
+        if (skybox != NULL && !yyjson_is_bool(skybox))
+            return validation_error(ctx, path, "scene world viewport skybox must be a boolean");
+        yyjson_val *work_plane = obj_get(view, "work_plane");
+        yyjson_val *normal = obj_get(work_plane, "normal");
+        if (work_plane != NULL && !yyjson_is_obj(work_plane))
+            return validation_error(ctx, path, "scene world viewport work_plane must be an object");
+        if (normal != NULL && !is_exact_vec_array(normal, 3))
+            return validation_error(ctx, path, "scene world viewport work_plane normal must be a vec3");
+        if (is_exact_vec_array(normal, 3))
+        {
+            const double x = yyjson_get_num(yyjson_arr_get(normal, 0));
+            const double y = yyjson_get_num(yyjson_arr_get(normal, 1));
+            const double z = yyjson_get_num(yyjson_arr_get(normal, 2));
+            if (x * x + y * y + z * z <= 0.000001)
+                return validation_error(ctx, path, "scene world viewport work_plane normal must be non-zero");
+        }
+        yyjson_val *distance = obj_get(work_plane, "distance");
+        if (distance != NULL && !yyjson_is_num(distance))
+            return validation_error(ctx, path, "scene world viewport work_plane distance must be a number");
+        yyjson_val *work_plane_enabled = obj_get(work_plane, "enabled");
+        if (work_plane_enabled != NULL && !yyjson_is_bool(work_plane_enabled))
+            return validation_error(ctx, path, "scene world viewport work_plane enabled must be a boolean");
+        yyjson_val *grid = obj_get(view, "grid");
+        if (grid != NULL && !yyjson_is_obj(grid))
+            return validation_error(ctx, path, "scene world viewport grid must be an object");
+        yyjson_val *enabled = obj_get(grid, "enabled");
+        if (enabled != NULL && !yyjson_is_bool(enabled))
+            return validation_error(ctx, path, "scene world viewport grid enabled must be a boolean");
+        yyjson_val *grid_color = obj_get(grid, "color");
+        if (grid_color != NULL && !is_exact_vec3_or_vec4_array(grid_color))
+            return validation_error(ctx, path, "scene world viewport grid color must be a vec3 or vec4 color");
+        const char *spacing_key = json_string(grid, "spacing_key");
+        if (obj_get(grid, "spacing_key") != NULL && (spacing_key == NULL || spacing_key[0] == '\0'))
+            return validation_error(ctx, path, "scene world viewport grid spacing_key must be a non-empty string");
+        static const char *const positive_grid_keys[] = {"spacing", "extent"};
+        for (size_t key = 0; yyjson_is_obj(grid) && key < SDL_arraysize(positive_grid_keys); ++key)
+        {
+            yyjson_val *value = obj_get(grid, positive_grid_keys[key]);
+            if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0))
+                return validation_error(ctx, path, "scene world viewport grid %s must be positive",
+                                        positive_grid_keys[key]);
+        }
     }
+
+    yyjson_val *layouts = obj_get(viewports, "layouts");
+    if (!yyjson_is_arr(layouts) || yyjson_arr_size(layouts) == 0)
+        return validation_error(ctx, json_path, "scene world_viewports layouts must be a non-empty array");
+    bool found_default = false;
+    for (size_t i = 0; i < yyjson_arr_size(layouts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.world_viewports.layouts[%zu]", json_path, i);
+        yyjson_val *layout = yyjson_arr_get(layouts, i);
+        const char *name = json_string(layout, "name");
+        const int columns = scene_json_int(layout, "columns", 0);
+        const int rows = scene_json_int(layout, "rows", 0);
+        if (!yyjson_is_obj(layout) || name == NULL || name[0] == '\0' || columns < 1 || rows < 1)
+            return validation_error(ctx, path, "scene world viewport layout requires name, columns, and rows");
+        for (size_t prior = 0; prior < i; ++prior)
+        {
+            const char *prior_name = json_string(yyjson_arr_get(layouts, prior), "name");
+            if (prior_name != NULL && SDL_strcmp(prior_name, name) == 0)
+                return validation_error(ctx, path, "scene world viewport layout name '%s' is duplicated", name);
+        }
+        found_default = found_default || SDL_strcmp(name, default_layout) == 0;
+        yyjson_val *layout_avoid = obj_get(layout, "avoid_docked_ui");
+        if (!validate_scene_world_viewport_docks(ctx, layout_avoid, path))
+            return false;
+        yyjson_val *panes = obj_get(layout, "panes");
+        if (!yyjson_is_arr(panes) || yyjson_arr_size(panes) == 0 ||
+            yyjson_arr_size(panes) > SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX)
+        {
+            return validation_error(ctx, path, "scene world viewport layout panes must be a non-empty bounded array");
+        }
+        for (size_t pane_index = 0; pane_index < yyjson_arr_size(panes); ++pane_index)
+        {
+            yyjson_val *pane = yyjson_arr_get(panes, pane_index);
+            const char *view_name = json_string(pane, "view");
+            bool found_view = false;
+            for (size_t view_index = 0; view_index < yyjson_arr_size(views); ++view_index)
+            {
+                const char *candidate = json_string(yyjson_arr_get(views, view_index), "name");
+                found_view =
+                    found_view || (candidate != NULL && view_name != NULL && SDL_strcmp(candidate, view_name) == 0);
+            }
+            const int column = scene_json_int(pane, "column", 0);
+            const int row = scene_json_int(pane, "row", 0);
+            const int column_span = scene_json_int(pane, "column_span", 1);
+            const int row_span = scene_json_int(pane, "row_span", 1);
+            if (!yyjson_is_obj(pane) || !found_view || column < 0 || row < 0 || column_span < 1 || row_span < 1 ||
+                column + column_span > columns || row + row_span > rows)
+            {
+                return validation_error(ctx, path, "scene world viewport pane has invalid view or grid placement");
+            }
+        }
+    }
+    if (!found_default)
+        return validation_error(ctx, json_path, "scene world_viewports default_layout must name an authored layout");
     return true;
 }
 
