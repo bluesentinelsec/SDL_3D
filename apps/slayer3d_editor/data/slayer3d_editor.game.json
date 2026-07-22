@@ -10,7 +10,7 @@
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",
-    "window": { "renderer": "opengl", "vsync": true },
+    "window": { "renderer": "opengl", "vsync": true, "logical_size_policy": "expand" },
     "quit": {
       "action": "action.exit",
       "request_signal": "signal.editor.file.exit"

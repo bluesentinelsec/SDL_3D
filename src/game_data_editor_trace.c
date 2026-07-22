@@ -74,6 +74,13 @@ static void editor_default_viewport(const slayer3d_game_data_runtime *runtime, f
     if (out_width == NULL || out_height == NULL)
         return;
 
+    if (runtime != NULL && runtime->ui_viewport_w > 0.0f && runtime->ui_viewport_h > 0.0f)
+    {
+        *out_width = runtime->ui_viewport_w;
+        *out_height = runtime->ui_viewport_h;
+        return;
+    }
+
     yyjson_val *app = obj_get(runtime_root(runtime), "app");
     yyjson_val *window = obj_get(app, "window");
     const int width =

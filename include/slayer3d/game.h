@@ -342,13 +342,14 @@ extern "C"
      */
     typedef struct slayer3d_game_config
     {
-        const char *title;                    /**< Window title, or "SLAYER3D" when NULL. */
-        int width;                            /**< Initial window width in pixels, or logical width when <= 0. */
-        int height;                           /**< Initial window height in pixels, or logical height when <= 0. */
-        int logical_width;                    /**< Virtual render width, or 1280 when <= 0. */
-        int logical_height;                   /**< Virtual render height, or 720 when <= 0. */
-        const char *icon_path;                /**< Optional filesystem path to a window icon image. */
-        slayer3d_backend backend;             /**< Requested backend, or SLAYER3D_BACKEND_AUTO when zero. */
+        const char *title;  /**< Window title, or "SLAYER3D" when NULL. */
+        int width;          /**< Initial window width in pixels, or logical width when <= 0. */
+        int height;         /**< Initial window height in pixels, or logical height when <= 0. */
+        int logical_width;  /**< Virtual render width, or 1280 when <= 0. */
+        int logical_height; /**< Virtual render height, or 720 when <= 0. */
+        slayer3d_logical_size_policy logical_size_policy; /**< Fixed or window-filling logical canvas. */
+        const char *icon_path;                            /**< Optional filesystem path to a window icon image. */
+        slayer3d_backend backend;                         /**< Requested backend, or SLAYER3D_BACKEND_AUTO when zero. */
         slayer3d_window_mode display_mode;    /**< Window presentation mode, or SLAYER3D default when zero. */
         int vsync;                            /**< >0 enables vsync, <0 disables vsync, 0 uses the SLAYER3D default. */
         int maximized;                        /**< >0 maximizes, <0 keeps window normal, 0 uses the SLAYER3D default. */

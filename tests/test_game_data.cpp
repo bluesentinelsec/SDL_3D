@@ -5188,6 +5188,22 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, LoadsAdaptiveLogicalCanvasPolicyForEditor)
+{
+    slayer3d_game_config config{};
+    char title[128]{};
+    char error[512]{};
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file(editor_path.string().c_str(), &config, title, sizeof(title),
+                                                        error, sizeof(error)))
+        << error;
+    EXPECT_STREQ("Slayer 3D Editor", config.title);
+    EXPECT_EQ(1280, config.logical_width);
+    EXPECT_EQ(720, config.logical_height);
+    EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_EXPAND, config.logical_size_policy);
+}
+
 TEST(GameDataRuntime, ExposesDataDrivenScenesAndMenus)
 {
     slayer3d_game_session *session = nullptr;
@@ -10625,6 +10641,16 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
   "world": { "name": "world.bad", "kind": "3d" }
 })json",
             "app dimensions must be positive integers",
+        },
+        {
+            "bad_logical_size_policy",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Logical Size Policy" },
+  "app": { "logical_size_policy": "crop" },
+  "world": { "name": "world.bad", "kind": "3d" }
+})json",
+            "logical_size_policy must be 'fixed' or 'expand'",
         },
         {
             "bad_world_scale",

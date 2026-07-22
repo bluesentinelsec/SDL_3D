@@ -131,8 +131,9 @@ static bool app_flow_apply_window_settings(const slayer3d_game_data_app_flow *fl
     slayer3d_init_window_config(&config);
     config.width = width;
     config.height = height;
-    config.logical_width = slayer3d_get_render_context_width(ctx->renderer);
-    config.logical_height = slayer3d_get_render_context_height(ctx->renderer);
+    if (!slayer3d_get_render_context_authored_size(ctx->renderer, &config.logical_width, &config.logical_height))
+        return false;
+    config.logical_size_policy = slayer3d_get_render_context_logical_size_policy(ctx->renderer);
     config.title = SDL_GetWindowTitle(ctx->window);
     config.display_mode = parse_window_mode_setting(
         slayer3d_properties_get_string(settings->props, flow->app.window_display_mode_key, "windowed"),

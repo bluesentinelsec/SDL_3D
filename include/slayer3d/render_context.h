@@ -33,12 +33,22 @@ extern "C"
         SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS = 3
     } slayer3d_window_mode;
 
+    /** @brief Policy for adapting an authored logical canvas to the window. */
+    typedef enum slayer3d_logical_size_policy
+    {
+        /** @brief Keep the authored logical dimensions and letterbox as needed. */
+        SLAYER3D_LOGICAL_SIZE_FIXED = 0,
+        /** @brief Treat authored dimensions as minimums and expand one axis to fill the window. */
+        SLAYER3D_LOGICAL_SIZE_EXPAND = 1
+    } slayer3d_logical_size_policy;
+
     typedef struct slayer3d_render_context_config
     {
         slayer3d_backend backend;
         bool allow_backend_fallback;
         int logical_width;
         int logical_height;
+        slayer3d_logical_size_policy logical_size_policy;
         SDL_RendererLogicalPresentation logical_presentation;
     } slayer3d_render_context_config;
 
@@ -123,14 +133,15 @@ extern "C"
      */
     typedef struct slayer3d_window_config
     {
-        int width;                         /**< Initial window width in pixels. */
-        int height;                        /**< Initial window height in pixels. */
-        int logical_width;                 /**< Virtual render width used for layout and presentation. */
-        int logical_height;                /**< Virtual render height used for layout and presentation. */
-        const char *title;                 /**< Window title, or "SLAYER3D" when NULL. */
-        const char *icon_path;             /**< Optional filesystem path to a window icon image. */
-        slayer3d_backend backend;          /**< AUTO, SOFTWARE, or OPENGL. */
-        bool allow_backend_fallback;       /**< Try the next backend if the preferred backend fails. */
+        int width;          /**< Initial window width in pixels. */
+        int height;         /**< Initial window height in pixels. */
+        int logical_width;  /**< Virtual render width used for layout and presentation. */
+        int logical_height; /**< Virtual render height used for layout and presentation. */
+        slayer3d_logical_size_policy logical_size_policy; /**< Fixed canvas or window-filling expanded canvas. */
+        const char *title;                                /**< Window title, or "SLAYER3D" when NULL. */
+        const char *icon_path;                            /**< Optional filesystem path to a window icon image. */
+        slayer3d_backend backend;                         /**< AUTO, SOFTWARE, or OPENGL. */
+        bool allow_backend_fallback;                      /**< Try the next backend if the preferred backend fails. */
         slayer3d_window_mode display_mode; /**< Windowed, exclusive fullscreen, or borderless fullscreen. */
         bool vsync;                        /**< Request synchronized presentation where supported. */
         bool maximized;                    /**< Create the desktop window maximized. */
@@ -169,7 +180,7 @@ extern "C"
      * @brief Fill a window config with sensible defaults.
      *
      * Defaults are width=1280, height=720, logical_width=1280,
-     * logical_height=720, title="SLAYER3D", backend=OPENGL,
+     * logical_height=720, logical_size_policy=FIXED, title="SLAYER3D", backend=OPENGL,
      * display_mode=WINDOWED, vsync=true, maximized=false,
      * allow_backend_fallback=true, resizable=true, and
      * high_pixel_density=true.
@@ -181,11 +192,12 @@ extern "C"
      *
      * Handles backend-specific setup, SDL_Renderer creation for the software
      * path, window flags, optional title/icon metadata, presentation mode, and
-     * logical resolution. High-level windows preserve the authored aspect
-     * ratio with letterboxing. Capable 3D backends render the world layer
-     * against the native pixel viewport, while overlays use logical
-     * coordinates. The caller receives an SDL_Window* for event polling and an
-     * slayer3d_render_context* for rendering.
+     * logical resolution. Fixed logical canvases preserve the authored aspect
+     * ratio with letterboxing; expanded canvases grow one logical axis to fill
+     * the output. Capable 3D backends render the world layer against the native
+     * pixel viewport, while overlays use logical coordinates. The caller
+     * receives an SDL_Window* for event polling and an slayer3d_render_context*
+     * for rendering.
      *
      * @param config Optional window configuration. NULL selects defaults.
      * @param out_window Receives the SDL window on success.
@@ -245,9 +257,30 @@ extern "C"
     slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context);
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
+    /** @brief Return the authored logical dimensions before adaptive expansion. */
+    bool slayer3d_get_render_context_authored_size(const slayer3d_render_context *context, int *out_width,
+                                                   int *out_height);
+    /** @brief Return the active logical canvas sizing policy. */
+    slayer3d_logical_size_policy slayer3d_get_render_context_logical_size_policy(
+        const slayer3d_render_context *context);
     /**
-     * @brief Return native display pixels per logical unit for the letterboxed
-     * presentation viewport.
+     * @brief Resolve a logical canvas against an output aspect ratio.
+     *
+     * FIXED returns the authored dimensions. EXPAND treats them as minimums,
+     * preserving one authored axis and growing the other to approximate the
+     * output aspect ratio without cropping content.
+     */
+    bool slayer3d_resolve_logical_size(int authored_width, int authored_height, int output_width, int output_height,
+                                       slayer3d_logical_size_policy policy, int *out_width, int *out_height);
+    /**
+     * @brief Synchronize an adaptive logical canvas with its current window.
+     *
+     * Fixed contexts are unchanged. Adaptive contexts resize backend resources
+     * transactionally when the window's pixel aspect ratio changes.
+     */
+    bool slayer3d_sync_render_context_logical_size(slayer3d_render_context *context);
+    /**
+     * @brief Return native display pixels per logical unit for the presentation viewport.
      *
      * Above 1 the window shows more pixels than the logical size (high-DPI or
      * upscaled fullscreen); below 1 the logical stream is downscaled. Returns

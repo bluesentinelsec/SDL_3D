@@ -3609,18 +3609,25 @@ static bool gl_present(slayer3d_render_context *context)
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
-    /* Compute letterbox viewport. */
+    /* Fixed canvases preserve their authored aspect. Expanded canvases already
+     * track the output aspect and fill the last sub-pixel rounding difference. */
     int win_w, win_h;
     SDL_GetWindowSizeInPixels(ctx->window, &win_w, &win_h);
 
-    float scale_x = (float)win_w / (float)ctx->logical_w;
-    float scale_y = (float)win_h / (float)ctx->logical_h;
-    float scale = (scale_x < scale_y) ? scale_x : scale_y;
-
-    int vp_w = (int)((float)ctx->logical_w * scale);
-    int vp_h = (int)((float)ctx->logical_h * scale);
-    int vp_x = (win_w - vp_w) / 2;
-    int vp_y = (win_h - vp_h) / 2;
+    int vp_w = win_w;
+    int vp_h = win_h;
+    int vp_x = 0;
+    int vp_y = 0;
+    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_FIXED)
+    {
+        float scale_x = (float)win_w / (float)ctx->logical_w;
+        float scale_y = (float)win_h / (float)ctx->logical_h;
+        float scale = (scale_x < scale_y) ? scale_x : scale_y;
+        vp_w = (int)((float)ctx->logical_w * scale);
+        vp_h = (int)((float)ctx->logical_h * scale);
+        vp_x = (win_w - vp_w) / 2;
+        vp_y = (win_h - vp_h) / 2;
+    }
 
     /* Bind default framebuffer, clear to black, set letterbox viewport. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, 0);

@@ -33,6 +33,10 @@ struct slayer3d_render_context
     slayer3d_backend_interface backend_iface;
     int width;
     int height;
+    int authored_width;
+    int authored_height;
+    slayer3d_logical_size_policy logical_size_policy;
+    SDL_RendererLogicalPresentation logical_presentation;
     float world_render_scale;
     float world_render_target_scale;
     int world_render_width;
