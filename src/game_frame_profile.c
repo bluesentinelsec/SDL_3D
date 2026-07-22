@@ -51,6 +51,8 @@ void slayer3d_game_frame_profile_record(slayer3d_game_frame_profile *profile, sl
         profile->hitch_33ms_count++;
     if (sample.frame_ms > 50.0)
         profile->hitch_50ms_count++;
+    if (sample.ticks > 1)
+        profile->catchup_frame_count++;
     if (sample.ticks > profile->max_ticks)
         profile->max_ticks = sample.ticks;
 }
@@ -84,6 +86,7 @@ bool slayer3d_game_frame_profile_summarize(const slayer3d_game_frame_profile *pr
     summary->missed_budget_count = profile->missed_budget_count;
     summary->hitch_33ms_count = profile->hitch_33ms_count;
     summary->hitch_50ms_count = profile->hitch_50ms_count;
+    summary->catchup_frame_count = profile->catchup_frame_count;
     summary->max_ticks = profile->max_ticks;
     return true;
 }

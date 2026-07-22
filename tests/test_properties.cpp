@@ -538,6 +538,37 @@ TEST(Properties, RemoveThenReinsertSameKey)
     slayer3d_properties_destroy(p);
 }
 
+TEST(Properties, RevisionChangesOnlyForEffectiveMutations)
+{
+    slayer3d_properties *p = slayer3d_properties_create();
+    ASSERT_NE(p, nullptr);
+    EXPECT_EQ(slayer3d_properties_revision(p), 0u);
+
+    slayer3d_properties_set_int(p, "value", 1);
+    const Uint64 inserted = slayer3d_properties_revision(p);
+    EXPECT_GT(inserted, 0u);
+    slayer3d_properties_set_int(p, "value", 1);
+    EXPECT_EQ(slayer3d_properties_revision(p), inserted);
+
+    slayer3d_properties_set_int(p, "value", 2);
+    const Uint64 changed = slayer3d_properties_revision(p);
+    EXPECT_GT(changed, inserted);
+    ASSERT_TRUE(slayer3d_properties_rename(p, "value", "renamed"));
+    EXPECT_GT(slayer3d_properties_revision(p), changed);
+
+    const Uint64 renamed = slayer3d_properties_revision(p);
+    slayer3d_properties_remove(p, "missing");
+    EXPECT_EQ(slayer3d_properties_revision(p), renamed);
+    slayer3d_properties_clear(p);
+    EXPECT_GT(slayer3d_properties_revision(p), renamed);
+
+    const Uint64 cleared = slayer3d_properties_revision(p);
+    slayer3d_properties_clear(p);
+    EXPECT_EQ(slayer3d_properties_revision(p), cleared);
+    EXPECT_EQ(slayer3d_properties_revision(nullptr), 0u);
+    slayer3d_properties_destroy(p);
+}
+
 TEST(Properties, RemoveDoesNotBreakProbeChain)
 {
     /* Insert keys that hash to the same bucket, remove the first,

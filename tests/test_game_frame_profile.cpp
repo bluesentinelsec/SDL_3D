@@ -26,6 +26,7 @@ TEST(GameFrameProfileTest, SummarizesFrameDistributionAndSlowestStageBreakdown)
     EXPECT_EQ(summary.missed_budget_count, 3);
     EXPECT_EQ(summary.hitch_33ms_count, 1);
     EXPECT_EQ(summary.hitch_50ms_count, 0);
+    EXPECT_EQ(summary.catchup_frame_count, 2);
     EXPECT_DOUBLE_EQ(summary.ticks_per_frame, 1.75);
     EXPECT_EQ(summary.max_ticks, 3);
     EXPECT_EQ(summary.sampled_frame_count, 4);

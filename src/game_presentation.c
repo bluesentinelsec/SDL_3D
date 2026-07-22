@@ -27,11 +27,22 @@ typedef struct game_presentation_profile
     double settings_ms;
     double world_ms;
     double ui_ms;
+    double viewport_count;
+    double ui_layout_builds;
+    double viewport_resolves;
+    double debug_resolves;
+    double ui_layout_ms;
+    double viewport_resolve_ms;
+    double debug_resolve_ms;
+    double model_mesh_draws;
+    double geometry_draw_calls;
+    char view_layout[64];
     int frames;
 } game_presentation_profile;
 
 static void record_game_presentation_profile(Uint64 frame_start, Uint64 assets_end, Uint64 settings_end,
-                                             Uint64 world_end, Uint64 ui_end)
+                                             Uint64 world_end, Uint64 ui_end,
+                                             const slayer3d_game_data_frame_desc *frame)
 {
     static game_presentation_profile profile;
     const double frequency = (double)SDL_GetPerformanceFrequency();
@@ -43,6 +54,27 @@ static void record_game_presentation_profile(Uint64 frame_start, Uint64 assets_e
     profile.settings_ms += (double)(settings_end - assets_end) * milliseconds;
     profile.world_ms += (double)(world_end - settings_end) * milliseconds;
     profile.ui_ms += (double)(ui_end - world_end) * milliseconds;
+    if (frame != NULL)
+    {
+        const game_data_presentation_cache *cache = frame->runtime->presentation_cache;
+        if (cache != NULL)
+        {
+            profile.viewport_count += (double)cache->viewport_count;
+            profile.ui_layout_builds += (double)cache->ui_layout_builds;
+            profile.viewport_resolves += (double)cache->viewport_resolves;
+            profile.debug_resolves += (double)cache->debug_resolves;
+            profile.ui_layout_ms += cache->ui_layout_ms;
+            profile.viewport_resolve_ms += cache->viewport_resolve_ms;
+            profile.debug_resolve_ms += cache->debug_resolve_ms;
+        }
+        if (frame->metrics != NULL)
+        {
+            profile.model_mesh_draws += (double)frame->metrics->render_model_mesh_draws_per_frame;
+            profile.geometry_draw_calls += (double)frame->metrics->render_geometry_draw_calls_per_frame;
+        }
+        SDL_strlcpy(profile.view_layout, scene_state_string(frame->runtime, "editor.view.layout", "default"),
+                    sizeof(profile.view_layout));
+    }
     profile.frames++;
     if (profile.last_counter == 0)
         profile.last_counter = frame_start;
@@ -52,14 +84,30 @@ static void record_game_presentation_profile(Uint64 frame_start, Uint64 assets_e
 
     const double frames = profile.frames > 0 ? (double)profile.frames : 1.0;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SLAYER3D presentation profile: assets=%.2fms settings=%.2fms world=%.2fms ui=%.2fms",
+                "SLAYER3D presentation profile: layout=%s viewports=%.1f assets=%.2fms settings=%.2fms "
+                "world=%.2fms ui=%.2fms layout_builds=%.2f viewport_resolves=%.2f debug_resolves=%.2f "
+                "layout_resolve=%.2fms viewport_resolve=%.2fms debug_resolve=%.2fms model_draws=%.1f "
+                "geometry_draws=%.1f",
+                profile.view_layout[0] != '\0' ? profile.view_layout : "default", profile.viewport_count / frames,
                 profile.assets_ms / frames, profile.settings_ms / frames, profile.world_ms / frames,
-                profile.ui_ms / frames);
+                profile.ui_ms / frames, profile.ui_layout_builds / frames, profile.viewport_resolves / frames,
+                profile.debug_resolves / frames, profile.ui_layout_ms / frames, profile.viewport_resolve_ms / frames,
+                profile.debug_resolve_ms / frames, profile.model_mesh_draws / frames,
+                profile.geometry_draw_calls / frames);
     profile.last_counter = ui_end;
     profile.assets_ms = 0.0;
     profile.settings_ms = 0.0;
     profile.world_ms = 0.0;
     profile.ui_ms = 0.0;
+    profile.viewport_count = 0.0;
+    profile.ui_layout_builds = 0.0;
+    profile.viewport_resolves = 0.0;
+    profile.debug_resolves = 0.0;
+    profile.ui_layout_ms = 0.0;
+    profile.viewport_resolve_ms = 0.0;
+    profile.debug_resolve_ms = 0.0;
+    profile.model_mesh_draws = 0.0;
+    profile.geometry_draw_calls = 0.0;
     profile.frames = 0;
 }
 
@@ -1332,6 +1380,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
     slayer3d_game_data_model_cache_begin_pose_frame(frame->model_cache);
+    (void)game_data_prepare_active_ui_widget_layout(frame->runtime, frame->metrics);
     if (profile_frames)
         settings_end = SDL_GetPerformanceCounter();
 
@@ -1357,6 +1406,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
         slayer3d_game_data_app_flow_draw(frame->app_flow, frame->renderer);
     ok = run_frame_hook(frame, frame->after_ui) && ok;
     if (profile_frames)
-        record_game_presentation_profile(frame_start, assets_end, settings_end, world_end, SDL_GetPerformanceCounter());
+        record_game_presentation_profile(frame_start, assets_end, settings_end, world_end, SDL_GetPerformanceCounter(),
+                                         frame);
     return ok;
 }

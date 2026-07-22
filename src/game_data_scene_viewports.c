@@ -6,8 +6,99 @@
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "slayer3d/game_presentation.h"
+
+static double elapsed_milliseconds(Uint64 start)
+{
+    const Uint64 frequency = SDL_GetPerformanceFrequency();
+    if (frequency == 0)
+        return 0.0;
+    return (double)(SDL_GetPerformanceCounter() - start) * 1000.0 / (double)frequency;
+}
+
+bool game_data_presentation_cache_create(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    if (runtime->presentation_cache != NULL)
+        return true;
+
+    game_data_presentation_cache *cache = (game_data_presentation_cache *)SDL_calloc(1, sizeof(*cache));
+    if (cache == NULL || !slayer3d_ui_layout_create(&cache->ui_layout))
+    {
+        SDL_free(cache);
+        return false;
+    }
+    runtime->presentation_cache = cache;
+    return true;
+}
+
+void game_data_presentation_cache_destroy(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->presentation_cache == NULL)
+        return;
+    slayer3d_ui_layout_destroy(runtime->presentation_cache->ui_layout);
+    SDL_free(runtime->presentation_cache);
+    runtime->presentation_cache = NULL;
+}
+
+void game_data_presentation_cache_begin_frame(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->presentation_cache == NULL)
+        return;
+    runtime->presentation_cache->layout_valid = false;
+    runtime->presentation_cache->viewports_valid = false;
+    runtime->presentation_cache->ui_layout_builds = 0;
+    runtime->presentation_cache->viewport_resolves = 0;
+    runtime->presentation_cache->debug_resolved = false;
+    runtime->presentation_cache->debug_resolves = 0;
+    runtime->presentation_cache->ui_layout_ms = 0.0;
+    runtime->presentation_cache->viewport_resolve_ms = 0.0;
+    runtime->presentation_cache->debug_resolve_ms = 0.0;
+}
+
+slayer3d_ui_layout_model *game_data_prepare_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime,
+                                                                    const slayer3d_game_data_ui_metrics *metrics)
+{
+    if (runtime == NULL || runtime->presentation_cache == NULL)
+        return NULL;
+
+    game_data_presentation_cache *cache = runtime->presentation_cache;
+    float viewport_width = 0.0f;
+    float viewport_height = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_width, &viewport_height);
+    const Uint64 state_revision = slayer3d_properties_revision(runtime->scene_state);
+    if (cache->layout_valid && cache->layout_state_revision == state_revision &&
+        cache->layout_scene_index == runtime->active_scene_index && cache->layout_width == viewport_width &&
+        cache->layout_height == viewport_height && (metrics == NULL || cache->layout_metrics == metrics))
+    {
+        return cache->ui_layout;
+    }
+
+    const Uint64 build_start = SDL_GetPerformanceCounter();
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_width, viewport_height, metrics,
+                                                          cache->ui_layout))
+    {
+        cache->layout_valid = false;
+        return NULL;
+    }
+    cache->layout_state_revision = state_revision;
+    cache->layout_scene_index = runtime->active_scene_index;
+    cache->layout_width = viewport_width;
+    cache->layout_height = viewport_height;
+    cache->layout_metrics = metrics;
+    cache->layout_valid = true;
+    cache->ui_layout_builds++;
+    cache->ui_layout_ms += elapsed_milliseconds(build_start);
+    return cache->ui_layout;
+}
+
+const slayer3d_ui_layout_model *game_data_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime)
+{
+    return game_data_prepare_active_ui_widget_layout(runtime, NULL);
+}
 
 static bool scene_viewport_rect_from_array(yyjson_val *value, SDL_Rect *out_rect)
 {
@@ -86,18 +177,12 @@ static float viewport_bound_value(yyjson_val *bounds, const char *key, float fal
     return fallback;
 }
 
-static void reserve_docked_ui(const slayer3d_game_data_runtime *runtime, float viewport_width, float viewport_height,
-                              bool reserve_left, bool reserve_right, bool reserve_bottom, float *left, float *right,
-                              float *bottom)
+static void reserve_docked_ui(const slayer3d_game_data_runtime *runtime, bool reserve_left, bool reserve_right,
+                              bool reserve_bottom, float *left, float *right, float *bottom)
 {
-    slayer3d_ui_layout_model *layout = NULL;
-    if (!slayer3d_ui_layout_create(&layout))
+    const slayer3d_ui_layout_model *layout = game_data_active_ui_widget_layout(runtime);
+    if (layout == NULL)
         return;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_width, viewport_height, NULL, layout))
-    {
-        slayer3d_ui_layout_destroy(layout);
-        return;
-    }
 
     for (int i = 0, count = slayer3d_ui_layout_node_count(layout); i < count; ++i)
     {
@@ -111,7 +196,6 @@ static void reserve_docked_ui(const slayer3d_game_data_runtime *runtime, float v
         else if (reserve_bottom && node->dock == SLAYER3D_UI_LAYOUT_DOCK_BOTTOM)
             *bottom = SDL_min(*bottom, node->rect.y);
     }
-    slayer3d_ui_layout_destroy(layout);
 }
 
 static bool viewport_layout_reserves_dock(yyjson_val *value, const char *dock)
@@ -159,8 +243,7 @@ static bool resolve_layout_viewports(const slayer3d_game_data_runtime *runtime, 
         viewport_layout_reserves_dock(reserved_docks, "right") ||
         viewport_layout_reserves_dock(reserved_docks, "bottom"))
     {
-        reserve_docked_ui(runtime, viewport_width, viewport_height,
-                          viewport_layout_reserves_dock(reserved_docks, "left"),
+        reserve_docked_ui(runtime, viewport_layout_reserves_dock(reserved_docks, "left"),
                           viewport_layout_reserves_dock(reserved_docks, "right"),
                           viewport_layout_reserves_dock(reserved_docks, "bottom"), &left, &right, &bottom);
     }
@@ -235,9 +318,9 @@ static bool resolve_layout_viewports(const slayer3d_game_data_runtime *runtime, 
     return count > 0;
 }
 
-bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
-                                                    game_data_scene_world_viewport *out_viewports, int capacity,
-                                                    int *out_count)
+static bool resolve_active_scene_world_viewports_uncached(const slayer3d_game_data_runtime *runtime,
+                                                          game_data_scene_world_viewport *out_viewports, int capacity,
+                                                          int *out_count)
 {
     if (runtime == NULL || out_count == NULL || capacity < 0 || (out_viewports != NULL && capacity == 0))
         return false;
@@ -249,6 +332,55 @@ bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_run
         return resolve_legacy_viewports(runtime, viewports, out_viewports, capacity, out_count);
     if (yyjson_is_obj(viewports))
         return resolve_layout_viewports(runtime, viewports, out_viewports, capacity, out_count);
+    return true;
+}
+
+bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
+                                                    game_data_scene_world_viewport *out_viewports, int capacity,
+                                                    int *out_count)
+{
+    if (runtime == NULL || out_count == NULL || capacity < 0 || (out_viewports != NULL && capacity == 0))
+        return false;
+    *out_count = 0;
+
+    game_data_presentation_cache *cache = runtime->presentation_cache;
+    if (cache == NULL)
+        return resolve_active_scene_world_viewports_uncached(runtime, out_viewports, capacity, out_count);
+
+    float viewport_width = 0.0f;
+    float viewport_height = 0.0f;
+    slayer3d_game_data_ui_viewport(runtime, &viewport_width, &viewport_height);
+    const Uint64 state_revision = slayer3d_properties_revision(runtime->scene_state);
+    if (!cache->viewports_valid || cache->viewport_state_revision != state_revision ||
+        cache->viewport_scene_index != runtime->active_scene_index || cache->viewport_width != viewport_width ||
+        cache->viewport_height != viewport_height)
+    {
+        int count = 0;
+        const Uint64 resolve_start = SDL_GetPerformanceCounter();
+        if (!resolve_active_scene_world_viewports_uncached(runtime, cache->viewports, SDL_arraysize(cache->viewports),
+                                                           &count))
+        {
+            cache->viewports_valid = false;
+            return false;
+        }
+        cache->viewport_state_revision = state_revision;
+        cache->viewport_scene_index = runtime->active_scene_index;
+        cache->viewport_width = viewport_width;
+        cache->viewport_height = viewport_height;
+        cache->viewport_count = count;
+        cache->viewports_valid = true;
+        cache->viewport_resolves++;
+        cache->viewport_resolve_ms += elapsed_milliseconds(resolve_start);
+    }
+
+    if (out_viewports != NULL && capacity < cache->viewport_count)
+        return false;
+    if (out_viewports != NULL && cache->viewport_count > 0)
+    {
+        SDL_memcpy(out_viewports, cache->viewports,
+                   (size_t)cache->viewport_count * sizeof(game_data_scene_world_viewport));
+    }
+    *out_count = cache->viewport_count;
     return true;
 }
 

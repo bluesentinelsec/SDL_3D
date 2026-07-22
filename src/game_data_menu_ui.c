@@ -1877,11 +1877,10 @@ bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_ru
             !for_each_ui_inspector_text_root(runtime, metrics, roots[root_index], callback, userdata) ||
             !for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], callback, userdata))
             return true;
-    slayer3d_ui_layout_model *layout = NULL;
-    if (!create_retained_ui_layout(runtime, metrics, &layout))
+    slayer3d_ui_layout_model *layout = game_data_prepare_active_ui_widget_layout(runtime, metrics);
+    if (layout == NULL)
         return true;
     const bool retained_ok = retained_ui_text_from_layout_model(layout, callback, userdata);
-    slayer3d_ui_layout_destroy(layout);
     if (!retained_ok)
         return true;
     return true;
@@ -2433,8 +2432,8 @@ bool slayer3d_game_data_for_each_ui_layered(const slayer3d_game_data_runtime *ru
     if (runtime == NULL || rect_callback == NULL)
         return false;
 
-    slayer3d_ui_layout_model *layout = NULL;
-    if (!create_retained_ui_layout(runtime, metrics, &layout))
+    slayer3d_ui_layout_model *layout = game_data_prepare_active_ui_widget_layout(runtime, metrics);
+    if (layout == NULL)
         return true;
 
     yyjson_val *roots[2];
@@ -2470,6 +2469,5 @@ bool slayer3d_game_data_for_each_ui_layered(const slayer3d_game_data_runtime *ru
         ok = ok && retained_ui_text_from_layout_model(layout, text_callback, userdata);
     }
 
-    slayer3d_ui_layout_destroy(layout);
     return ok;
 }

@@ -31,6 +31,7 @@ typedef struct slayer3d_game_frame_profile
     int hitch_33ms_count;
     int hitch_50ms_count;
     int ticks_count;
+    int catchup_frame_count;
     int max_ticks;
 } slayer3d_game_frame_profile;
 
@@ -52,6 +53,7 @@ typedef struct slayer3d_game_frame_profile_summary
     int missed_budget_count;
     int hitch_33ms_count;
     int hitch_50ms_count;
+    int catchup_frame_count;
     int max_ticks;
 } slayer3d_game_frame_profile_summary;
 

@@ -284,6 +284,17 @@ static bool editor_handle_bound_dropdown(slayer3d_game_data_runtime *runtime, co
     if (hit->option_index >= 0)
     {
         (void)editor_set_bound_dropdown_value(runtime->scene_state, hit_widget, hit->option_index);
+        const char *selected_key = json_string(hit_widget, "selected_value_key", NULL);
+        if (selected_key != NULL && SDL_strcmp(selected_key, "editor.view.layout") == 0)
+        {
+            yyjson_val *options = obj_get(hit_widget, "options");
+            const char *label =
+                yyjson_is_arr(options) ? yyjson_get_str(yyjson_arr_get(options, (size_t)hit->option_index)) : NULL;
+            char message[128];
+            SDL_snprintf(message, sizeof(message), "View layout selected: %s (%d pane%s)",
+                         label != NULL ? label : "custom", hit->option_index + 1, hit->option_index == 0 ? "" : "s");
+            editor_publish_console_message(runtime, message);
+        }
         slayer3d_properties_set_bool(runtime->scene_state, open_key, false);
         return true;
     }

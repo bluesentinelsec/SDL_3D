@@ -216,6 +216,35 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     return true;
 }
 
+static const slayer3d_game_data_editor_debug_desc *active_editor_debug_desc_cached(
+    const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->presentation_cache == NULL)
+        return NULL;
+
+    game_data_presentation_cache *cache = runtime->presentation_cache;
+    const Uint64 state_revision = slayer3d_properties_revision(runtime->scene_state);
+    if (cache->debug_resolved && cache->debug_state_revision == state_revision &&
+        cache->debug_scene_index == runtime->active_scene_index)
+    {
+        return cache->debug_enabled ? &cache->editor_debug_desc : NULL;
+    }
+
+    const Uint64 resolve_start = SDL_GetPerformanceCounter();
+    cache->debug_enabled = active_editor_debug_desc_from_json(
+        runtime, &cache->editor_debug_desc, &cache->editor_debug_trace, &cache->editor_debug_selection);
+    cache->debug_state_revision = state_revision;
+    cache->debug_scene_index = runtime->active_scene_index;
+    cache->debug_resolved = true;
+    cache->debug_resolves++;
+    const Uint64 frequency = SDL_GetPerformanceFrequency();
+    if (frequency > 0)
+    {
+        cache->debug_resolve_ms += (double)(SDL_GetPerformanceCounter() - resolve_start) * 1000.0 / (double)frequency;
+    }
+    return cache->debug_enabled ? &cache->editor_debug_desc : NULL;
+}
+
 static bool emit_editor_debug_line(editor_debug_iteration_context *context, slayer3d_vec3 start, slayer3d_vec3 end)
 {
     if (context == NULL || context->callback == NULL)
@@ -268,26 +297,33 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
     if (runtime == NULL || callback == NULL)
         return false;
 
-    slayer3d_game_data_editor_debug_desc desc;
-    slayer3d_game_data_world_trace_desc trace;
-    slayer3d_game_data_editor_selection selection;
-    if (!active_editor_debug_desc_from_json(runtime, &desc, &trace, &selection))
+    slayer3d_game_data_editor_debug_desc local_desc;
+    slayer3d_game_data_world_trace_desc local_trace;
+    slayer3d_game_data_editor_selection local_selection;
+    const slayer3d_game_data_editor_debug_desc *desc = active_editor_debug_desc_cached(runtime);
+    if (runtime->presentation_cache == NULL)
+    {
+        if (!active_editor_debug_desc_from_json(runtime, &local_desc, &local_trace, &local_selection))
+            return true;
+        desc = &local_desc;
+    }
+    if (desc == NULL)
         return true;
-    if (!slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata))
+    if (!slayer3d_game_data_for_each_editor_debug_primitive(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata))
+    if (!emit_editor_selected_brush_bounds(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_selected_source_edge_handles(runtime, &desc, callback, userdata))
+    if (!emit_editor_selected_source_edge_handles(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_selected_source_vertex_handles(runtime, &desc, callback, userdata))
+    if (!emit_editor_selected_source_vertex_handles(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_source_vertex_drag_guides(runtime, &desc, callback, userdata))
+    if (!emit_editor_source_vertex_drag_guides(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_source_vertex_add_preview(runtime, &desc, callback, userdata))
+    if (!emit_editor_source_vertex_add_preview(runtime, desc, callback, userdata))
         return false;
-    if (!emit_editor_overlapping_source_brush_bounds(runtime, &desc, callback, userdata))
+    if (!emit_editor_overlapping_source_brush_bounds(runtime, desc, callback, userdata))
         return false;
-    return emit_editor_debug_overlay_markers(runtime, &desc, callback, userdata);
+    return emit_editor_debug_overlay_markers(runtime, desc, callback, userdata);
 }
 
 static bool editor_debug_mode_is_vertex(const slayer3d_game_data_runtime *runtime)

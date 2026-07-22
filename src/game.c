@@ -688,14 +688,14 @@ static void slayer3d_game_run_frame(slayer3d_game_run_state *run)
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                             "SLAYER3D frame profile: fps=%.1f avg=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms "
                             "budget=%.2fms missed=%d/%d hitch33=%d hitch50=%d poll=%.2fms tick=%.2fms render=%.2fms "
-                            "present=%.2fms ticks/frame=%.2f max_ticks=%d sampled=%d/%d",
+                            "present=%.2fms ticks/frame=%.2f catchup=%d/%d max_ticks=%d sampled=%d/%d",
                             (double)summary.frame_count / elapsed_seconds, summary.frame_average_ms,
                             summary.frame_p50_ms, summary.frame_p95_ms, summary.frame_p99_ms, summary.slowest.frame_ms,
                             summary.budget_ms, summary.missed_budget_count, summary.frame_count,
                             summary.hitch_33ms_count, summary.hitch_50ms_count, summary.poll_average_ms,
                             summary.tick_average_ms, summary.render_average_ms, summary.present_average_ms,
-                            summary.ticks_per_frame, summary.max_ticks, summary.sampled_frame_count,
-                            summary.frame_count);
+                            summary.ticks_per_frame, summary.catchup_frame_count, summary.frame_count,
+                            summary.max_ticks, summary.sampled_frame_count, summary.frame_count);
                 SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                             "SLAYER3D slowest frame: frame=%.2fms poll=%.2fms tick=%.2fms render=%.2fms "
                             "present=%.2fms ticks=%d",

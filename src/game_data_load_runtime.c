@@ -401,7 +401,7 @@ bool slayer3d_game_data_load_asset_with_options(slayer3d_asset_resolver *assets,
         runtime->file_base_dir = SDL_strdup(options->source_base_dir);
     runtime->scene_state = slayer3d_properties_create();
     runtime->rng_state = 0xC0FFEEu;
-    if (runtime->base_dir == NULL || runtime->scene_state == NULL ||
+    if (runtime->base_dir == NULL || runtime->scene_state == NULL || !game_data_presentation_cache_create(runtime) ||
         (options->source_base_dir != NULL && options->source_base_dir[0] != '\0' && runtime->file_base_dir == NULL))
     {
         slayer3d_game_data_source_map_destroy(source_map);

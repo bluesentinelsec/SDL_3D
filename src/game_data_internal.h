@@ -46,6 +46,51 @@
 #endif
 #include "game_data_editor_types.h"
 
+typedef struct game_data_scene_world_viewport
+{
+    const char *name;
+    const char *camera;
+    const char *label;
+    const char *label_font;
+    SDL_Rect rect;
+    bool draw_skybox;
+    bool draw_viewmodel;
+    yyjson_val *label_style;
+    yyjson_val *work_plane;
+    yyjson_val *grid;
+} game_data_scene_world_viewport;
+
+typedef struct game_data_presentation_cache
+{
+    slayer3d_ui_layout_model *ui_layout;
+    const slayer3d_game_data_ui_metrics *layout_metrics;
+    game_data_scene_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX];
+    slayer3d_game_data_editor_debug_desc editor_debug_desc;
+    slayer3d_game_data_world_trace_desc editor_debug_trace;
+    slayer3d_game_data_editor_selection editor_debug_selection;
+    Uint64 layout_state_revision;
+    Uint64 viewport_state_revision;
+    Uint64 debug_state_revision;
+    float layout_width;
+    float layout_height;
+    float viewport_width;
+    float viewport_height;
+    double ui_layout_ms;
+    double viewport_resolve_ms;
+    double debug_resolve_ms;
+    int layout_scene_index;
+    int viewport_scene_index;
+    int debug_scene_index;
+    int viewport_count;
+    int ui_layout_builds;
+    int viewport_resolves;
+    int debug_resolves;
+    bool layout_valid;
+    bool viewports_valid;
+    bool debug_resolved;
+    bool debug_enabled;
+} game_data_presentation_cache;
+
 typedef struct slayer3d_game_data_runtime
 {
     yyjson_doc *doc;
@@ -90,6 +135,7 @@ typedef struct slayer3d_game_data_runtime
      * the 1280×720 default until the host publishes the render size. */
     float ui_viewport_w;
     float ui_viewport_h;
+    game_data_presentation_cache *presentation_cache;
     ui_state_entry *ui_states;
     int ui_state_count;
     int ui_state_capacity;
@@ -290,23 +336,15 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
 /* Read the published logical UI viewport, falling back to 1280×720. */
 void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height);
 
-typedef struct game_data_scene_world_viewport
-{
-    const char *name;
-    const char *camera;
-    const char *label;
-    const char *label_font;
-    SDL_Rect rect;
-    bool draw_skybox;
-    bool draw_viewmodel;
-    yyjson_val *label_style;
-    yyjson_val *work_plane;
-    yyjson_val *grid;
-} game_data_scene_world_viewport;
-
 bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
                                                     game_data_scene_world_viewport *out_viewports, int capacity,
                                                     int *out_count);
+bool game_data_presentation_cache_create(slayer3d_game_data_runtime *runtime);
+void game_data_presentation_cache_destroy(slayer3d_game_data_runtime *runtime);
+void game_data_presentation_cache_begin_frame(const slayer3d_game_data_runtime *runtime);
+const slayer3d_ui_layout_model *game_data_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime);
+slayer3d_ui_layout_model *game_data_prepare_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime,
+                                                                    const slayer3d_game_data_ui_metrics *metrics);
 bool slayer3d_game_data_ui_binding_to_string(const slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_ui_metrics *metrics, yyjson_val *binding,
                                              char *buffer, size_t buffer_size);

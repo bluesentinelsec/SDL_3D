@@ -40,6 +40,7 @@ struct slayer3d_properties
     int count;    /* Number of OCCUPIED entries. */
     int occupied; /* OCCUPIED + TOMBSTONE (for load factor). */
     int next_order;
+    Uint64 revision;
 };
 
 #define INITIAL_CAPACITY 16
@@ -142,24 +143,63 @@ static bool grow(slayer3d_properties *props)
 }
 
 /** Insert or overwrite a key with the given value. */
+static bool values_equal(const slayer3d_value *left, const slayer3d_value *right)
+{
+    if (left == NULL || right == NULL || left->type != right->type)
+        return false;
+    switch (left->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        return left->as_int == right->as_int;
+    case SLAYER3D_VALUE_FLOAT:
+        return left->as_float == right->as_float;
+    case SLAYER3D_VALUE_BOOL:
+        return left->as_bool == right->as_bool;
+    case SLAYER3D_VALUE_VEC3:
+        return left->as_vec3.x == right->as_vec3.x && left->as_vec3.y == right->as_vec3.y &&
+               left->as_vec3.z == right->as_vec3.z;
+    case SLAYER3D_VALUE_STRING:
+        return SDL_strcmp(left->as_string != NULL ? left->as_string : "",
+                          right->as_string != NULL ? right->as_string : "") == 0;
+    case SLAYER3D_VALUE_COLOR:
+        return left->as_color.r == right->as_color.r && left->as_color.g == right->as_color.g &&
+               left->as_color.b == right->as_color.b && left->as_color.a == right->as_color.a;
+    }
+    return false;
+}
+
 static void set_value(slayer3d_properties *props, const char *key, slayer3d_value value)
 {
     if (props == NULL || key == NULL)
+    {
+        free_value(&value);
         return;
+    }
 
     /* Grow if load factor exceeds threshold. */
     if (props->capacity == 0 || (props->occupied + 1) * 100 > props->capacity * LOAD_FACTOR_THRESHOLD)
     {
         if (!grow(props))
+        {
+            free_value(&value);
             return;
+        }
     }
 
     entry *e = find_entry(props->entries, props->capacity, key);
     if (e == NULL)
+    {
+        free_value(&value);
         return;
+    }
 
     if (e->state == ENTRY_OCCUPIED)
     {
+        if (values_equal(&e->value, &value))
+        {
+            free_value(&value);
+            return;
+        }
         /* Overwrite existing entry. Free old value, keep key. */
         free_value(&e->value);
         e->value = value;
@@ -181,6 +221,7 @@ static void set_value(slayer3d_properties *props, const char *key, slayer3d_valu
         if (!was_tombstone)
             props->occupied++;
     }
+    props->revision++;
 }
 
 /** Look up a key. Returns NULL if not found. */
@@ -384,6 +425,7 @@ bool slayer3d_properties_rename(slayer3d_properties *props, const char *old_key,
     if (was_empty)
         props->occupied++;
     SDL_free(old_key_copy);
+    props->revision++;
     return true;
 }
 
@@ -400,6 +442,7 @@ void slayer3d_properties_remove(slayer3d_properties *props, const char *key)
     e->state = ENTRY_TOMBSTONE;
     e->order = 0;
     props->count--;
+    props->revision++;
     /* occupied stays the same — tombstones count toward load factor. */
 }
 
@@ -407,6 +450,7 @@ void slayer3d_properties_clear(slayer3d_properties *props)
 {
     if (props == NULL)
         return;
+    const bool changed = props->count > 0;
     for (int i = 0; i < props->capacity; ++i)
     {
         if (props->entries[i].state == ENTRY_OCCUPIED)
@@ -417,6 +461,13 @@ void slayer3d_properties_clear(slayer3d_properties *props)
     props->count = 0;
     props->occupied = 0;
     props->next_order = 0;
+    if (changed)
+        props->revision++;
+}
+
+Uint64 slayer3d_properties_revision(const slayer3d_properties *props)
+{
+    return props != NULL ? props->revision : 0u;
 }
 
 /* ================================================================== */

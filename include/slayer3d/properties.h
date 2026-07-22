@@ -218,6 +218,15 @@ extern "C"
      */
     void slayer3d_properties_clear(slayer3d_properties *props);
 
+    /**
+     * @brief Return the monotonic mutation revision for a property bag.
+     *
+     * The revision changes only when stored state actually changes. Repeating
+     * a setter with an identical key, type, and value leaves it unchanged.
+     * This supports retained consumers that need inexpensive invalidation.
+     */
+    Uint64 slayer3d_properties_revision(const slayer3d_properties *props);
+
     /* ================================================================== */
     /* Iteration / introspection                                         */
     /* ================================================================== */
