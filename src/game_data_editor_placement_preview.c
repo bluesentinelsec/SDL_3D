@@ -478,7 +478,13 @@ static bool editor_drag_commit_source_box(slayer3d_game_data_runtime *runtime, y
     const bool liquid_mode = SDL_strcmp(scene_state_string(runtime, "editor.mode", "select"), "liquid") == 0;
     const char *message = liquid_mode ? "Liquid volume created" : "Brush created";
     publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL, message);
-    editor_publish_console_message(runtime, message);
+    const slayer3d_vec3 center =
+        slayer3d_vec3_scale(slayer3d_vec3_add(preview_result->bounds.min, preview_result->bounds.max), 0.5f);
+    const slayer3d_vec3 dimensions = slayer3d_vec3_sub(preview_result->bounds.max, preview_result->bounds.min);
+    editor_publish_console_messagef(runtime,
+                                    "%s: id=%s position=(%.3f, %.3f, %.3f) dimensions=(%.3f, %.3f, %.3f) material=%s",
+                                    message, preview_result->brush_name, center.x, center.y, center.z, dimensions.x,
+                                    dimensions.y, dimensions.z, drag->material_name != NULL ? drag->material_name : "");
     clear_editor_drag_create(runtime);
     return true;
 }

@@ -57,6 +57,7 @@ extern "C"
     slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slayer3d_runner_args *args,
                                                         FILE *stream);
     int slayer3d_runner_main(int argc, char **argv);
+    int slayer3d_runner_editor_main(int argc, char **argv);
     void slayer3d_runner_args_destroy(slayer3d_runner_args *args);
     void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream);
 

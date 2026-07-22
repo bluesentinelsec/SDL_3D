@@ -2131,7 +2131,7 @@
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": true },
           { "type": "scene_state.set", "key": "editor.ui.window.front", "value": "ui.editor_shell.liquid_panel" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "liquid tool" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "Liquid tool selected" }
         ]
       },
       {

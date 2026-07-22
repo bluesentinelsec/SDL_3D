@@ -68,6 +68,14 @@ extern "C"
         /** @brief Suppress the authored app startup transition when using direct-start tooling. */
         bool skip_app_flow_startup;
         /**
+         * @brief Mirror SDL log output into the data-authored editor console.
+         *
+         * Intended for editor hosts whose game data provides the standard
+         * `editor.console` state. Messages are queued from any thread and
+         * appended to the GUI console on the runtime's update thread.
+         */
+        bool mirror_logs_to_editor_console;
+        /**
          * @brief Enable authored host/direct-connect network orchestration.
          *
          * When true, the runtime consumes the standard authored network

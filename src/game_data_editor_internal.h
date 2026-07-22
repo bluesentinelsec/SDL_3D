@@ -8,6 +8,8 @@
  * types have been declared, so it intentionally does not include that header.
  */
 
+#include <SDL3/SDL_log.h>
+
 #define SLAYER3D_EDITOR_PROPERTY_SLOT_CAP 64
 
 yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
@@ -186,7 +188,11 @@ void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, con
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
 void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, float value);
 void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
+void editor_append_console_message(slayer3d_game_data_runtime *runtime, SDL_LogPriority priority, const char *message);
+void editor_publish_console_log(slayer3d_game_data_runtime *runtime, SDL_LogPriority priority, const char *message);
 void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message);
+void editor_publish_console_messagef(slayer3d_game_data_runtime *runtime, SDL_PRINTF_FORMAT_STRING const char *fmt, ...)
+    SDL_PRINTF_VARARG_FUNC(2);
 #define EDITOR_CONSOLE_VISIBLE_MAX 20
 int editor_console_visible_count(const slayer3d_properties *scene_state);
 void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime);

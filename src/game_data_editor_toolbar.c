@@ -847,16 +847,16 @@ typedef struct editor_tool_mode_def
 } editor_tool_mode_def;
 
 static const editor_tool_mode_def editor_tool_mode_defs[] = {
-    {"select", "select mode", NULL},
-    {"brush", "brush tool", NULL},
-    {"face", "face tool", NULL},
-    {"edge", "edge tool", "select a brush before edge tool"},
+    {"select", "Selection tool selected", NULL},
+    {"brush", "Brush tool selected", NULL},
+    {"face", "Face tool selected", NULL},
+    {"edge", "Edge tool selected", "Edge tool requires a selected brush"},
     {"clip", "", NULL},
-    {"vertex", "vertex tool", "select a brush before vertex tool"},
-    {"rotate", "rotate tool", "select a brush before rotate tool"},
-    {"scale", "scale tool", "select a brush before scale tool"},
-    {"shear", "shear tool", "select a brush before shear tool"},
-    {"liquid", "liquid tool", NULL},
+    {"vertex", "Vertex tool selected", "Vertex tool requires a selected brush"},
+    {"rotate", "Rotate tool selected", "Rotate tool requires a selected brush"},
+    {"scale", "Scale tool selected", "Scale tool requires a selected brush"},
+    {"shear", "Shear tool selected", "Shear tool requires a selected brush"},
+    {"liquid", "Liquid tool selected", NULL},
 };
 
 static const editor_tool_mode_def *editor_find_tool_mode_def(const char *mode)
@@ -937,6 +937,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
         reset_editor_scale_tool_state(runtime, message);
     if (SDL_strcmp(mode, "shear") == 0)
         reset_editor_shear_tool_state(runtime, message);
+    if (message != NULL && message[0] != '\0')
+        editor_publish_console_message(runtime, message);
     return true;
 }
 
@@ -971,15 +973,37 @@ static bool editor_action_routes_to_signal(const char *action)
 
 static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const char *action)
 {
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
     const char *mode = editor_mode_for_tool_action(action);
     if (mode != NULL)
         return slayer3d_game_data_set_editor_tool_mode(runtime, mode, NULL);
-    if (runtime != NULL && editor_action_routes_to_signal(action))
+    if (editor_action_routes_to_signal(action))
     {
+        char previous_action[512];
+        char previous_console_line[512];
+        SDL_strlcpy(previous_action,
+                    slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", ""),
+                    sizeof(previous_action));
+        SDL_strlcpy(previous_console_line,
+                    slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", ""),
+                    sizeof(previous_console_line));
         char signal[128];
         SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
         if (editor_emit_signal_by_name(runtime, signal))
+        {
+            const char *current_action =
+                slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", "");
+            const char *current_console_line =
+                slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", "");
+            if (current_action[0] != '\0' && SDL_strcmp(current_action, previous_action) != 0 &&
+                SDL_strcmp(current_console_line, previous_console_line) == 0)
+            {
+                editor_publish_console_message(runtime, current_action);
+            }
             return true;
+        }
     }
     return false;
 }

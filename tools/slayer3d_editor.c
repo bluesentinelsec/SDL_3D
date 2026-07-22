@@ -3,7 +3,6 @@
  * @brief Generic SLAYER3D data-authored editor host.
  */
 
-#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_main.h>
 
 #include <stdio.h>
@@ -66,11 +65,7 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor project: %s", project.project_dir);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor save path: %s", launch.save_path);
-    if (launch.input_path != NULL && launch.input_path[0] != '\0')
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor input path: %s", launch.input_path);
-    const int result = slayer3d_runner_main(invocation.argc, invocation.argv);
+    const int result = slayer3d_runner_editor_main(invocation.argc, invocation.argv);
     slayer3d_editor_runner_invocation_destroy(&invocation);
     slayer3d_editor_launch_destroy(&launch);
     slayer3d_editor_project_destroy(&project);
