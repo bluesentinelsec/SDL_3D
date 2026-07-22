@@ -187,6 +187,7 @@ target_sources(
         src/camera.c
         src/collision.c
         src/data_game.c
+        src/data_game_editor_log.c
         src/door.c
         src/drawing3d.c
         src/effects.c

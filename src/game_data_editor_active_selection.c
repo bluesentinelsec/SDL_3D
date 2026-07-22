@@ -1421,7 +1421,11 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
                 update_active_editor_selection_from_selected_brushes(runtime);
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", true);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.rotate.message", "rotated selection");
-                editor_publish_console_message(runtime, "rotated selection");
+                editor_publish_console_messagef(runtime,
+                                                "Selection rotated: angle=%.3f degrees axis=(%.3f, %.3f, %.3f) "
+                                                "pivot=(%.3f, %.3f, %.3f)",
+                                                angle * (180.0f / SDL_PI_F), axis.x, axis.y, axis.z, pivot.x, pivot.y,
+                                                pivot.z);
             }
             else
             {
@@ -1559,7 +1563,10 @@ static bool editor_handle_scale_drag(slayer3d_game_data_runtime *runtime,
                 update_active_editor_selection_from_selected_brushes(runtime);
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.valid", true);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.scale.message", "scaled selection");
-                editor_publish_console_message(runtime, "scaled selection");
+                editor_publish_console_messagef(runtime,
+                                                "Selection scaled: factors=(%.3f, %.3f, %.3f) anchor=(%.3f, %.3f, "
+                                                "%.3f)",
+                                                factors.x, factors.y, factors.z, anchor.x, anchor.y, anchor.z);
             }
             else
             {
@@ -1712,7 +1719,10 @@ static bool editor_handle_shear_drag(slayer3d_game_data_runtime *runtime,
                 update_active_editor_selection_from_selected_brushes(runtime);
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.valid", true);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.shear.message", "sheared selection");
-                editor_publish_console_message(runtime, "sheared selection");
+                editor_publish_console_messagef(runtime,
+                                                "Selection sheared: delta=(%.3f, %.3f, %.3f) side=(%.3f, %.3f, "
+                                                "%.3f)",
+                                                delta.x, delta.y, delta.z, side_normal.x, side_normal.y, side_normal.z);
             }
             else
             {
@@ -1869,7 +1879,9 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                 runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
                                            moved_actor ? "drag moved thing" : "drag moved brush");
-            editor_publish_console_message(runtime, moved_actor ? "drag moved thing" : "drag moved brush");
+            editor_publish_console_messagef(runtime, "%s moved: offset=(%.3f, %.3f, %.3f)",
+                                            moved_actor ? "Thing" : "Brush", drag->applied_offset.x,
+                                            drag->applied_offset.y, drag->applied_offset.z);
         }
         clear_editor_drag_move(runtime);
     }

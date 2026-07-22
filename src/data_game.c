@@ -12,6 +12,7 @@
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/transition.h"
 
+#include "data_game_editor_log_internal.h"
 #include "game_data_editor_dialog_internal.h"
 
 struct slayer3d_data_game_runtime
@@ -42,6 +43,7 @@ struct slayer3d_data_game_runtime
     bool mouse_capture_applied;
     bool mouse_capture_enabled;
     bool have_published_asset_warmup_stats;
+    data_game_editor_log_mirror *editor_log_mirror;
 };
 
 static const char SLAYER3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
@@ -1173,6 +1175,13 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
     slayer3d_game_data_frame_state_init(&runtime->frame_state);
     slayer3d_game_data_input_profile_refresh_state_init(&runtime->input_profile_refresh);
 
+    if (desc->mirror_logs_to_editor_console &&
+        !data_game_editor_log_mirror_create(&runtime->editor_log_mirror, error_buffer, error_buffer_size))
+    {
+        slayer3d_data_game_runtime_destroy(runtime);
+        return false;
+    }
+
     runtime->assets = slayer3d_asset_resolver_create();
     if (runtime->assets == NULL)
     {
@@ -1203,6 +1212,7 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
         slayer3d_data_game_runtime_destroy(runtime);
         return false;
     }
+    data_game_editor_log_mirror_drain(runtime->editor_log_mirror, runtime->data);
     runtime->managed_network_enabled =
         runtime->managed_network_enabled && slayer3d_game_data_network_managed_runtime_enabled(runtime->data);
 
@@ -1234,6 +1244,7 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
         return false;
     }
 
+    data_game_editor_log_mirror_drain(runtime->editor_log_mirror, runtime->data);
     *out_runtime = runtime;
     return true;
 }
@@ -1245,6 +1256,8 @@ void slayer3d_data_game_runtime_destroy(slayer3d_data_game_runtime *runtime)
         return;
     }
 
+    data_game_editor_log_mirror_destroy(runtime->editor_log_mirror);
+    runtime->editor_log_mirror = NULL;
     disconnect_managed_network(runtime);
     disconnect_haptics_policies(runtime);
     slayer3d_game_data_app_flow_stop(&runtime->app_flow);
@@ -1730,9 +1743,7 @@ bool slayer3d_data_game_runtime_process_event(slayer3d_data_game_runtime *runtim
         char console_message[512];
         SDL_snprintf(console_message, sizeof(console_message), "File dialog failed: %s",
                      message[0] != '\0' ? message : "unknown error");
-        slayer3d_game_data_editor_publish_console_message(runtime->data, console_message);
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D file dialog failed: %s",
-                    message[0] != '\0' ? message : "unknown error");
+        slayer3d_game_data_editor_publish_console_log(runtime->data, SDL_LOG_PRIORITY_WARN, console_message);
     }
     else if (!request->canceled && request->selected_path != NULL && request->selected_path[0] != '\0')
     {
@@ -1769,6 +1780,7 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
         return false;
     }
 
+    data_game_editor_log_mirror_drain(runtime->editor_log_mirror, runtime->data);
     data_game_publish_ui_viewport(runtime, ctx);
     if (!refresh_active_input_profile_if_available(runtime))
         return false;
@@ -1789,6 +1801,7 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
     data_game_apply_scene_mouse_capture(runtime, ctx);
     slayer3d_game_data_frame_state_record_update_cpu_time(
         &runtime->frame_state, data_game_elapsed_seconds(start_counter, SDL_GetPerformanceCounter()));
+    data_game_editor_log_mirror_drain(runtime->editor_log_mirror, runtime->data);
     return true;
 }
 

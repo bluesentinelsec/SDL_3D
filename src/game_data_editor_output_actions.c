@@ -3,6 +3,8 @@
 
 #include <SDL3/SDL_log.h>
 
+#include <stdarg.h>
+
 #define EDITOR_CONSOLE_HISTORY_COUNT 64
 #define EDITOR_CONSOLE_THUMB_TRAVEL 24.0f
 
@@ -97,33 +99,102 @@ bool editor_emit_signal_by_name(slayer3d_game_data_runtime *runtime, const char 
     return true;
 }
 
-void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message)
+static const char *editor_console_priority_name(SDL_LogPriority priority)
+{
+    switch (priority)
+    {
+    case SDL_LOG_PRIORITY_TRACE:
+        return "trace";
+    case SDL_LOG_PRIORITY_VERBOSE:
+        return "verbose";
+    case SDL_LOG_PRIORITY_DEBUG:
+        return "debug";
+    case SDL_LOG_PRIORITY_WARN:
+        return "warning";
+    case SDL_LOG_PRIORITY_ERROR:
+        return "error";
+    case SDL_LOG_PRIORITY_CRITICAL:
+        return "critical";
+    case SDL_LOG_PRIORITY_INFO:
+    default:
+        return "info";
+    }
+}
+
+void editor_append_console_message(slayer3d_game_data_runtime *runtime, SDL_LogPriority priority, const char *message)
 {
     if (runtime == NULL || runtime->scene_state == NULL || message == NULL || message[0] == '\0')
         return;
 
     char previous[EDITOR_CONSOLE_HISTORY_COUNT][512];
+    char previous_levels[EDITOR_CONSOLE_HISTORY_COUNT][16];
     SDL_zeroa(previous);
+    SDL_zeroa(previous_levels);
     for (int i = 0; i < EDITOR_CONSOLE_HISTORY_COUNT; ++i)
     {
         char key[64];
         SDL_snprintf(key, sizeof(key), "editor.console.history%d", i);
         SDL_strlcpy(previous[i], slayer3d_properties_get_string(runtime->scene_state, key, ""), sizeof(previous[i]));
+        SDL_snprintf(key, sizeof(key), "editor.console.history%d.level", i);
+        SDL_strlcpy(previous_levels[i], slayer3d_properties_get_string(runtime->scene_state, key, "info"),
+                    sizeof(previous_levels[i]));
     }
     for (int i = EDITOR_CONSOLE_HISTORY_COUNT - 1; i > 0; --i)
     {
         char key[64];
         SDL_snprintf(key, sizeof(key), "editor.console.history%d", i);
         slayer3d_properties_set_string(runtime->scene_state, key, previous[i - 1]);
+        SDL_snprintf(key, sizeof(key), "editor.console.history%d.level", i);
+        slayer3d_properties_set_string(runtime->scene_state, key, previous_levels[i - 1]);
     }
     slayer3d_properties_set_string(runtime->scene_state, "editor.console.history0", message);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.console.history0.level",
+                                   editor_console_priority_name(priority));
     const int count = SDL_min(EDITOR_CONSOLE_HISTORY_COUNT,
                               slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0) + 1);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.count", count);
     slayer3d_properties_set_int(runtime->scene_state, "editor.console.scroll", 0);
     editor_clear_console_selection_state(runtime->scene_state);
     editor_refresh_console_lines(runtime);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
+}
+
+void editor_publish_console_log(slayer3d_game_data_runtime *runtime, SDL_LogPriority priority, const char *message)
+{
+    editor_append_console_message(runtime, priority, message);
+    if (message != NULL && message[0] != '\0')
+    {
+        SDL_SetLogPriority(SLAYER3D_EDITOR_LOG_CATEGORY, SDL_GetLogPriority(SDL_LOG_CATEGORY_APPLICATION));
+        SDL_LogMessage(SLAYER3D_EDITOR_LOG_CATEGORY, priority, "%s", message);
+    }
+}
+
+void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    editor_publish_console_log(runtime, SDL_LOG_PRIORITY_INFO, message);
+}
+
+void editor_publish_console_messagef(slayer3d_game_data_runtime *runtime, const char *fmt, ...)
+{
+    if (fmt == NULL)
+        return;
+    char message[512];
+    va_list args;
+    va_start(args, fmt);
+    SDL_vsnprintf(message, sizeof(message), fmt, args);
+    va_end(args);
+    editor_publish_console_message(runtime, message);
+}
+
+void slayer3d_game_data_editor_append_console_message(struct slayer3d_game_data_runtime *runtime,
+                                                      SDL_LogPriority priority, const char *message)
+{
+    editor_append_console_message(runtime, priority, message);
+}
+
+void slayer3d_game_data_editor_publish_console_log(struct slayer3d_game_data_runtime *runtime, SDL_LogPriority priority,
+                                                   const char *message)
+{
+    editor_publish_console_log(runtime, priority, message);
 }
 
 void slayer3d_game_data_editor_publish_console_message(struct slayer3d_game_data_runtime *runtime, const char *message)
@@ -147,17 +218,25 @@ void editor_refresh_console_lines(slayer3d_game_data_runtime *runtime)
     for (int i = 0; i < EDITOR_CONSOLE_VISIBLE_MAX; ++i)
     {
         char line_key[64];
+        char level_key[64];
         SDL_snprintf(line_key, sizeof(line_key), "editor.console.line%d", i);
+        SDL_snprintf(level_key, sizeof(level_key), "editor.console.line%d.level", i);
         if (i < visible_count)
         {
             char source_key[64];
+            char source_level_key[64];
             SDL_snprintf(source_key, sizeof(source_key), "editor.console.history%d", scroll + i);
+            SDL_snprintf(source_level_key, sizeof(source_level_key), "editor.console.history%d.level", scroll + i);
             slayer3d_properties_set_string(runtime->scene_state, line_key,
                                            slayer3d_properties_get_string(runtime->scene_state, source_key, ""));
+            slayer3d_properties_set_string(
+                runtime->scene_state, level_key,
+                slayer3d_properties_get_string(runtime->scene_state, source_level_key, "info"));
         }
         else
         {
             slayer3d_properties_set_string(runtime->scene_state, line_key, "");
+            slayer3d_properties_set_string(runtime->scene_state, level_key, "info");
         }
     }
 

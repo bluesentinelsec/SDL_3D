@@ -42,6 +42,7 @@ typedef struct runner_state
     char title[128];
     slayer3d_data_game_runtime *runtime;
     char *generated_map_output_dir;
+    bool editor_host;
 } runner_state;
 
 static bool runner_is_asset_path(const char *path)
@@ -402,6 +403,7 @@ static bool runner_init(slayer3d_game_context *ctx, void *userdata)
     desc.initial_player_start = state->args.player_start;
     desc.initial_scene_state = initial_state;
     desc.initial_scene_payload = initial_state;
+    desc.mirror_logs_to_editor_console = state->editor_host;
     desc.skip_app_flow_startup = (state->args.scene != NULL && state->args.scene[0] != '\0') ||
                                  (state->args.player_start != NULL && state->args.player_start[0] != '\0');
 
@@ -414,6 +416,18 @@ static bool runner_init(slayer3d_game_context *ctx, void *userdata)
     slayer3d_properties_destroy(initial_state);
 
     slayer3d_data_game_runtime_apply_mouse_capture(state->runtime, ctx);
+    if (state->editor_host)
+    {
+        const slayer3d_properties *editor_state =
+            slayer3d_game_data_scene_state(slayer3d_data_game_runtime_data(state->runtime));
+        const char *project_dir = slayer3d_properties_get_string(editor_state, "editor.project.dir", "");
+        const char *save_path = slayer3d_properties_get_string(editor_state, "editor.save.path", "");
+        const char *input_path = slayer3d_properties_get_string(editor_state, "editor.input.path", "");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor project: %s", project_dir);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor save path: %s", save_path);
+        if (input_path[0] != '\0')
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor input path: %s", input_path);
+    }
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D runner loaded data asset: %s", state->args.data_asset_path);
     return true;
 }
@@ -459,10 +473,11 @@ static void runner_shutdown(slayer3d_game_context *ctx, void *userdata)
     }
 }
 
-int slayer3d_runner_main(int argc, char **argv)
+static int runner_main(int argc, char **argv, bool editor_host)
 {
     runner_state state;
     SDL_zero(state);
+    state.editor_host = editor_host;
     state.executable_path = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : NULL;
     const slayer3d_tool_cli_result cli_result = slayer3d_runner_args_parse(argc, argv, &state.args, stderr);
     if (cli_result != SLAYER3D_TOOL_CLI_OK)
@@ -527,6 +542,16 @@ int slayer3d_runner_main(int argc, char **argv)
     slayer3d_runner_args_destroy(&state.args);
     SDL_free(state.generated_map_output_dir);
     return result;
+}
+
+int slayer3d_runner_main(int argc, char **argv)
+{
+    return runner_main(argc, argv, false);
+}
+
+int slayer3d_runner_editor_main(int argc, char **argv)
+{
+    return runner_main(argc, argv, true);
 }
 
 #if !defined(SLAYER3D_RUNNER_NO_MAIN)

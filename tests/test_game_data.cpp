@@ -2875,6 +2875,82 @@ TEST(GameDataRuntime, DataGameRuntimeOwnsGenericPongLifecycle)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorConsoleMirrorsSDLLogsWithoutDuplicatingEditorMessages)
+{
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    const std::filesystem::path data_path = slayer3d_editor_data_path();
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    SDLLogOutputGuard log_guard;
+    CapturedLogMessage captured_log;
+    SDL_SetLogPriority(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_VERBOSE);
+    SDL_SetLogOutputFunction(capture_log_output, &captured_log);
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.mirror_logs_to_editor_console = true;
+
+    char error[512]{};
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+
+    auto history_occurrences = [&](const char *message, std::string *out_level = nullptr) {
+        int occurrences = 0;
+        for (int i = 0; i < 64; ++i)
+        {
+            char key[64];
+            SDL_snprintf(key, sizeof(key), "editor.console.history%d", i);
+            if (std::string(slayer3d_properties_get_string(scene_state, key, "")) != message)
+                continue;
+            occurrences++;
+            if (out_level != nullptr)
+            {
+                SDL_snprintf(key, sizeof(key), "editor.console.history%d.level", i);
+                *out_level = slayer3d_properties_get_string(scene_state, key, "");
+            }
+        }
+        return occurrences;
+    };
+
+    captured_log = {};
+    SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "editor mirror warning probe");
+    EXPECT_EQ(captured_log.category, SDL_LOG_CATEGORY_APPLICATION);
+    EXPECT_EQ(captured_log.priority, SDL_LOG_PRIORITY_WARN);
+    EXPECT_EQ(captured_log.message, "editor mirror warning probe");
+
+    slayer3d_game_context ctx{};
+    ctx.session = session;
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    std::string mirrored_level;
+    EXPECT_EQ(history_occurrences("editor mirror warning probe", &mirrored_level), 1);
+    EXPECT_EQ(mirrored_level, "warning");
+
+    captured_log = {};
+    editor_publish_console_message(data, "editor paired message probe");
+    EXPECT_EQ(captured_log.priority, SDL_LOG_PRIORITY_INFO);
+    EXPECT_EQ(captured_log.message, "editor paired message probe");
+    EXPECT_EQ(history_occurrences("editor paired message probe"), 1);
+    ASSERT_TRUE(slayer3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+    EXPECT_EQ(history_occurrences("editor paired message probe"), 1);
+
+    slayer3d_data_game_runtime_destroy(runtime);
+    captured_log = {};
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "restored callback probe");
+    EXPECT_EQ(captured_log.message, "restored callback probe");
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, DirectStartEntersRequestedSceneBeforeInitialSceneRuns)
 {
     const std::filesystem::path dir = unique_test_dir("direct_start");
@@ -25784,7 +25860,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
     ASSERT_NE(scene_state, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "vertex");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex tool");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "Vertex tool selected");
 
     auto visible_ui_rect = [&](const char *name) {
         struct RectNameCapture
@@ -25982,7 +26058,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeActivatesToolbarWithoutSelection)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "vertex");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "select a brush before vertex tool");
+                 "Vertex tool requires a selected brush");
 
     struct RectNameCapture
     {
@@ -26047,7 +26123,7 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
     ASSERT_NE(scene_state, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "edge");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "edge");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "edge tool");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "Edge tool selected");
 
     struct RectNameCapture
     {
@@ -28668,7 +28744,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, mode_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "brush");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush tool");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "Brush tool selected");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
     slayer3d_color selected_tool_fill{};
     ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.brush.button", &selected_tool_fill));
@@ -28717,7 +28793,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "edge");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "edge");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "select a brush before edge tool");
+                 "Edge tool requires a selected brush");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.edge.selected"));
     ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.edge.button", &selected_tool_fill));
     EXPECT_EQ(selected_tool_fill.r, 38);
@@ -28752,7 +28828,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(press_key(SDL_SCANCODE_SPACE, 113));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "select mode");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "Selection tool selected");
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.entity.button"));
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.texture.button"));
 
@@ -29755,6 +29831,11 @@ TEST(GameDataRuntime, EditorShellDojoSelectModeDragAutoCommitsBrushInEmptySpace)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.state", ""), "committed");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", ""), "Brush created");
+    const std::string creation_log = slayer3d_properties_get_string(scene_state, "editor.console.history0", "");
+    EXPECT_NE(creation_log.find("Brush created: id="), std::string::npos);
+    EXPECT_NE(creation_log.find("position=("), std::string::npos);
+    EXPECT_NE(creation_log.find("dimensions=("), std::string::npos);
+    EXPECT_NE(creation_log.find("material=mat.editor.floor"), std::string::npos);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

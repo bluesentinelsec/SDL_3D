@@ -415,19 +415,19 @@
       {
         "mode": "select",
         "tool_mode": "select",
-        "message": "select mode",
+        "message": "Selection tool selected",
         "button": { "x": 12, "y": 45, "w": 78, "h": 28 }
       },
       {
         "mode": "brush",
         "tool_mode": "brush",
-        "message": "brush tool",
+        "message": "Brush tool selected",
         "button": { "x": 96, "y": 45, "w": 104, "h": 28 }
       },
       {
         "mode": "edge",
         "tool_mode": "edge",
-        "message": "edge tool",
+        "message": "Edge tool selected",
         "button": { "x": 206, "y": 45, "w": 92, "h": 28 }
       },
       {
@@ -439,31 +439,31 @@
       {
         "mode": "face",
         "tool_mode": "face",
-        "message": "face tool",
+        "message": "Face tool selected",
         "button": { "x": 398, "y": 45, "w": 88, "h": 28 }
       },
       {
         "mode": "vertex",
         "tool_mode": "vertex",
-        "message": "vertex tool",
+        "message": "Vertex tool selected",
         "button": { "x": 492, "y": 45, "w": 100, "h": 28 }
       },
       {
         "mode": "rotate",
         "tool_mode": "rotate",
-        "message": "rotate tool",
+        "message": "Rotate tool selected",
         "button": { "x": 598, "y": 45, "w": 100, "h": 28 }
       },
       {
         "mode": "scale",
         "tool_mode": "scale",
-        "message": "scale tool",
+        "message": "Scale tool selected",
         "button": { "x": 704, "y": 45, "w": 88, "h": 28 }
       },
       {
         "mode": "shear",
         "tool_mode": "shear",
-        "message": "shear tool",
+        "message": "Shear tool selected",
         "button": { "x": 798, "y": 45, "w": 88, "h": 28 }
       }
     ],
