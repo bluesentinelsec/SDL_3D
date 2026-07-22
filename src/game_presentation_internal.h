@@ -114,6 +114,12 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
                                         const slayer3d_game_data_ui_metrics *metrics,
                                         const slayer3d_game_data_render_eval *render_eval, float pulse_phase);
 
+bool slayer3d_game_data_for_each_ui_layered(const slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_ui_metrics *metrics,
+                                            slayer3d_game_data_ui_rect_fn rect_callback,
+                                            slayer3d_game_data_ui_image_fn image_callback,
+                                            slayer3d_game_data_ui_text_fn text_callback, void *userdata);
+
 bool slayer3d_game_data_draw_mesh_primitive(primitive_draw_context *context,
                                             const slayer3d_game_data_render_primitive *primitive);
 

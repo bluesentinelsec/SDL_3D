@@ -5,7 +5,9 @@
 
 #include "game_presentation_internal.h"
 
+#include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "slayer3d/drawing3d.h"
 
@@ -76,6 +78,51 @@ typedef struct ui_scissor_scope
     bool had_previous;
     SDL_Rect previous;
 } ui_scissor_scope;
+
+typedef struct ui_layer_profile
+{
+    Uint64 last_counter;
+    double collect_ms;
+    double sort_ms;
+    double draw_ms;
+    double free_ms;
+    int item_count;
+    int frames;
+} ui_layer_profile;
+
+static void record_ui_layer_profile(Uint64 start, Uint64 collected, Uint64 sorted, Uint64 drawn, Uint64 freed,
+                                    int item_count)
+{
+    static ui_layer_profile profile;
+    const double frequency = (double)SDL_GetPerformanceFrequency();
+    if (frequency <= 0.0)
+        return;
+
+    const double milliseconds = 1000.0 / frequency;
+    profile.collect_ms += (double)(collected - start) * milliseconds;
+    profile.sort_ms += (double)(sorted - collected) * milliseconds;
+    profile.draw_ms += (double)(drawn - sorted) * milliseconds;
+    profile.free_ms += (double)(freed - drawn) * milliseconds;
+    profile.item_count += item_count;
+    profile.frames++;
+    if (profile.last_counter == 0)
+        profile.last_counter = start;
+    if ((double)(freed - profile.last_counter) < frequency)
+        return;
+
+    const double frames = profile.frames > 0 ? (double)profile.frames : 1.0;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "SLAYER3D UI profile: items=%.1f collect=%.2fms sort=%.2fms draw=%.2fms free=%.2fms",
+                (double)profile.item_count / frames, profile.collect_ms / frames, profile.sort_ms / frames,
+                profile.draw_ms / frames, profile.free_ms / frames);
+    profile.last_counter = freed;
+    profile.collect_ms = 0.0;
+    profile.sort_ms = 0.0;
+    profile.draw_ms = 0.0;
+    profile.free_ms = 0.0;
+    profile.item_count = 0;
+    profile.frames = 0;
+}
 
 /*
  * Duplicate one collected string so a deferred draw item never outlives its
@@ -676,6 +723,12 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
     if (runtime == NULL || renderer == NULL)
         return false;
 
+    const bool profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
+    const Uint64 profile_start = profile_frames ? SDL_GetPerformanceCounter() : 0;
+    Uint64 profile_collected = 0;
+    Uint64 profile_sorted = 0;
+    Uint64 profile_drawn = 0;
+
     if (font_cache != NULL)
         slayer3d_game_data_font_cache_set_display_scale(font_cache,
                                                         slayer3d_get_render_context_display_scale(renderer));
@@ -686,15 +739,18 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
     list.runtime = runtime;
     list.metrics = metrics;
 
-    bool ok = slayer3d_game_data_for_each_ui_rect(runtime, collect_ui_rect, &list);
-    if (ok && image_cache != NULL)
-        ok = slayer3d_game_data_for_each_ui_image(runtime, collect_ui_image, &list);
-    if (ok && font_cache != NULL)
-        ok = slayer3d_game_data_for_each_ui_text_for_metrics(runtime, metrics, collect_ui_text, &list);
+    slayer3d_game_data_ui_image_fn image_callback = image_cache != NULL ? collect_ui_image : NULL;
+    slayer3d_game_data_ui_text_fn text_callback = font_cache != NULL ? collect_ui_text : NULL;
+    bool ok =
+        slayer3d_game_data_for_each_ui_layered(runtime, metrics, collect_ui_rect, image_callback, text_callback, &list);
     ok = ok && list.ok;
+    if (profile_frames)
+        profile_collected = SDL_GetPerformanceCounter();
     if (ok)
     {
         ui_draw_list_sort(&list);
+        if (profile_frames)
+            profile_sorted = SDL_GetPerformanceCounter();
 
         ui_rect_draw_context rect_context;
         SDL_zero(rect_context);
@@ -736,8 +792,18 @@ bool slayer3d_game_data_draw_ui_layered(const slayer3d_game_data_runtime *runtim
         }
         ok = rect_context.ok && image_context.ok && text_context.ok && ok;
     }
+    if (profile_frames)
+    {
+        if (profile_sorted == 0)
+            profile_sorted = SDL_GetPerformanceCounter();
+        profile_drawn = SDL_GetPerformanceCounter();
+    }
 
+    const int item_count = list.count;
     ui_draw_list_free(&list);
+    if (profile_frames)
+        record_ui_layer_profile(profile_start, profile_collected, profile_sorted, profile_drawn,
+                                SDL_GetPerformanceCounter(), item_count);
     return ok;
 }
 

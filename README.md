@@ -111,6 +111,16 @@ cmake --build --preset release
 ctest --preset release
 ```
 
+For an optimized editor-only build:
+
+```sh
+cmake --preset editor
+cmake --build --preset editor
+```
+
+Use this preset when running or evaluating the editor. The default preset is an
+unoptimized engine development build.
+
 For a sanitizer-enabled build:
 
 ```sh

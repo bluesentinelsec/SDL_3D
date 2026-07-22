@@ -28,6 +28,7 @@ struct slayer3d_data_game_runtime
     slayer3d_game_data_app_flow app_flow;
     slayer3d_game_data_frame_state frame_state;
     slayer3d_game_data_input_profile_refresh_state input_profile_refresh;
+    slayer3d_game_data_asset_warmup_stats published_asset_warmup_stats;
     slayer3d_game_session *session;
     int *haptics_signal_ids;
     int *haptics_connections;
@@ -40,6 +41,7 @@ struct slayer3d_data_game_runtime
     float managed_network_termination_timer;
     bool mouse_capture_applied;
     bool mouse_capture_enabled;
+    bool have_published_asset_warmup_stats;
 };
 
 static const char SLAYER3D_MANAGED_NETWORK_HOST_SESSION[] = "host";
@@ -1351,6 +1353,27 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
     return true;
 }
 
+static void publish_asset_warmup_stats_if_changed(slayer3d_data_game_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+
+    slayer3d_game_data_asset_warmup_stats stats;
+    SDL_zero(stats);
+    slayer3d_game_data_asset_warmup_queue_stats(&runtime->asset_warmup, &stats);
+    if (runtime->have_published_asset_warmup_stats &&
+        SDL_memcmp(&runtime->published_asset_warmup_stats, &stats, sizeof(stats)) == 0)
+    {
+        return;
+    }
+
+    if (slayer3d_data_game_runtime_publish_asset_warmup_stats(runtime, NULL))
+    {
+        runtime->published_asset_warmup_stats = stats;
+        runtime->have_published_asset_warmup_stats = true;
+    }
+}
+
 bool slayer3d_data_game_runtime_refresh_input_profile_on_device_change(slayer3d_data_game_runtime *runtime,
                                                                        slayer3d_input_manager *input,
                                                                        const char **out_profile_name, bool *out_applied,
@@ -1770,14 +1793,20 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
 
 void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
+    static Uint64 profile_last_counter;
+    static double profile_prepare_ms;
+    static double profile_draw_ms;
+    static double profile_finish_ms;
+    static int profile_frame_count;
     if (runtime == NULL || runtime->data == NULL || ctx == NULL)
     {
         return;
     }
 
+    const bool profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
+    const Uint64 profile_start = profile_frames ? SDL_GetPerformanceCounter() : 0;
     data_game_publish_ui_viewport(runtime, ctx);
     slayer3d_game_data_frame_state_record_render(&runtime->frame_state, ctx, runtime->data);
-    (void)slayer3d_data_game_runtime_publish_asset_warmup_stats(runtime, NULL);
     data_game_sync_presentation_media_dir(runtime);
 
     slayer3d_game_data_frame_desc frame;
@@ -1797,7 +1826,32 @@ void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slay
     frame.pulse_phase = runtime->frame_state.ui_pulse_phase;
     const Uint64 start_counter = SDL_GetPerformanceCounter();
     slayer3d_game_data_draw_frame(&frame);
-    (void)slayer3d_data_game_runtime_publish_asset_warmup_stats(runtime, NULL);
+    const Uint64 draw_end_counter = profile_frames ? SDL_GetPerformanceCounter() : 0;
+    publish_asset_warmup_stats_if_changed(runtime);
     slayer3d_game_data_frame_state_record_render_cpu_time(
         &runtime->frame_state, data_game_elapsed_seconds(start_counter, SDL_GetPerformanceCounter()));
+    if (profile_frames)
+    {
+        const Uint64 profile_end = SDL_GetPerformanceCounter();
+        const double frequency = (double)SDL_GetPerformanceFrequency();
+        const double milliseconds = frequency > 0.0 ? 1000.0 / frequency : 0.0;
+        profile_prepare_ms += (double)(start_counter - profile_start) * milliseconds;
+        profile_draw_ms += (double)(draw_end_counter - start_counter) * milliseconds;
+        profile_finish_ms += (double)(profile_end - draw_end_counter) * milliseconds;
+        profile_frame_count++;
+        if (profile_last_counter == 0)
+            profile_last_counter = profile_start;
+        if (frequency > 0.0 && (double)(profile_end - profile_last_counter) >= frequency)
+        {
+            const double frames = profile_frame_count > 0 ? (double)profile_frame_count : 1.0;
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "SLAYER3D render wrapper profile: prepare=%.2fms draw=%.2fms finish=%.2fms",
+                        profile_prepare_ms / frames, profile_draw_ms / frames, profile_finish_ms / frames);
+            profile_last_counter = profile_end;
+            profile_prepare_ms = 0.0;
+            profile_draw_ms = 0.0;
+            profile_finish_ms = 0.0;
+            profile_frame_count = 0;
+        }
+    }
 }
