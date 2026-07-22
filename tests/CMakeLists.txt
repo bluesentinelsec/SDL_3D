@@ -93,6 +93,7 @@ set(SLAYER3D_TEST_SOURCES
     test_audio.cpp
     test_effects.cpp
     test_game.cpp
+    test_game_frame_profile.cpp
     test_game_session.cpp
     test_input.cpp
     test_transition.cpp
@@ -207,6 +208,8 @@ else()
     slayer3d_add_test(slayer3d_audio_test test_audio.cpp unit)
     slayer3d_add_test(slayer3d_effects_test test_effects.cpp unit)
     slayer3d_add_test(slayer3d_game_test test_game.cpp render)
+    slayer3d_add_test(slayer3d_game_frame_profile_test test_game_frame_profile.cpp unit)
+    target_include_directories(slayer3d_game_frame_profile_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     slayer3d_add_test(slayer3d_game_session_test test_game_session.cpp unit)
     if(SLAYER3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
         slayer3d_add_test(slayer3d_network_test test_network.cpp unit)

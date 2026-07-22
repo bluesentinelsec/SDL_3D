@@ -13,6 +13,8 @@
 #include "slayer3d/logic.h"
 #include "slayer3d/time.h"
 
+#include "game_frame_profile_internal.h"
+
 #define SLAYER3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
 #define SLAYER3D_GAME_DEFAULT_MAX_TICKS 8
 
@@ -527,14 +529,7 @@ typedef struct slayer3d_game_run_state
     float accumulator;
     Uint64 last_counter;
     Uint64 profile_last_counter;
-    double profile_poll_ms;
-    double profile_tick_ms;
-    double profile_render_ms;
-    double profile_present_ms;
-    double profile_frame_ms;
-    int profile_frames_count;
-    int profile_ticks_count;
-    int profile_max_ticks;
+    slayer3d_game_frame_profile frame_profile;
     int result;
 } slayer3d_game_run_state;
 
@@ -668,17 +663,15 @@ static void slayer3d_game_run_frame(slayer3d_game_run_state *run)
     if (run->profile_frames)
     {
         const double inv_freq_ms = 1000.0 / (double)SDL_GetPerformanceFrequency();
-        run->profile_poll_ms += (double)(poll_end_counter - poll_start_counter) * inv_freq_ms;
-        run->profile_tick_ms += (double)(tick_end_counter - tick_start_counter) * inv_freq_ms;
-        run->profile_render_ms += (double)(render_end_counter - render_start_counter) * inv_freq_ms;
-        run->profile_present_ms += (double)(present_end_counter - present_start_counter) * inv_freq_ms;
-        run->profile_frame_ms += (double)(present_end_counter - frame_start_counter) * inv_freq_ms;
-        run->profile_frames_count++;
-        run->profile_ticks_count += ticks_this_frame;
-        if (ticks_this_frame > run->profile_max_ticks)
-        {
-            run->profile_max_ticks = ticks_this_frame;
-        }
+        const slayer3d_game_frame_profile_sample sample = {
+            .frame_ms = (double)(present_end_counter - frame_start_counter) * inv_freq_ms,
+            .poll_ms = (double)(poll_end_counter - poll_start_counter) * inv_freq_ms,
+            .tick_ms = (double)(tick_end_counter - tick_start_counter) * inv_freq_ms,
+            .render_ms = (double)(render_end_counter - render_start_counter) * inv_freq_ms,
+            .present_ms = (double)(present_end_counter - present_start_counter) * inv_freq_ms,
+            .ticks = ticks_this_frame,
+        };
+        slayer3d_game_frame_profile_record(&run->frame_profile, sample);
 
         if (run->profile_last_counter == 0)
         {
@@ -687,24 +680,31 @@ static void slayer3d_game_run_frame(slayer3d_game_run_state *run)
         else if ((double)(present_end_counter - run->profile_last_counter) / (double)SDL_GetPerformanceFrequency() >=
                  1.0)
         {
-            const double frames = run->profile_frames_count > 0 ? (double)run->profile_frames_count : 1.0;
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                        "SLAYER3D profile: fps=%.1f frame=%.2fms poll=%.2f tick=%.2f render=%.2f present=%.2f "
-                        "ticks/frame=%.2f max_ticks=%d",
-                        frames * (double)SDL_GetPerformanceFrequency() /
-                            (double)(present_end_counter - run->profile_last_counter),
-                        run->profile_frame_ms / frames, run->profile_poll_ms / frames, run->profile_tick_ms / frames,
-                        run->profile_render_ms / frames, run->profile_present_ms / frames,
-                        run->profile_ticks_count / frames, run->profile_max_ticks);
+            slayer3d_game_frame_profile_summary summary;
+            if (slayer3d_game_frame_profile_summarize(&run->frame_profile, &summary))
+            {
+                const double elapsed_seconds =
+                    (double)(present_end_counter - run->profile_last_counter) / (double)SDL_GetPerformanceFrequency();
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "SLAYER3D frame profile: fps=%.1f avg=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms "
+                            "budget=%.2fms missed=%d/%d hitch33=%d hitch50=%d poll=%.2fms tick=%.2fms render=%.2fms "
+                            "present=%.2fms ticks/frame=%.2f catchup=%d/%d max_ticks=%d sampled=%d/%d",
+                            (double)summary.frame_count / elapsed_seconds, summary.frame_average_ms,
+                            summary.frame_p50_ms, summary.frame_p95_ms, summary.frame_p99_ms, summary.slowest.frame_ms,
+                            summary.budget_ms, summary.missed_budget_count, summary.frame_count,
+                            summary.hitch_33ms_count, summary.hitch_50ms_count, summary.poll_average_ms,
+                            summary.tick_average_ms, summary.render_average_ms, summary.present_average_ms,
+                            summary.ticks_per_frame, summary.catchup_frame_count, summary.frame_count,
+                            summary.max_ticks, summary.sampled_frame_count, summary.frame_count);
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                            "SLAYER3D slowest frame: frame=%.2fms poll=%.2fms tick=%.2fms render=%.2fms "
+                            "present=%.2fms ticks=%d",
+                            summary.slowest.frame_ms, summary.slowest.poll_ms, summary.slowest.tick_ms,
+                            summary.slowest.render_ms, summary.slowest.present_ms, summary.slowest.ticks);
+            }
             run->profile_last_counter = present_end_counter;
-            run->profile_poll_ms = 0.0;
-            run->profile_tick_ms = 0.0;
-            run->profile_render_ms = 0.0;
-            run->profile_present_ms = 0.0;
-            run->profile_frame_ms = 0.0;
-            run->profile_frames_count = 0;
-            run->profile_ticks_count = 0;
-            run->profile_max_ticks = 0;
+            const double budget_ms = run->frame_profile.budget_ms;
+            slayer3d_game_frame_profile_reset(&run->frame_profile, budget_ms);
         }
     }
 }
@@ -757,6 +757,10 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
     run->fixed_dt = slayer3d_game_fixed_dt(config);
     run->max_ticks_per_frame = slayer3d_game_max_ticks_per_frame(config);
     run->profile_frames = SDL_getenv("SLAYER3D_PROFILE_FRAMES") != NULL;
+    const double profile_target_fps = config != NULL && config->dynamic_world_render_target_fps > 0.0f
+                                          ? (double)config->dynamic_world_render_target_fps
+                                          : 60.0;
+    slayer3d_game_frame_profile_reset(&run->frame_profile, 1000.0 / profile_target_fps);
 
     SDL_SetMainReady();
 

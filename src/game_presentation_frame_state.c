@@ -100,6 +100,8 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
     if (state == NULL || ctx == NULL)
         return;
 
+    game_data_presentation_cache_begin_frame(runtime);
+
     if (state->rendered_frames > 0)
     {
         const float frame_dt = ctx->real_time - state->last_render_time;

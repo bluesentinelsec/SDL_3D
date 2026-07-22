@@ -404,6 +404,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     for (int i = 0; i < runtime->network_diagnostic_count; ++i)
         SDL_free(runtime->network_diagnostics[i].name);
 
+    game_data_presentation_cache_destroy(runtime);
     slayer3d_script_engine_destroy(runtime->scripts);
     slayer3d_properties_destroy(runtime->scene_state);
     slayer3d_storage_destroy(runtime->storage);
