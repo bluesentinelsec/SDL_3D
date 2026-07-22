@@ -13,6 +13,7 @@
 #ifndef SLAYER3D_GAME_PRESENTATION_H
 #define SLAYER3D_GAME_PRESENTATION_H
 
+#include <SDL3/SDL_rect.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdbool.h>
@@ -34,6 +35,37 @@
 extern "C"
 {
 #endif
+
+    /** @brief Maximum number of simultaneously resolved scene world viewports. */
+#ifndef SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX
+#define SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX 16
+#endif
+
+    /** @brief One concrete viewport produced by the active scene's authored layout. */
+    typedef struct slayer3d_game_data_world_viewport
+    {
+        const char *name;    /**< Runtime-owned authored viewport name. */
+        const char *camera;  /**< Runtime-owned camera name used by this viewport. */
+        SDL_Rect rect;       /**< Resolved logical screen rectangle. */
+        bool draw_viewmodel; /**< Whether first-person viewmodel geometry is drawn. */
+    } slayer3d_game_data_world_viewport;
+
+    /**
+     * @brief Resolve the active scene's world viewports for the current UI state.
+     *
+     * Responsive layouts are resolved against the published logical UI viewport
+     * and may reserve space occupied by retained UI windows docked to the left,
+     * right, or bottom. Legacy fixed viewport arrays are also supported.
+     *
+     * @param runtime Game-data runtime with an active scene.
+     * @param out_viewports Destination array, or NULL when only the count is needed.
+     * @param capacity Number of entries available in `out_viewports`.
+     * @param out_count Receives the number of resolved viewports.
+     * @return true when the active configuration was resolved successfully.
+     */
+    bool slayer3d_game_data_resolve_active_world_viewports(const slayer3d_game_data_runtime *runtime,
+                                                           slayer3d_game_data_world_viewport *out_viewports,
+                                                           int capacity, int *out_count);
 
     /**
      * @brief Runtime cache for fonts referenced by authored UI text.

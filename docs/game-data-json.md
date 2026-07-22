@@ -2297,25 +2297,63 @@ while the orthographic camera stays still. Override `flyby_mode`, `top_mode`,
 `front_mode`, or `side_mode` if a project uses different authored mode names.
 
 Editor scenes can pair one free-flight camera actor with multiple authored
-cameras. A typical graybox editor uses an `fps` or perspective camera for 3D
-inspection and orthographic cameras for top/front/side plotting. For a classic
-multi-viewport editor, author `world_viewports` on the scene:
+cameras. A typical graybox editor uses a perspective camera for 3D inspection
+and orthographic cameras for top/front/side plotting. For a responsive
+multi-viewport editor, author a layout-managed `world_viewports` object:
 
 ```json
 {
-  "world_viewports": [
-    { "name": "perspective", "camera": "camera.editor.perspective", "rect": [0, 0, 640, 360] },
-    { "name": "top", "camera": "camera.editor.top", "rect": [640, 0, 640, 360] },
-    { "name": "front", "camera": "camera.editor.front", "rect": [0, 360, 640, 360] },
-    { "name": "side", "camera": "camera.editor.side", "rect": [640, 360, 640, 360] }
-  ]
+  "world_viewports": {
+    "layout_key": "editor.view.layout",
+    "default_layout": "one_pane",
+    "bounds": { "x": 0, "y": 76, "width": "fill", "height": "fill" },
+    "avoid_docked_ui": true,
+    "gap": 2,
+    "views": [
+      { "name": "perspective", "camera": "camera.editor.perspective" },
+      {
+        "name": "top",
+        "camera": "camera.editor.top",
+        "work_plane": { "normal": [0, 1, 0], "distance": 0 },
+        "grid": { "enabled": true, "spacing_key": "editor.grid.size", "extent": 256 }
+      }
+    ],
+    "layouts": [
+      {
+        "name": "one_pane",
+        "columns": 1,
+        "rows": 1,
+        "panes": [{ "view": "perspective", "column": 0, "row": 0 }]
+      },
+      {
+        "name": "two_panes",
+        "columns": 2,
+        "rows": 1,
+        "panes": [
+          { "view": "perspective", "column": 0, "row": 0 },
+          { "view": "top", "column": 1, "row": 0 }
+        ]
+      }
+    ]
+  }
 }
 ```
 
-Each rect is `[x, y, width, height]` in logical pixels. Optional `active_if`
-conditions let the same scene switch between a four-viewport layout and a
-single full-screen flyby camera. World viewports affect only 3D/world drawing;
-UI remains rendered at the normal logical resolution.
+`layout_key` selects a named layout from scene state and falls back to
+`default_layout`. Layouts divide the available canvas into `rows` and `columns`;
+panes select a view and may use `row_span` or `column_span`, like a retained
+grid layout manager. Numeric bounds use logical pixels and `"fill"` consumes
+the remaining logical extent. With `avoid_docked_ui`, visible retained windows
+docked left, right, or bottom reserve their resolved rectangles; floating
+windows overlay the canvas without resizing it. Set it to a dock-name array such
+as `["bottom"]` to reserve selected sides only, and override it on an individual
+layout when needed. A view can enable a work-plane grid with fixed `spacing` or
+a scene-state `spacing_key`.
+
+The legacy array form remains supported for fixed integrations. Each legacy
+entry uses `rect: [x, y, width, height]` and may have `active_if`, `work_plane`,
+and `viewmodel` fields. World viewports affect only 3D/world drawing; UI remains
+rendered at the normal logical resolution.
 
 Selection traces may also declare matching `viewports` entries. When the mouse
 falls inside a viewport rect, the trace uses that viewport's camera, local
@@ -2325,7 +2363,8 @@ still allowing a perspective preview in the same scene. Traces that omit
 `viewports` fall back to the trace camera or active camera. A viewport entry may
 set `"screen": "center"` to trace from the viewport center instead of the live
 mouse position, which is the expected shape for full-screen 3D editor flyby
-placement.
+placement. Set `"viewports": "scene"` to consume the active scene's resolved
+viewport layout directly instead of duplicating rectangles and work planes.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:

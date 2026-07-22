@@ -133,6 +133,7 @@ bool editor_handle_shape_widget(slayer3d_game_data_runtime *runtime, yyjson_val 
             slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.global.panel.open", false);
             slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.view.menu.open", false);
         }
         if (out_consumed != NULL)
             *out_consumed = true;

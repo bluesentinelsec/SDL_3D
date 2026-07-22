@@ -66,13 +66,83 @@
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
     ]
   },
-  "world_viewports": [
-    {
-      "name": "editor.perspective",
-      "camera": "camera.editor_shell.viewport",
-      "rect": [0, 80, 1280, 520]
-    }
-  ],
+  "world_viewports": {
+    "layout_key": "editor.view.layout",
+    "default_layout": "one_pane",
+    "bounds": { "x": 0, "y": 80, "width": "fill", "height": "fill" },
+    "avoid_docked_ui": true,
+    "gap": 2,
+    "views": [
+      {
+        "name": "perspective",
+        "camera": "camera.editor_shell.viewport",
+        "work_plane": {
+          "enabled": true,
+          "normal": [0.0, 1.0, 0.0],
+          "normal_key": "editor.work_plane.normal",
+          "distance": 0.0,
+          "distance_key": "editor.work_plane.distance"
+        }
+      },
+      {
+        "name": "top",
+        "camera": "camera.editor_shell.ortho_top",
+        "work_plane": { "enabled": true, "normal": [0.0, 1.0, 0.0], "distance": 0.0 },
+        "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
+      },
+      {
+        "name": "front",
+        "camera": "camera.editor_shell.ortho_front",
+        "work_plane": { "enabled": true, "normal": [0.0, 0.0, 1.0], "distance": 0.0 },
+        "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
+      },
+      {
+        "name": "side",
+        "camera": "camera.editor_shell.ortho_side",
+        "work_plane": { "enabled": true, "normal": [1.0, 0.0, 0.0], "distance": 0.0 },
+        "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
+      }
+    ],
+    "layouts": [
+      {
+        "name": "one_pane",
+        "columns": 1,
+        "rows": 1,
+        "avoid_docked_ui": ["bottom"],
+        "panes": [{ "view": "perspective", "column": 0, "row": 0 }]
+      },
+      {
+        "name": "two_panes",
+        "columns": 2,
+        "rows": 1,
+        "panes": [
+          { "view": "perspective", "column": 0, "row": 0 },
+          { "view": "top", "column": 1, "row": 0 }
+        ]
+      },
+      {
+        "name": "three_panes",
+        "columns": 2,
+        "rows": 2,
+        "panes": [
+          { "view": "perspective", "column": 0, "row": 0, "row_span": 2 },
+          { "view": "top", "column": 1, "row": 0 },
+          { "view": "front", "column": 1, "row": 1 }
+        ]
+      },
+      {
+        "name": "four_panes",
+        "columns": 2,
+        "rows": 2,
+        "panes": [
+          { "view": "perspective", "column": 0, "row": 0 },
+          { "view": "top", "column": 1, "row": 0 },
+          { "view": "side", "column": 0, "row": 1 },
+          { "view": "front", "column": 1, "row": 1 }
+        ]
+      }
+    ]
+  },
   "editor": {
     "selection": {
       "mode": "click",
@@ -81,19 +151,7 @@
       "trace": {
         "source": "camera_screen",
         "viewport": [1280.0, 720.0],
-        "viewports": [
-          {
-            "camera": "camera.editor_shell.viewport",
-            "rect": [0, 80, 1280, 520],
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 1.0, 0.0],
-              "normal_key": "editor.work_plane.normal",
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          }
-        ],
+        "viewports": "scene",
         "near": 0.05,
         "far": 100.0,
         "model_filter": "brush_worlds",
@@ -583,6 +641,22 @@
               "Hexagon"
             ],
             "values": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+          },
+          {
+            "id": "ui.editor_shell.toolbar.view.button",
+            "type": "dropdown",
+            "w": 84,
+            "h": 28,
+            "text": "View",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.view.select",
+            "open_key": "editor.view.menu.open",
+            "selected_value_key": "editor.view.layout",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.view.menu.open", "op": "==", "value": true, "default": false },
+            "option_height": 24,
+            "options": ["One Pane", "Two Panes", "Three Panes", "Four Panes"],
+            "values": ["one_pane", "two_panes", "three_panes", "four_panes"]
           },
           {
             "id": "ui.editor_shell.toolbar.global.button",

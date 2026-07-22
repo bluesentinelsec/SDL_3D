@@ -169,8 +169,16 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     yyjson_val *viewports = obj_get(trace, "viewports");
     if (viewports != NULL)
     {
+        if (yyjson_is_str(viewports))
+        {
+            if (SDL_strcmp(yyjson_get_str(viewports), "scene") != 0)
+                return validation_error(ctx, trace_path,
+                                        "scene editor camera_screen trace viewports string must be 'scene'");
+            return true;
+        }
         if (!yyjson_is_arr(viewports))
-            return validation_error(ctx, trace_path, "scene editor camera_screen trace viewports must be an array");
+            return validation_error(ctx, trace_path,
+                                    "scene editor camera_screen trace viewports must be an array or 'scene'");
         for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
         {
             char viewport_path[PATH_BUFFER_SIZE];

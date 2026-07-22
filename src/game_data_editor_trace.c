@@ -146,13 +146,50 @@ static bool editor_trace_viewport_rect(yyjson_val *viewport, float *out_x, float
     return *out_w > 0.0f && *out_h > 0.0f;
 }
 
+static bool editor_trace_uses_scene_viewports(yyjson_val *trace)
+{
+    yyjson_val *viewports = obj_get(trace, "viewports");
+    return yyjson_is_str(viewports) && SDL_strcmp(yyjson_get_str(viewports), "scene") == 0;
+}
+
+static bool editor_trace_select_scene_viewport_at(const slayer3d_game_data_runtime *runtime, float screen_x,
+                                                  float screen_y, editor_trace_viewport_config *out_viewport)
+{
+    game_data_scene_world_viewport viewports[SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX];
+    int count = 0;
+    if (!game_data_resolve_active_scene_world_viewports(runtime, viewports, SDL_arraysize(viewports), &count))
+        return false;
+
+    for (int i = 0; i < count; ++i)
+    {
+        const SDL_Rect rect = viewports[i].rect;
+        if (screen_x < (float)rect.x || screen_y < (float)rect.y || screen_x >= (float)(rect.x + rect.w) ||
+            screen_y >= (float)(rect.y + rect.h))
+        {
+            continue;
+        }
+
+        SDL_zero(*out_viewport);
+        out_viewport->camera = viewports[i].camera;
+        out_viewport->x = (float)rect.x;
+        out_viewport->y = (float)rect.y;
+        out_viewport->width = (float)rect.w;
+        out_viewport->height = (float)rect.h;
+        out_viewport->screen_x = screen_x - (float)rect.x;
+        out_viewport->screen_y = screen_y - (float)rect.y;
+        out_viewport->work_plane = viewports[i].work_plane;
+        return true;
+    }
+    return false;
+}
+
 static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
                                          editor_trace_viewport_config *out_viewport)
 {
     if (runtime == NULL || trace == NULL || out_viewport == NULL)
         return false;
     yyjson_val *viewports = obj_get(trace, "viewports");
-    if (!yyjson_is_arr(viewports))
+    if (!yyjson_is_arr(viewports) && !editor_trace_uses_scene_viewports(trace))
         return false;
 
     float full_width = 0.0f;
@@ -163,6 +200,9 @@ static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runti
     float screen_y = 0.0f;
     if (!editor_trace_screen_point(runtime, trace, full_width, full_height, &screen_x, &screen_y))
         return false;
+
+    if (editor_trace_uses_scene_viewports(trace))
+        return editor_trace_select_scene_viewport_at(runtime, screen_x, screen_y, out_viewport);
 
     for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
     {
@@ -213,6 +253,8 @@ bool editor_trace_select_viewport_at(const slayer3d_game_data_runtime *runtime, 
     if (runtime == NULL || trace == NULL || out_viewport == NULL)
         return false;
     yyjson_val *viewports = obj_get(trace, "viewports");
+    if (editor_trace_uses_scene_viewports(trace))
+        return editor_trace_select_scene_viewport_at(runtime, screen_x, screen_y, out_viewport);
     if (!yyjson_is_arr(viewports))
         return false;
 

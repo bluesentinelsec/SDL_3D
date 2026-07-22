@@ -194,15 +194,34 @@ static int ui_widget_selected_index_from_values(const slayer3d_game_data_runtime
 {
     const char *key = json_string(node, "selected_value_key", NULL);
     yyjson_val *values = obj_get(node, "values");
-    float selected_value = 0.0f;
-    if (!ui_widget_scene_float(runtime, key, &selected_value) || !yyjson_is_arr(values))
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || !yyjson_is_arr(values))
         return fallback;
 
+    const slayer3d_value *selected = slayer3d_properties_get_value(runtime->scene_state, key);
+    if (selected == NULL)
+        return fallback;
     for (size_t i = 0, count = yyjson_arr_size(values); i < count; ++i)
     {
         yyjson_val *value = yyjson_arr_get(values, i);
-        if (yyjson_is_num(value) && SDL_fabsf((float)yyjson_get_num(value) - selected_value) <= 0.0001f)
+        if (selected->type == SLAYER3D_VALUE_STRING && yyjson_is_str(value) &&
+            SDL_strcmp(selected->as_string != NULL ? selected->as_string : "", yyjson_get_str(value)) == 0)
+        {
             return (int)i;
+        }
+        if (selected->type == SLAYER3D_VALUE_BOOL && yyjson_is_bool(value) &&
+            selected->as_bool == yyjson_get_bool(value))
+            return (int)i;
+        if (yyjson_is_num(value))
+        {
+            const float selected_number = selected->type == SLAYER3D_VALUE_FLOAT
+                                              ? selected->as_float
+                                              : (selected->type == SLAYER3D_VALUE_INT ? (float)selected->as_int : 0.0f);
+            if ((selected->type == SLAYER3D_VALUE_FLOAT || selected->type == SLAYER3D_VALUE_INT) &&
+                SDL_fabsf((float)yyjson_get_num(value) - selected_number) <= 0.0001f)
+            {
+                return (int)i;
+            }
+        }
     }
     return fallback;
 }
