@@ -99,9 +99,25 @@ build/editor/slayer3d_editor.exe
 
 Each sample reports FPS and milliseconds spent polling events, running fixed
 ticks, submitting render work, and presenting. Presentation, UI collection, and
-managed render-wrapper samples further divide the render cost. Compare profiles
-from the same map and window size, and include the build preset: Debug and
-optimized timings are not directly comparable.
+managed render-wrapper samples further divide the render cost. The managed-loop
+sample also reports frame-time percentiles, missed target frame budgets (60 FPS
+by default), hitch counts, and the stage breakdown for the slowest frame in each
+interval. Compare profiles from the same map and window size, and include the
+build preset: Debug and optimized timings are not directly comparable.
+
+On macOS, build the symbolized optimized editor and record an interactive Time
+Profiler session with:
+
+```sh
+cmake --preset editor-profile
+cmake --build --preset editor-profile
+tools/profile_editor_macos.sh
+```
+
+The launcher enables frame profiling, captures terminal output, and attaches
+Instruments to the editor. Closing the editor finalizes a timestamped directory
+under `build/profiles` containing `editor.log`, `time-profile.trace`, and build
+metadata. Pass normal editor arguments after the script name when needed.
 
 ## Install Layout
 

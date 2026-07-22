@@ -39,6 +39,16 @@
             }
         },
         {
+            "name": "editor-profile",
+            "displayName": "Instrumented Editor",
+            "description": "Build the interactive editor with optimizations and profiler-friendly debug symbols.",
+            "inherits": "editor",
+            "binaryDir": "${sourceDir}/build/editor-profile",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
             "name": "sanitizers",
             "displayName": "Sanitizers",
             "inherits": "default",
@@ -61,6 +71,13 @@
         {
             "name": "editor",
             "configurePreset": "editor",
+            "targets": [
+                "slayer3d_editor"
+            ]
+        },
+        {
+            "name": "editor-profile",
+            "configurePreset": "editor-profile",
             "targets": [
                 "slayer3d_editor"
             ]
