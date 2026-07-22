@@ -474,20 +474,39 @@ bool slayer3d_game_data_sync_ui_scroll_limits(slayer3d_game_data_runtime *runtim
 
 bool slayer3d_game_data_set_ui_viewport(slayer3d_game_data_runtime *runtime, float width, float height)
 {
-    if (runtime == NULL || width <= 0.0f || height <= 0.0f)
+    return slayer3d_game_data_set_ui_viewport_rect(runtime, 0.0f, 0.0f, width, height);
+}
+
+bool slayer3d_game_data_set_ui_viewport_rect(slayer3d_game_data_runtime *runtime, float x, float y, float width,
+                                             float height)
+{
+    if (runtime == NULL || x < 0.0f || y < 0.0f || width <= 0.0f || height <= 0.0f)
         return false;
+    runtime->ui_viewport_x = x;
+    runtime->ui_viewport_y = y;
     runtime->ui_viewport_w = width;
     runtime->ui_viewport_h = height;
     return true;
 }
 
+void slayer3d_game_data_ui_viewport_rect(const slayer3d_game_data_runtime *runtime, slayer3d_ui_layout_rect *out_rect)
+{
+    if (out_rect == NULL)
+        return;
+    const bool published = runtime != NULL && runtime->ui_viewport_w > 0.0f && runtime->ui_viewport_h > 0.0f;
+    *out_rect = published ? (slayer3d_ui_layout_rect){runtime->ui_viewport_x, runtime->ui_viewport_y,
+                                                      runtime->ui_viewport_w, runtime->ui_viewport_h}
+                          : (slayer3d_ui_layout_rect){0.0f, 0.0f, 1280.0f, 720.0f};
+}
+
 void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
 {
-    const bool published = runtime != NULL && runtime->ui_viewport_w > 0.0f && runtime->ui_viewport_h > 0.0f;
+    slayer3d_ui_layout_rect viewport;
+    slayer3d_game_data_ui_viewport_rect(runtime, &viewport);
     if (out_width != NULL)
-        *out_width = published ? runtime->ui_viewport_w : 1280.0f;
+        *out_width = viewport.w;
     if (out_height != NULL)
-        *out_height = published ? runtime->ui_viewport_h : 720.0f;
+        *out_height = viewport.h;
 }
 
 bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
@@ -503,5 +522,9 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
     const scene_entry *scene = active_scene_entry_const(runtime);
     if (scene != NULL && !ui_widget_add_root_widgets(runtime, scene->root, metrics, layout))
         return false;
-    return slayer3d_ui_layout_resolve(layout, viewport_w, viewport_h);
+    slayer3d_ui_layout_rect viewport;
+    slayer3d_game_data_ui_viewport_rect(runtime, &viewport);
+    viewport.w = viewport_w;
+    viewport.h = viewport_h;
+    return slayer3d_ui_layout_resolve_in_rect(layout, viewport);
 }

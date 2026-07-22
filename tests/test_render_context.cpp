@@ -232,6 +232,15 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowExpandsLogicalCanvasToOutputAspec
     EXPECT_EQ(expected_height, slayer3d_get_render_context_height(context));
     EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_EXPAND, slayer3d_get_render_context_logical_size_policy(context));
 
+    SDL_FRect safe_area{};
+    ASSERT_TRUE(slayer3d_get_render_context_safe_area(context, &safe_area)) << SDL_GetError();
+    EXPECT_GE(safe_area.x, 0.0f);
+    EXPECT_GE(safe_area.y, 0.0f);
+    EXPECT_GT(safe_area.w, 0.0f);
+    EXPECT_GT(safe_area.h, 0.0f);
+    EXPECT_LE(safe_area.x + safe_area.w, static_cast<float>(expected_width));
+    EXPECT_LE(safe_area.y + safe_area.h, static_cast<float>(expected_height));
+
     SDL_Renderer *renderer = SDL_GetRenderer(window);
     ASSERT_NE(renderer, nullptr);
     int logical_width = 0;

@@ -257,6 +257,16 @@ extern "C"
     slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context);
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
+    /**
+     * @brief Return the logical area safe for important and interactive UI.
+     *
+     * The returned rectangle maps SDL's platform-provided window safe area
+     * into the active logical canvas. It avoids display cutouts, system
+     * controls, and overscan while leaving the complete canvas available for
+     * non-interactive rendering. Headless contexts and platforms without a
+     * smaller safe area return the complete logical canvas.
+     */
+    bool slayer3d_get_render_context_safe_area(const slayer3d_render_context *context, SDL_FRect *out_area);
     /** @brief Return the authored logical dimensions before adaptive expansion. */
     bool slayer3d_get_render_context_authored_size(const slayer3d_render_context *context, int *out_width,
                                                    int *out_height);

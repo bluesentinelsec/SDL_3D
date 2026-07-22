@@ -523,6 +523,96 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     return context->height;
 }
 
+static float slayer3d_map_window_axis_to_logical(float value, float viewport_origin, float viewport_extent,
+                                                 float logical_extent)
+{
+    return viewport_extent > 0.0f ? (value - viewport_origin) * logical_extent / viewport_extent : 0.0f;
+}
+
+bool slayer3d_get_render_context_safe_area(const slayer3d_render_context *context, SDL_FRect *out_area)
+{
+    if (context == NULL || out_area == NULL)
+        return SDL_InvalidParamError("context/out_area");
+
+    *out_area = (SDL_FRect){0.0f, 0.0f, (float)context->width, (float)context->height};
+    if (context->window == NULL || context->width <= 0 || context->height <= 0)
+        return true;
+
+    SDL_Rect safe;
+    int window_width = 0;
+    int window_height = 0;
+    if (!SDL_GetWindowSafeArea(context->window, &safe) ||
+        !SDL_GetWindowSize(context->window, &window_width, &window_height) || window_width <= 0 || window_height <= 0)
+    {
+        SDL_ClearError();
+        return true;
+    }
+
+    if (context->renderer != NULL)
+    {
+        float logical_left = 0.0f;
+        float logical_top = 0.0f;
+        float logical_right = 0.0f;
+        float logical_bottom = 0.0f;
+        if (SDL_RenderCoordinatesFromWindow(context->renderer, (float)safe.x, (float)safe.y, &logical_left,
+                                            &logical_top) &&
+            SDL_RenderCoordinatesFromWindow(context->renderer, (float)(safe.x + safe.w), (float)(safe.y + safe.h),
+                                            &logical_right, &logical_bottom))
+        {
+            out_area->x = SDL_clamp(logical_left, 0.0f, (float)context->width);
+            out_area->y = SDL_clamp(logical_top, 0.0f, (float)context->height);
+            out_area->w = SDL_max(SDL_clamp(logical_right, 0.0f, (float)context->width) - out_area->x, 0.0f);
+            out_area->h = SDL_max(SDL_clamp(logical_bottom, 0.0f, (float)context->height) - out_area->y, 0.0f);
+            if (out_area->w > 0.0f && out_area->h > 0.0f)
+                return true;
+        }
+        SDL_ClearError();
+        *out_area = (SDL_FRect){0.0f, 0.0f, (float)context->width, (float)context->height};
+    }
+
+    float viewport_x = 0.0f;
+    float viewport_y = 0.0f;
+    float viewport_width = (float)window_width;
+    float viewport_height = (float)window_height;
+    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_FIXED &&
+        context->logical_presentation != SDL_LOGICAL_PRESENTATION_STRETCH &&
+        context->logical_presentation != SDL_LOGICAL_PRESENTATION_DISABLED)
+    {
+        const float scale_x = (float)window_width / (float)context->width;
+        const float scale_y = (float)window_height / (float)context->height;
+        float scale = SDL_min(scale_x, scale_y);
+        if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_OVERSCAN)
+            scale = SDL_max(scale_x, scale_y);
+        else if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_INTEGER_SCALE)
+            scale = SDL_max(SDL_floorf(scale), 1.0f);
+        viewport_width = (float)context->width * scale;
+        viewport_height = (float)context->height * scale;
+        viewport_x = ((float)window_width - viewport_width) * 0.5f;
+        viewport_y = ((float)window_height - viewport_height) * 0.5f;
+    }
+
+    const float safe_left = SDL_max((float)safe.x, viewport_x);
+    const float safe_top = SDL_max((float)safe.y, viewport_y);
+    const float safe_right = SDL_min((float)(safe.x + safe.w), viewport_x + viewport_width);
+    const float safe_bottom = SDL_min((float)(safe.y + safe.h), viewport_y + viewport_height);
+    if (safe_right <= safe_left || safe_bottom <= safe_top)
+        return true;
+
+    const float logical_left =
+        slayer3d_map_window_axis_to_logical(safe_left, viewport_x, viewport_width, (float)context->width);
+    const float logical_top =
+        slayer3d_map_window_axis_to_logical(safe_top, viewport_y, viewport_height, (float)context->height);
+    const float logical_right =
+        slayer3d_map_window_axis_to_logical(safe_right, viewport_x, viewport_width, (float)context->width);
+    const float logical_bottom =
+        slayer3d_map_window_axis_to_logical(safe_bottom, viewport_y, viewport_height, (float)context->height);
+    out_area->x = SDL_clamp(logical_left, 0.0f, (float)context->width);
+    out_area->y = SDL_clamp(logical_top, 0.0f, (float)context->height);
+    out_area->w = SDL_max(SDL_clamp(logical_right, 0.0f, (float)context->width) - out_area->x, 0.0f);
+    out_area->h = SDL_max(SDL_clamp(logical_bottom, 0.0f, (float)context->height) - out_area->y, 0.0f);
+    return true;
+}
+
 bool slayer3d_get_render_context_authored_size(const slayer3d_render_context *context, int *out_width, int *out_height)
 {
     if (context == NULL || out_width == NULL || out_height == NULL)
@@ -1460,14 +1550,17 @@ retry_backend:
     *out_context = context;
     int pixel_width = 0;
     int pixel_height = 0;
+    SDL_FRect safe_area = {0.0f, 0.0f, (float)context->width, (float)context->height};
     (void)SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
+    (void)slayer3d_get_render_context_safe_area(context, &safe_area);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d "
-                "pixels=%dx%d logical=%dx%d logical_policy=%s density=%.2f high_dpi=%s",
+                "pixels=%dx%d logical=%dx%d safe_area=%.1f,%.1f %.1fx%.1f logical_policy=%s density=%.2f "
+                "high_dpi=%s",
                 slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
                 local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height,
-                pixel_width, pixel_height, context->width, context->height,
-                local.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? "expand" : "fixed",
+                pixel_width, pixel_height, context->width, context->height, safe_area.x, safe_area.y, safe_area.w,
+                safe_area.h, local.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? "expand" : "fixed",
                 SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
     return true;
 }

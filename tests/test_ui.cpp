@@ -697,6 +697,75 @@ TEST(SLAYER3DUI, DockedRootWindowsStackAroundTheCanvas)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, SafeAreaViewportOffsetsRootsAnchorsDocksAndPopups)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc toolbar{};
+    toolbar.id = "toolbar";
+    toolbar.type = SLAYER3D_UI_LAYOUT_NODE_TOOLBAR;
+    toolbar.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    toolbar.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    toolbar.rect = {0.0f, 0.0f, 0.0f, 40.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &toolbar));
+
+    slayer3d_ui_layout_node_desc anchored{};
+    anchored.id = "anchored";
+    anchored.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    anchored.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    anchored.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    anchored.rect = {12.0f, 8.0f, 100.0f, 30.0f};
+    anchored.anchor_right = true;
+    anchored.anchor_bottom = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &anchored));
+
+    slayer3d_ui_layout_node_desc docked{};
+    docked.id = "docked";
+    docked.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    docked.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    docked.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    docked.rect = {0.0f, 0.0f, 180.0f, 200.0f};
+    docked.window = true;
+    docked.dock = SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    docked.dock_top = 40.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &docked));
+
+    const char *options[] = {"One", "Two"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "dropdown";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {900.0f, 610.0f, 140.0f, 30.0f};
+    dropdown.open = true;
+    dropdown.options = options;
+    dropdown.option_count = 2;
+    dropdown.option_height = 24.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+
+    const slayer3d_ui_layout_rect safe_area{20.0f, 48.0f, 1000.0f, 640.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_resolve_in_rect(layout, safe_area));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "toolbar"), 20.0f, 48.0f, 1000.0f, 40.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "anchored"), 908.0f, 650.0f, 100.0f, 30.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "docked"), 840.0f, 88.0f, 180.0f, 600.0f);
+
+    const slayer3d_ui_layout_render_command *popup = find_render_command(layout, "dropdown.popup");
+    ASSERT_NE(popup, nullptr);
+    EXPECT_FLOAT_EQ(popup->rect.x, 880.0f);
+    EXPECT_FLOAT_EQ(popup->rect.y, 610.0f);
+
+    slayer3d_ui_layout_rect preview{};
+    ASSERT_TRUE(slayer3d_ui_layout_calculate_window_dock_rect_in_rect(layout, "docked", SLAYER3D_UI_LAYOUT_DOCK_BOTTOM,
+                                                                      safe_area, &preview));
+    EXPECT_FLOAT_EQ(preview.x, 20.0f);
+    EXPECT_FLOAT_EQ(preview.y, 488.0f);
+    EXPECT_FLOAT_EQ(preview.w, 1000.0f);
+    EXPECT_FLOAT_EQ(preview.h, 200.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, FrontRootWindowRaisesItsCompleteStackingContext)
 {
     slayer3d_ui_layout_model *layout = nullptr;

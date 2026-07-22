@@ -4531,6 +4531,8 @@ TEST(GameDataRuntime, RetainedUIWidgetLayoutUsesPublishedViewport)
 
     struct RectCapture
     {
+        float x = 0.0f;
+        float y = 0.0f;
         float width = 0.0f;
         bool found = false;
     } capture;
@@ -4538,6 +4540,8 @@ TEST(GameDataRuntime, RetainedUIWidgetLayoutUsesPublishedViewport)
         auto *state = static_cast<RectCapture *>(userdata);
         if (rect != nullptr && rect->name != nullptr && std::string(rect->name) == "hud.bar" && !state->found)
         {
+            state->x = rect->x;
+            state->y = rect->y;
             state->width = rect->w;
             state->found = true;
         }
@@ -4558,7 +4562,16 @@ TEST(GameDataRuntime, RetainedUIWidgetLayoutUsesPublishedViewport)
     ASSERT_TRUE(capture.found);
     EXPECT_FLOAT_EQ(capture.width, 2560.0f);
 
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport_rect(runtime, 20.0f, 48.0f, 1200.0f, 672.0f));
+    capture = RectCapture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+    ASSERT_TRUE(capture.found);
+    EXPECT_FLOAT_EQ(capture.x, 20.0f);
+    EXPECT_FLOAT_EQ(capture.y, 48.0f);
+    EXPECT_FLOAT_EQ(capture.width, 1200.0f);
+
     EXPECT_FALSE(slayer3d_game_data_set_ui_viewport(runtime, 0.0f, 1440.0f));
+    EXPECT_FALSE(slayer3d_game_data_set_ui_viewport_rect(runtime, -1.0f, 0.0f, 1280.0f, 720.0f));
     EXPECT_FALSE(slayer3d_game_data_set_ui_viewport(nullptr, 1280.0f, 720.0f));
 
     slayer3d_game_data_destroy(runtime);
@@ -25471,6 +25484,30 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 0);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
 
+    // A nonzero platform safe-area origin must remain distinct from the
+    // viewport-local authored window coordinates used while dragging.
+    const slayer3d_ui_layout_rect safe_area{20.0f, 32.0f, 1240.0f, 688.0f};
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport_rect(runtime, safe_area.x, safe_area.y, safe_area.w, safe_area.h));
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, safe_area.w, safe_area.h, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *global_header =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.global_panel.header");
+    ASSERT_NE(global_header, nullptr);
+    EXPECT_GE(global_header->rect.y, safe_area.y + 80.0f);
+    const float global_drag_x = global_header->rect.x + 12.0f;
+    const float global_drag_y = global_header->rect.y + 16.0f;
+    slayer3d_ui_layout_destroy(layout);
+    drag(global_drag_x, global_drag_y, safe_area.x + 2.0f, safe_area.y + 240.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.global.panel.dock", ""), "left");
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+    ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, safe_area.w, safe_area.h, nullptr, layout));
+    const slayer3d_ui_layout_resolved_node *global_panel =
+        slayer3d_ui_layout_find_resolved_node(layout, "ui.editor_shell.global_panel.panel");
+    ASSERT_NE(global_panel, nullptr);
+    EXPECT_FLOAT_EQ(global_panel->rect.x, safe_area.x);
+    EXPECT_GE(global_panel->rect.y, safe_area.y + 80.0f);
+    slayer3d_ui_layout_destroy(layout);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -39118,6 +39155,17 @@ TEST(GameDataRuntime, EditorShellResolvesResponsiveViewportLayouts)
     EXPECT_EQ(viewports[0].rect.y, 80);
     EXPECT_EQ(viewports[0].rect.w, 1280);
     EXPECT_EQ(viewports[0].rect.h, 640);
+
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport_rect(runtime, 0.0f, 32.0f, 1280.0f, 688.0f));
+    ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,
+                                                                  SLAYER3D_GAME_DATA_WORLD_VIEWPORT_MAX, &count));
+    ASSERT_EQ(count, 1);
+    EXPECT_EQ(viewports[0].rect.x, 0);
+    EXPECT_EQ(viewports[0].rect.y, 112);
+    EXPECT_EQ(viewports[0].rect.w, 1280);
+    EXPECT_EQ(viewports[0].rect.h, 608);
+
+    ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 1280.0f, 720.0f));
 
     slayer3d_properties_set_string(state, "editor.view.layout", "two_panes");
     ASSERT_TRUE(slayer3d_game_data_resolve_active_world_viewports(runtime, viewports,

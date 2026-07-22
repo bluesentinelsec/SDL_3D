@@ -389,6 +389,11 @@ aspect ratio. The logical canvas is recomputed after resizes and display-mode
 changes. The default policy is `"fixed"`, so games retain their authored aspect
 ratio and letterboxing unless they explicitly opt in.
 
+Interactive retained UI resolves inside SDL's platform safe area. Rendering
+continues across the complete logical canvas, while toolbars, docks, floating
+windows, popups, and hit targets avoid camera notches, system controls, and
+other display cutouts.
+
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
 requests shutdown through the managed app flow when `quit.enabled_if` is absent
