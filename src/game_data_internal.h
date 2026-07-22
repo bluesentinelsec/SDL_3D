@@ -342,8 +342,7 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
 /* Read the published logical UI viewport, falling back to 1280×720. */
 void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height);
 /* Read the complete published logical UI safe-area rectangle. */
-void slayer3d_game_data_ui_viewport_rect(const slayer3d_game_data_runtime *runtime,
-                                         slayer3d_ui_layout_rect *out_rect);
+void slayer3d_game_data_ui_viewport_rect(const slayer3d_game_data_runtime *runtime, slayer3d_ui_layout_rect *out_rect);
 
 bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
                                                     game_data_scene_world_viewport *out_viewports, int capacity,
