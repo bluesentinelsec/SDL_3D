@@ -294,9 +294,12 @@ typedef struct game_data_scene_world_viewport
 {
     const char *name;
     const char *camera;
+    const char *label;
+    const char *label_font;
     SDL_Rect rect;
     bool draw_skybox;
     bool draw_viewmodel;
+    yyjson_val *label_style;
     yyjson_val *work_plane;
     yyjson_val *grid;
 } game_data_scene_world_viewport;

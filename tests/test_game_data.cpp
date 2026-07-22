@@ -39005,6 +39005,7 @@ TEST(GameDataRuntime, EditorShellResolvesResponsiveViewportLayouts)
     ASSERT_EQ(count, 1);
     EXPECT_STREQ(viewports[0].name, "perspective");
     EXPECT_STREQ(viewports[0].camera, "camera.editor_shell.viewport");
+    EXPECT_STREQ(viewports[0].label, "Perspective");
     EXPECT_TRUE(viewports[0].draw_skybox);
     EXPECT_EQ(viewports[0].rect.x, 0);
     EXPECT_EQ(viewports[0].rect.y, 80);
@@ -39017,6 +39018,7 @@ TEST(GameDataRuntime, EditorShellResolvesResponsiveViewportLayouts)
     ASSERT_EQ(count, 2);
     EXPECT_STREQ(viewports[0].camera, "camera.editor_shell.viewport");
     EXPECT_STREQ(viewports[1].camera, "camera.editor_shell.ortho_top");
+    EXPECT_STREQ(viewports[1].label, "Top");
     EXPECT_TRUE(viewports[0].draw_skybox);
     EXPECT_FALSE(viewports[1].draw_skybox);
     EXPECT_EQ(viewports[0].rect.y, viewports[1].rect.y);
@@ -39041,6 +39043,10 @@ TEST(GameDataRuntime, EditorShellResolvesResponsiveViewportLayouts)
     EXPECT_STREQ(viewports[1].name, "top");
     EXPECT_STREQ(viewports[2].name, "side");
     EXPECT_STREQ(viewports[3].name, "front");
+    EXPECT_STREQ(viewports[0].label, "Perspective");
+    EXPECT_STREQ(viewports[1].label, "Top");
+    EXPECT_STREQ(viewports[2].label, "Side");
+    EXPECT_STREQ(viewports[3].label, "Front");
     EXPECT_TRUE(viewports[0].draw_skybox);
     EXPECT_FALSE(viewports[1].draw_skybox);
     EXPECT_FALSE(viewports[2].draw_skybox);

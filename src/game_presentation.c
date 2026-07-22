@@ -962,6 +962,57 @@ static const char *editor_debug_label_font_id(const slayer3d_game_data_runtime *
     return json_string(first, "id", NULL);
 }
 
+static bool draw_scene_viewport_label(const slayer3d_game_data_frame_desc *frame,
+                                      const game_data_scene_world_viewport *viewport)
+{
+    if (frame == NULL || viewport == NULL || viewport->label == NULL || viewport->label[0] == '\0' ||
+        frame->font_cache == NULL)
+    {
+        return true;
+    }
+
+    const char *font_id = viewport->label_font;
+    if (font_id == NULL)
+        font_id = editor_debug_label_font_id(frame->runtime);
+    if (font_id == NULL)
+        return true;
+
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(frame->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL,
+                                                      font_id, &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
+
+    slayer3d_font *font = slayer3d_game_data_find_or_load_font(frame->runtime, frame->font_cache, font_id);
+    if (font == NULL)
+        return true;
+
+    const float scale = json_float(viewport->label_style, "scale", 0.72f);
+    const float padding_x = json_float(viewport->label_style, "padding_x", 8.0f);
+    const float padding_y = json_float(viewport->label_style, "padding_y", 4.0f);
+    const float bottom_offset = json_float(viewport->label_style, "bottom_offset", 8.0f);
+    const slayer3d_color text_color =
+        json_color(viewport->label_style, "text_color", (slayer3d_color){220, 228, 236, 255});
+    const slayer3d_color background_color =
+        json_color(viewport->label_style, "background_color", (slayer3d_color){7, 12, 18, 205});
+
+    float text_width = 0.0f;
+    float text_height = 0.0f;
+    slayer3d_measure_text(font, viewport->label, &text_width, &text_height);
+    text_width *= scale;
+    text_height *= scale;
+    const float width = text_width + padding_x * 2.0f;
+    const float height = text_height + padding_y * 2.0f;
+    const float x = (float)viewport->rect.x + ((float)viewport->rect.w - width) * 0.5f;
+    const float y = (float)(viewport->rect.y + viewport->rect.h) - height - bottom_offset;
+
+    return slayer3d_draw_rect_overlay(frame->renderer, x, y, width, height, background_color) &&
+           slayer3d_draw_text_overlay_scaled(frame->renderer, font, viewport->label, x + padding_x, y + padding_y,
+                                             scale, text_color);
+}
+
 static bool editor_debug_project_world_to_screen(slayer3d_render_context *renderer, const slayer3d_camera3d *camera,
                                                  slayer3d_vec3 point, float *out_x, float *out_y)
 {
@@ -1147,7 +1198,7 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
     if (slayer3d_begin_mode_3d(frame->renderer, *camera))
     {
         ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-        if (viewport == NULL || viewport->draw_skybox)
+        if (camera->projection == SLAYER3D_CAMERA_PERSPECTIVE && (viewport == NULL || viewport->draw_skybox))
         {
             ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
                                           frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
@@ -1240,6 +1291,7 @@ static bool draw_active_scene_world_viewports(const slayer3d_game_data_frame_des
             continue;
         }
         ok = draw_world_for_camera(frame, &camera, viewport, viewport->draw_viewmodel) && ok;
+        ok = draw_scene_viewport_label(frame, viewport) && ok;
         drawn = true;
     }
 

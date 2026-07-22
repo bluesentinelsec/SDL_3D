@@ -785,6 +785,36 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
 static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                         validation_names *names);
 
+static bool validate_scene_world_viewport_label_style(validation_context *ctx, yyjson_val *style, const char *path)
+{
+    if (style == NULL)
+        return true;
+    if (!yyjson_is_obj(style))
+        return validation_error(ctx, path, "scene world viewport label_style must be an object");
+
+    static const char *const non_negative_keys[] = {"padding_x", "padding_y", "bottom_offset"};
+    for (size_t i = 0; i < SDL_arraysize(non_negative_keys); ++i)
+    {
+        yyjson_val *value = obj_get(style, non_negative_keys[i]);
+        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+            return validation_error(ctx, path, "scene world viewport label_style %s must be non-negative",
+                                    non_negative_keys[i]);
+    }
+    yyjson_val *scale = obj_get(style, "scale");
+    if (scale != NULL && (!yyjson_is_num(scale) || yyjson_get_num(scale) <= 0.0))
+        return validation_error(ctx, path, "scene world viewport label_style scale must be positive");
+
+    static const char *const color_keys[] = {"text_color", "background_color"};
+    for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
+    {
+        yyjson_val *color = obj_get(style, color_keys[i]);
+        if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+            return validation_error(ctx, path, "scene world viewport label_style %s must be a vec3 or vec4 color",
+                                    color_keys[i]);
+    }
+    return true;
+}
+
 static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                            validation_names *names)
 {
@@ -804,6 +834,14 @@ static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *
             if (name == NULL || name[0] == '\0')
                 return validation_error(ctx, path, "scene world viewport requires a non-empty name");
             if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport, "camera"), path))
+                return false;
+            yyjson_val *label = obj_get(viewport, "label");
+            if (label != NULL && (!yyjson_is_str(label) || yyjson_get_len(label) == 0))
+                return validation_error(ctx, path, "scene world viewport label must be a non-empty string");
+            if (obj_get(viewport, "label_font") != NULL &&
+                !require_ref(ctx, &names->fonts, "font asset", json_string(viewport, "label_font"), path))
+                return false;
+            if (!validate_scene_world_viewport_label_style(ctx, obj_get(viewport, "label_style"), path))
                 return false;
             yyjson_val *rect = obj_get(viewport, "rect");
             if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
@@ -838,6 +876,11 @@ static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *
         return validation_error(ctx, json_path, "scene world_viewports gap must be a non-negative number");
     yyjson_val *avoid = obj_get(viewports, "avoid_docked_ui");
     if (!validate_scene_world_viewport_docks(ctx, avoid, json_path))
+        return false;
+    if (obj_get(viewports, "label_font") != NULL &&
+        !require_ref(ctx, &names->fonts, "font asset", json_string(viewports, "label_font"), json_path))
+        return false;
+    if (!validate_scene_world_viewport_label_style(ctx, obj_get(viewports, "label_style"), json_path))
         return false;
 
     yyjson_val *bounds = obj_get(viewports, "bounds");
@@ -877,6 +920,14 @@ static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *
                 return validation_error(ctx, path, "scene world viewport view name '%s' is duplicated", name);
         }
         if (!require_ref(ctx, &names->cameras, "camera", json_string(view, "camera"), path))
+            return false;
+        yyjson_val *label = obj_get(view, "label");
+        if (label != NULL && (!yyjson_is_str(label) || yyjson_get_len(label) == 0))
+            return validation_error(ctx, path, "scene world viewport label must be a non-empty string");
+        if (obj_get(view, "label_font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(view, "label_font"), path))
+            return false;
+        if (!validate_scene_world_viewport_label_style(ctx, obj_get(view, "label_style"), path))
             return false;
         yyjson_val *viewmodel = obj_get(view, "viewmodel");
         if (viewmodel != NULL && !yyjson_is_bool(viewmodel))

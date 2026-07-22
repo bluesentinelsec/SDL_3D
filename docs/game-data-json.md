@@ -2309,10 +2309,20 @@ multi-viewport editor, author a layout-managed `world_viewports` object:
     "bounds": { "x": 0, "y": 76, "width": "fill", "height": "fill" },
     "avoid_docked_ui": true,
     "gap": 2,
+    "label_font": "font.editor.ui",
+    "label_style": {
+      "scale": 0.72,
+      "padding_x": 8,
+      "padding_y": 4,
+      "bottom_offset": 8,
+      "text_color": [220, 228, 236, 255],
+      "background_color": [7, 12, 18, 205]
+    },
     "views": [
-      { "name": "perspective", "camera": "camera.editor.perspective" },
+      { "name": "perspective", "label": "Perspective", "camera": "camera.editor.perspective" },
       {
         "name": "top",
+        "label": "Top",
         "camera": "camera.editor.top",
         "skybox": false,
         "work_plane": { "normal": [0, 1, 0], "distance": 0 },
@@ -2349,13 +2359,18 @@ docked left, right, or bottom reserve their resolved rectangles; floating
 windows overlay the canvas without resizing it. Set it to a dock-name array such
 as `["bottom"]` to reserve selected sides only, and override it on an individual
 layout when needed. A view can enable a work-plane grid with fixed `spacing` or
-a scene-state `spacing_key`. Set `skybox` to `false` for orthographic drafting
-views that should retain the neutral canvas background; it defaults to `true`.
+a scene-state `spacing_key`. Skyboxes are rendered only for perspective cameras;
+`skybox: false` can additionally suppress them for a perspective view. An
+optional view `label` is drawn at the bottom center of its pane. `label_font`
+and `label_style` may be shared by the layout object or overridden per view.
+Label style supports `scale`, `padding_x`, `padding_y`, `bottom_offset`,
+`text_color`, and `background_color`.
 
 The legacy array form remains supported for fixed integrations. Each legacy
 entry uses `rect: [x, y, width, height]` and may have `active_if`, `work_plane`,
-`skybox`, and `viewmodel` fields. World viewports affect only 3D/world drawing; UI remains
-rendered at the normal logical resolution.
+`skybox`, `label`, `label_font`, `label_style`, and `viewmodel` fields. World
+viewports affect only 3D/world drawing; UI remains rendered at the normal
+logical resolution.
 
 Selection traces may also declare matching `viewports` entries. When the mouse
 falls inside a viewport rect, the trace uses that viewport's camera, local

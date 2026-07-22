@@ -72,9 +72,19 @@
     "bounds": { "x": 0, "y": 80, "width": "fill", "height": "fill" },
     "avoid_docked_ui": true,
     "gap": 2,
+    "label_font": "font.editor_shell.ui",
+    "label_style": {
+      "scale": 0.72,
+      "padding_x": 8,
+      "padding_y": 4,
+      "bottom_offset": 8,
+      "text_color": [220, 228, 236, 255],
+      "background_color": [7, 12, 18, 205]
+    },
     "views": [
       {
         "name": "perspective",
+        "label": "Perspective",
         "camera": "camera.editor_shell.viewport",
         "work_plane": {
           "enabled": true,
@@ -86,6 +96,7 @@
       },
       {
         "name": "top",
+        "label": "Top",
         "camera": "camera.editor_shell.ortho_top",
         "skybox": false,
         "work_plane": { "enabled": true, "normal": [0.0, 1.0, 0.0], "distance": 0.0 },
@@ -93,6 +104,7 @@
       },
       {
         "name": "front",
+        "label": "Front",
         "camera": "camera.editor_shell.ortho_front",
         "skybox": false,
         "work_plane": { "enabled": true, "normal": [0.0, 0.0, 1.0], "distance": 0.0 },
@@ -100,6 +112,7 @@
       },
       {
         "name": "side",
+        "label": "Side",
         "camera": "camera.editor_shell.ortho_side",
         "skybox": false,
         "work_plane": { "enabled": true, "normal": [1.0, 0.0, 0.0], "distance": 0.0 },

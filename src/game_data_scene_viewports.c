@@ -45,8 +45,11 @@ static bool resolve_legacy_viewports(const slayer3d_game_data_runtime *runtime, 
         SDL_zero(viewport);
         viewport.name = json_string(entry, "name", NULL);
         viewport.camera = json_string(entry, "camera", NULL);
+        viewport.label = json_string(entry, "label", NULL);
+        viewport.label_font = json_string(entry, "label_font", NULL);
         viewport.draw_skybox = json_bool(entry, "skybox", true);
         viewport.draw_viewmodel = json_bool(entry, "viewmodel", false);
+        viewport.label_style = obj_get(entry, "label_style");
         viewport.work_plane = obj_get(entry, "work_plane");
         viewport.grid = obj_get(entry, "grid");
         if (viewport.camera == NULL || !scene_viewport_rect_from_array(obj_get(entry, "rect"), &viewport.rect))
@@ -177,6 +180,8 @@ static bool resolve_layout_viewports(const slayer3d_game_data_runtime *runtime, 
 
     yyjson_val *views = obj_get(config, "views");
     yyjson_val *panes = obj_get(layout, "panes");
+    const char *default_label_font = json_string(config, "label_font", NULL);
+    yyjson_val *default_label_style = obj_get(config, "label_style");
     int count = 0;
     for (size_t i = 0; yyjson_is_arr(panes) && i < yyjson_arr_size(panes); ++i)
     {
@@ -208,8 +213,13 @@ static bool resolve_layout_viewports(const slayer3d_game_data_runtime *runtime, 
         SDL_zero(viewport);
         viewport.name = json_string(view, "name", NULL);
         viewport.camera = camera;
+        viewport.label = json_string(view, "label", NULL);
+        viewport.label_font = json_string(view, "label_font", default_label_font);
         viewport.draw_skybox = json_bool(view, "skybox", true);
         viewport.draw_viewmodel = json_bool(view, "viewmodel", false);
+        viewport.label_style = obj_get(view, "label_style");
+        if (viewport.label_style == NULL)
+            viewport.label_style = default_label_style;
         viewport.rect.x = (int)SDL_lroundf(x0);
         viewport.rect.y = (int)SDL_lroundf(y0);
         viewport.rect.w = SDL_max((int)SDL_lroundf(x1) - viewport.rect.x, 1);
@@ -256,6 +266,7 @@ bool slayer3d_game_data_resolve_active_world_viewports(const slayer3d_game_data_
     {
         out_viewports[i].name = resolved[i].name;
         out_viewports[i].camera = resolved[i].camera;
+        out_viewports[i].label = resolved[i].label;
         out_viewports[i].rect = resolved[i].rect;
         out_viewports[i].draw_skybox = resolved[i].draw_skybox;
         out_viewports[i].draw_viewmodel = resolved[i].draw_viewmodel;
