@@ -1147,9 +1147,12 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
     if (slayer3d_begin_mode_3d(frame->renderer, *camera))
     {
         ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
-                                      frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
-             ok;
+        if (viewport == NULL || viewport->draw_skybox)
+        {
+            ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
+                                          frame->font_cache != NULL ? frame->font_cache->media_dir : NULL) &&
+                 ok;
+        }
         ok = draw_scene_viewport_grid(frame, viewport) && ok;
         ok = slayer3d_game_data_draw_sector_levels_with_assets(
                  frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,

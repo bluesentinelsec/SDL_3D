@@ -2314,6 +2314,7 @@ multi-viewport editor, author a layout-managed `world_viewports` object:
       {
         "name": "top",
         "camera": "camera.editor.top",
+        "skybox": false,
         "work_plane": { "normal": [0, 1, 0], "distance": 0 },
         "grid": { "enabled": true, "spacing_key": "editor.grid.size", "extent": 256 }
       }
@@ -2348,11 +2349,12 @@ docked left, right, or bottom reserve their resolved rectangles; floating
 windows overlay the canvas without resizing it. Set it to a dock-name array such
 as `["bottom"]` to reserve selected sides only, and override it on an individual
 layout when needed. A view can enable a work-plane grid with fixed `spacing` or
-a scene-state `spacing_key`.
+a scene-state `spacing_key`. Set `skybox` to `false` for orthographic drafting
+views that should retain the neutral canvas background; it defaults to `true`.
 
 The legacy array form remains supported for fixed integrations. Each legacy
 entry uses `rect: [x, y, width, height]` and may have `active_if`, `work_plane`,
-and `viewmodel` fields. World viewports affect only 3D/world drawing; UI remains
+`skybox`, and `viewmodel` fields. World viewports affect only 3D/world drawing; UI remains
 rendered at the normal logical resolution.
 
 Selection traces may also declare matching `viewports` entries. When the mouse

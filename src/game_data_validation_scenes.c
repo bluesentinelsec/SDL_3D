@@ -815,6 +815,9 @@ static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *
             yyjson_val *viewmodel = obj_get(viewport, "viewmodel");
             if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
                 return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
+            yyjson_val *skybox = obj_get(viewport, "skybox");
+            if (skybox != NULL && !yyjson_is_bool(skybox))
+                return validation_error(ctx, path, "scene world viewport skybox must be a boolean");
             char condition_path[PATH_BUFFER_SIZE];
             format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
             if (!validate_scene_ui_condition(ctx, obj_get(viewport, "active_if"), condition_path, names))
@@ -878,6 +881,9 @@ static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *
         yyjson_val *viewmodel = obj_get(view, "viewmodel");
         if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
             return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
+        yyjson_val *skybox = obj_get(view, "skybox");
+        if (skybox != NULL && !yyjson_is_bool(skybox))
+            return validation_error(ctx, path, "scene world viewport skybox must be a boolean");
         yyjson_val *work_plane = obj_get(view, "work_plane");
         yyjson_val *normal = obj_get(work_plane, "normal");
         if (work_plane != NULL && !yyjson_is_obj(work_plane))

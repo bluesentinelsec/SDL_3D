@@ -38,7 +38,6 @@ typedef struct slayer3d_gl_tex_entry
 
 typedef struct slayer3d_gl_skybox_entry
 {
-    bool pending;
     bool panorama;
     const slayer3d_texture2d *sphere;
     const slayer3d_texture2d *pos_x;
@@ -405,7 +404,9 @@ struct slayer3d_gl_context
 
     slayer3d_gl_tex_entry *tex_cache;
     slayer3d_gl_tex_entry *skybox_tex_cache;
-    slayer3d_gl_skybox_entry skybox;
+    slayer3d_gl_skybox_entry *skybox_list;
+    int skybox_count;
+    int skybox_capacity;
 
     float *white_colors;
     int white_colors_capacity;

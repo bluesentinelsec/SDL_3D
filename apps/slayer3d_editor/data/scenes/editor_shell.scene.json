@@ -87,18 +87,21 @@
       {
         "name": "top",
         "camera": "camera.editor_shell.ortho_top",
+        "skybox": false,
         "work_plane": { "enabled": true, "normal": [0.0, 1.0, 0.0], "distance": 0.0 },
         "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
       },
       {
         "name": "front",
         "camera": "camera.editor_shell.ortho_front",
+        "skybox": false,
         "work_plane": { "enabled": true, "normal": [0.0, 0.0, 1.0], "distance": 0.0 },
         "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
       },
       {
         "name": "side",
         "camera": "camera.editor_shell.ortho_side",
+        "skybox": false,
         "work_plane": { "enabled": true, "normal": [1.0, 0.0, 0.0], "distance": 0.0 },
         "grid": { "enabled": true, "spacing_key": "editor.grid.size", "spacing": 1.0, "extent": 256.0, "color": [68, 88, 102, 125] }
       }

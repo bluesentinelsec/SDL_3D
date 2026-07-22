@@ -47,6 +47,7 @@ extern "C"
         const char *name;    /**< Runtime-owned authored viewport name. */
         const char *camera;  /**< Runtime-owned camera name used by this viewport. */
         SDL_Rect rect;       /**< Resolved logical screen rectangle. */
+        bool draw_skybox;    /**< Whether the active scene skybox is drawn. */
         bool draw_viewmodel; /**< Whether first-person viewmodel geometry is drawn. */
     } slayer3d_game_data_world_viewport;
 
