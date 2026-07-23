@@ -226,6 +226,10 @@ pane's resolved geometry, wheel input over the pane adjusts its `scroll_key`
 (one item per notch for lists, 40px for panes, overridable with
 `scroll_step`), and events over panes are consumed before the world/canvas.
 Clicks outside an open dropdown popup dismiss it and are likewise consumed.
+Transient panels and menus can author `outside_click_action`; the retained
+layout synthesizes a full-viewport hit region immediately behind the node.
+Clicks inside still reach the node or its children, while clicks outside emit
+the authored action and cannot propagate to the canvas.
 
 Bare-key editor shortcuts gate on the single scene fact
 `editor.ui.text_entry.active`, published by the runtime from the live

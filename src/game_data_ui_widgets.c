@@ -323,6 +323,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.text = ui_widget_dynamic_text(runtime, metrics, node, text_buffer, sizeof(text_buffer));
     desc.font = json_string(node, "font", NULL);
     desc.action = json_string(node, "action", NULL);
+    desc.outside_click_action = json_string(node, "outside_click_action", NULL);
     desc.has_text_color = obj_get(node, "text_color") != NULL;
     desc.text_color = json_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
     desc.text_role = ui_widget_text_role_from_string(json_string(node, "text_role", NULL));

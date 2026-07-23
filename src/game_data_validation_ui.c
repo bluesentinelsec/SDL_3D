@@ -522,6 +522,10 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     if (!ui_widget_optional_non_empty_string_len(node, "action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
         return validation_error(ctx, path, "UI widget action must be a non-empty string shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_ACTION_MAX);
+    if (!ui_widget_optional_non_empty_string_len(node, "outside_click_action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+        return validation_error(ctx, path,
+                                "UI widget outside_click_action must be a non-empty string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_ACTION_MAX);
     if (!ui_widget_optional_bool(node, "selected"))
         return validation_error(ctx, path, "UI widget selected must be a boolean when authored");
 

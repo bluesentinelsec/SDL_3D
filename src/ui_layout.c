@@ -31,6 +31,7 @@ typedef struct ui_layout_node
     char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
     char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
     char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    char outside_click_action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     slayer3d_color text_color;
     bool has_text_color;
     slayer3d_ui_text_role text_role;
@@ -387,7 +388,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     {
         return false;
     }
-    if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) || !ui_layout_action_valid(desc->action))
+    if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) ||
+        !ui_layout_action_valid(desc->action) || !ui_layout_action_valid(desc->outside_click_action))
         return false;
     if (!ui_layout_image_valid(desc->image) || !ui_layout_action_valid(desc->scroll_key) ||
         !ui_layout_action_valid(desc->scroll_signal))
@@ -428,6 +430,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     ui_layout_copy_text(node->text, desc->text);
     ui_layout_copy_font(node->font, desc->font);
     ui_layout_copy_action(node->action, desc->action);
+    ui_layout_copy_action(node->outside_click_action, desc->outside_click_action);
     node->text_color = desc->text_color;
     node->has_text_color = desc->has_text_color;
     node->text_role = desc->text_role;
@@ -466,7 +469,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
         node->clip_children = true;
     for (int i = 0; i < node->option_count; ++i)
         ui_layout_copy_text(node->options[i], desc->options[i]);
-    node->interactive = desc->interactive || desc->action != NULL || ui_layout_type_interactive(desc->type);
+    node->interactive = desc->interactive || desc->action != NULL || node->outside_click_action[0] != '\0' ||
+                        ui_layout_type_interactive(desc->type);
     node->selected = desc->selected;
     model->dirty = true;
     return true;
@@ -1043,6 +1047,47 @@ static void ui_layout_resolve_window_stacking(slayer3d_ui_layout_model *model)
     }
 }
 
+static bool ui_layout_node_is_descendant_of(const slayer3d_ui_layout_model *model, int index, int ancestor)
+{
+    while (index >= 0)
+    {
+        if (index == ancestor)
+            return true;
+        index = model->nodes[index].parent_index;
+    }
+    return false;
+}
+
+/*
+ * A transient popup is also a stacking context. Raise its complete subtree
+ * above unrelated UI so the visual surface and hit ownership agree.
+ */
+static void ui_layout_resolve_popup_stacking(slayer3d_ui_layout_model *model)
+{
+    for (int popup = 0; popup < model->count; ++popup)
+    {
+        if (model->nodes[popup].outside_click_action[0] == '\0')
+            continue;
+
+        int highest_other_layer = model->nodes[popup].resolved_layer - 1;
+        for (int i = 0; i < model->count; ++i)
+        {
+            if (!ui_layout_node_is_descendant_of(model, i, popup))
+                highest_other_layer = SDL_max(highest_other_layer, model->nodes[i].resolved_layer);
+        }
+
+        const int popup_layer = model->nodes[popup].resolved_layer;
+        if (popup_layer > highest_other_layer)
+            continue;
+        const int layer_offset = highest_other_layer - popup_layer + 1;
+        for (int i = 0; i < model->count; ++i)
+        {
+            if (ui_layout_node_is_descendant_of(model, i, popup))
+                model->nodes[i].resolved_layer += layer_offset;
+        }
+    }
+}
+
 static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
 {
     for (int i = 0; i < model->count; ++i)
@@ -1135,6 +1180,8 @@ static int ui_layout_required_flat_capacity(const slayer3d_ui_layout_model *mode
         const ui_layout_node *node = &model->nodes[i];
         if (node->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && node->open && node->option_count > 0)
             required += 1 + node->option_count;
+        if (node->outside_click_action[0] != '\0')
+            required += 1;
         if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(node))
             required += 2; /* synthesized scrollbar track + thumb */
     }
@@ -1193,7 +1240,7 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
 static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
                                        slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
                                        bool has_clip_rect, slayer3d_ui_layout_rect clip_rect, const char *action,
-                                       bool selected, int option_index)
+                                       bool selected, int option_index, bool outside_click)
 {
     slayer3d_ui_layout_hit_region *hit = &model->hit_regions[model->hit_region_count++];
     SDL_zero(*hit);
@@ -1209,6 +1256,25 @@ static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const ch
     hit->active = ui_layout_id_matches(model->active_id, id);
     hit->selected = selected;
     hit->option_index = option_index;
+    hit->outside_click = outside_click;
+}
+
+static void ui_layout_compile_outside_click_region(slayer3d_ui_layout_model *model, const ui_layout_node *node)
+{
+    if (node->outside_click_action[0] == '\0')
+        return;
+
+    char region_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    SDL_snprintf(region_id, sizeof(region_id), "%s.outside", node->id);
+    const slayer3d_ui_layout_rect viewport = {
+        model->resolved_viewport_x,
+        model->resolved_viewport_y,
+        model->resolved_viewport_w,
+        model->resolved_viewport_h,
+    };
+    ui_layout_store_hit_region(model, region_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, viewport,
+                               node->resolved_layer - 1, false, (slayer3d_ui_layout_rect){0},
+                               node->outside_click_action, false, -1, true);
 }
 
 static slayer3d_ui_layout_rect ui_layout_dropdown_popup_rect(const slayer3d_ui_layout_model *model,
@@ -1264,7 +1330,7 @@ static void ui_layout_compile_scrollbar(slayer3d_ui_layout_model *model, const u
         return;
     ui_layout_store_hit_region(model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_SCROLL, track,
                                node->resolved_layer + 2, node->has_resolved_clip_rect, node->resolved_clip_rect, NULL,
-                               false, -1);
+                               false, -1, false);
 }
 
 static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui_layout_node *node)
@@ -1302,7 +1368,8 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
             slayer3d_ui_typography_style(&model->typography, node->text_role).color, node->text_scale, node->text_align,
             (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f, false, NULL, false);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                   popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->action, selected, i);
+                                   popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->action, selected, i,
+                                   false);
     }
     return true;
 }
@@ -1331,8 +1398,10 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         if (node->interactive && visible_in_clip)
         {
             ui_layout_store_hit_region(model, node->id, node->id, node->type, node->rect, node->layer,
-                                       node->has_clip_rect, node->clip_rect, node->action, node->selected, -1);
+                                       node->has_clip_rect, node->clip_rect, node->action, node->selected, -1, false);
         }
+        if (visible_in_clip)
+            ui_layout_compile_outside_click_region(model, source);
         if (source->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && !ui_layout_compile_dropdown(model, source))
             return false;
         if ((source->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || ui_layout_node_is_virtual_list(source)) &&
@@ -1369,6 +1438,7 @@ bool slayer3d_ui_layout_resolve_in_rect(slayer3d_ui_layout_model *model, slayer3
     if (!ui_layout_recompute_effective_clips(model))
         return false;
     ui_layout_resolve_window_stacking(model);
+    ui_layout_resolve_popup_stacking(model);
     ui_layout_store_resolved_nodes(model);
     model->resolved_viewport_x = viewport.x;
     model->resolved_viewport_y = viewport.y;
@@ -1495,9 +1565,27 @@ const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_
 {
     if (model == NULL)
         return NULL;
+
+    /*
+     * An open transient popup owns clicks outside its bounds regardless of
+     * unrelated widget layers. This makes dismissal a stacking-context rule
+     * instead of relying on every host to coordinate layer numbers.
+     */
     for (int i = model->hit_region_count - 1; i >= 0; --i)
     {
         const slayer3d_ui_layout_hit_region *region = &model->hit_regions[i];
+        if (!region->outside_click || !ui_layout_rect_contains(region->rect, x, y))
+            continue;
+        const slayer3d_ui_layout_resolved_node *owner = slayer3d_ui_layout_find_resolved_node(model, region->owner_id);
+        if (owner != NULL && !ui_layout_rect_contains(owner->rect, x, y))
+            return region;
+    }
+
+    for (int i = model->hit_region_count - 1; i >= 0; --i)
+    {
+        const slayer3d_ui_layout_hit_region *region = &model->hit_regions[i];
+        if (region->outside_click)
+            continue;
         if (ui_layout_rect_contains(region->rect, x, y) &&
             (!region->has_clip_rect || ui_layout_rect_contains(region->clip_rect, x, y)))
         {

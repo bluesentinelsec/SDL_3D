@@ -11248,6 +11248,15 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
             "UI widget action must be a non-empty string",
         },
         {
+            "bad_outside_click_action",
+            R"json({
+  "widgets": [
+    { "id": "menu", "type": "panel", "w": 100, "h": 100, "outside_click_action": "" }
+  ]
+})json",
+            "UI widget outside_click_action must be a non-empty string",
+        },
+        {
             "bad_font",
             R"json({
   "widgets": [
@@ -20129,6 +20138,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     seed_editor_shell_test_cube(runtime);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
@@ -24448,6 +24458,15 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+
+    HitSummary outside_file_menu_hit = retained_ui_hit(640.0f, 400.0f);
+    EXPECT_EQ(outside_file_menu_hit.id, "ui.editor_shell.file_menu.panel.outside");
+    EXPECT_EQ(outside_file_menu_hit.action, "editor.file.close");
+    const std::string mode_before_file_dismiss = slayer3d_properties_get_string(scene_state, "editor.tool.mode", "");
+    click_editor(640.0f, 400.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
+    EXPECT_EQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), mode_before_file_dismiss);
+
     SDL_Event motion_event{};
     motion_event.type = SDL_EVENT_MOUSE_MOTION;
     motion_event.motion.x = 48.0f;
@@ -29776,6 +29795,7 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
     ASSERT_NE(editor_camera, nullptr);
     editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
@@ -30919,7 +30939,6 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
@@ -31166,6 +31185,7 @@ TEST(GameDataRuntime, EditorShellDojoHorizontalFlipToolbarMirrorsMultiSelection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31339,6 +31359,7 @@ TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31511,6 +31532,7 @@ TEST(GameDataRuntime, EditorShellDojoDuplicateToolbarCopiesSelectionInPlaceForDr
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31653,6 +31675,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -39303,6 +39326,7 @@ TEST(GameDataRuntime, EditorShellViewDropdownSelectsViewportLayout)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 1280.0f, 720.0f));
 
     slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);

@@ -1401,6 +1401,64 @@ TEST(SLAYER3DUI, RetainedDropdownPopupClampsToViewport)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedPopupCapturesOutsideClickBehindItsContents)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc canvas{};
+    canvas.id = "canvas";
+    canvas.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    canvas.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    canvas.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    canvas.rect = {0.0f, 0.0f, 320.0f, 200.0f};
+    canvas.layer = 1000;
+    canvas.action = "canvas.select";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &canvas));
+
+    slayer3d_ui_layout_node_desc popup{};
+    popup.id = "file.menu";
+    popup.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    popup.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    popup.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    popup.rect = {20.0f, 20.0f, 100.0f, 100.0f};
+    popup.layer = 100;
+    popup.outside_click_action = "file.close";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &popup));
+
+    slayer3d_ui_layout_node_desc button{};
+    button.id = "file.menu.open";
+    button.parent_id = "file.menu";
+    button.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    button.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.rect = {10.0f, 10.0f, 80.0f, 24.0f};
+    button.layer = 101;
+    button.action = "file.open";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &button));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 320.0f, 200.0f));
+
+    const slayer3d_ui_layout_hit_region *inside = slayer3d_ui_layout_hit_test(layout, 40.0f, 40.0f);
+    ASSERT_NE(inside, nullptr);
+    EXPECT_STREQ(inside->id, "file.menu.open");
+    EXPECT_STREQ(inside->action, "file.open");
+    EXPECT_FALSE(inside->outside_click);
+
+    const slayer3d_ui_layout_hit_region *inside_surface = slayer3d_ui_layout_hit_test(layout, 115.0f, 115.0f);
+    ASSERT_NE(inside_surface, nullptr);
+    EXPECT_STREQ(inside_surface->id, "file.menu");
+    EXPECT_FALSE(inside_surface->outside_click);
+
+    const slayer3d_ui_layout_hit_region *outside = slayer3d_ui_layout_hit_test(layout, 200.0f, 150.0f);
+    ASSERT_NE(outside, nullptr);
+    EXPECT_STREQ(outside->id, "file.menu.outside");
+    EXPECT_STREQ(outside->owner_id, "file.menu");
+    EXPECT_STREQ(outside->action, "file.close");
+    EXPECT_TRUE(outside->outside_click);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedDropdownOptionReportsActivation)
 {
     slayer3d_ui_layout_model *layout = nullptr;

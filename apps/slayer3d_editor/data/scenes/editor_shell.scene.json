@@ -920,6 +920,7 @@
         "clip_children": true,
         "interactive": true,
         "layer": 500,
+        "outside_click_action": "editor.file.close",
         "fill_color": [8, 13, 22, 255],
         "border_color": [82, 112, 154, 255],
         "border_thickness": 1,

@@ -148,6 +148,14 @@ extern "C"
         const char *text;
         const char *font;
         const char *action;
+        /**
+         * @brief Optional action emitted by a synthesized full-viewport hit region outside this node.
+         *
+         * Use this for transient menus and popups. The capture region is
+         * layered immediately behind the node so clicks inside the popup
+         * continue to reach its controls while outside clicks are consumed.
+         */
+        const char *outside_click_action;
         slayer3d_color text_color;
         bool has_text_color;
         /** @brief Semantic text style; zero-initialized nodes default to body. */
@@ -331,6 +339,8 @@ extern "C"
         bool selected;
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
+        /** @brief True when this region captures an outside click for its owner popup. */
+        bool outside_click;
     } slayer3d_ui_layout_hit_region;
 
     /** @brief Pointer input for retained UI hit testing and activation. */
