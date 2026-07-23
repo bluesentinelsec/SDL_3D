@@ -1256,6 +1256,16 @@ TEST(SLAYER3DUI, RetainedDragHandleReportsSemanticPointerState)
     header.rect = {10.0f, 20.0f, 180.0f, 32.0f};
     header.drag_handle = true;
     ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &header));
+
+    slayer3d_ui_layout_node_desc indicator{};
+    indicator.id = "inspector.drag_indicator";
+    indicator.parent_id = "inspector.header";
+    indicator.type = SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR;
+    indicator.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    indicator.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    indicator.rect = {60.0f, 6.0f, 24.0f, 20.0f};
+    indicator.state_source_id = "inspector.header";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &indicator));
     ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
 
     slayer3d_ui_layout_input_state input{};
@@ -1276,6 +1286,13 @@ TEST(SLAYER3DUI, RetainedDragHandleReportsSemanticPointerState)
     EXPECT_TRUE(render->drag_handle);
     EXPECT_TRUE(render->hovered);
     EXPECT_TRUE(render->active);
+
+    const slayer3d_ui_layout_render_command *indicator_render = slayer3d_ui_layout_render_command_at(layout, 1);
+    ASSERT_NE(indicator_render, nullptr);
+    EXPECT_EQ(indicator_render->type, SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR);
+    EXPECT_STREQ(indicator_render->state_source_id, "inspector.header");
+    EXPECT_TRUE(indicator_render->hovered);
+    EXPECT_TRUE(indicator_render->active);
 
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, 30.0f, 30.0f);
     ASSERT_NE(hit, nullptr);

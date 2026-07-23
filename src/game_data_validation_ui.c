@@ -144,7 +144,7 @@ static bool ui_widget_type_valid(const char *type)
 {
     static const char *const types[] = {
         "panel",     "toolbar", "row",     "column",   "button", "label",  "dropdown",
-        "tab_strip", "spacer",  "console", "log_view", "image",  "scroll",
+        "tab_strip", "spacer",  "console", "log_view", "image",  "scroll", "drag_indicator",
     };
     if (type == NULL || type[0] == '\0')
         return false;
@@ -644,6 +644,12 @@ static slayer3d_ui_layout_node_type parse_ui_widget_type(const char *type)
         return SLAYER3D_UI_LAYOUT_NODE_SPACER;
     if (SDL_strcmp(type, "console") == 0 || SDL_strcmp(type, "log_view") == 0)
         return SLAYER3D_UI_LAYOUT_NODE_CONSOLE;
+    if (SDL_strcmp(type, "image") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_IMAGE;
+    if (SDL_strcmp(type, "scroll") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_SCROLL;
+    if (SDL_strcmp(type, "drag_indicator") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR;
     return SLAYER3D_UI_LAYOUT_NODE_PANEL;
 }
 

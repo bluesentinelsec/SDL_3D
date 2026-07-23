@@ -2114,10 +2114,6 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
     {
         return (slayer3d_color){38, 104, 56, 255};
     }
-    if (command->drag_handle && command->active)
-        return (slayer3d_color){42, 58, 78, 248};
-    if (command->drag_handle && command->hovered)
-        return (slayer3d_color){54, 102, 166, 248};
     if (command->has_fill_color)
         return command->fill_color;
     if (command->window)
@@ -2149,8 +2145,6 @@ static slayer3d_color retained_ui_command_border(const slayer3d_ui_layout_render
         return (slayer3d_color){0, 0, 0, 0};
     if (command->selected)
         return (slayer3d_color){96, 255, 128, 255};
-    if (command->drag_handle && command->hovered)
-        return (slayer3d_color){105, 142, 178, 245};
     if (command->has_border_color)
         return command->border_color;
     if (command->popup)
@@ -2169,6 +2163,46 @@ static bool retained_ui_selected_name(const char *id, char *buffer, size_t buffe
         return false;
     const size_t prefix_len = SDL_strlen(id) - SDL_strlen(".button");
     SDL_snprintf(buffer, buffer_size, "%.*s.selected", (int)prefix_len, id);
+    return true;
+}
+
+static bool emit_retained_drag_indicator(const slayer3d_ui_layout_render_command *command,
+                                         slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    if (command == NULL || callback == NULL)
+        return false;
+
+    if (command->hovered || command->active)
+    {
+        const slayer3d_color background =
+            command->active ? (slayer3d_color){42, 58, 78, 235} : (slayer3d_color){54, 102, 166, 210};
+        if (!emit_ui_rect_from_values_clipped_layered(NULL, command->id, command->layer, command->rect.x,
+                                                      command->rect.y, command->rect.w, command->rect.h, background,
+                                                      command->has_clip_rect, command->clip_rect, callback, userdata))
+        {
+            return false;
+        }
+    }
+
+    const float bar_width = SDL_max(SDL_min(command->rect.w - 8.0f, 14.0f), 4.0f);
+    const float bar_height = 2.0f;
+    const float bar_gap = 3.0f;
+    const float total_height = bar_height * 3.0f + bar_gap * 2.0f;
+    const float x = command->rect.x + (command->rect.w - bar_width) * 0.5f;
+    const float y = command->rect.y + (command->rect.h - total_height) * 0.5f;
+    const slayer3d_color bar_color = command->hovered || command->active ? (slayer3d_color){225, 238, 255, 255}
+                                                                         : (slayer3d_color){126, 148, 176, 235};
+    for (int i = 0; i < 3; ++i)
+    {
+        char name[SLAYER3D_UI_LAYOUT_ID_MAX];
+        SDL_snprintf(name, sizeof(name), "%s.bar.%d", command->id, i);
+        if (!emit_ui_rect_from_values_clipped_layered(
+                NULL, name, command->layer + 1, x, y + (bar_height + bar_gap) * (float)i, bar_width, bar_height,
+                bar_color, command->has_clip_rect, command->clip_rect, callback, userdata))
+        {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -2201,6 +2235,11 @@ static bool retained_ui_rects_from_layout_model(const slayer3d_game_data_runtime
             command->type == SLAYER3D_UI_LAYOUT_NODE_SPACER || command->type == SLAYER3D_UI_LAYOUT_NODE_ROW ||
             command->type == SLAYER3D_UI_LAYOUT_NODE_COLUMN || command->type == SLAYER3D_UI_LAYOUT_NODE_IMAGE)
         {
+            continue;
+        }
+        if (command->type == SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR)
+        {
+            ok = emit_retained_drag_indicator(command, callback, userdata);
             continue;
         }
 

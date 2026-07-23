@@ -173,8 +173,11 @@ default and form stacking contexts, so one window's descendants cannot bleed
 through a window above it.
 
 The retained layout marks the named descendant as a semantic drag handle.
-That role makes the handle interactive and provides standard hover and pressed
-feedback without requiring per-window styling or editor-specific hit tests.
+That role makes the full handle interactive without requiring editor-specific
+hit tests. A `drag_indicator` widget placed anywhere inside the same window
+automatically follows that handle's hover and pressed state. It renders the
+standard compact three-bar grip, keeping visual feedback bounded while the
+larger title bar remains easy to grab.
 
 ```json
 {

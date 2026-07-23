@@ -51,6 +51,8 @@ extern "C"
          * overflows. Correctness lives in the container, not per child.
          */
         SLAYER3D_UI_LAYOUT_NODE_SCROLL,
+        /** @brief Decorative three-bar grip whose state follows an authored drag handle. */
+        SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR,
     } slayer3d_ui_layout_node_type;
 
     /** @brief Optional layout axis applied to a node's direct children. */
@@ -147,6 +149,8 @@ extern "C"
         bool interactive;
         /** @brief Treat this interactive node as its owning window's pointer drag handle. */
         bool drag_handle;
+        /** @brief Optional node id whose hover and active state drive this node's presentation. */
+        const char *state_source_id;
         const char *text;
         const char *font;
         const char *action;
@@ -245,6 +249,8 @@ extern "C"
         bool interactive;
         /** @brief True when this node is its owning window's pointer drag handle. */
         bool drag_handle;
+        /** @brief Node id whose hover and active state drive this node's presentation. */
+        char state_source_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         /** @brief True when this resolved node is an independently movable root window. */
         bool window;
         /** @brief True when this root window owns the front-most window stacking context. */
@@ -321,6 +327,8 @@ extern "C"
         bool selected;
         /** @brief True when this command paints a window drag handle. */
         bool drag_handle;
+        /** @brief Node id whose hover and active state drive this command. */
+        char state_source_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         bool popup;

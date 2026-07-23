@@ -31,6 +31,8 @@ static slayer3d_ui_layout_node_type ui_widget_type_from_string(const char *type)
         return SLAYER3D_UI_LAYOUT_NODE_IMAGE;
     if (SDL_strcmp(type, "scroll") == 0)
         return SLAYER3D_UI_LAYOUT_NODE_SCROLL;
+    if (SDL_strcmp(type, "drag_indicator") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR;
     return SLAYER3D_UI_LAYOUT_NODE_PANEL;
 }
 
@@ -370,6 +372,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     }
     desc.drag_handle =
         desc.id != NULL && window_drag_handle_id != NULL && SDL_strcmp(desc.id, window_drag_handle_id) == 0;
+    if (desc.type == SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR)
+        desc.state_source_id = window_drag_handle_id;
     desc.scroll_key = json_string(node, "scroll_key", NULL);
     float pane_scroll = 0.0f;
     if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))
