@@ -201,6 +201,102 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowLetterboxesLogicalPresentation)
     slayer3d_destroy_window(window, context);
 }
 
+TEST_F(SDLVideoFixture, HighLevelSoftwareWindowExpandsLogicalCanvasToOutputAspect)
+{
+    SLAYER3DBackendOverrideGuard backend_override("software");
+    slayer3d_window_config config;
+    slayer3d_init_window_config(&config);
+    config.width = 640;
+    config.height = 480;
+    config.logical_width = 320;
+    config.logical_height = 180;
+    config.logical_size_policy = SLAYER3D_LOGICAL_SIZE_EXPAND;
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_window(&config, &window, &context)) << SDL_GetError();
+    ASSERT_NE(window, nullptr);
+    ASSERT_NE(context, nullptr);
+
+    int output_width = 0;
+    int output_height = 0;
+    ASSERT_TRUE(SDL_GetWindowSizeInPixels(window, &output_width, &output_height)) << SDL_GetError();
+    int expected_width = 0;
+    int expected_height = 0;
+    ASSERT_TRUE(slayer3d_resolve_logical_size(320, 180, output_width, output_height, SLAYER3D_LOGICAL_SIZE_EXPAND,
+                                              &expected_width, &expected_height));
+    EXPECT_EQ(expected_width, slayer3d_get_render_context_width(context));
+    EXPECT_EQ(expected_height, slayer3d_get_render_context_height(context));
+    EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_EXPAND, slayer3d_get_render_context_logical_size_policy(context));
+
+    SDL_FRect safe_area{};
+    ASSERT_TRUE(slayer3d_get_render_context_safe_area(context, &safe_area)) << SDL_GetError();
+    EXPECT_GE(safe_area.x, 0.0f);
+    EXPECT_GE(safe_area.y, 0.0f);
+    EXPECT_GT(safe_area.w, 0.0f);
+    EXPECT_GT(safe_area.h, 0.0f);
+    EXPECT_LE(safe_area.x + safe_area.w, static_cast<float>(expected_width));
+    EXPECT_LE(safe_area.y + safe_area.h, static_cast<float>(expected_height));
+
+    SDL_Renderer *renderer = SDL_GetRenderer(window);
+    ASSERT_NE(renderer, nullptr);
+    int logical_width = 0;
+    int logical_height = 0;
+    SDL_RendererLogicalPresentation mode = SDL_LOGICAL_PRESENTATION_DISABLED;
+    ASSERT_TRUE(SDL_GetRenderLogicalPresentation(renderer, &logical_width, &logical_height, &mode)) << SDL_GetError();
+    EXPECT_EQ(expected_width, logical_width);
+    EXPECT_EQ(expected_height, logical_height);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
+    ASSERT_TRUE(slayer3d_clear_render_context(context, {16, 32, 64, 255})) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_present_render_context(context)) << SDL_GetError();
+
+    slayer3d_destroy_window(window, context);
+}
+
+TEST_F(SDLVideoFixture, AdaptiveSoftwareCanvasTracksWindowResizes)
+{
+    SLAYER3DBackendOverrideGuard backend_override("software");
+    slayer3d_window_config config;
+    slayer3d_init_window_config(&config);
+    config.width = 640;
+    config.height = 480;
+    config.logical_width = 320;
+    config.logical_height = 180;
+    config.logical_size_policy = SLAYER3D_LOGICAL_SIZE_EXPAND;
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
+    config.allow_backend_fallback = false;
+    config.vsync = false;
+
+    SDL_Window *window = nullptr;
+    slayer3d_render_context *context = nullptr;
+    ASSERT_TRUE(slayer3d_create_window(&config, &window, &context)) << SDL_GetError();
+    if (!SDL_SetWindowSize(window, 800, 400))
+    {
+        const std::string reason = SDL_GetError();
+        slayer3d_destroy_window(window, context);
+        GTEST_SKIP() << "Platform does not support programmatic window resizing: " << reason;
+    }
+    ASSERT_TRUE(SDL_SyncWindow(window)) << SDL_GetError();
+
+    int output_width = 0;
+    int output_height = 0;
+    ASSERT_TRUE(SDL_GetWindowSizeInPixels(window, &output_width, &output_height)) << SDL_GetError();
+    int expected_width = 0;
+    int expected_height = 0;
+    ASSERT_TRUE(slayer3d_resolve_logical_size(320, 180, output_width, output_height, SLAYER3D_LOGICAL_SIZE_EXPAND,
+                                              &expected_width, &expected_height));
+    ASSERT_TRUE(slayer3d_sync_render_context_logical_size(context)) << SDL_GetError();
+    EXPECT_EQ(expected_width, slayer3d_get_render_context_width(context));
+    EXPECT_EQ(expected_height, slayer3d_get_render_context_height(context));
+    ASSERT_TRUE(slayer3d_clear_render_context(context, {16, 32, 64, 255})) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_present_render_context(context)) << SDL_GetError();
+
+    slayer3d_destroy_window(window, context);
+}
+
 TEST_F(SDLVideoFixture, HighLevelSoftwareWindowAppliesVSyncAtRuntime)
 {
     SLAYER3DBackendOverrideGuard backend_override("software");

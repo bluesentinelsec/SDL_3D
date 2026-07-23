@@ -72,6 +72,23 @@ bool validate_app_refs(validation_context *ctx, yyjson_val *root, validation_nam
     yyjson_val *high_pixel_density = obj_get(window, "high_pixel_density");
     if (high_pixel_density != NULL && !yyjson_is_bool(high_pixel_density))
         return validation_error(ctx, "$.app.window.high_pixel_density", "high_pixel_density must be a boolean");
+    yyjson_val *app_logical_size_policy_value = obj_get(app, "logical_size_policy");
+    const char *app_logical_size_policy = json_string(app, "logical_size_policy");
+    if (app_logical_size_policy_value != NULL &&
+        (!yyjson_is_str(app_logical_size_policy_value) ||
+         (SDL_strcmp(app_logical_size_policy, "fixed") != 0 && SDL_strcmp(app_logical_size_policy, "expand") != 0)))
+    {
+        return validation_error(ctx, "$.app.logical_size_policy", "logical_size_policy must be 'fixed' or 'expand'");
+    }
+    yyjson_val *window_logical_size_policy_value = obj_get(window, "logical_size_policy");
+    const char *window_logical_size_policy = json_string(window, "logical_size_policy");
+    if (window_logical_size_policy_value != NULL &&
+        (!yyjson_is_str(window_logical_size_policy_value) || (SDL_strcmp(window_logical_size_policy, "fixed") != 0 &&
+                                                              SDL_strcmp(window_logical_size_policy, "expand") != 0)))
+    {
+        return validation_error(ctx, "$.app.window.logical_size_policy",
+                                "logical_size_policy must be 'fixed' or 'expand'");
+    }
     const char *window_apply_signal = json_string(window, "apply_signal");
     if (window_apply_signal != NULL &&
         !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))

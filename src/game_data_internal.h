@@ -73,8 +73,12 @@ typedef struct game_data_presentation_cache
     Uint64 debug_state_revision;
     float layout_width;
     float layout_height;
+    float layout_x;
+    float layout_y;
     float viewport_width;
     float viewport_height;
+    float viewport_x;
+    float viewport_y;
     double ui_layout_ms;
     double viewport_resolve_ms;
     double debug_resolve_ms;
@@ -131,8 +135,10 @@ typedef struct slayer3d_game_data_runtime
     int active_scene_index;
     slayer3d_properties *scene_state;
     yyjson_doc *scene_sky_override;
-    /* Logical UI viewport used to resolve retained widget layouts; 0 means
-     * the 1280×720 default until the host publishes the render size. */
+    /* Logical safe-area viewport used to resolve retained widget layouts; a
+     * zero size means the 1280x720 default until the host publishes it. */
+    float ui_viewport_x;
+    float ui_viewport_y;
     float ui_viewport_w;
     float ui_viewport_h;
     game_data_presentation_cache *presentation_cache;
@@ -335,6 +341,8 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
                                                       slayer3d_ui_layout_model *layout);
 /* Read the published logical UI viewport, falling back to 1280×720. */
 void slayer3d_game_data_ui_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height);
+/* Read the complete published logical UI safe-area rectangle. */
+void slayer3d_game_data_ui_viewport_rect(const slayer3d_game_data_runtime *runtime, slayer3d_ui_layout_rect *out_rect);
 
 bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_runtime *runtime,
                                                     game_data_scene_world_viewport *out_viewports, int capacity,

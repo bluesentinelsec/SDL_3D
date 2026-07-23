@@ -1,5 +1,8 @@
 #include "slayer3d/render_context.h"
 
+#include <limits.h>
+#include <stdint.h>
+
 #include <SDL3/SDL_cpuinfo.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
@@ -116,7 +119,87 @@ void slayer3d_init_render_context_config(slayer3d_render_context_config *config)
     config->allow_backend_fallback = true;
     config->logical_width = 0;
     config->logical_height = 0;
-    config->logical_presentation = SDL_LOGICAL_PRESENTATION_STRETCH;
+    config->logical_size_policy = SLAYER3D_LOGICAL_SIZE_FIXED;
+    config->logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
+}
+
+bool slayer3d_resolve_logical_size(int authored_width, int authored_height, int output_width, int output_height,
+                                   slayer3d_logical_size_policy policy, int *out_width, int *out_height)
+{
+    if (out_width == NULL || out_height == NULL)
+        return SDL_InvalidParamError("out_width/out_height");
+    if (authored_width <= 0 || authored_height <= 0 || output_width <= 0 || output_height <= 0)
+        return SDL_SetError("Logical and output dimensions must be positive.");
+    if (policy != SLAYER3D_LOGICAL_SIZE_FIXED && policy != SLAYER3D_LOGICAL_SIZE_EXPAND)
+        return SDL_SetError("Unknown logical size policy: %d", (int)policy);
+
+    *out_width = authored_width;
+    *out_height = authored_height;
+    if (policy == SLAYER3D_LOGICAL_SIZE_FIXED)
+        return true;
+
+    const Sint64 authored_aspect_cross = (Sint64)authored_width * (Sint64)output_height;
+    const Sint64 output_aspect_cross = (Sint64)output_width * (Sint64)authored_height;
+    if (output_aspect_cross > authored_aspect_cross)
+    {
+        const Sint64 expanded_width =
+            ((Sint64)authored_height * (Sint64)output_width + (Sint64)output_height - 1) / (Sint64)output_height;
+        if (expanded_width > INT_MAX)
+            return SDL_SetError("Expanded logical width exceeds the supported range.");
+        *out_width = (int)expanded_width;
+    }
+    else if (output_aspect_cross < authored_aspect_cross)
+    {
+        const Sint64 expanded_height =
+            ((Sint64)authored_width * (Sint64)output_height + (Sint64)output_width - 1) / (Sint64)output_width;
+        if (expanded_height > INT_MAX)
+            return SDL_SetError("Expanded logical height exceeds the supported range.");
+        *out_height = (int)expanded_height;
+    }
+    return true;
+}
+
+bool slayer3d_resolve_aspect_fit_viewport(int logical_width, int logical_height, int output_width, int output_height,
+                                          SDL_FRect *out_viewport)
+{
+    if (out_viewport == NULL)
+        return SDL_InvalidParamError("out_viewport");
+    if (logical_width <= 0 || logical_height <= 0 || output_width <= 0 || output_height <= 0)
+        return SDL_SetError("Logical and output dimensions must be positive.");
+
+    const float scale_x = (float)output_width / (float)logical_width;
+    const float scale_y = (float)output_height / (float)logical_height;
+    const float scale = SDL_min(scale_x, scale_y);
+    out_viewport->w = (float)logical_width * scale;
+    out_viewport->h = (float)logical_height * scale;
+    out_viewport->x = ((float)output_width - out_viewport->w) * 0.5f;
+    out_viewport->y = ((float)output_height - out_viewport->h) * 0.5f;
+    return true;
+}
+
+static bool slayer3d_get_render_output_size(SDL_Window *window, SDL_Renderer *renderer, int *out_width, int *out_height)
+{
+    if (renderer != NULL)
+    {
+        if (SDL_GetRenderOutputSize(renderer, out_width, out_height) && *out_width > 0 && *out_height > 0)
+            return true;
+        SDL_ClearError();
+    }
+    return SDL_GetWindowSizeInPixels(window, out_width, out_height) && *out_width > 0 && *out_height > 0;
+}
+
+static bool slayer3d_render_buffer_sizes(int width, int height, size_t *out_color_size, size_t *out_depth_size)
+{
+    if (width <= 0 || height <= 0 || out_color_size == NULL || out_depth_size == NULL)
+        return SDL_InvalidParamError("render buffer dimensions");
+    if ((size_t)width > SIZE_MAX / (size_t)height)
+        return SDL_SetError("Logical render dimensions overflow the addressable buffer size.");
+    const size_t pixel_count = (size_t)width * (size_t)height;
+    if (pixel_count > SIZE_MAX / 4U || pixel_count > SIZE_MAX / sizeof(float))
+        return SDL_SetError("Logical render dimensions overflow the addressable buffer size.");
+    *out_color_size = pixel_count * 4U;
+    *out_depth_size = pixel_count * sizeof(float);
+    return true;
 }
 
 const char *slayer3d_get_backend_name(slayer3d_backend backend)
@@ -156,8 +239,8 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     const char *env_backend_name;
     int render_width;
     int render_height;
-    size_t color_buffer_size;
-    size_t depth_buffer_size;
+    size_t color_buffer_size = 0;
+    size_t depth_buffer_size = 0;
 
     if (window == NULL)
     {
@@ -185,6 +268,16 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
         return SDL_SetError("Logical width and height must both be zero or both be non-zero.");
     }
 
+    if (local_config.logical_size_policy != SLAYER3D_LOGICAL_SIZE_FIXED &&
+        local_config.logical_size_policy != SLAYER3D_LOGICAL_SIZE_EXPAND)
+    {
+        return SDL_SetError("Unknown logical size policy: %d", (int)local_config.logical_size_policy);
+    }
+    if (local_config.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND && local_config.logical_width == 0)
+    {
+        return SDL_SetError("Expanded logical sizing requires authored logical dimensions.");
+    }
+
     requested_backend = local_config.backend;
     env_backend_name = SDL_getenv(SLAYER3D_BACKEND_ENV);
     if (env_backend_name != NULL && *env_backend_name != '\0')
@@ -206,17 +299,25 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
 
     if (local_config.logical_width > 0)
     {
+        int output_width = 0;
+        int output_height = 0;
+        if (!slayer3d_get_render_output_size(window, renderer, &output_width, &output_height) ||
+            !slayer3d_resolve_logical_size(local_config.logical_width, local_config.logical_height, output_width,
+                                           output_height, local_config.logical_size_policy, &render_width,
+                                           &render_height))
+        {
+            return false;
+        }
         if (renderer != NULL)
         {
-            if (!SDL_SetRenderLogicalPresentation(renderer, local_config.logical_width, local_config.logical_height,
-                                                  local_config.logical_presentation))
+            const SDL_RendererLogicalPresentation presentation =
+                local_config.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX
+                                                                                 : local_config.logical_presentation;
+            if (!SDL_SetRenderLogicalPresentation(renderer, render_width, render_height, presentation))
             {
                 return false;
             }
         }
-
-        render_width = local_config.logical_width;
-        render_height = local_config.logical_height;
     }
     else
     {
@@ -249,6 +350,11 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
 
     if (resolved_backend == SLAYER3D_BACKEND_SOFTWARE)
     {
+        if (!slayer3d_render_buffer_sizes(render_width, render_height, &color_buffer_size, &depth_buffer_size))
+        {
+            SDL_free(context);
+            return false;
+        }
         context->color_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING,
                                                    render_width, render_height);
         if (context->color_texture == NULL)
@@ -257,7 +363,6 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
             return false;
         }
 
-        color_buffer_size = (size_t)render_width * (size_t)render_height * 4U;
         context->color_buffer = SDL_calloc(1, color_buffer_size);
         if (context->color_buffer == NULL)
         {
@@ -266,7 +371,6 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
             return SDL_OutOfMemory();
         }
 
-        depth_buffer_size = (size_t)render_width * (size_t)render_height * sizeof(float);
         context->depth_buffer = SDL_malloc(depth_buffer_size);
         if (context->depth_buffer == NULL)
         {
@@ -313,6 +417,10 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
 
     context->width = render_width;
     context->height = render_height;
+    context->authored_width = local_config.logical_width > 0 ? local_config.logical_width : render_width;
+    context->authored_height = local_config.logical_height > 0 ? local_config.logical_height : render_height;
+    context->logical_size_policy = local_config.logical_size_policy;
+    context->logical_presentation = local_config.logical_presentation;
     context->world_render_scale = 1.0f;
     context->world_render_target_scale = 1.0f;
     context->world_render_width = render_width;
@@ -431,6 +539,268 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     }
 
     return context->height;
+}
+
+static float slayer3d_map_window_axis_to_logical(float value, float viewport_origin, float viewport_extent,
+                                                 float logical_extent)
+{
+    return viewport_extent > 0.0f ? (value - viewport_origin) * logical_extent / viewport_extent : 0.0f;
+}
+
+bool slayer3d_get_render_context_safe_area(const slayer3d_render_context *context, SDL_FRect *out_area)
+{
+    if (context == NULL || out_area == NULL)
+        return SDL_InvalidParamError("context/out_area");
+
+    *out_area = (SDL_FRect){0.0f, 0.0f, (float)context->width, (float)context->height};
+    if (context->window == NULL || context->width <= 0 || context->height <= 0)
+        return true;
+
+    SDL_Rect safe;
+    int window_width = 0;
+    int window_height = 0;
+    if (!SDL_GetWindowSafeArea(context->window, &safe) ||
+        !SDL_GetWindowSize(context->window, &window_width, &window_height) || window_width <= 0 || window_height <= 0)
+    {
+        SDL_ClearError();
+        return true;
+    }
+
+    if (context->renderer != NULL)
+    {
+        float logical_left = 0.0f;
+        float logical_top = 0.0f;
+        float logical_right = 0.0f;
+        float logical_bottom = 0.0f;
+        if (SDL_RenderCoordinatesFromWindow(context->renderer, (float)safe.x, (float)safe.y, &logical_left,
+                                            &logical_top) &&
+            SDL_RenderCoordinatesFromWindow(context->renderer, (float)(safe.x + safe.w), (float)(safe.y + safe.h),
+                                            &logical_right, &logical_bottom))
+        {
+            out_area->x = SDL_clamp(logical_left, 0.0f, (float)context->width);
+            out_area->y = SDL_clamp(logical_top, 0.0f, (float)context->height);
+            out_area->w = SDL_max(SDL_clamp(logical_right, 0.0f, (float)context->width) - out_area->x, 0.0f);
+            out_area->h = SDL_max(SDL_clamp(logical_bottom, 0.0f, (float)context->height) - out_area->y, 0.0f);
+            if (out_area->w > 0.0f && out_area->h > 0.0f)
+                return true;
+        }
+        SDL_ClearError();
+        *out_area = (SDL_FRect){0.0f, 0.0f, (float)context->width, (float)context->height};
+    }
+
+    float viewport_x = 0.0f;
+    float viewport_y = 0.0f;
+    float viewport_width = (float)window_width;
+    float viewport_height = (float)window_height;
+    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ||
+        (context->logical_presentation != SDL_LOGICAL_PRESENTATION_STRETCH &&
+         context->logical_presentation != SDL_LOGICAL_PRESENTATION_DISABLED))
+    {
+        if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ||
+            context->logical_presentation == SDL_LOGICAL_PRESENTATION_LETTERBOX)
+        {
+            SDL_FRect viewport = {0};
+            if (!slayer3d_resolve_aspect_fit_viewport(context->width, context->height, window_width, window_height,
+                                                      &viewport))
+                return false;
+            viewport_x = viewport.x;
+            viewport_y = viewport.y;
+            viewport_width = viewport.w;
+            viewport_height = viewport.h;
+        }
+        else
+        {
+            const float scale_x = (float)window_width / (float)context->width;
+            const float scale_y = (float)window_height / (float)context->height;
+            float scale;
+            if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_OVERSCAN)
+                scale = SDL_max(scale_x, scale_y);
+            else
+                scale = SDL_max(SDL_floorf(SDL_min(scale_x, scale_y)), 1.0f);
+            viewport_width = (float)context->width * scale;
+            viewport_height = (float)context->height * scale;
+            viewport_x = ((float)window_width - viewport_width) * 0.5f;
+            viewport_y = ((float)window_height - viewport_height) * 0.5f;
+        }
+    }
+
+    const float safe_left = SDL_max((float)safe.x, viewport_x);
+    const float safe_top = SDL_max((float)safe.y, viewport_y);
+    const float safe_right = SDL_min((float)(safe.x + safe.w), viewport_x + viewport_width);
+    const float safe_bottom = SDL_min((float)(safe.y + safe.h), viewport_y + viewport_height);
+    if (safe_right <= safe_left || safe_bottom <= safe_top)
+        return true;
+
+    const float logical_left =
+        slayer3d_map_window_axis_to_logical(safe_left, viewport_x, viewport_width, (float)context->width);
+    const float logical_top =
+        slayer3d_map_window_axis_to_logical(safe_top, viewport_y, viewport_height, (float)context->height);
+    const float logical_right =
+        slayer3d_map_window_axis_to_logical(safe_right, viewport_x, viewport_width, (float)context->width);
+    const float logical_bottom =
+        slayer3d_map_window_axis_to_logical(safe_bottom, viewport_y, viewport_height, (float)context->height);
+    out_area->x = SDL_clamp(logical_left, 0.0f, (float)context->width);
+    out_area->y = SDL_clamp(logical_top, 0.0f, (float)context->height);
+    out_area->w = SDL_max(SDL_clamp(logical_right, 0.0f, (float)context->width) - out_area->x, 0.0f);
+    out_area->h = SDL_max(SDL_clamp(logical_bottom, 0.0f, (float)context->height) - out_area->y, 0.0f);
+    return true;
+}
+
+bool slayer3d_get_render_context_authored_size(const slayer3d_render_context *context, int *out_width, int *out_height)
+{
+    if (context == NULL || out_width == NULL || out_height == NULL)
+        return SDL_InvalidParamError("context/out_width/out_height");
+    *out_width = context->authored_width;
+    *out_height = context->authored_height;
+    return true;
+}
+
+slayer3d_logical_size_policy slayer3d_get_render_context_logical_size_policy(const slayer3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        SDL_InvalidParamError("context");
+        return SLAYER3D_LOGICAL_SIZE_FIXED;
+    }
+    return context->logical_size_policy;
+}
+
+static SDL_Rect slayer3d_clamp_rect_to_logical_size(SDL_Rect rect, int width, int height)
+{
+    if (rect.x < 0)
+    {
+        rect.w += rect.x;
+        rect.x = 0;
+    }
+    if (rect.y < 0)
+    {
+        rect.h += rect.y;
+        rect.y = 0;
+    }
+    rect.x = SDL_min(rect.x, width);
+    rect.y = SDL_min(rect.y, height);
+    rect.w = SDL_max(0, SDL_min(rect.w, width - rect.x));
+    rect.h = SDL_max(0, SDL_min(rect.h, height - rect.y));
+    return rect;
+}
+
+static bool slayer3d_resize_render_context(slayer3d_render_context *context, int width, int height,
+                                           slayer3d_logical_size_policy policy,
+                                           SDL_RendererLogicalPresentation fixed_presentation)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (width <= 0 || height <= 0)
+        return SDL_SetError("Logical render dimensions must be positive.");
+    if (context->width == width && context->height == height)
+    {
+        if (context->renderer != NULL)
+        {
+            const SDL_RendererLogicalPresentation presentation =
+                policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX : fixed_presentation;
+            return SDL_SetRenderLogicalPresentation(context->renderer, width, height, presentation);
+        }
+        return true;
+    }
+
+    if (context->backend == SLAYER3D_BACKEND_SOFTWARE)
+    {
+        size_t color_size = 0;
+        size_t depth_size = 0;
+        if (!slayer3d_render_buffer_sizes(width, height, &color_size, &depth_size))
+            return false;
+
+        SDL_Texture *new_texture =
+            SDL_CreateTexture(context->renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, width, height);
+        Uint8 *new_color_buffer = (Uint8 *)SDL_calloc(1, color_size);
+        float *new_depth_buffer = (float *)SDL_malloc(depth_size);
+        if (new_texture == NULL || new_color_buffer == NULL || new_depth_buffer == NULL)
+        {
+            SDL_DestroyTexture(new_texture);
+            SDL_free(new_color_buffer);
+            SDL_free(new_depth_buffer);
+            if (SDL_GetError()[0] == '\0')
+                SDL_OutOfMemory();
+            return false;
+        }
+
+        const size_t pixel_count = (size_t)width * (size_t)height;
+        for (size_t i = 0; i < pixel_count; ++i)
+            new_depth_buffer[i] = 1.0f;
+
+        const SDL_RendererLogicalPresentation presentation =
+            policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX : fixed_presentation;
+        if (!SDL_SetRenderLogicalPresentation(context->renderer, width, height, presentation))
+        {
+            SDL_DestroyTexture(new_texture);
+            SDL_free(new_color_buffer);
+            SDL_free(new_depth_buffer);
+            return false;
+        }
+
+        SDL_DestroyTexture(context->color_texture);
+        SDL_free(context->color_buffer);
+        SDL_free(context->depth_buffer);
+        context->color_texture = new_texture;
+        context->color_buffer = new_color_buffer;
+        context->depth_buffer = new_depth_buffer;
+        context->world_render_width = width;
+        context->world_render_height = height;
+    }
+    else if (!slayer3d_gl_sync_world_render_target(context->gl, width, height, context->world_render_scale,
+                                                   &context->world_render_width, &context->world_render_height))
+    {
+        return false;
+    }
+
+    const int old_width = context->width;
+    const int old_height = context->height;
+    context->width = width;
+    context->height = height;
+    context->viewport_rect = context->viewport_enabled
+                                 ? slayer3d_clamp_rect_to_logical_size(context->viewport_rect, width, height)
+                                 : (SDL_Rect){0, 0, width, height};
+    context->scissor_rect = context->scissor_enabled
+                                ? slayer3d_clamp_rect_to_logical_size(context->scissor_rect, width, height)
+                                : (SDL_Rect){0, 0, width, height};
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D logical canvas resized: %dx%d -> %dx%d", old_width, old_height,
+                width, height);
+    return true;
+}
+
+static bool slayer3d_apply_logical_size_config(slayer3d_render_context *context, int authored_width,
+                                               int authored_height, slayer3d_logical_size_policy policy,
+                                               SDL_RendererLogicalPresentation fixed_presentation)
+{
+    int output_width = 0;
+    int output_height = 0;
+    int width = 0;
+    int height = 0;
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (!slayer3d_get_render_output_size(context->window, context->renderer, &output_width, &output_height) ||
+        !slayer3d_resolve_logical_size(authored_width, authored_height, output_width, output_height, policy, &width,
+                                       &height) ||
+        !slayer3d_resize_render_context(context, width, height, policy, fixed_presentation))
+    {
+        return false;
+    }
+
+    context->authored_width = authored_width;
+    context->authored_height = authored_height;
+    context->logical_size_policy = policy;
+    context->logical_presentation = fixed_presentation;
+    return true;
+}
+
+bool slayer3d_sync_render_context_logical_size(slayer3d_render_context *context)
+{
+    if (context == NULL)
+        return SDL_InvalidParamError("context");
+    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_FIXED)
+        return true;
+    return slayer3d_apply_logical_size_config(context, context->authored_width, context->authored_height,
+                                              context->logical_size_policy, context->logical_presentation);
 }
 
 float slayer3d_get_render_context_display_scale(const slayer3d_render_context *context)
@@ -919,6 +1289,8 @@ bool slayer3d_present_render_context(slayer3d_render_context *context)
         return SDL_InvalidParamError("context");
     }
 
+    if (!slayer3d_sync_render_context_logical_size(context))
+        return false;
     return context->backend_iface.present(context);
 }
 
@@ -937,6 +1309,7 @@ void slayer3d_init_window_config(slayer3d_window_config *config)
     config->height = 720;
     config->logical_width = 1280;
     config->logical_height = 720;
+    config->logical_size_policy = SLAYER3D_LOGICAL_SIZE_FIXED;
     config->title = "SLAYER3D";
     config->icon_path = NULL;
     config->backend = SLAYER3D_BACKEND_OPENGL;
@@ -1169,6 +1542,7 @@ retry_backend:
     rcfg.allow_backend_fallback = false; /* already resolved */
     rcfg.logical_width = local.logical_width;
     rcfg.logical_height = local.logical_height;
+    rcfg.logical_size_policy = local.logical_size_policy;
     rcfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
     if (!slayer3d_create_render_context(window, renderer, &rcfg, &context))
@@ -1209,13 +1583,18 @@ retry_backend:
     *out_context = context;
     int pixel_width = 0;
     int pixel_height = 0;
+    SDL_FRect safe_area = {0.0f, 0.0f, (float)context->width, (float)context->height};
     (void)SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
+    (void)slayer3d_get_render_context_safe_area(context, &safe_area);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
                 "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d "
-                "pixels=%dx%d density=%.2f high_dpi=%s",
+                "pixels=%dx%d logical=%dx%d safe_area=%.1f,%.1f %.1fx%.1f logical_policy=%s density=%.2f "
+                "high_dpi=%s",
                 slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
                 local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height,
-                pixel_width, pixel_height, SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
+                pixel_width, pixel_height, context->width, context->height, safe_area.x, safe_area.y, safe_area.w,
+                safe_area.h, local.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? "expand" : "fixed",
+                SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
     return true;
 }
 
@@ -1236,10 +1615,11 @@ bool slayer3d_apply_window_config(SDL_Window **window, slayer3d_render_context *
         local.title = SDL_GetWindowTitle(*window);
     if (local.width <= 0 || local.height <= 0)
         SDL_GetWindowSize(*window, &local.width, &local.height);
-    if (local.logical_width <= 0)
-        local.logical_width = slayer3d_get_render_context_width(*context);
-    if (local.logical_height <= 0)
-        local.logical_height = slayer3d_get_render_context_height(*context);
+    if (local.logical_width <= 0 || local.logical_height <= 0)
+    {
+        if (!slayer3d_get_render_context_authored_size(*context, &local.logical_width, &local.logical_height))
+            return false;
+    }
 
     if (!slayer3d_resolve_backend(local.backend, local.allow_backend_fallback, &requested_backend))
         return false;
@@ -1277,6 +1657,12 @@ bool slayer3d_apply_window_config(SDL_Window **window, slayer3d_render_context *
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D vsync apply failed: %s", SDL_GetError());
             SDL_ClearError();
+        }
+        if (!slayer3d_apply_logical_size_config(*context, local.logical_width, local.logical_height,
+                                                local.logical_size_policy, SDL_LOGICAL_PRESENTATION_LETTERBOX))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D logical canvas apply failed: %s", SDL_GetError());
+            return false;
         }
     }
 
@@ -1319,6 +1705,9 @@ bool slayer3d_switch_backend(SDL_Window **window, slayer3d_render_context **cont
     int w, h;
     char title_buf[256];
     slayer3d_window_config wcfg;
+    int logical_width = 1280;
+    int logical_height = 720;
+    slayer3d_logical_size_policy logical_size_policy = SLAYER3D_LOGICAL_SIZE_FIXED;
 
     if (window == NULL || context == NULL)
     {
@@ -1336,6 +1725,12 @@ bool slayer3d_switch_backend(SDL_Window **window, slayer3d_render_context **cont
         if (t != NULL)
             SDL_strlcpy(title_buf, t, sizeof(title_buf));
     }
+    if (*context != NULL)
+    {
+        logical_width = (*context)->authored_width;
+        logical_height = (*context)->authored_height;
+        logical_size_policy = (*context)->logical_size_policy;
+    }
 
     /* Tear down old context and window. */
     slayer3d_destroy_window(*window, *context);
@@ -1346,6 +1741,9 @@ bool slayer3d_switch_backend(SDL_Window **window, slayer3d_render_context **cont
     slayer3d_init_window_config(&wcfg);
     wcfg.width = w;
     wcfg.height = h;
+    wcfg.logical_width = logical_width;
+    wcfg.logical_height = logical_height;
+    wcfg.logical_size_policy = logical_size_policy;
     wcfg.title = title_buf[0] ? title_buf : "SLAYER3D";
     wcfg.backend = new_backend;
     wcfg.allow_backend_fallback = false;

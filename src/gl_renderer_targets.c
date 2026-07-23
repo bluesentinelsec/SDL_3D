@@ -138,11 +138,11 @@ static bool gl_presentation_viewport_size(slayer3d_gl_context *ctx, int logical_
         return SDL_SetError("The GL window does not currently expose a valid pixel size.");
     }
 
-    const float scale_x = (float)output_width / (float)logical_width;
-    const float scale_y = (float)output_height / (float)logical_height;
-    const float scale = (scale_x < scale_y) ? scale_x : scale_y;
-    *out_width = SDL_max(1, (int)SDL_floorf((float)logical_width * scale + 0.5f));
-    *out_height = SDL_max(1, (int)SDL_floorf((float)logical_height * scale + 0.5f));
+    SDL_FRect viewport = {0};
+    if (!slayer3d_resolve_aspect_fit_viewport(logical_width, logical_height, output_width, output_height, &viewport))
+        return false;
+    *out_width = SDL_max(1, (int)SDL_floorf(viewport.w + 0.5f));
+    *out_height = SDL_max(1, (int)SDL_floorf(viewport.h + 0.5f));
     return true;
 }
 

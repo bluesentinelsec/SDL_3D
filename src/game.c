@@ -407,6 +407,7 @@ static bool slayer3d_game_create_context(const slayer3d_game_config *config, sla
     window_config.height = (config != NULL && config->height > 0) ? config->height : logical_height;
     window_config.logical_width = logical_width;
     window_config.logical_height = logical_height;
+    window_config.logical_size_policy = config != NULL ? config->logical_size_policy : SLAYER3D_LOGICAL_SIZE_FIXED;
     window_config.title = (config != NULL && config->title != NULL) ? config->title : "SLAYER3D";
     window_config.icon_path = config != NULL ? config->icon_path : NULL;
     if (config != NULL && config->backend != SLAYER3D_BACKEND_AUTO)
@@ -501,15 +502,16 @@ static void slayer3d_game_sync_input_mouse_transform(const slayer3d_game_context
         return;
     }
 
-    const float scale_x = (float)window_width / (float)logical_width;
-    const float scale_y = (float)window_height / (float)logical_height;
-    const float scale = scale_x < scale_y ? scale_x : scale_y;
-    const float viewport_width = (float)logical_width * scale;
-    const float viewport_height = (float)logical_height * scale;
-    const float viewport_x = ((float)window_width - viewport_width) * 0.5f;
-    const float viewport_y = ((float)window_height - viewport_height) * 0.5f;
-    slayer3d_input_set_mouse_position_transform(input, (float)logical_width / viewport_width,
-                                                (float)logical_height / viewport_height, viewport_x, viewport_y);
+    SDL_FRect viewport = {0};
+    if (!slayer3d_resolve_aspect_fit_viewport(logical_width, logical_height, window_width, window_height, &viewport) ||
+        viewport.w <= 0.0f || viewport.h <= 0.0f)
+    {
+        SDL_ClearError();
+        slayer3d_input_set_mouse_position_transform(input, 1.0f, 1.0f, 0.0f, 0.0f);
+        return;
+    }
+    slayer3d_input_set_mouse_position_transform(input, (float)logical_width / viewport.w,
+                                                (float)logical_height / viewport.h, viewport.x, viewport.y);
 }
 
 /**
@@ -547,6 +549,13 @@ static void slayer3d_game_run_frame(slayer3d_game_run_state *run)
     Uint64 present_start_counter;
     Uint64 present_end_counter;
     SDL_Event event;
+    if (!slayer3d_sync_render_context_logical_size(ctx->renderer))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D logical canvas sync failed: %s", SDL_GetError());
+        run->result = 1;
+        ctx->quit_requested = true;
+        return;
+    }
     slayer3d_game_sync_input_mouse_transform(ctx);
     while (SDL_PollEvent(&event))
     {

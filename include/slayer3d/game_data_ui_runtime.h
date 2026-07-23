@@ -115,6 +115,15 @@ extern "C"
     bool slayer3d_game_data_set_ui_viewport(slayer3d_game_data_runtime *runtime, float width, float height);
 
     /**
+     * @brief Publish a logical safe-area rectangle for retained UI layout.
+     *
+     * The complete render canvas can extend beyond this rectangle, but root
+     * widgets, docks, and interactive content resolve inside these bounds.
+     */
+    bool slayer3d_game_data_set_ui_viewport_rect(slayer3d_game_data_runtime *runtime, float x, float y, float width,
+                                                 float height);
+
+    /**
      * @brief Initialize runtime UI state to identity values.
      *
      * The initialized state has no override flags, zero offset, scale 1, alpha

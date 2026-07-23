@@ -508,14 +508,11 @@ void slayer3d_ui_begin_frame_ex(slayer3d_ui_context *ui, slayer3d_render_context
     SDL_GetWindowSize(window, &win_w, &win_h);
     if (win_w > 0 && win_h > 0 && lw > 0 && lh > 0)
     {
-        float sx = (float)win_w / (float)lw;
-        float sy = (float)win_h / (float)lh;
-        float s = (sx < sy) ? sx : sy;
-        float vp_w = (float)lw * s;
-        float vp_h = (float)lh * s;
-        float vp_x = ((float)win_w - vp_w) * 0.5f;
-        float vp_y = ((float)win_h - vp_h) * 0.5f;
-        slayer3d_ui_set_mouse_transform(ui, (float)lw / vp_w, (float)lh / vp_h, vp_x, vp_y);
+        SDL_FRect viewport = {0};
+        if (slayer3d_resolve_aspect_fit_viewport(lw, lh, win_w, win_h, &viewport))
+        {
+            slayer3d_ui_set_mouse_transform(ui, (float)lw / viewport.w, (float)lh / viewport.h, viewport.x, viewport.y);
+        }
     }
 }
 

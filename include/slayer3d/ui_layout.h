@@ -324,8 +324,18 @@ extern "C"
     /** @brief Add one retained UI node to the model. */
     bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_node_desc *desc);
 
-    /** @brief Resolve all retained UI nodes into screen-space rectangles. */
+    /** @brief Resolve all retained UI nodes into an origin-zero screen-space viewport. */
     bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_w, float viewport_h);
+
+    /**
+     * @brief Resolve all retained UI nodes inside a screen-space viewport rectangle.
+     *
+     * Root positions, anchors, docks, floating-window bounds, and popups are
+     * relative to @p viewport. This is useful for platform safe areas where
+     * interactive UI must avoid display cutouts while rendering still uses the
+     * complete logical canvas.
+     */
+    bool slayer3d_ui_layout_resolve_in_rect(slayer3d_ui_layout_model *model, slayer3d_ui_layout_rect viewport);
 
     /** @brief Mark the retained UI layout dirty so the next resolve recomputes cached lists. */
     void slayer3d_ui_layout_mark_dirty(slayer3d_ui_layout_model *model);
@@ -359,6 +369,12 @@ extern "C"
     bool slayer3d_ui_layout_calculate_window_dock_rect(const slayer3d_ui_layout_model *model, const char *id,
                                                        slayer3d_ui_layout_dock dock, float viewport_width,
                                                        float viewport_height, slayer3d_ui_layout_rect *out_rect);
+
+    /** @brief Calculate a root window dock rectangle inside an arbitrary viewport rectangle. */
+    bool slayer3d_ui_layout_calculate_window_dock_rect_in_rect(const slayer3d_ui_layout_model *model, const char *id,
+                                                               slayer3d_ui_layout_dock dock,
+                                                               slayer3d_ui_layout_rect viewport,
+                                                               slayer3d_ui_layout_rect *out_rect);
 
     /** @brief Return the number of flat retained UI render commands. */
     int slayer3d_ui_layout_render_command_count(const slayer3d_ui_layout_model *model);

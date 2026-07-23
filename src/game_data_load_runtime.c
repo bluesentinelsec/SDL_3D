@@ -13,6 +13,17 @@
 static void storage_config_from_root(yyjson_val *root, slayer3d_storage_config *out_config);
 static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 
+static slayer3d_logical_size_policy parse_logical_size_policy(const char *value, slayer3d_logical_size_policy fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "fixed") == 0)
+        return SLAYER3D_LOGICAL_SIZE_FIXED;
+    if (SDL_strcasecmp(value, "expand") == 0)
+        return SLAYER3D_LOGICAL_SIZE_EXPAND;
+    return fallback;
+}
+
 bool slayer3d_game_data_register_adapter(slayer3d_game_data_runtime *runtime, const char *name,
                                          slayer3d_game_data_adapter_fn callback, void *userdata)
 {
@@ -183,6 +194,8 @@ static bool apply_app_config_from_root(yyjson_val *root, slayer3d_game_config *o
     out_config->height = json_int(app, "window_height", json_int(app, "height", out_config->height));
     out_config->logical_width = json_int(app, "logical_width", json_int(app, "width", out_config->logical_width));
     out_config->logical_height = json_int(app, "logical_height", json_int(app, "height", out_config->logical_height));
+    out_config->logical_size_policy =
+        parse_logical_size_policy(json_string(app, "logical_size_policy", NULL), out_config->logical_size_policy);
     out_config->icon_path = json_string(app, "icon_path", json_string(app, "icon", out_config->icon_path));
     out_config->backend = parse_backend(json_string(app, "backend", NULL), out_config->backend);
     yyjson_val *window = obj_get(app, "window");
@@ -198,6 +211,8 @@ static bool apply_app_config_from_root(yyjson_val *root, slayer3d_game_config *o
         out_config->height = json_int(window, "window_height", json_int(window, "height", out_config->height));
         out_config->logical_width = json_int(window, "logical_width", out_config->logical_width);
         out_config->logical_height = json_int(window, "logical_height", out_config->logical_height);
+        out_config->logical_size_policy = parse_logical_size_policy(json_string(window, "logical_size_policy", NULL),
+                                                                    out_config->logical_size_policy);
 #if defined(SLAYER3D_PRODUCTION_BUILD)
         const char *mode = json_string(window, "production_display_mode", json_string(window, "display_mode", NULL));
 #else

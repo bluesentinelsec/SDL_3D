@@ -67,6 +67,7 @@ TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigSetsDocumentedDefaults)
     config.allow_backend_fallback = false;
     config.logical_width = 42;
     config.logical_height = 42;
+    config.logical_size_policy = SLAYER3D_LOGICAL_SIZE_EXPAND;
     config.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
     slayer3d_init_render_context_config(&config);
@@ -75,7 +76,8 @@ TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigSetsDocumentedDefaults)
     EXPECT_TRUE(config.allow_backend_fallback);
     EXPECT_EQ(0, config.logical_width);
     EXPECT_EQ(0, config.logical_height);
-    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_STRETCH, config.logical_presentation);
+    EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_FIXED, config.logical_size_policy);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, config.logical_presentation);
 }
 
 TEST(SLAYER3DWindowConfig, InitWindowConfigSetsHighDpiDefault)
@@ -89,7 +91,73 @@ TEST(SLAYER3DWindowConfig, InitWindowConfigSetsHighDpiDefault)
     EXPECT_EQ(config.height, 720);
     EXPECT_EQ(config.logical_width, 1280);
     EXPECT_EQ(config.logical_height, 720);
+    EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_FIXED, config.logical_size_policy);
     EXPECT_TRUE(config.high_pixel_density);
+}
+
+TEST(SLAYER3DLogicalSize, FixedPolicyPreservesAuthoredCanvas)
+{
+    int width = 0;
+    int height = 0;
+    ASSERT_TRUE(slayer3d_resolve_logical_size(1280, 720, 1600, 1000, SLAYER3D_LOGICAL_SIZE_FIXED, &width, &height));
+    EXPECT_EQ(1280, width);
+    EXPECT_EQ(720, height);
+}
+
+TEST(SLAYER3DLogicalSize, ExpandPolicyFillsCommonAndTallAspects)
+{
+    int width = 0;
+    int height = 0;
+
+    ASSERT_TRUE(slayer3d_resolve_logical_size(1280, 720, 1920, 1080, SLAYER3D_LOGICAL_SIZE_EXPAND, &width, &height));
+    EXPECT_EQ(1280, width);
+    EXPECT_EQ(720, height);
+
+    ASSERT_TRUE(slayer3d_resolve_logical_size(1280, 720, 1600, 1000, SLAYER3D_LOGICAL_SIZE_EXPAND, &width, &height));
+    EXPECT_EQ(1280, width);
+    EXPECT_EQ(800, height);
+
+    ASSERT_TRUE(slayer3d_resolve_logical_size(1280, 720, 3456, 2234, SLAYER3D_LOGICAL_SIZE_EXPAND, &width, &height));
+    EXPECT_EQ(1280, width);
+    EXPECT_EQ(828, height);
+}
+
+TEST(SLAYER3DLogicalSize, ExpandPolicyGrowsWidthForWideOutputs)
+{
+    int width = 0;
+    int height = 0;
+    ASSERT_TRUE(slayer3d_resolve_logical_size(1280, 720, 3440, 1440, SLAYER3D_LOGICAL_SIZE_EXPAND, &width, &height));
+    EXPECT_EQ(1720, width);
+    EXPECT_EQ(720, height);
+}
+
+TEST(SLAYER3DLogicalSize, RejectsInvalidDimensionsAndPolicies)
+{
+    int width = 0;
+    int height = 0;
+    EXPECT_FALSE(slayer3d_resolve_logical_size(0, 720, 1920, 1080, SLAYER3D_LOGICAL_SIZE_EXPAND, &width, &height));
+    EXPECT_FALSE(slayer3d_resolve_logical_size(1280, 720, 1920, 1080, static_cast<slayer3d_logical_size_policy>(99),
+                                               &width, &height));
+    EXPECT_FALSE(slayer3d_resolve_logical_size(1280, 720, 1920, 1080, SLAYER3D_LOGICAL_SIZE_EXPAND, nullptr, &height));
+}
+
+TEST(SLAYER3DLogicalSize, AspectFitViewportPreservesGeometryAfterAdaptiveRounding)
+{
+    SDL_FRect viewport{};
+    ASSERT_TRUE(slayer3d_resolve_aspect_fit_viewport(1280, 828, 3456, 2234, &viewport));
+
+    EXPECT_FLOAT_EQ(0.0f, viewport.y);
+    EXPECT_NEAR(1.237f, viewport.x, 0.01f);
+    EXPECT_NEAR(3453.53f, viewport.w, 0.01f);
+    EXPECT_FLOAT_EQ(2234.0f, viewport.h);
+    EXPECT_NEAR(viewport.w / 1280.0f, viewport.h / 828.0f, 0.0001f);
+}
+
+TEST(SLAYER3DLogicalSize, AspectFitViewportRejectsInvalidArguments)
+{
+    SDL_FRect viewport{};
+    EXPECT_FALSE(slayer3d_resolve_aspect_fit_viewport(0, 720, 1920, 1080, &viewport));
+    EXPECT_FALSE(slayer3d_resolve_aspect_fit_viewport(1280, 720, 1920, 1080, nullptr));
 }
 
 TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigRejectsNull)

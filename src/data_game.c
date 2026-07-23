@@ -1768,8 +1768,12 @@ static void data_game_publish_ui_viewport(slayer3d_data_game_runtime *runtime, s
 {
     if (runtime == NULL || runtime->data == NULL || ctx == NULL || ctx->renderer == NULL)
         return;
-    (void)slayer3d_game_data_set_ui_viewport(runtime->data, (float)slayer3d_get_render_context_width(ctx->renderer),
-                                             (float)slayer3d_get_render_context_height(ctx->renderer));
+    SDL_FRect safe_area;
+    if (slayer3d_get_render_context_safe_area(ctx->renderer, &safe_area))
+    {
+        (void)slayer3d_game_data_set_ui_viewport_rect(runtime->data, safe_area.x, safe_area.y, safe_area.w,
+                                                      safe_area.h);
+    }
 }
 
 bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx, float dt)

@@ -381,6 +381,19 @@ the platform support them. Author `"high_pixel_density": false` under
 `app.window` only when testing low-DPI presentation behavior or working around a
 platform issue. Mouse coordinates and UI layout remain in logical pixels.
 
+Desktop tools that should use all available window space can set
+`app.window.logical_size_policy` to `"expand"`. In that mode, `logical_width`
+and `logical_height` are minimum canvas dimensions: the engine keeps one axis
+at its authored size and expands the other to match the current window's pixel
+aspect ratio. The logical canvas is recomputed after resizes and display-mode
+changes. The default policy is `"fixed"`, so games retain their authored aspect
+ratio and letterboxing unless they explicitly opt in.
+
+Interactive retained UI resolves inside SDL's platform safe area. Rendering
+continues across the complete logical canvas, while toolbars, docks, floating
+windows, popups, and hit targets avoid camera notches, system controls, and
+other display cutouts.
+
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
 requests shutdown through the managed app flow when `quit.enabled_if` is absent

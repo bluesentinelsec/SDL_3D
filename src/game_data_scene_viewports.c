@@ -66,19 +66,19 @@ slayer3d_ui_layout_model *game_data_prepare_active_ui_widget_layout(const slayer
         return NULL;
 
     game_data_presentation_cache *cache = runtime->presentation_cache;
-    float viewport_width = 0.0f;
-    float viewport_height = 0.0f;
-    slayer3d_game_data_ui_viewport(runtime, &viewport_width, &viewport_height);
+    slayer3d_ui_layout_rect safe_viewport;
+    slayer3d_game_data_ui_viewport_rect(runtime, &safe_viewport);
     const Uint64 state_revision = slayer3d_properties_revision(runtime->scene_state);
     if (cache->layout_valid && cache->layout_state_revision == state_revision &&
-        cache->layout_scene_index == runtime->active_scene_index && cache->layout_width == viewport_width &&
-        cache->layout_height == viewport_height && (metrics == NULL || cache->layout_metrics == metrics))
+        cache->layout_scene_index == runtime->active_scene_index && cache->layout_x == safe_viewport.x &&
+        cache->layout_y == safe_viewport.y && cache->layout_width == safe_viewport.w &&
+        cache->layout_height == safe_viewport.h && (metrics == NULL || cache->layout_metrics == metrics))
     {
         return cache->ui_layout;
     }
 
     const Uint64 build_start = SDL_GetPerformanceCounter();
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, viewport_width, viewport_height, metrics,
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, safe_viewport.w, safe_viewport.h, metrics,
                                                           cache->ui_layout))
     {
         cache->layout_valid = false;
@@ -86,8 +86,10 @@ slayer3d_ui_layout_model *game_data_prepare_active_ui_widget_layout(const slayer
     }
     cache->layout_state_revision = state_revision;
     cache->layout_scene_index = runtime->active_scene_index;
-    cache->layout_width = viewport_width;
-    cache->layout_height = viewport_height;
+    cache->layout_x = safe_viewport.x;
+    cache->layout_y = safe_viewport.y;
+    cache->layout_width = safe_viewport.w;
+    cache->layout_height = safe_viewport.h;
     cache->layout_metrics = metrics;
     cache->layout_valid = true;
     cache->ui_layout_builds++;
@@ -214,17 +216,20 @@ static bool viewport_layout_reserves_dock(yyjson_val *value, const char *dock)
 static bool resolve_layout_viewports(const slayer3d_game_data_runtime *runtime, yyjson_val *config,
                                      game_data_scene_world_viewport *out_viewports, int capacity, int *out_count)
 {
-    float viewport_width = 0.0f;
-    float viewport_height = 0.0f;
-    slayer3d_game_data_ui_viewport(runtime, &viewport_width, &viewport_height);
+    slayer3d_ui_layout_rect safe_viewport;
+    slayer3d_game_data_ui_viewport_rect(runtime, &safe_viewport);
 
     yyjson_val *bounds = obj_get(config, "bounds");
-    float left = viewport_bound_value(bounds, "x", 0.0f, viewport_width);
-    float top = viewport_bound_value(bounds, "y", 0.0f, viewport_height);
-    float width = viewport_bound_value(bounds, "width", viewport_width - left, viewport_width - left);
-    float height = viewport_bound_value(bounds, "height", viewport_height - top, viewport_height - top);
-    float right = SDL_min(left + width, viewport_width);
-    float bottom = SDL_min(top + height, viewport_height);
+    const float local_left = viewport_bound_value(bounds, "x", 0.0f, safe_viewport.w);
+    const float local_top = viewport_bound_value(bounds, "y", 0.0f, safe_viewport.h);
+    const float width =
+        viewport_bound_value(bounds, "width", safe_viewport.w - local_left, safe_viewport.w - local_left);
+    const float height =
+        viewport_bound_value(bounds, "height", safe_viewport.h - local_top, safe_viewport.h - local_top);
+    float left = safe_viewport.x + local_left;
+    float top = safe_viewport.y + local_top;
+    float right = SDL_min(left + width, safe_viewport.x + safe_viewport.w);
+    float bottom = SDL_min(top + height, safe_viewport.y + safe_viewport.h);
     const char *default_layout = json_string(config, "default_layout", NULL);
     const char *layout_name = default_layout;
     const char *state_key = json_string(config, "layout_key", NULL);
@@ -347,13 +352,13 @@ bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_run
     if (cache == NULL)
         return resolve_active_scene_world_viewports_uncached(runtime, out_viewports, capacity, out_count);
 
-    float viewport_width = 0.0f;
-    float viewport_height = 0.0f;
-    slayer3d_game_data_ui_viewport(runtime, &viewport_width, &viewport_height);
+    slayer3d_ui_layout_rect safe_viewport;
+    slayer3d_game_data_ui_viewport_rect(runtime, &safe_viewport);
     const Uint64 state_revision = slayer3d_properties_revision(runtime->scene_state);
     if (!cache->viewports_valid || cache->viewport_state_revision != state_revision ||
-        cache->viewport_scene_index != runtime->active_scene_index || cache->viewport_width != viewport_width ||
-        cache->viewport_height != viewport_height)
+        cache->viewport_scene_index != runtime->active_scene_index || cache->viewport_x != safe_viewport.x ||
+        cache->viewport_y != safe_viewport.y || cache->viewport_width != safe_viewport.w ||
+        cache->viewport_height != safe_viewport.h)
     {
         int count = 0;
         const Uint64 resolve_start = SDL_GetPerformanceCounter();
@@ -365,8 +370,10 @@ bool game_data_resolve_active_scene_world_viewports(const slayer3d_game_data_run
         }
         cache->viewport_state_revision = state_revision;
         cache->viewport_scene_index = runtime->active_scene_index;
-        cache->viewport_width = viewport_width;
-        cache->viewport_height = viewport_height;
+        cache->viewport_x = safe_viewport.x;
+        cache->viewport_y = safe_viewport.y;
+        cache->viewport_width = safe_viewport.w;
+        cache->viewport_height = safe_viewport.h;
         cache->viewport_count = count;
         cache->viewports_valid = true;
         cache->viewport_resolves++;
