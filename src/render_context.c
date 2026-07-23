@@ -120,7 +120,7 @@ void slayer3d_init_render_context_config(slayer3d_render_context_config *config)
     config->logical_width = 0;
     config->logical_height = 0;
     config->logical_size_policy = SLAYER3D_LOGICAL_SIZE_FIXED;
-    config->logical_presentation = SDL_LOGICAL_PRESENTATION_STRETCH;
+    config->logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 }
 
 bool slayer3d_resolve_logical_size(int authored_width, int authored_height, int output_width, int output_height,

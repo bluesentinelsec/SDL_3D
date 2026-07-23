@@ -77,7 +77,7 @@ TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigSetsDocumentedDefaults)
     EXPECT_EQ(0, config.logical_width);
     EXPECT_EQ(0, config.logical_height);
     EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_FIXED, config.logical_size_policy);
-    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_STRETCH, config.logical_presentation);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, config.logical_presentation);
 }
 
 TEST(SLAYER3DWindowConfig, InitWindowConfigSetsHighDpiDefault)
