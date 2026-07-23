@@ -239,8 +239,8 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     const char *env_backend_name;
     int render_width;
     int render_height;
-    size_t color_buffer_size;
-    size_t depth_buffer_size;
+    size_t color_buffer_size = 0;
+    size_t depth_buffer_size = 0;
 
     if (window == NULL)
     {
