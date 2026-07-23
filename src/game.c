@@ -502,20 +502,16 @@ static void slayer3d_game_sync_input_mouse_transform(const slayer3d_game_context
         return;
     }
 
-    const float scale_x = (float)window_width / (float)logical_width;
-    const float scale_y = (float)window_height / (float)logical_height;
-    if (slayer3d_get_render_context_logical_size_policy(ctx->renderer) == SLAYER3D_LOGICAL_SIZE_EXPAND)
+    SDL_FRect viewport;
+    if (!slayer3d_resolve_aspect_fit_viewport(logical_width, logical_height, window_width, window_height, &viewport) ||
+        viewport.w <= 0.0f || viewport.h <= 0.0f)
     {
-        slayer3d_input_set_mouse_position_transform(input, 1.0f / scale_x, 1.0f / scale_y, 0.0f, 0.0f);
+        SDL_ClearError();
+        slayer3d_input_set_mouse_position_transform(input, 1.0f, 1.0f, 0.0f, 0.0f);
         return;
     }
-    const float scale = scale_x < scale_y ? scale_x : scale_y;
-    const float viewport_width = (float)logical_width * scale;
-    const float viewport_height = (float)logical_height * scale;
-    const float viewport_x = ((float)window_width - viewport_width) * 0.5f;
-    const float viewport_y = ((float)window_height - viewport_height) * 0.5f;
-    slayer3d_input_set_mouse_position_transform(input, (float)logical_width / viewport_width,
-                                                (float)logical_height / viewport_height, viewport_x, viewport_y);
+    slayer3d_input_set_mouse_position_transform(input, (float)logical_width / viewport.w,
+                                                (float)logical_height / viewport.h, viewport.x, viewport.y);
 }
 
 /**

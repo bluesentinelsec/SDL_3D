@@ -141,6 +141,25 @@ TEST(SLAYER3DLogicalSize, RejectsInvalidDimensionsAndPolicies)
     EXPECT_FALSE(slayer3d_resolve_logical_size(1280, 720, 1920, 1080, SLAYER3D_LOGICAL_SIZE_EXPAND, nullptr, &height));
 }
 
+TEST(SLAYER3DLogicalSize, AspectFitViewportPreservesGeometryAfterAdaptiveRounding)
+{
+    SDL_FRect viewport{};
+    ASSERT_TRUE(slayer3d_resolve_aspect_fit_viewport(1280, 828, 3456, 2234, &viewport));
+
+    EXPECT_FLOAT_EQ(0.0f, viewport.y);
+    EXPECT_NEAR(1.237f, viewport.x, 0.01f);
+    EXPECT_NEAR(3453.53f, viewport.w, 0.01f);
+    EXPECT_FLOAT_EQ(2234.0f, viewport.h);
+    EXPECT_NEAR(viewport.w / 1280.0f, viewport.h / 828.0f, 0.0001f);
+}
+
+TEST(SLAYER3DLogicalSize, AspectFitViewportRejectsInvalidArguments)
+{
+    SDL_FRect viewport{};
+    EXPECT_FALSE(slayer3d_resolve_aspect_fit_viewport(0, 720, 1920, 1080, &viewport));
+    EXPECT_FALSE(slayer3d_resolve_aspect_fit_viewport(1280, 720, 1920, 1080, nullptr));
+}
+
 TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigRejectsNull)
 {
     SDL_ClearError();

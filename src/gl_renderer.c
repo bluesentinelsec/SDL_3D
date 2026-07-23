@@ -3609,25 +3609,18 @@ static bool gl_present(slayer3d_render_context *context)
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
 
-    /* Fixed canvases preserve their authored aspect. Expanded canvases already
-     * track the output aspect and fill the last sub-pixel rounding difference. */
+    /* Preserve logical geometry even when adaptive sizing leaves a fractional
+     * aspect remainder that cannot be represented by integer canvas units. */
     int win_w, win_h;
     SDL_GetWindowSizeInPixels(ctx->window, &win_w, &win_h);
 
-    int vp_w = win_w;
-    int vp_h = win_h;
-    int vp_x = 0;
-    int vp_y = 0;
-    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_FIXED)
-    {
-        float scale_x = (float)win_w / (float)ctx->logical_w;
-        float scale_y = (float)win_h / (float)ctx->logical_h;
-        float scale = (scale_x < scale_y) ? scale_x : scale_y;
-        vp_w = (int)((float)ctx->logical_w * scale);
-        vp_h = (int)((float)ctx->logical_h * scale);
-        vp_x = (win_w - vp_w) / 2;
-        vp_y = (win_h - vp_h) / 2;
-    }
+    SDL_FRect presentation_viewport;
+    if (!slayer3d_resolve_aspect_fit_viewport(ctx->logical_w, ctx->logical_h, win_w, win_h, &presentation_viewport))
+        return false;
+    const int vp_w = SDL_max(1, (int)SDL_floorf(presentation_viewport.w + 0.5f));
+    const int vp_h = SDL_max(1, (int)SDL_floorf(presentation_viewport.h + 0.5f));
+    const int vp_x = (win_w - vp_w) / 2;
+    const int vp_y = (win_h - vp_h) / 2;
 
     /* Bind default framebuffer, clear to black, set letterbox viewport. */
     gl->BindFramebuffer(GL_FRAMEBUFFER, 0);

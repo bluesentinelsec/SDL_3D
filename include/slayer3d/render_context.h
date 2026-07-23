@@ -283,6 +283,15 @@ extern "C"
     bool slayer3d_resolve_logical_size(int authored_width, int authored_height, int output_width, int output_height,
                                        slayer3d_logical_size_policy policy, int *out_width, int *out_height);
     /**
+     * @brief Resolve the largest centered, aspect-preserving viewport in an output.
+     *
+     * The returned rectangle uses output coordinates. Its scale is uniform on
+     * both axes, so presenting the logical canvas inside it cannot distort
+     * geometry. Any indivisible remainder is left as a centered gutter.
+     */
+    bool slayer3d_resolve_aspect_fit_viewport(int logical_width, int logical_height, int output_width,
+                                              int output_height, SDL_FRect *out_viewport);
+    /**
      * @brief Synchronize an adaptive logical canvas with its current window.
      *
      * Fixed contexts are unchanged. Adaptive contexts resize backend resources

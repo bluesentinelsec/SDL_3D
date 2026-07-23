@@ -159,11 +159,29 @@ bool slayer3d_resolve_logical_size(int authored_width, int authored_height, int 
     return true;
 }
 
+bool slayer3d_resolve_aspect_fit_viewport(int logical_width, int logical_height, int output_width, int output_height,
+                                          SDL_FRect *out_viewport)
+{
+    if (out_viewport == NULL)
+        return SDL_InvalidParamError("out_viewport");
+    if (logical_width <= 0 || logical_height <= 0 || output_width <= 0 || output_height <= 0)
+        return SDL_SetError("Logical and output dimensions must be positive.");
+
+    const float scale_x = (float)output_width / (float)logical_width;
+    const float scale_y = (float)output_height / (float)logical_height;
+    const float scale = SDL_min(scale_x, scale_y);
+    out_viewport->w = (float)logical_width * scale;
+    out_viewport->h = (float)logical_height * scale;
+    out_viewport->x = ((float)output_width - out_viewport->w) * 0.5f;
+    out_viewport->y = ((float)output_height - out_viewport->h) * 0.5f;
+    return true;
+}
+
 static bool slayer3d_get_render_output_size(SDL_Window *window, SDL_Renderer *renderer, int *out_width, int *out_height)
 {
     if (renderer != NULL)
     {
-        if (SDL_GetCurrentRenderOutputSize(renderer, out_width, out_height) && *out_width > 0 && *out_height > 0)
+        if (SDL_GetRenderOutputSize(renderer, out_width, out_height) && *out_width > 0 && *out_height > 0)
             return true;
         SDL_ClearError();
     }
@@ -293,7 +311,7 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
         if (renderer != NULL)
         {
             const SDL_RendererLogicalPresentation presentation =
-                local_config.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_STRETCH
+                local_config.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX
                                                                                  : local_config.logical_presentation;
             if (!SDL_SetRenderLogicalPresentation(renderer, render_width, render_height, presentation))
             {
@@ -574,21 +592,36 @@ bool slayer3d_get_render_context_safe_area(const slayer3d_render_context *contex
     float viewport_y = 0.0f;
     float viewport_width = (float)window_width;
     float viewport_height = (float)window_height;
-    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_FIXED &&
-        context->logical_presentation != SDL_LOGICAL_PRESENTATION_STRETCH &&
-        context->logical_presentation != SDL_LOGICAL_PRESENTATION_DISABLED)
+    if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ||
+        (context->logical_presentation != SDL_LOGICAL_PRESENTATION_STRETCH &&
+         context->logical_presentation != SDL_LOGICAL_PRESENTATION_DISABLED))
     {
-        const float scale_x = (float)window_width / (float)context->width;
-        const float scale_y = (float)window_height / (float)context->height;
-        float scale = SDL_min(scale_x, scale_y);
-        if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_OVERSCAN)
-            scale = SDL_max(scale_x, scale_y);
-        else if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_INTEGER_SCALE)
-            scale = SDL_max(SDL_floorf(scale), 1.0f);
-        viewport_width = (float)context->width * scale;
-        viewport_height = (float)context->height * scale;
-        viewport_x = ((float)window_width - viewport_width) * 0.5f;
-        viewport_y = ((float)window_height - viewport_height) * 0.5f;
+        if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ||
+            context->logical_presentation == SDL_LOGICAL_PRESENTATION_LETTERBOX)
+        {
+            SDL_FRect viewport;
+            if (!slayer3d_resolve_aspect_fit_viewport(context->width, context->height, window_width, window_height,
+                                                      &viewport))
+                return false;
+            viewport_x = viewport.x;
+            viewport_y = viewport.y;
+            viewport_width = viewport.w;
+            viewport_height = viewport.h;
+        }
+        else
+        {
+            const float scale_x = (float)window_width / (float)context->width;
+            const float scale_y = (float)window_height / (float)context->height;
+            float scale;
+            if (context->logical_presentation == SDL_LOGICAL_PRESENTATION_OVERSCAN)
+                scale = SDL_max(scale_x, scale_y);
+            else
+                scale = SDL_max(SDL_floorf(SDL_min(scale_x, scale_y)), 1.0f);
+            viewport_width = (float)context->width * scale;
+            viewport_height = (float)context->height * scale;
+            viewport_x = ((float)window_width - viewport_width) * 0.5f;
+            viewport_y = ((float)window_height - viewport_height) * 0.5f;
+        }
     }
 
     const float safe_left = SDL_max((float)safe.x, viewport_x);
@@ -664,7 +697,7 @@ static bool slayer3d_resize_render_context(slayer3d_render_context *context, int
         if (context->renderer != NULL)
         {
             const SDL_RendererLogicalPresentation presentation =
-                policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_STRETCH : fixed_presentation;
+                policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX : fixed_presentation;
             return SDL_SetRenderLogicalPresentation(context->renderer, width, height, presentation);
         }
         return true;
@@ -696,7 +729,7 @@ static bool slayer3d_resize_render_context(slayer3d_render_context *context, int
             new_depth_buffer[i] = 1.0f;
 
         const SDL_RendererLogicalPresentation presentation =
-            policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_STRETCH : fixed_presentation;
+            policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? SDL_LOGICAL_PRESENTATION_LETTERBOX : fixed_presentation;
         if (!SDL_SetRenderLogicalPresentation(context->renderer, width, height, presentation))
         {
             SDL_DestroyTexture(new_texture);

@@ -249,7 +249,7 @@ TEST_F(SDLVideoFixture, HighLevelSoftwareWindowExpandsLogicalCanvasToOutputAspec
     ASSERT_TRUE(SDL_GetRenderLogicalPresentation(renderer, &logical_width, &logical_height, &mode)) << SDL_GetError();
     EXPECT_EQ(expected_width, logical_width);
     EXPECT_EQ(expected_height, logical_height);
-    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_STRETCH, mode);
+    EXPECT_EQ(SDL_LOGICAL_PRESENTATION_LETTERBOX, mode);
     ASSERT_TRUE(slayer3d_clear_render_context(context, {16, 32, 64, 255})) << SDL_GetError();
     ASSERT_TRUE(slayer3d_present_render_context(context)) << SDL_GetError();
 
