@@ -210,6 +210,21 @@ static bool ui_widget_text_align_valid(const char *align)
            SDL_strcmp(align, "right") == 0;
 }
 
+static bool ui_widget_text_role_valid(const char *role)
+{
+    return role == NULL || SDL_strcmp(role, "body") == 0 || SDL_strcmp(role, "caption") == 0 ||
+           SDL_strcmp(role, "heading") == 0;
+}
+
+static slayer3d_ui_text_role parse_ui_widget_text_role(const char *role)
+{
+    if (role != NULL && SDL_strcmp(role, "caption") == 0)
+        return SLAYER3D_UI_TEXT_ROLE_CAPTION;
+    if (role != NULL && SDL_strcmp(role, "heading") == 0)
+        return SLAYER3D_UI_TEXT_ROLE_HEADING;
+    return SLAYER3D_UI_TEXT_ROLE_BODY;
+}
+
 static bool ui_widget_optional_string_len(yyjson_val *object, const char *key, size_t max_size)
 {
     yyjson_val *value = obj_get(object, key);
@@ -353,6 +368,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     }
     if (!ui_widget_optional_positive_number(node, "text_scale"))
         return validation_error(ctx, path, "UI widget text_scale must be positive when authored");
+    if (!ui_widget_text_role_valid(json_string(node, "text_role")))
+        return validation_error(ctx, path, "UI widget text_role must be body, caption, or heading when authored");
     if (!ui_widget_text_align_valid(json_string(node, "align")))
         return validation_error(ctx, path, "UI widget align must be left, center, or right when authored");
     if (!ui_widget_optional_integer(node, "layer") || !ui_widget_optional_integer(node, "z"))
@@ -717,6 +734,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.action = json_string(node, "action");
     desc.has_text_color = obj_get(node, "text_color") != NULL;
     desc.text_color = ui_widget_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
+    desc.text_role = parse_ui_widget_text_role(json_string(node, "text_role"));
     desc.text_scale = parse_ui_widget_float(node, "text_scale", 0.0f);
     desc.text_align = parse_ui_widget_text_align(json_string(node, "align"));
     yyjson_val *fill_color = obj_get(node, "color");
@@ -787,6 +805,30 @@ static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, co
         ok = validation_error(ctx, path, "UI widget layout could not be resolved");
     slayer3d_ui_layout_destroy(layout);
     return ok;
+}
+
+static bool validate_ui_typography_style(validation_context *ctx, yyjson_val *typography, const char *role,
+                                         const char *path)
+{
+    yyjson_val *style = obj_get(typography, role);
+    if (style == NULL)
+        return true;
+    if (!yyjson_is_obj(style))
+        return validation_error(ctx, path, "UI typography %s style must be an object", role);
+    if (!ui_widget_optional_positive_number(style, "size"))
+        return validation_error(ctx, path, "UI typography %s size must be positive when authored", role);
+    return validate_ui_tool_color(ctx, style, "color", path);
+}
+
+static bool validate_ui_typography(validation_context *ctx, yyjson_val *typography, const char *path)
+{
+    if (typography == NULL)
+        return true;
+    if (!yyjson_is_obj(typography))
+        return validation_error(ctx, path, "UI typography must be an object");
+    return validate_ui_typography_style(ctx, typography, "body", path) &&
+           validate_ui_typography_style(ctx, typography, "caption", path) &&
+           validate_ui_typography_style(ctx, typography, "heading", path);
 }
 
 bool validate_ui_tool_color(validation_context *ctx, yyjson_val *object, const char *key, const char *path)
@@ -954,8 +996,9 @@ bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *na
     yyjson_val *panels = obj_get(ui, "panels");
     yyjson_val *inspectors = obj_get(ui, "inspectors");
     yyjson_val *widgets = obj_get(ui, "widgets");
+    yyjson_val *typography = obj_get(ui, "typography");
     if (texts == NULL && images == NULL && rects == NULL && menus == NULL && panels == NULL && inspectors == NULL &&
-        widgets == NULL)
+        widgets == NULL && typography == NULL)
     {
         return true;
     }
@@ -967,7 +1010,8 @@ bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *na
         return validation_error(ctx, "$.ui.rects", "UI rectangles must be an array");
     if (menus != NULL && !yyjson_is_arr(menus))
         return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
-    if (!validate_ui_panels(ctx, panels, "$.ui.panels", names) ||
+    if (!validate_ui_typography(ctx, typography, "$.ui.typography") ||
+        !validate_ui_panels(ctx, panels, "$.ui.panels", names) ||
         !validate_ui_inspectors(ctx, inspectors, "$.ui.inspectors", names) ||
         !validate_ui_widgets(ctx, widgets, "$.ui.widgets", names))
     {

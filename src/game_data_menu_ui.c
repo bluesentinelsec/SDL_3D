@@ -1775,7 +1775,8 @@ static slayer3d_game_data_ui_align retained_ui_text_align(const slayer3d_ui_layo
     return SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
 }
 
-static bool retained_ui_text_from_layout_model(const slayer3d_ui_layout_model *layout,
+static bool retained_ui_text_from_layout_model(const slayer3d_game_data_runtime *runtime,
+                                               const slayer3d_ui_layout_model *layout,
                                                slayer3d_game_data_ui_text_fn callback, void *userdata)
 {
     if (layout == NULL)
@@ -1818,12 +1819,16 @@ static bool retained_ui_text_from_layout_model(const slayer3d_ui_layout_model *l
             text.x = command->rect.x + command->rect.w * 0.5f;
             text.centered = true;
         }
-        text.y = command->rect.y + command->rect.h * 0.35f;
         text.normalized = false;
-        text.scale = command->text_scale > 0.0f ? command->text_scale : (command->option_index >= 0 ? 0.46f : 0.5f);
-        text.color = command->has_text_color ? command->text_color
-                                             : (command->selected ? (slayer3d_color){255, 255, 255, 255}
-                                                                  : (slayer3d_color){215, 224, 238, 245});
+        slayer3d_game_data_font_asset font_asset;
+        const bool has_font_asset = slayer3d_game_data_get_font_asset(runtime, text.font, &font_asset);
+        const float font_size = has_font_asset && font_asset.size > 0.0f ? font_asset.size : 14.0f;
+        text.scale = command->text_scale > 0.0f ? command->text_scale : command->text_size / font_size;
+        const float text_height = font_size * text.scale;
+        text.y = command->rect.y + SDL_max((command->rect.h - text_height) * 0.5f, 0.0f);
+        text.color = command->has_text_color
+                         ? command->text_color
+                         : (command->selected ? (slayer3d_color){255, 255, 255, 255} : command->role_text_color);
         text.has_clip_rect = command->has_clip_rect;
         text.clip_x = command->clip_rect.x;
         text.clip_y = command->clip_rect.y;
@@ -1880,7 +1885,7 @@ bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_ru
     slayer3d_ui_layout_model *layout = game_data_prepare_active_ui_widget_layout(runtime, metrics);
     if (layout == NULL)
         return true;
-    const bool retained_ok = retained_ui_text_from_layout_model(layout, callback, userdata);
+    const bool retained_ok = retained_ui_text_from_layout_model(runtime, layout, callback, userdata);
     if (!retained_ok)
         return true;
     return true;
@@ -2466,7 +2471,7 @@ bool slayer3d_game_data_for_each_ui_layered(const slayer3d_game_data_runtime *ru
                  for_each_ui_inspector_text_root(runtime, metrics, roots[root_index], text_callback, userdata) &&
                  for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], text_callback, userdata);
         }
-        ok = ok && retained_ui_text_from_layout_model(layout, text_callback, userdata);
+        ok = ok && retained_ui_text_from_layout_model(runtime, layout, text_callback, userdata);
     }
 
     return ok;

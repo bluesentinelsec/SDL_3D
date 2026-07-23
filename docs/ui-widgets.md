@@ -234,12 +234,42 @@ the C-side computation instead of adding conditions to every sensor.
 
 ## Styling
 
+Retained text uses semantic theme roles. Widgets default to `body`; author
+`text_role` as `caption` or `heading` only when the content has that semantic
+purpose. Role sizes are logical pixels, so display density improves glyph
+atlas sharpness without changing layout size.
+
+```json
+{
+  "ui": {
+    "typography": {
+      "body": { "size": 14, "color": [215, 224, 238, 245] },
+      "caption": { "size": 12, "color": [157, 171, 190, 235] },
+      "heading": { "size": 14, "color": [238, 244, 252, 255] }
+    },
+    "widgets": [
+      {
+        "id": "ui.inspector.title",
+        "type": "label",
+        "text": "Inspector",
+        "text_role": "heading",
+        "w": 120,
+        "h": 24
+      }
+    ]
+  }
+}
+```
+
 Nodes may author:
 
 - `color` or `fill_color`: background fill color.
 - `border_color` and `border_thickness`: optional border.
 - `font`, `text` or `label`: static text content.
-- `text_color`, `text_scale`, and `align`: text presentation.
+- `text_role`: `body` (the default), `caption`, or `heading`.
+- `text_color`: an explicit per-node override of the role color.
+- `text_scale`: a legacy explicit scale override for exceptional content.
+- `align`: `left`, `center`, or `right`.
 
 Colors are `[r, g, b]` or `[r, g, b, a]` byte arrays. `align` may be `left`,
 `center`, or `right`.

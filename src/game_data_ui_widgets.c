@@ -87,6 +87,34 @@ static slayer3d_ui_layout_text_align ui_widget_text_align_from_string(const char
     return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO;
 }
 
+static slayer3d_ui_text_role ui_widget_text_role_from_string(const char *role)
+{
+    if (role != NULL && SDL_strcmp(role, "caption") == 0)
+        return SLAYER3D_UI_TEXT_ROLE_CAPTION;
+    if (role != NULL && SDL_strcmp(role, "heading") == 0)
+        return SLAYER3D_UI_TEXT_ROLE_HEADING;
+    return SLAYER3D_UI_TEXT_ROLE_BODY;
+}
+
+static void ui_widget_apply_text_style(yyjson_val *typography, const char *name, slayer3d_ui_text_style *style)
+{
+    yyjson_val *authored = obj_get(typography, name);
+    if (!yyjson_is_obj(authored) || style == NULL)
+        return;
+    style->size = json_float(authored, "size", style->size);
+    style->color = json_color(authored, "color", style->color);
+}
+
+static void ui_widget_apply_typography(yyjson_val *root, slayer3d_ui_typography_theme *theme)
+{
+    yyjson_val *typography = obj_get(obj_get(root, "ui"), "typography");
+    if (!yyjson_is_obj(typography) || theme == NULL)
+        return;
+    ui_widget_apply_text_style(typography, "body", &theme->body);
+    ui_widget_apply_text_style(typography, "caption", &theme->caption);
+    ui_widget_apply_text_style(typography, "heading", &theme->heading);
+}
+
 static const char *ui_widget_string(yyjson_val *node, const char *primary_key, const char *secondary_key)
 {
     const char *value = json_string(node, primary_key, NULL);
@@ -297,6 +325,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.action = json_string(node, "action", NULL);
     desc.has_text_color = obj_get(node, "text_color") != NULL;
     desc.text_color = json_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
+    desc.text_role = ui_widget_text_role_from_string(json_string(node, "text_role", NULL));
     desc.text_scale = json_float(node, "text_scale", 0.0f);
     desc.text_align = ui_widget_text_align_from_string(json_string(node, "align", NULL));
     yyjson_val *fill_color = obj_get(node, "color");
@@ -517,9 +546,15 @@ bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_r
         return false;
 
     slayer3d_ui_layout_clear(layout);
+    slayer3d_ui_typography_theme typography = slayer3d_ui_typography_theme_default();
+    ui_widget_apply_typography(runtime_root(runtime), &typography);
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    if (scene != NULL)
+        ui_widget_apply_typography(scene->root, &typography);
+    if (!slayer3d_ui_layout_set_typography_theme(layout, &typography))
+        return false;
     if (!ui_widget_add_root_widgets(runtime, runtime_root(runtime), metrics, layout))
         return false;
-    const scene_entry *scene = active_scene_entry_const(runtime);
     if (scene != NULL && !ui_widget_add_root_widgets(runtime, scene->root, metrics, layout))
         return false;
     slayer3d_ui_layout_rect viewport;
