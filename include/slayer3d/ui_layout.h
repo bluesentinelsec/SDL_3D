@@ -145,6 +145,8 @@ extern "C"
         const char *clip_rect_id;
         int layer;
         bool interactive;
+        /** @brief Treat this interactive node as its owning window's pointer drag handle. */
+        bool drag_handle;
         const char *text;
         const char *font;
         const char *action;
@@ -241,6 +243,8 @@ extern "C"
         slayer3d_ui_layout_rect clip_rect;
         int layer;
         bool interactive;
+        /** @brief True when this node is its owning window's pointer drag handle. */
+        bool drag_handle;
         /** @brief True when this resolved node is an independently movable root window. */
         bool window;
         /** @brief True when this root window owns the front-most window stacking context. */
@@ -315,6 +319,8 @@ extern "C"
         bool hovered;
         bool active;
         bool selected;
+        /** @brief True when this command paints a window drag handle. */
+        bool drag_handle;
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         bool popup;
@@ -337,6 +343,8 @@ extern "C"
         bool hovered;
         bool active;
         bool selected;
+        /** @brief True when this region begins a window drag gesture. */
+        bool drag_handle;
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         /** @brief True when this region captures an outside click for its owner popup. */

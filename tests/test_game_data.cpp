@@ -25335,8 +25335,31 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
         const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
         EXPECT_NE(hit, nullptr);
         if (hit != nullptr)
+        {
             EXPECT_STREQ(hit->id, header_id);
+            EXPECT_TRUE(hit->drag_handle);
+        }
         slayer3d_ui_layout_destroy(layout);
+    };
+    auto expect_drag_handle_hover = [&](float x, float y, const char *header_id) {
+        pointer_move(x, y);
+        struct DragHandleCapture
+        {
+            const char *id = nullptr;
+            bool hovered = false;
+        } capture{header_id, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<DragHandleCapture *>(userdata);
+            if (rect != nullptr && rect->name != nullptr && SDL_strcmp(rect->name, capture->id) == 0 &&
+                rect->w > 20.0f && rect->h > 20.0f && rect->color.r == 54 && rect->color.g == 102 &&
+                rect->color.b == 166 && rect->color.a == 248)
+            {
+                capture->hovered = true;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.hovered) << header_id << " should render drag-handle hover feedback";
     };
     auto expect_visible_text = [&](const char *id, const char *expected) {
         struct TextCapture
@@ -25477,6 +25500,7 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     slayer3d_ui_layout_destroy(layout);
 
     expect_header_hit(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
+    expect_drag_handle_hover(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
     drag(324.0f, 96.0f, 640.0f, 650.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
     EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 500.0f);

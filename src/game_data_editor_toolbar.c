@@ -615,7 +615,7 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
         return false;
     if (config.front_key != NULL)
         slayer3d_properties_set_string(state, config.front_key, window->id);
-    const bool starts_drag = config.drag_handle != NULL && SDL_strcmp(hit->id, config.drag_handle) == 0;
+    const bool starts_drag = hit->drag_handle;
     const bool starts_resize = config.resize_handle != NULL && SDL_strcmp(hit->id, config.resize_handle) == 0 &&
                                window->dock != SLAYER3D_UI_LAYOUT_DOCK_LEFT &&
                                window->dock != SLAYER3D_UI_LAYOUT_DOCK_RIGHT;

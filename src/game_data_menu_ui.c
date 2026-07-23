@@ -2114,6 +2114,10 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
     {
         return (slayer3d_color){38, 104, 56, 255};
     }
+    if (command->drag_handle && command->active)
+        return (slayer3d_color){42, 58, 78, 248};
+    if (command->drag_handle && command->hovered)
+        return (slayer3d_color){54, 102, 166, 248};
     if (command->has_fill_color)
         return command->fill_color;
     if (command->window)
@@ -2145,6 +2149,8 @@ static slayer3d_color retained_ui_command_border(const slayer3d_ui_layout_render
         return (slayer3d_color){0, 0, 0, 0};
     if (command->selected)
         return (slayer3d_color){96, 255, 128, 255};
+    if (command->drag_handle && command->hovered)
+        return (slayer3d_color){105, 142, 178, 245};
     if (command->has_border_color)
         return command->border_color;
     if (command->popup)

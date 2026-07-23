@@ -1243,6 +1243,49 @@ TEST(SLAYER3DUI, RetainedButtonReportsActionAndPointerState)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedDragHandleReportsSemanticPointerState)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc header{};
+    header.id = "inspector.header";
+    header.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    header.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    header.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    header.rect = {10.0f, 20.0f, 180.0f, 32.0f};
+    header.drag_handle = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &header));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 30.0f;
+    input.pointer_y = 30.0f;
+    input.primary_down = true;
+    input.primary_pressed = true;
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, nullptr));
+
+    const slayer3d_ui_layout_resolved_node *resolved =
+        slayer3d_ui_layout_find_resolved_node(layout, "inspector.header");
+    ASSERT_NE(resolved, nullptr);
+    EXPECT_TRUE(resolved->interactive);
+    EXPECT_TRUE(resolved->drag_handle);
+
+    const slayer3d_ui_layout_render_command *render = slayer3d_ui_layout_render_command_at(layout, 0);
+    ASSERT_NE(render, nullptr);
+    EXPECT_TRUE(render->drag_handle);
+    EXPECT_TRUE(render->hovered);
+    EXPECT_TRUE(render->active);
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, 30.0f, 30.0f);
+    ASSERT_NE(hit, nullptr);
+    EXPECT_TRUE(hit->drag_handle);
+    EXPECT_TRUE(hit->hovered);
+    EXPECT_TRUE(hit->active);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedSelectedStateAppearsInRenderMetadata)
 {
     slayer3d_ui_layout_model *layout = nullptr;

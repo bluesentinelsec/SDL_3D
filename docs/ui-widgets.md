@@ -172,6 +172,10 @@ on the corresponding dock axis. Window roots paint an opaque surface by
 default and form stacking contexts, so one window's descendants cannot bleed
 through a window above it.
 
+The retained layout marks the named descendant as a semantic drag handle.
+That role makes the handle interactive and provides standard hover and pressed
+feedback without requiring per-window styling or editor-specific hit tests.
+
 ```json
 {
   "id": "ui.inspector.panel",
