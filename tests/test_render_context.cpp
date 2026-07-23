@@ -273,7 +273,12 @@ TEST_F(SDLVideoFixture, AdaptiveSoftwareCanvasTracksWindowResizes)
     SDL_Window *window = nullptr;
     slayer3d_render_context *context = nullptr;
     ASSERT_TRUE(slayer3d_create_window(&config, &window, &context)) << SDL_GetError();
-    ASSERT_TRUE(SDL_SetWindowSize(window, 800, 400)) << SDL_GetError();
+    if (!SDL_SetWindowSize(window, 800, 400))
+    {
+        const std::string reason = SDL_GetError();
+        slayer3d_destroy_window(window, context);
+        GTEST_SKIP() << "Platform does not support programmatic window resizing: " << reason;
+    }
     ASSERT_TRUE(SDL_SyncWindow(window)) << SDL_GetError();
 
     int output_width = 0;

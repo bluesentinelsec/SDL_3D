@@ -508,7 +508,7 @@ void slayer3d_ui_begin_frame_ex(slayer3d_ui_context *ui, slayer3d_render_context
     SDL_GetWindowSize(window, &win_w, &win_h);
     if (win_w > 0 && win_h > 0 && lw > 0 && lh > 0)
     {
-        SDL_FRect viewport;
+        SDL_FRect viewport = {0};
         if (slayer3d_resolve_aspect_fit_viewport(lw, lh, win_w, win_h, &viewport))
         {
             slayer3d_ui_set_mouse_transform(ui, (float)lw / viewport.w, (float)lh / viewport.h, viewport.x, viewport.y);

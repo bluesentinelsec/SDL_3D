@@ -502,7 +502,7 @@ static void slayer3d_game_sync_input_mouse_transform(const slayer3d_game_context
         return;
     }
 
-    SDL_FRect viewport;
+    SDL_FRect viewport = {0};
     if (!slayer3d_resolve_aspect_fit_viewport(logical_width, logical_height, window_width, window_height, &viewport) ||
         viewport.w <= 0.0f || viewport.h <= 0.0f)
     {

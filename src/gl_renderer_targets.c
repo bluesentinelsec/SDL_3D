@@ -138,7 +138,7 @@ static bool gl_presentation_viewport_size(slayer3d_gl_context *ctx, int logical_
         return SDL_SetError("The GL window does not currently expose a valid pixel size.");
     }
 
-    SDL_FRect viewport;
+    SDL_FRect viewport = {0};
     if (!slayer3d_resolve_aspect_fit_viewport(logical_width, logical_height, output_width, output_height, &viewport))
         return false;
     *out_width = SDL_max(1, (int)SDL_floorf(viewport.w + 0.5f));

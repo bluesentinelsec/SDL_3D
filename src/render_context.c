@@ -599,7 +599,7 @@ bool slayer3d_get_render_context_safe_area(const slayer3d_render_context *contex
         if (context->logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ||
             context->logical_presentation == SDL_LOGICAL_PRESENTATION_LETTERBOX)
         {
-            SDL_FRect viewport;
+            SDL_FRect viewport = {0};
             if (!slayer3d_resolve_aspect_fit_viewport(context->width, context->height, window_width, window_height,
                                                       &viewport))
                 return false;

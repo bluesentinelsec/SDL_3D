@@ -3614,7 +3614,7 @@ static bool gl_present(slayer3d_render_context *context)
     int win_w, win_h;
     SDL_GetWindowSizeInPixels(ctx->window, &win_w, &win_h);
 
-    SDL_FRect presentation_viewport;
+    SDL_FRect presentation_viewport = {0};
     if (!slayer3d_resolve_aspect_fit_viewport(ctx->logical_w, ctx->logical_h, win_w, win_h, &presentation_viewport))
         return false;
     const int vp_w = SDL_max(1, (int)SDL_floorf(presentation_viewport.w + 0.5f));
