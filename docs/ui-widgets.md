@@ -49,6 +49,11 @@ Supported node types are:
 - `image` for thumbnails and icons.
 - `scroll` for vertically scrolling panes.
 
+Interactive retained controls receive hover and active visual states by
+default. Buttons in an authored panel use the same hover feedback as
+synthesized dropdown options; menu authors do not add per-button hover state
+or pointer-coordinate conditions.
+
 ### Scroll Panes
 
 `scroll` containers own their children the way a Tk or GTK scrolled window
@@ -167,6 +172,13 @@ on the corresponding dock axis. Window roots paint an opaque surface by
 default and form stacking contexts, so one window's descendants cannot bleed
 through a window above it.
 
+The retained layout marks the named descendant as a semantic drag handle.
+That role makes the full handle interactive without requiring editor-specific
+hit tests. A `drag_indicator` widget placed anywhere inside the same window
+automatically follows that handle's hover and pressed state. It renders the
+standard compact three-bar grip, keeping visual feedback bounded while the
+larger title bar remains easy to grab.
+
 ```json
 {
   "id": "ui.inspector.panel",
@@ -226,6 +238,10 @@ pane's resolved geometry, wheel input over the pane adjusts its `scroll_key`
 (one item per notch for lists, 40px for panes, overridable with
 `scroll_step`), and events over panes are consumed before the world/canvas.
 Clicks outside an open dropdown popup dismiss it and are likewise consumed.
+Transient panels and menus can author `outside_click_action`; the retained
+layout synthesizes a full-viewport hit region immediately behind the node.
+Clicks inside still reach the node or its children, while clicks outside emit
+the authored action and cannot propagate to the canvas.
 
 Bare-key editor shortcuts gate on the single scene fact
 `editor.ui.text_entry.active`, published by the runtime from the live

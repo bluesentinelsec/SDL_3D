@@ -106,6 +106,11 @@ static bool editor_hit_is_synthesized_scrollbar(const slayer3d_ui_layout_hit_reg
     return id_len >= suffix_len && SDL_strcmp(hit->id + id_len - suffix_len, SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX) == 0;
 }
 
+static bool editor_hit_is_outside_click_capture(const slayer3d_ui_layout_hit_region *hit)
+{
+    return hit != NULL && hit->outside_click;
+}
+
 typedef struct editor_ui_window_config
 {
     const char *id;
@@ -610,7 +615,7 @@ static bool editor_handle_ui_window_pointer(slayer3d_game_data_runtime *runtime,
         return false;
     if (config.front_key != NULL)
         slayer3d_properties_set_string(state, config.front_key, window->id);
-    const bool starts_drag = config.drag_handle != NULL && SDL_strcmp(hit->id, config.drag_handle) == 0;
+    const bool starts_drag = hit->drag_handle;
     const bool starts_resize = config.resize_handle != NULL && SDL_strcmp(hit->id, config.resize_handle) == 0 &&
                                window->dock != SLAYER3D_UI_LAYOUT_DOCK_LEFT &&
                                window->dock != SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
@@ -1187,7 +1192,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
         editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_liquid_panel(hit) ||
         editor_hit_is_skybox_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
-        console_event_active || window_event_active)
+        editor_hit_is_outside_click_capture(hit) || console_event_active || window_event_active)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

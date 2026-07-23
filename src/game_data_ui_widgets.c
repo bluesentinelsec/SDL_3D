@@ -31,6 +31,8 @@ static slayer3d_ui_layout_node_type ui_widget_type_from_string(const char *type)
         return SLAYER3D_UI_LAYOUT_NODE_IMAGE;
     if (SDL_strcmp(type, "scroll") == 0)
         return SLAYER3D_UI_LAYOUT_NODE_SCROLL;
+    if (SDL_strcmp(type, "drag_indicator") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR;
     return SLAYER3D_UI_LAYOUT_NODE_PANEL;
 }
 
@@ -275,7 +277,8 @@ static const char *ui_widget_dynamic_text(const slayer3d_game_data_runtime *runt
 }
 
 static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_ui_metrics *metrics,
-                               yyjson_val *node, const char *parent_id, slayer3d_ui_layout_model *layout)
+                               yyjson_val *node, const char *parent_id, const char *window_drag_handle_id,
+                               slayer3d_ui_layout_model *layout)
 {
     yyjson_val *visible_if = obj_get(node, "visible_if");
     if (visible_if != NULL && !eval_data_condition(runtime, visible_if, metrics))
@@ -323,6 +326,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.text = ui_widget_dynamic_text(runtime, metrics, node, text_buffer, sizeof(text_buffer));
     desc.font = json_string(node, "font", NULL);
     desc.action = json_string(node, "action", NULL);
+    desc.outside_click_action = json_string(node, "outside_click_action", NULL);
     desc.has_text_color = obj_get(node, "text_color") != NULL;
     desc.text_color = json_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
     desc.text_role = ui_widget_text_role_from_string(json_string(node, "text_role", NULL));
@@ -350,6 +354,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     yyjson_val *window = obj_get(node, "window");
     if (yyjson_is_obj(window))
     {
+        window_drag_handle_id = json_string(window, "drag_handle", NULL);
         desc.window = true;
         const char *default_dock = json_string(window, "default_dock", "none");
         const char *dock = ui_widget_scene_string(runtime, json_string(window, "dock_key", NULL), default_dock);
@@ -365,6 +370,10 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.dock_width = json_float(window, "dock_width", 0.0f);
         desc.dock_height = json_float(window, "dock_height", 0.0f);
     }
+    desc.drag_handle =
+        desc.id != NULL && window_drag_handle_id != NULL && SDL_strcmp(desc.id, window_drag_handle_id) == 0;
+    if (desc.type == SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR)
+        desc.state_source_id = window_drag_handle_id;
     desc.scroll_key = json_string(node, "scroll_key", NULL);
     float pane_scroll = 0.0f;
     if (ui_widget_scene_float(runtime, desc.scroll_key, &pane_scroll))
@@ -396,7 +405,7 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
 
     yyjson_val *children = obj_get(node, "children");
     for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
-        if (!ui_widget_add_node(runtime, metrics, yyjson_arr_get(children, i), desc.id, layout))
+        if (!ui_widget_add_node(runtime, metrics, yyjson_arr_get(children, i), desc.id, window_drag_handle_id, layout))
             return false;
     return true;
 }
@@ -406,7 +415,7 @@ static bool ui_widget_add_root_widgets(const slayer3d_game_data_runtime *runtime
 {
     yyjson_val *widgets = obj_get(obj_get(root, "ui"), "widgets");
     for (size_t i = 0; yyjson_is_arr(widgets) && i < yyjson_arr_size(widgets); ++i)
-        if (!ui_widget_add_node(runtime, metrics, yyjson_arr_get(widgets, i), NULL, layout))
+        if (!ui_widget_add_node(runtime, metrics, yyjson_arr_get(widgets, i), NULL, NULL, layout))
             return false;
     return true;
 }

@@ -11248,6 +11248,15 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
             "UI widget action must be a non-empty string",
         },
         {
+            "bad_outside_click_action",
+            R"json({
+  "widgets": [
+    { "id": "menu", "type": "panel", "w": 100, "h": 100, "outside_click_action": "" }
+  ]
+})json",
+            "UI widget outside_click_action must be a non-empty string",
+        },
+        {
             "bad_font",
             R"json({
   "widgets": [
@@ -20129,6 +20138,7 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     seed_editor_shell_test_cube(runtime);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
@@ -24190,17 +24200,18 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
-    auto resolved_file_panel_color = [&]() {
+    auto resolved_file_rect_color = [&](const char *expected_name) {
         struct Capture
         {
             slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
             slayer3d_color color{0, 0, 0, 0};
             bool found = false;
-        } capture{runtime, {}, false};
+        } capture{runtime, expected_name, {}, false};
         auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
             auto *capture = static_cast<Capture *>(userdata);
-            if (rect == nullptr || rect->name == nullptr ||
-                std::string(rect->name) != "ui.editor_shell.file_menu.panel")
+            if (capture->found || rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                std::string(rect->name) != capture->name)
                 return true;
             slayer3d_game_data_ui_rect resolved{};
             bool visible = false;
@@ -24212,7 +24223,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
             return true;
         };
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
-        EXPECT_TRUE(capture.found);
+        EXPECT_TRUE(capture.found) << expected_name;
         return capture.color;
     };
     auto resolved_rect_layer = [&](const char *expected_name) {
@@ -24333,7 +24344,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(file_exit_region.found);
     EXPECT_EQ(file_exit_region.hit.action, "editor.file.exit");
     std::vector<std::string> file_rects = visible_file_rects();
-    slayer3d_color file_panel_color = resolved_file_panel_color();
+    slayer3d_color file_panel_color = resolved_file_rect_color("ui.editor_shell.file_menu.panel");
     EXPECT_EQ(file_panel_color.a, 255);
     const int file_panel_layer = resolved_rect_layer("ui.editor_shell.file_menu.panel");
     EXPECT_EQ(file_panel_layer, 500);
@@ -24448,6 +24459,32 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+
+    SDL_Event file_hover{};
+    file_hover.type = SDL_EVENT_MOUSE_MOTION;
+    file_hover.motion.x = file_open_region.rect.x + file_open_region.rect.w * 0.5f;
+    file_hover.motion.y = file_open_region.rect.y + file_open_region.rect.h * 0.5f;
+    slayer3d_input_process_event(input, &file_hover);
+    slayer3d_input_update(input, input_tick++);
+    const slayer3d_color hovered_file_button = resolved_file_rect_color("ui.editor_shell.file_menu.open.button");
+    EXPECT_EQ(hovered_file_button.r, 54);
+    EXPECT_EQ(hovered_file_button.g, 102);
+    EXPECT_EQ(hovered_file_button.b, 166);
+    EXPECT_EQ(hovered_file_button.a, 248);
+    const slayer3d_color idle_file_button = resolved_file_rect_color("ui.editor_shell.file_menu.save.button");
+    EXPECT_EQ(idle_file_button.r, 26);
+    EXPECT_EQ(idle_file_button.g, 35);
+    EXPECT_EQ(idle_file_button.b, 48);
+    EXPECT_EQ(idle_file_button.a, 242);
+
+    HitSummary outside_file_menu_hit = retained_ui_hit(640.0f, 400.0f);
+    EXPECT_EQ(outside_file_menu_hit.id, "ui.editor_shell.file_menu.panel.outside");
+    EXPECT_EQ(outside_file_menu_hit.action, "editor.file.close");
+    const std::string mode_before_file_dismiss = slayer3d_properties_get_string(scene_state, "editor.tool.mode", "");
+    click_editor(640.0f, 400.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
+    EXPECT_EQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), mode_before_file_dismiss);
+
     SDL_Event motion_event{};
     motion_event.type = SDL_EVENT_MOUSE_MOTION;
     motion_event.motion.x = 48.0f;
@@ -25298,7 +25335,47 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
         const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, x, y);
         EXPECT_NE(hit, nullptr);
         if (hit != nullptr)
+        {
             EXPECT_STREQ(hit->id, header_id);
+            EXPECT_TRUE(hit->drag_handle);
+        }
+        slayer3d_ui_layout_destroy(layout);
+    };
+    auto expect_drag_handle_hover = [&](float x, float y, const char *header_id, const char *indicator_id) {
+        pointer_move(x, y);
+        struct DragHandleCapture
+        {
+            const char *header_id = nullptr;
+            const char *indicator_id = nullptr;
+            bool indicator_hovered = false;
+            bool full_header_highlighted = false;
+        } capture{header_id, indicator_id, false, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<DragHandleCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr)
+                return true;
+            const bool hover_color = rect->color.r == 54 && rect->color.g == 102 && rect->color.b == 166;
+            if (SDL_strcmp(rect->name, capture->indicator_id) == 0 && rect->w >= 20.0f && rect->h >= 18.0f &&
+                rect->w <= 28.0f && rect->h <= 24.0f && hover_color && rect->color.a == 210)
+            {
+                capture->indicator_hovered = true;
+            }
+            if (SDL_strcmp(rect->name, capture->header_id) == 0 && rect->w > 28.0f && hover_color)
+                capture->full_header_highlighted = true;
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.indicator_hovered) << indicator_id << " should render bounded drag-handle hover feedback";
+        EXPECT_FALSE(capture.full_header_highlighted) << header_id << " should remain a neutral drag target";
+    };
+    auto expect_drag_indicator = [&](const char *indicator_id, const char *header_id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *indicator = slayer3d_ui_layout_find_resolved_node(layout, indicator_id);
+        ASSERT_NE(indicator, nullptr);
+        EXPECT_EQ(indicator->type, SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR);
+        EXPECT_STREQ(indicator->state_source_id, header_id);
         slayer3d_ui_layout_destroy(layout);
     };
     auto expect_visible_text = [&](const char *id, const char *expected) {
@@ -25322,11 +25399,11 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
         EXPECT_TRUE(capture.found) << id << " should render '" << expected << "'";
     };
     auto expect_window_floats_and_redocks = [&](const char *signal, const char *id, const char *header_id,
-                                                const char *drag_hint_id, const char *close_label_id,
+                                                const char *drag_indicator_id, const char *close_label_id,
                                                 const char *dock_key) {
         emit_signal(signal);
         EXPECT_STREQ(slayer3d_properties_get_string(scene_state, dock_key, ""), "right");
-        expect_visible_text(drag_hint_id, "drag");
+        expect_drag_indicator(drag_indicator_id, header_id);
         expect_visible_text(close_label_id, "close");
         slayer3d_ui_layout_rect rect = resolved_window_rect(id);
         expect_header_hit(rect.x + 12.0f, rect.y + 16.0f, header_id);
@@ -25371,7 +25448,7 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     emit_signal("signal.editor.palette.game_object");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
                  "ui.editor_shell.actor_viewer.panel");
-    expect_visible_text("ui.editor_shell.actor_viewer.drag_hint", "drag");
+    expect_drag_indicator("ui.editor_shell.actor_viewer.drag_indicator", "ui.editor_shell.actor_viewer.header");
     expect_visible_text("ui.editor_shell.actor_viewer.close.label", "close");
     slayer3d_ui_layout_rect initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
     const float initial_drag_x = initial_things_rect.x + 12.0f;
@@ -25440,6 +25517,8 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     slayer3d_ui_layout_destroy(layout);
 
     expect_header_hit(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
+    expect_drag_handle_hover(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header",
+                             "ui.editor_shell.actor_viewer.drag_indicator");
     drag(324.0f, 96.0f, 640.0f, 650.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "none");
     EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.y", 0.0f), 500.0f);
@@ -25453,17 +25532,19 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.viewer.dock", ""), "right");
 
     expect_window_floats_and_redocks("signal.editor.sky.panel.open", "ui.editor_shell.skybox_panel.panel",
-                                     "ui.editor_shell.skybox_panel.header", "ui.editor_shell.skybox_panel.drag_hint",
+                                     "ui.editor_shell.skybox_panel.header",
+                                     "ui.editor_shell.skybox_panel.drag_indicator",
                                      "ui.editor_shell.skybox_panel.close.label", "editor.sky.panel.dock");
     expect_window_floats_and_redocks("signal.editor.liquid.panel.open", "ui.editor_shell.liquid_panel",
-                                     "ui.editor_shell.liquid_panel.header", "ui.editor_shell.liquid_panel.drag_hint",
+                                     "ui.editor_shell.liquid_panel.header",
+                                     "ui.editor_shell.liquid_panel.drag_indicator",
                                      "ui.editor_shell.liquid_panel.close", "editor.liquid.panel.dock");
     expect_window_floats_and_redocks("signal.editor.palette.material", "ui.editor_shell.texture_viewer.panel",
                                      "ui.editor_shell.texture_viewer.header",
-                                     "ui.editor_shell.texture_viewer.drag_hint",
+                                     "ui.editor_shell.texture_viewer.drag_indicator",
                                      "ui.editor_shell.texture_viewer.close.label", "editor.texture.viewer.dock");
 
-    expect_visible_text("ui.editor_shell.left_inspector.drag_hint", "drag");
+    expect_drag_indicator("ui.editor_shell.left_inspector.drag_indicator", "ui.editor_shell.left_inspector.header");
     expect_visible_text("ui.editor_shell.left_inspector.close", "close");
     expect_header_hit(20.0f, 96.0f, "ui.editor_shell.left_inspector.header");
     drag(20.0f, 96.0f, 500.0f, 650.0f);
@@ -25484,7 +25565,7 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.ui.window.front", ""),
                  "ui.editor_shell.console.panel");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "bottom");
-    expect_visible_text("ui.editor_shell.console.drag_hint", "drag");
+    expect_drag_indicator("ui.editor_shell.console.drag_indicator", "ui.editor_shell.console.header");
     expect_visible_text("ui.editor_shell.console.close", "close");
     slayer3d_ui_layout_rect console_rect = resolved_window_rect("ui.editor_shell.console.panel");
     expect_header_hit(console_rect.x + 200.0f, console_rect.y + 20.0f, "ui.editor_shell.console.header");
@@ -25534,7 +25615,7 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
 
     emit_signal("signal.editor.global.open");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.global.panel.open", false));
-    expect_visible_text("ui.editor_shell.global_panel.drag_hint", "drag");
+    expect_drag_indicator("ui.editor_shell.global_panel.drag_indicator", "ui.editor_shell.global_panel.header");
     expect_visible_text("ui.editor_shell.global_panel.close.label", "close");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 0);
     click(640.0f, 340.0f);
@@ -29776,6 +29857,7 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
     ASSERT_NE(editor_camera, nullptr);
     editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
@@ -30919,7 +31001,6 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
@@ -31166,6 +31247,7 @@ TEST(GameDataRuntime, EditorShellDojoHorizontalFlipToolbarMirrorsMultiSelection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31339,6 +31421,7 @@ TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31511,6 +31594,7 @@ TEST(GameDataRuntime, EditorShellDojoDuplicateToolbarCopiesSelectionInPlaceForDr
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -31653,6 +31737,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -38499,6 +38584,15 @@ TEST(GameDataRuntime, EditorStairBrushAppendsStepsAndTracksTransformDirection)
     ASSERT_TRUE(slayer3d_ui_layout_create(&stair_layout));
     ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, stair_layout));
     EXPECT_NE(slayer3d_ui_layout_find_resolved_node(stair_layout, "ui.editor_shell.stair_panel"), nullptr);
+    const slayer3d_ui_layout_resolved_node *stair_header =
+        slayer3d_ui_layout_find_resolved_node(stair_layout, "ui.editor_shell.stair_panel.header");
+    const slayer3d_ui_layout_resolved_node *stair_drag_indicator =
+        slayer3d_ui_layout_find_resolved_node(stair_layout, "ui.editor_shell.stair_panel.drag_indicator");
+    ASSERT_NE(stair_header, nullptr);
+    ASSERT_NE(stair_drag_indicator, nullptr);
+    EXPECT_TRUE(stair_header->drag_handle);
+    EXPECT_EQ(stair_drag_indicator->type, SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR);
+    EXPECT_STREQ(stair_drag_indicator->state_source_id, stair_header->id);
     bool found_direction = false;
     bool found_add = false;
     bool found_remove = false;
@@ -39303,6 +39397,7 @@ TEST(GameDataRuntime, EditorShellViewDropdownSelectsViewportLayout)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_media_available_for_tests(runtime);
     ASSERT_TRUE(slayer3d_game_data_set_ui_viewport(runtime, 1280.0f, 720.0f));
 
     slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);
