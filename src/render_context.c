@@ -1424,6 +1424,27 @@ static const char *slayer3d_actual_window_mode_name(SDL_Window *window)
     return SDL_GetWindowFullscreenMode(window) == NULL ? "fullscreen_borderless" : "fullscreen_exclusive";
 }
 
+SDL_WindowFlags slayer3d_internal_window_flags(const slayer3d_window_config *config, slayer3d_backend backend)
+{
+    SDL_WindowFlags flags = 0;
+
+    if (config == NULL)
+        return flags;
+
+    if (config->resizable)
+        flags |= SDL_WINDOW_RESIZABLE;
+    if (config->display_mode == SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS)
+        flags |= SDL_WINDOW_FULLSCREEN;
+    else if (config->display_mode == SLAYER3D_WINDOW_MODE_WINDOWED && config->maximized)
+        flags |= SDL_WINDOW_MAXIMIZED;
+    if (config->high_pixel_density)
+        flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    if (backend == SLAYER3D_BACKEND_OPENGL)
+        flags |= SDL_WINDOW_OPENGL;
+
+    return flags;
+}
+
 bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **out_window,
                             slayer3d_render_context **out_context)
 {
@@ -1475,13 +1496,7 @@ retry_backend:
     context = NULL;
 
     /* Set up window flags and GL attributes based on resolved backend. */
-    SDL_WindowFlags flags = 0;
-    if (local.resizable)
-        flags |= SDL_WINDOW_RESIZABLE;
-    if (local.maximized)
-        flags |= SDL_WINDOW_MAXIMIZED;
-    if (local.high_pixel_density)
-        flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
+    SDL_WindowFlags flags = slayer3d_internal_window_flags(&local, resolved);
 
     if (resolved == SLAYER3D_BACKEND_OPENGL)
     {
@@ -1497,7 +1512,6 @@ retry_backend:
 #endif
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        flags |= SDL_WINDOW_OPENGL;
     }
 
     window = SDL_CreateWindow(local.title, local.width, local.height, flags);
@@ -1519,6 +1533,12 @@ retry_backend:
     {
         SDL_DestroyWindow(window);
         return false;
+    }
+    if (local.display_mode == SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS && !SDL_SyncWindow(window))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D borderless fullscreen synchronization timed out: %s",
+                    SDL_GetError());
+        SDL_ClearError();
     }
 
     /* Software backend needs an SDL_Renderer; GL does not. */
@@ -1581,17 +1601,21 @@ retry_backend:
 
     *out_window = window;
     *out_context = context;
+    int window_width = 0;
+    int window_height = 0;
     int pixel_width = 0;
     int pixel_height = 0;
     SDL_FRect safe_area = {0.0f, 0.0f, (float)context->width, (float)context->height};
+    (void)SDL_GetWindowSize(window, &window_width, &window_height);
     (void)SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
     (void)slayer3d_get_render_context_safe_area(context, &safe_area);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d "
-                "pixels=%dx%d logical=%dx%d safe_area=%.1f,%.1f %.1fx%.1f logical_policy=%s density=%.2f "
-                "high_dpi=%s",
-                slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
-                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height,
+                "SLAYER3D window created: requested_mode=%s actual_mode=%s backend=%s requested_vsync=%s "
+                "actual_vsync=%d requested_size=%dx%d size=%dx%d pixels=%dx%d logical=%dx%d "
+                "safe_area=%.1f,%.1f %.1fx%.1f logical_policy=%s density=%.2f high_dpi=%s",
+                slayer3d_window_mode_name(local.display_mode), slayer3d_actual_window_mode_name(window),
+                slayer3d_get_backend_name(resolved), local.vsync ? "on" : "off",
+                have_actual_vsync ? actual_vsync : -999, local.width, local.height, window_width, window_height,
                 pixel_width, pixel_height, context->width, context->height, safe_area.x, safe_area.y, safe_area.w,
                 safe_area.h, local.logical_size_policy == SLAYER3D_LOGICAL_SIZE_EXPAND ? "expand" : "fixed",
                 SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
