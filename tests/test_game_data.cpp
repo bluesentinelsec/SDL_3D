@@ -24200,17 +24200,18 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
-    auto resolved_file_panel_color = [&]() {
+    auto resolved_file_rect_color = [&](const char *expected_name) {
         struct Capture
         {
             slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
             slayer3d_color color{0, 0, 0, 0};
             bool found = false;
-        } capture{runtime, {}, false};
+        } capture{runtime, expected_name, {}, false};
         auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
             auto *capture = static_cast<Capture *>(userdata);
-            if (rect == nullptr || rect->name == nullptr ||
-                std::string(rect->name) != "ui.editor_shell.file_menu.panel")
+            if (capture->found || rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                std::string(rect->name) != capture->name)
                 return true;
             slayer3d_game_data_ui_rect resolved{};
             bool visible = false;
@@ -24222,7 +24223,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
             return true;
         };
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
-        EXPECT_TRUE(capture.found);
+        EXPECT_TRUE(capture.found) << expected_name;
         return capture.color;
     };
     auto resolved_rect_layer = [&](const char *expected_name) {
@@ -24343,7 +24344,7 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(file_exit_region.found);
     EXPECT_EQ(file_exit_region.hit.action, "editor.file.exit");
     std::vector<std::string> file_rects = visible_file_rects();
-    slayer3d_color file_panel_color = resolved_file_panel_color();
+    slayer3d_color file_panel_color = resolved_file_rect_color("ui.editor_shell.file_menu.panel");
     EXPECT_EQ(file_panel_color.a, 255);
     const int file_panel_layer = resolved_rect_layer("ui.editor_shell.file_menu.panel");
     EXPECT_EQ(file_panel_layer, 500);
@@ -24458,6 +24459,23 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
         ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     };
+
+    SDL_Event file_hover{};
+    file_hover.type = SDL_EVENT_MOUSE_MOTION;
+    file_hover.motion.x = file_open_region.rect.x + file_open_region.rect.w * 0.5f;
+    file_hover.motion.y = file_open_region.rect.y + file_open_region.rect.h * 0.5f;
+    slayer3d_input_process_event(input, &file_hover);
+    slayer3d_input_update(input, input_tick++);
+    const slayer3d_color hovered_file_button = resolved_file_rect_color("ui.editor_shell.file_menu.open.button");
+    EXPECT_EQ(hovered_file_button.r, 54);
+    EXPECT_EQ(hovered_file_button.g, 102);
+    EXPECT_EQ(hovered_file_button.b, 166);
+    EXPECT_EQ(hovered_file_button.a, 248);
+    const slayer3d_color idle_file_button = resolved_file_rect_color("ui.editor_shell.file_menu.save.button");
+    EXPECT_EQ(idle_file_button.r, 26);
+    EXPECT_EQ(idle_file_button.g, 35);
+    EXPECT_EQ(idle_file_button.b, 48);
+    EXPECT_EQ(idle_file_button.a, 242);
 
     HitSummary outside_file_menu_hit = retained_ui_hit(640.0f, 400.0f);
     EXPECT_EQ(outside_file_menu_hit.id, "ui.editor_shell.file_menu.panel.outside");

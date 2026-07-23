@@ -49,6 +49,11 @@ Supported node types are:
 - `image` for thumbnails and icons.
 - `scroll` for vertically scrolling panes.
 
+Interactive retained controls receive hover and active visual states by
+default. Buttons in an authored panel use the same hover feedback as
+synthesized dropdown options; menu authors do not add per-button hover state
+or pointer-coordinate conditions.
+
 ### Scroll Panes
 
 `scroll` containers own their children the way a Tk or GTK scrolled window

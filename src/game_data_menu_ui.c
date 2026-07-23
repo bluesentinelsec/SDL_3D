@@ -2108,8 +2108,9 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
 {
     if (command == NULL)
         return (slayer3d_color){0, 0, 0, 0};
-    if (command->selected && command->option_index < 0 &&
-        (command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN))
+    const bool control =
+        command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    if (command->selected && command->option_index < 0 && control)
     {
         return (slayer3d_color){38, 104, 56, 255};
     }
@@ -2125,10 +2126,14 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
         return (slayer3d_color){54, 102, 166, 248};
     if (command->option_index >= 0)
         return (slayer3d_color){17, 24, 35, 244};
+    if (control && command->active)
+        return (slayer3d_color){42, 58, 78, 248};
+    if (control && command->hovered)
+        return (slayer3d_color){54, 102, 166, 248};
     if (command->type == SLAYER3D_UI_LAYOUT_NODE_TOOLBAR)
         return (slayer3d_color){7, 10, 17, 245};
-    if (command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN)
-        return command->active ? (slayer3d_color){42, 58, 78, 248} : (slayer3d_color){26, 35, 48, 242};
+    if (control)
+        return (slayer3d_color){26, 35, 48, 242};
     if (command->type == SLAYER3D_UI_LAYOUT_NODE_PANEL)
         return (slayer3d_color){10, 15, 23, 228};
     return (slayer3d_color){0, 0, 0, 0};
