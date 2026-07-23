@@ -128,6 +128,9 @@ struct slayer3d_render_context
  * actor/mesh culling against the light frustum. */
 void slayer3d_internal_extract_frustum_planes(slayer3d_render_context *context, slayer3d_mat4 view_projection);
 
+/* Resolve the SDL creation flags for a high-level window configuration. */
+SDL_WindowFlags slayer3d_internal_window_flags(const slayer3d_window_config *config, slayer3d_backend backend);
+
 static inline slayer3d_framebuffer slayer3d_framebuffer_from_context(slayer3d_render_context *context)
 {
     slayer3d_framebuffer framebuffer;

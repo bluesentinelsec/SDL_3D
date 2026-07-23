@@ -6,6 +6,7 @@
 extern "C"
 {
 #include "backend.h"
+#include "render_context_internal.h"
 #include "slayer3d/slayer3d.h"
 }
 
@@ -93,6 +94,48 @@ TEST(SLAYER3DWindowConfig, InitWindowConfigSetsHighDpiDefault)
     EXPECT_EQ(config.logical_height, 720);
     EXPECT_EQ(SLAYER3D_LOGICAL_SIZE_FIXED, config.logical_size_policy);
     EXPECT_TRUE(config.high_pixel_density);
+}
+
+TEST(SLAYER3DWindowConfig, WindowedCreationFlagsPreserveDesktopWindowState)
+{
+    slayer3d_window_config config{};
+    slayer3d_init_window_config(&config);
+    config.display_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
+    config.maximized = true;
+    config.resizable = true;
+
+    const SDL_WindowFlags flags = slayer3d_internal_window_flags(&config, SLAYER3D_BACKEND_SOFTWARE);
+
+    EXPECT_NE(0u, flags & SDL_WINDOW_MAXIMIZED);
+    EXPECT_NE(0u, flags & SDL_WINDOW_RESIZABLE);
+    EXPECT_EQ(0u, flags & SDL_WINDOW_FULLSCREEN);
+}
+
+TEST(SLAYER3DWindowConfig, BorderlessFullscreenIsEstablishedDuringWindowCreation)
+{
+    slayer3d_window_config config{};
+    slayer3d_init_window_config(&config);
+    config.display_mode = SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+    config.maximized = true;
+
+    const SDL_WindowFlags flags = slayer3d_internal_window_flags(&config, SLAYER3D_BACKEND_OPENGL);
+
+    EXPECT_NE(0u, flags & SDL_WINDOW_FULLSCREEN);
+    EXPECT_NE(0u, flags & SDL_WINDOW_OPENGL);
+    EXPECT_EQ(0u, flags & SDL_WINDOW_MAXIMIZED);
+}
+
+TEST(SLAYER3DWindowConfig, ExclusiveFullscreenDoesNotRequestWindowedMaximization)
+{
+    slayer3d_window_config config{};
+    slayer3d_init_window_config(&config);
+    config.display_mode = SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+    config.maximized = true;
+
+    const SDL_WindowFlags flags = slayer3d_internal_window_flags(&config, SLAYER3D_BACKEND_SOFTWARE);
+
+    EXPECT_EQ(0u, flags & SDL_WINDOW_FULLSCREEN);
+    EXPECT_EQ(0u, flags & SDL_WINDOW_MAXIMIZED);
 }
 
 TEST(SLAYER3DLogicalSize, FixedPolicyPreservesAuthoredCanvas)

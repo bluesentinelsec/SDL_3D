@@ -388,6 +388,28 @@ static int slayer3d_game_max_ticks_per_frame(const slayer3d_game_config *config)
                                                                : SLAYER3D_GAME_DEFAULT_MAX_TICKS;
 }
 
+static slayer3d_window_mode slayer3d_game_window_mode(const slayer3d_game_config *config)
+{
+    return (config != NULL && config->display_mode != SLAYER3D_WINDOW_MODE_DEFAULT) ? config->display_mode
+                                                                                    : SLAYER3D_GAME_DEFAULT_WINDOW_MODE;
+}
+
+static void slayer3d_game_prepare_video(const slayer3d_game_config *config)
+{
+#ifdef SDL_PLATFORM_MACOS
+    /* Cocoa snapshots this policy during SDL video initialization. */
+    if (slayer3d_game_window_mode(config) == SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS &&
+        !SDL_SetHint(SDL_HINT_VIDEO_MAC_FULLSCREEN_SPACES, "0"))
+    {
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "SLAYER3D could not select desktop borderless fullscreen on macOS; "
+                    "SDL_VIDEO_MAC_FULLSCREEN_SPACES may be overriding the requested mode");
+    }
+#else
+    (void)config;
+#endif
+}
+
 static float slayer3d_game_dynamic_scale_value(float value, float fallback)
 {
     return value > 0.0f ? value : fallback;
@@ -412,9 +434,7 @@ static bool slayer3d_game_create_context(const slayer3d_game_config *config, sla
     window_config.icon_path = config != NULL ? config->icon_path : NULL;
     if (config != NULL && config->backend != SLAYER3D_BACKEND_AUTO)
         window_config.backend = config->backend;
-    window_config.display_mode = (config != NULL && config->display_mode != SLAYER3D_WINDOW_MODE_DEFAULT)
-                                     ? config->display_mode
-                                     : SLAYER3D_GAME_DEFAULT_WINDOW_MODE;
+    window_config.display_mode = slayer3d_game_window_mode(config);
     if (config != NULL && config->vsync != 0)
         window_config.vsync = config->vsync > 0;
     if (config != NULL && config->maximized != 0)
@@ -772,6 +792,7 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
     slayer3d_game_frame_profile_reset(&run->frame_profile, 1000.0 / profile_target_fps);
 
     SDL_SetMainReady();
+    slayer3d_game_prepare_video(config);
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC))
     {
