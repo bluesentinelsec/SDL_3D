@@ -33,6 +33,7 @@ typedef struct ui_layout_node
     char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     slayer3d_color text_color;
     bool has_text_color;
+    slayer3d_ui_text_role text_role;
     float text_scale;
     slayer3d_ui_layout_text_align text_align;
     slayer3d_color fill_color;
@@ -102,6 +103,7 @@ struct slayer3d_ui_layout_model
     float resolved_viewport_h;
     char active_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     char hover_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    slayer3d_ui_typography_theme typography;
     bool dirty;
 };
 
@@ -293,8 +295,42 @@ bool slayer3d_ui_layout_create(slayer3d_ui_layout_model **out_model)
     slayer3d_ui_layout_model *model = (slayer3d_ui_layout_model *)SDL_calloc(1, sizeof(*model));
     if (model == NULL)
         return false;
+    model->typography = slayer3d_ui_typography_theme_default();
     model->dirty = true;
     *out_model = model;
+    return true;
+}
+
+slayer3d_ui_typography_theme slayer3d_ui_typography_theme_default(void)
+{
+    return (slayer3d_ui_typography_theme){
+        .body = {14.0f, {215, 224, 238, 245}},
+        .caption = {12.0f, {157, 171, 190, 235}},
+        .heading = {14.0f, {238, 244, 252, 255}},
+    };
+}
+
+slayer3d_ui_text_style slayer3d_ui_typography_style(const slayer3d_ui_typography_theme *theme,
+                                                    slayer3d_ui_text_role role)
+{
+    const slayer3d_ui_typography_theme fallback = slayer3d_ui_typography_theme_default();
+    const slayer3d_ui_typography_theme *resolved = theme != NULL ? theme : &fallback;
+    if (role == SLAYER3D_UI_TEXT_ROLE_CAPTION)
+        return resolved->caption;
+    if (role == SLAYER3D_UI_TEXT_ROLE_HEADING)
+        return resolved->heading;
+    return resolved->body;
+}
+
+bool slayer3d_ui_layout_set_typography_theme(slayer3d_ui_layout_model *model, const slayer3d_ui_typography_theme *theme)
+{
+    if (model == NULL || theme == NULL || theme->body.size <= 0.0f || theme->caption.size <= 0.0f ||
+        theme->heading.size <= 0.0f)
+    {
+        return false;
+    }
+    model->typography = *theme;
+    model->dirty = true;
     return true;
 }
 
@@ -345,7 +381,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     {
         return false;
     }
-    if (desc->text_scale < 0.0f || desc->text_align < SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO ||
+    if (desc->text_role < SLAYER3D_UI_TEXT_ROLE_BODY || desc->text_role >= SLAYER3D_UI_TEXT_ROLE_COUNT ||
+        desc->text_scale < 0.0f || desc->text_align < SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO ||
         desc->text_align > SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT)
     {
         return false;
@@ -393,6 +430,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     ui_layout_copy_action(node->action, desc->action);
     node->text_color = desc->text_color;
     node->has_text_color = desc->has_text_color;
+    node->text_role = desc->text_role;
     node->text_scale = desc->text_scale;
     node->text_align = desc->text_align;
     node->fill_color = desc->fill_color;
@@ -1030,6 +1068,10 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         ui_layout_copy_action(resolved->action, node->action);
         resolved->text_color = node->text_color;
         resolved->has_text_color = node->has_text_color;
+        resolved->text_role = node->text_role;
+        const slayer3d_ui_text_style text_style = slayer3d_ui_typography_style(&model->typography, node->text_role);
+        resolved->text_size = text_style.size;
+        resolved->role_text_color = text_style.color;
         resolved->text_scale = node->text_scale;
         resolved->text_align = node->text_align;
         resolved->hovered = node->hovered;
@@ -1108,7 +1150,9 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
                                            slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
                                            bool has_clip_rect, slayer3d_ui_layout_rect clip_rect, const char *text,
                                            const char *font, bool selected, bool popup, int option_index,
-                                           slayer3d_color text_color, bool has_text_color, float text_scale,
+                                           slayer3d_color text_color, bool has_text_color,
+                                           slayer3d_ui_text_role text_role, float text_size,
+                                           slayer3d_color role_text_color, float text_scale,
                                            slayer3d_ui_layout_text_align text_align, slayer3d_color fill_color,
                                            bool has_fill_color, slayer3d_color border_color, bool has_border_color,
                                            float border_thickness, bool window, const char *image, bool preserve_aspect)
@@ -1126,6 +1170,9 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
     ui_layout_copy_font(render->font, font);
     render->text_color = text_color;
     render->has_text_color = has_text_color;
+    render->text_role = text_role;
+    render->text_size = text_size;
+    render->role_text_color = role_text_color;
     render->text_scale = text_scale;
     render->text_align = text_align;
     render->fill_color = fill_color;
@@ -1206,12 +1253,13 @@ static void ui_layout_compile_scrollbar(slayer3d_ui_layout_model *model, const u
     ui_layout_store_render_command(
         model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, track, node->resolved_layer + 1,
         node->has_resolved_clip_rect, node->resolved_clip_rect, "", NULL, false, false, -1, (slayer3d_color){0}, false,
-        0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, track_fill, true, track_border, true, 1.0f, false, NULL, false);
-    ui_layout_store_render_command(model, thumb_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, thumb,
-                                   node->resolved_layer + 2, node->has_resolved_clip_rect, node->resolved_clip_rect, "",
-                                   NULL, false, false, -1, (slayer3d_color){0}, false, 0.0f,
-                                   SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, thumb_fill, true, (slayer3d_color){0}, false,
-                                   0.0f, false, NULL, false);
+        SLAYER3D_UI_TEXT_ROLE_BODY, model->typography.body.size, model->typography.body.color, 0.0f,
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, track_fill, true, track_border, true, 1.0f, false, NULL, false);
+    ui_layout_store_render_command(
+        model, thumb_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, thumb, node->resolved_layer + 2,
+        node->has_resolved_clip_rect, node->resolved_clip_rect, "", NULL, false, false, -1, (slayer3d_color){0}, false,
+        SLAYER3D_UI_TEXT_ROLE_BODY, model->typography.body.size, model->typography.body.color, 0.0f,
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, thumb_fill, true, (slayer3d_color){0}, false, 0.0f, false, NULL, false);
     if (node->resolved_scroll_max <= 0.0f)
         return;
     ui_layout_store_hit_region(model, scrollbar_id, node->id, SLAYER3D_UI_LAYOUT_NODE_SCROLL, track,
@@ -1230,7 +1278,8 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
     const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
                                    false, (slayer3d_ui_layout_rect){0}, "", node->font, false, true, -1,
-                                   (slayer3d_color){0}, false, 0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO,
+                                   (slayer3d_color){0}, false, SLAYER3D_UI_TEXT_ROLE_BODY, model->typography.body.size,
+                                   model->typography.body.color, 0.0f, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO,
                                    (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f, false, NULL, false);
 
     const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
@@ -1245,11 +1294,13 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
             option_height,
         };
         const bool selected = i == node->selected_index;
-        ui_layout_store_render_command(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                       popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->options[i],
-                                       node->font, selected, false, i, node->text_color, node->has_text_color,
-                                       node->text_scale, node->text_align, (slayer3d_color){0}, false,
-                                       (slayer3d_color){0}, false, 0.0f, false, NULL, false);
+        ui_layout_store_render_command(
+            model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect, popup_layer + 1, false,
+            (slayer3d_ui_layout_rect){0}, node->options[i], node->font, selected, false, i, node->text_color,
+            node->has_text_color, node->text_role,
+            slayer3d_ui_typography_style(&model->typography, node->text_role).size,
+            slayer3d_ui_typography_style(&model->typography, node->text_role).color, node->text_scale, node->text_align,
+            (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f, false, NULL, false);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
                                    popup_layer + 1, false, (slayer3d_ui_layout_rect){0}, node->action, selected, i);
     }
@@ -1272,8 +1323,9 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
             ui_layout_store_render_command(
                 model, node->id, node->id, node->type, node->rect, node->layer, node->has_clip_rect, node->clip_rect,
                 node->text, node->font, node->selected, false, -1, node->text_color, node->has_text_color,
-                node->text_scale, node->text_align, node->fill_color, node->has_fill_color, node->border_color,
-                node->has_border_color, node->border_thickness, node->window, node->image, node->preserve_aspect);
+                node->text_role, node->text_size, node->role_text_color, node->text_scale, node->text_align,
+                node->fill_color, node->has_fill_color, node->border_color, node->has_border_color,
+                node->border_thickness, node->window, node->image, node->preserve_aspect);
         }
 
         if (node->interactive && visible_in_clip)

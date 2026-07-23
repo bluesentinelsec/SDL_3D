@@ -1066,6 +1066,60 @@ TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedTypographyRolesResolveThemeSizesAndColors)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_typography_theme theme = slayer3d_ui_typography_theme_default();
+    EXPECT_FLOAT_EQ(theme.body.size, 14.0f);
+    EXPECT_FLOAT_EQ(theme.caption.size, 12.0f);
+    EXPECT_FLOAT_EQ(theme.heading.size, 14.0f);
+    theme.heading.color = {240, 230, 210, 255};
+    ASSERT_TRUE(slayer3d_ui_layout_set_typography_theme(layout, &theme));
+
+    slayer3d_ui_layout_node_desc heading{};
+    heading.id = "heading";
+    heading.type = SLAYER3D_UI_LAYOUT_NODE_LABEL;
+    heading.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    heading.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    heading.rect = {10.0f, 20.0f, 120.0f, 24.0f};
+    heading.text = "Properties";
+    heading.text_role = SLAYER3D_UI_TEXT_ROLE_HEADING;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &heading));
+
+    const char *options[] = {"First", "Second"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "dropdown";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {10.0f, 50.0f, 120.0f, 24.0f};
+    dropdown.text = "Choose";
+    dropdown.text_role = SLAYER3D_UI_TEXT_ROLE_CAPTION;
+    dropdown.options = options;
+    dropdown.option_count = 2;
+    dropdown.open = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_render_command *heading_command = find_render_command(layout, "heading");
+    ASSERT_NE(heading_command, nullptr);
+    EXPECT_EQ(heading_command->text_role, SLAYER3D_UI_TEXT_ROLE_HEADING);
+    EXPECT_FLOAT_EQ(heading_command->text_size, 14.0f);
+    EXPECT_EQ(heading_command->role_text_color.r, 240);
+    EXPECT_FLOAT_EQ(heading_command->text_scale, 0.0f);
+
+    const slayer3d_ui_layout_render_command *option_command = find_render_command(layout, "dropdown.option.0");
+    ASSERT_NE(option_command, nullptr);
+    EXPECT_EQ(option_command->text_role, SLAYER3D_UI_TEXT_ROLE_CAPTION);
+    EXPECT_FLOAT_EQ(option_command->text_size, 12.0f);
+    EXPECT_EQ(option_command->role_text_color.r, theme.caption.color.r);
+    EXPECT_FLOAT_EQ(option_command->text_scale, 0.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedHitTestingUsesFrontMostLayer)
 {
     slayer3d_ui_layout_model *layout = nullptr;

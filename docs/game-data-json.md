@@ -3856,6 +3856,11 @@ should use `ui.widgets`.
 ```json
 {
   "ui": {
+    "typography": {
+      "body": { "size": 14, "color": [215, 224, 238, 245] },
+      "caption": { "size": 12, "color": [157, 171, 190, 235] },
+      "heading": { "size": 14, "color": [238, 244, 252, 255] }
+    },
     "widgets": [
       {
         "id": "ui.tools",
@@ -3875,6 +3880,7 @@ should use `ui.widgets`.
             "id": "ui.tools.select",
             "type": "button",
             "text": "Select",
+            "text_role": "body",
             "font": "font.hud",
             "w": 120,
             "h": 32,
@@ -3918,8 +3924,11 @@ Widgets support `panel`, `toolbar`, `row`, `column`, `button`, `label`,
 extent, clamp the offset read from `scroll_key`, and synthesize a
 proportional scrollbar when content overflows.
 `w` and `h` may be positive numbers or `"fill"`. Nodes may author `color` /
-`fill_color`, `border_color`, `border_thickness`, `text_color`, `text_scale`,
-and `align` (`left`, `center`, or `right`). Containers may author
+`fill_color`, `border_color`, `border_thickness`, `text_color`, `text_role`,
+the legacy explicit `text_scale` override, and `align` (`left`, `center`, or
+`right`). `text_role` accepts `body` (the default), `caption`, or `heading`;
+their theme sizes are logical pixels and do not change with display density.
+Containers may author
 `layout: "row"`, `"column"`, or `"grid"`; grids require a positive integer
 `columns` count and place children row-major. `image` nodes reference an image
 asset via `image`, optionally with `preserve_aspect`, and inherit position,

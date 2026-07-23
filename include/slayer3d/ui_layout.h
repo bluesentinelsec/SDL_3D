@@ -87,6 +87,35 @@ extern "C"
         SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT,
     } slayer3d_ui_layout_text_align;
 
+    /** @brief Semantic typography role for retained UI text. */
+    typedef enum slayer3d_ui_text_role
+    {
+        SLAYER3D_UI_TEXT_ROLE_BODY = 0,
+        SLAYER3D_UI_TEXT_ROLE_CAPTION,
+        SLAYER3D_UI_TEXT_ROLE_HEADING,
+        SLAYER3D_UI_TEXT_ROLE_COUNT,
+    } slayer3d_ui_text_role;
+
+    /** @brief Theme style for one retained UI typography role. */
+    typedef struct slayer3d_ui_text_style
+    {
+        /** @brief Font size in logical pixels, independent of display density. */
+        float size;
+        /** @brief Default color used when a node does not author text_color. */
+        slayer3d_color color;
+    } slayer3d_ui_text_style;
+
+    /** @brief Theme-level retained UI typography styles. */
+    typedef struct slayer3d_ui_typography_theme
+    {
+        /** @brief Default style for widget text and controls. */
+        slayer3d_ui_text_style body;
+        /** @brief Reduced style for secondary metadata and annotations. */
+        slayer3d_ui_text_style caption;
+        /** @brief Emphasized style for panel and section titles. */
+        slayer3d_ui_text_style heading;
+    } slayer3d_ui_typography_theme;
+
     /** @brief Simple logical-pixel rectangle. */
     typedef struct slayer3d_ui_layout_rect
     {
@@ -121,6 +150,9 @@ extern "C"
         const char *action;
         slayer3d_color text_color;
         bool has_text_color;
+        /** @brief Semantic text style; zero-initialized nodes default to body. */
+        slayer3d_ui_text_role text_role;
+        /** @brief Optional legacy scale override; zero resolves from text_role. */
         float text_scale;
         slayer3d_ui_layout_text_align text_align;
         slayer3d_color fill_color;
@@ -211,6 +243,12 @@ extern "C"
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         slayer3d_color text_color;
         bool has_text_color;
+        /** @brief Semantic role inherited from the authored node. */
+        slayer3d_ui_text_role text_role;
+        /** @brief Resolved role size in logical pixels. */
+        float text_size;
+        /** @brief Theme color for text_role. */
+        slayer3d_color role_text_color;
         float text_scale;
         slayer3d_ui_layout_text_align text_align;
         bool hovered;
@@ -253,6 +291,12 @@ extern "C"
         char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
         slayer3d_color text_color;
         bool has_text_color;
+        /** @brief Semantic role inherited from the resolved node. */
+        slayer3d_ui_text_role text_role;
+        /** @brief Resolved role size in logical pixels. */
+        float text_size;
+        /** @brief Theme color for text_role. */
+        slayer3d_color role_text_color;
         float text_scale;
         slayer3d_ui_layout_text_align text_align;
         slayer3d_color fill_color;
@@ -320,6 +364,17 @@ extern "C"
 
     /** @brief Remove all nodes from a retained UI layout model. */
     void slayer3d_ui_layout_clear(slayer3d_ui_layout_model *model);
+
+    /** @brief Return the standard retained UI typography theme. */
+    slayer3d_ui_typography_theme slayer3d_ui_typography_theme_default(void);
+
+    /** @brief Set the typography theme used when resolving retained text roles. */
+    bool slayer3d_ui_layout_set_typography_theme(slayer3d_ui_layout_model *model,
+                                                 const slayer3d_ui_typography_theme *theme);
+
+    /** @brief Return the typography style for a semantic role. */
+    slayer3d_ui_text_style slayer3d_ui_typography_style(const slayer3d_ui_typography_theme *theme,
+                                                        slayer3d_ui_text_role role);
 
     /** @brief Add one retained UI node to the model. */
     bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_node_desc *desc);

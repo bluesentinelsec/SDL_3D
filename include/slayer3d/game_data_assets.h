@@ -29,7 +29,7 @@ extern "C"
         bool builtin;
         /** @brief External font path when @p builtin is false, or NULL. */
         const char *path;
-        /** @brief Requested font pixel size. */
+        /** @brief Requested font size in logical display units. */
         float size;
     } slayer3d_game_data_font_asset;
 

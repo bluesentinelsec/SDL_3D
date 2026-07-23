@@ -10842,9 +10842,15 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
   "metadata": { "name": "Retained UI Widgets", "id": "test.retained_ui", "version": "0.1.0" },
   "world": { "name": "world.retained_ui", "kind": "fixed_screen" },
   "assets": {
-    "images": [{ "id": "image.retained_ui.thumb", "path": "asset://images/thumb.png" }]
+    "images": [{ "id": "image.retained_ui.thumb", "path": "asset://images/thumb.png" }],
+    "fonts": [{ "id": "font.retained_ui", "builtin": "Inter", "size": 20 }]
   },
   "ui": {
+    "typography": {
+      "body": { "size": 14, "color": [215, 224, 238, 245] },
+      "caption": { "size": 12, "color": [157, 171, 190, 235] },
+      "heading": { "size": 14, "color": [238, 244, 252, 255] }
+    },
     "widgets": [
       {
         "id": "browser.grid",
@@ -10898,11 +10904,12 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
             "w": 96,
             "h": "fill",
             "text": "File",
+            "font": "font.retained_ui",
             "color": [18, 24, 32, 230],
             "border_color": [96, 128, 180, 255],
             "border_thickness": 2,
             "text_color": [230, 236, 245, 255],
-            "text_scale": 0.75,
+            "text_role": "heading",
             "align": "center",
             "action": "editor.file",
             "selected": true
@@ -10915,6 +10922,8 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
             "layer": 10,
             "interactive": true,
             "label": "Grid",
+            "font": "font.retained_ui",
+            "text_role": "caption",
             "action": "editor.grid",
             "options": ["Grid 0.5", "Grid 1", "Grid 2"],
             "selected_index": 1,
@@ -10931,6 +10940,36 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
     EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "retained_ui.game.json").string().c_str(), nullptr, error,
                                                  sizeof(error)))
         << error;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "retained_ui.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+    struct TypographyCapture
+    {
+        float heading_scale = 0.0f;
+        float caption_scale = 0.0f;
+        float option_scale = 0.0f;
+    } capture;
+    auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *state = static_cast<TypographyCapture *>(userdata);
+        const std::string name = text->name != nullptr ? text->name : "";
+        if (name == "toolbar.file")
+            state->heading_scale = text->scale;
+        else if (name == "toolbar.grid")
+            state->caption_scale = text->scale;
+        else if (name == "toolbar.grid.option.0")
+            state->option_scale = text->scale;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+    EXPECT_FLOAT_EQ(capture.heading_scale, 14.0f / 20.0f);
+    EXPECT_FLOAT_EQ(capture.caption_scale, 12.0f / 20.0f);
+    EXPECT_FLOAT_EQ(capture.option_scale, 12.0f / 20.0f);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }
 
@@ -11259,6 +11298,24 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget text_scale must be positive",
+        },
+        {
+            "bad_text_role",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "text_role": "large" }
+  ]
+})json",
+            "UI widget text_role must be body, caption, or heading",
+        },
+        {
+            "bad_typography_size",
+            R"json({
+  "typography": {
+    "body": { "size": 0 }
+  }
+})json",
+            "UI typography body size must be positive",
         },
         {
             "bad_text_align",
