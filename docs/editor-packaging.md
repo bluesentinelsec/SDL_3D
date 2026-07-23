@@ -34,6 +34,8 @@ slayer3d_editor --window-mode fullscreen-borderless
 
 `fullscreen` selects an exclusive display mode, while
 `fullscreen-borderless` uses the desktop display bounds in a borderless window.
+On macOS, borderless mode occupies the desktop directly instead of entering an
+animated fullscreen Space.
 The File menu's `Exit` command requests the managed app shutdown path, allowing
 normal shutdown callbacks and engine cleanup to complete.
 
