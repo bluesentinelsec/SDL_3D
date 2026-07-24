@@ -768,6 +768,51 @@ TEST(SLAYER3DUI, DockedResizableWindowsSynthesizeBoundedSemanticRails)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, DockedResizableWindowsCollapseToRailAndClipContents)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc window{};
+    window.id = "window";
+    window.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    window.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.rect = {0.0f, 0.0f, 240.0f, 300.0f};
+    window.window = true;
+    window.dock = SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    window.dock_width = 1.0f;
+    window.dock_resizable = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &window));
+
+    slayer3d_ui_layout_node_desc content{};
+    content.id = "window.content";
+    content.parent_id = "window";
+    content.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    content.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    content.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    content.rect = {0.0f, 20.0f, 120.0f, 40.0f};
+    content.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &content));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 400.0f, 300.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "window"), 0.0f, 0.0f, 6.0f, 300.0f);
+
+    const slayer3d_ui_layout_render_command *content_command = find_render_command(layout, "window.content");
+    ASSERT_NE(content_command, nullptr);
+    EXPECT_TRUE(content_command->has_clip_rect);
+    EXPECT_FLOAT_EQ(content_command->clip_rect.x, 0.0f);
+    EXPECT_FLOAT_EQ(content_command->clip_rect.w, 6.0f);
+    EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 50.0f, 30.0f), nullptr);
+
+    const slayer3d_ui_layout_hit_region *resize = slayer3d_ui_layout_hit_test(layout, 3.0f, 100.0f);
+    ASSERT_NE(resize, nullptr);
+    EXPECT_STREQ(resize->id, "window.dock_resize");
+    EXPECT_EQ(resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, SafeAreaViewportOffsetsRootsAnchorsDocksAndPopups)
 {
     slayer3d_ui_layout_model *layout = nullptr;

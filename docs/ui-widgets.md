@@ -169,9 +169,9 @@ bottom dock stack and stack horizontally inward in authored order.
 Bottom-docked windows fill the available width and stack upward. Optional
 `dock_width` and `dock_height` values override a window's floating dimension
 on the corresponding dock axis. `dock_width_key` and `dock_height_key` bind
-those dimensions to scene state. Window roots paint an opaque surface by
-default and form stacking contexts, so one window's descendants cannot bleed
-through a window above it.
+those dimensions to scene state. Window roots paint an opaque surface, clip
+their descendants to their own bounds, and form stacking contexts, so content
+cannot bleed through or escape a resized window.
 
 The retained layout marks the named descendant as a semantic drag handle.
 That role makes the full handle interactive without requiring editor-specific
@@ -199,9 +199,9 @@ larger title bar remains easy to grab.
     "dock_resizable": true,
     "dock_width_key": "editor.inspector.dock_width",
     "dock_height_key": "editor.inspector.dock_height",
-    "min_dock_width": 308,
+    "min_dock_width": 24,
     "max_dock_width": 720,
-    "min_dock_height": 240,
+    "min_dock_height": 24,
     "max_dock_height": 640,
     "snap_distance": 48,
     "drag_threshold": 4,
@@ -241,7 +241,11 @@ authored dock size key during capture; the layout clamps the value to
 `min_dock_width` / `max_dock_width` or `min_dock_height` /
 `max_dock_height`, then reflows every window in that dock stack. An optional
 `dock_resize_thickness` changes the hit target from its 6px default without
-changing the visible rail width.
+changing the visible rail width. A zero minimum means the pane can collapse
+to the resize rail itself; applications may author a slightly larger minimum
+when they want a visible collapsed sliver. This matches split-pane behavior
+on the web: content retains its natural layout and is clipped as the containing
+pane contracts, then reappears unchanged when the pane expands.
 
 For a bottom console, use the same contract with `default_dock: "bottom"`.
 Its `dock_height_key` may share the root's `h_key` so docked and floating

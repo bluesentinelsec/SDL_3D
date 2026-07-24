@@ -490,8 +490,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     ui_layout_copy_action(node->scroll_signal, desc->scroll_signal);
     node->scroll_step = desc->scroll_step;
     node->scrollbar_always = desc->scrollbar_always;
-    /* A scroll pane owns its children: clipping is not optional. */
-    if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL)
+    /* Scroll panes and windows own their child drawing surfaces. */
+    if (node->type == SLAYER3D_UI_LAYOUT_NODE_SCROLL || node->window)
         node->clip_children = true;
     for (int i = 0; i < node->option_count; ++i)
         ui_layout_copy_text(node->options[i], desc->options[i]);
@@ -831,7 +831,11 @@ static float ui_layout_node_dock_width(const ui_layout_node *node, float viewpor
 {
     const float requested = node->dock_width > 0.0f ? node->dock_width : ui_layout_node_width(node, viewport_w);
     const float maximum = node->max_dock_width > 0.0f ? SDL_min(node->max_dock_width, viewport_w) : viewport_w;
-    const float minimum = SDL_min(node->min_dock_width, maximum);
+    const float resize_floor = node->dock_resizable
+                                   ? (node->dock_resize_thickness > 0.0f ? node->dock_resize_thickness
+                                                                         : (float)UI_LAYOUT_DOCK_RESIZE_THICKNESS)
+                                   : 0.0f;
+    const float minimum = SDL_min(SDL_max(node->min_dock_width, resize_floor), maximum);
     return SDL_clamp(requested, minimum, maximum);
 }
 
@@ -839,7 +843,11 @@ static float ui_layout_node_dock_height(const ui_layout_node *node, float viewpo
 {
     const float requested = node->dock_height > 0.0f ? node->dock_height : ui_layout_node_height(node, viewport_h);
     const float maximum = node->max_dock_height > 0.0f ? SDL_min(node->max_dock_height, viewport_h) : viewport_h;
-    const float minimum = SDL_min(node->min_dock_height, maximum);
+    const float resize_floor = node->dock_resizable
+                                   ? (node->dock_resize_thickness > 0.0f ? node->dock_resize_thickness
+                                                                         : (float)UI_LAYOUT_DOCK_RESIZE_THICKNESS)
+                                   : 0.0f;
+    const float minimum = SDL_min(SDL_max(node->min_dock_height, resize_floor), maximum);
     return SDL_clamp(requested, minimum, maximum);
 }
 

@@ -25505,6 +25505,10 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     slayer3d_ui_layout_rect initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
     slayer3d_ui_layout_rect things_resize =
         dock_resize_rect("ui.editor_shell.actor_viewer.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(things_resize.x + things_resize.w * 0.5f, things_resize.y + 180.0f, 1256.0f, things_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.dock_width", 0.0f), 24.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").w, 24.0f);
+    things_resize = dock_resize_rect("ui.editor_shell.actor_viewer.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
     drag(things_resize.x + things_resize.w * 0.5f, things_resize.y + 180.0f, 942.0f, things_resize.y + 180.0f);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.dock_width", 0.0f), 338.0f);
     EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").w, 338.0f);
@@ -25579,6 +25583,11 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
 
     slayer3d_ui_layout_rect inspector_resize =
         dock_resize_rect("ui.editor_shell.left_inspector.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+    drag(inspector_resize.x + inspector_resize.w * 0.5f, inspector_resize.y + 180.0f, 24.0f,
+         inspector_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.dock_width", 0.0f), 24.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").x, 28.0f);
+    inspector_resize = dock_resize_rect("ui.editor_shell.left_inspector.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
     drag(inspector_resize.x + inspector_resize.w * 0.5f, inspector_resize.y + 180.0f, 408.0f,
          inspector_resize.y + 180.0f);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.dock_width", 0.0f), 408.0f);
@@ -25669,6 +25678,14 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     drag(console_rect.x + 200.0f, console_rect.y + 20.0f, 640.0f, 718.0f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.dock", ""), "bottom");
     input_frame();
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 120.0f);
+
+    slayer3d_ui_layout_rect console_resize =
+        dock_resize_rect("ui.editor_shell.console.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_TOP);
+    drag(console_resize.x + 640.0f, console_resize.y + console_resize.h * 0.5f, console_resize.x + 640.0f, 696.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 24.0f);
+    console_resize = dock_resize_rect("ui.editor_shell.console.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_TOP);
+    drag(console_resize.x + 640.0f, console_resize.y + console_resize.h * 0.5f, console_resize.x + 640.0f, 600.0f);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.console.visible_height", 0.0f), 120.0f);
 
     drag(640.0f, 602.0f, 640.0f, 500.0f);

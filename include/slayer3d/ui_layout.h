@@ -232,10 +232,20 @@ extern "C"
         bool dock_resizable;
         /** @brief Hit target thickness for the dock resize rail; zero uses the theme default. */
         float dock_resize_thickness;
-        /** @brief Minimum and maximum docked width; zero leaves that bound unconstrained. */
+        /**
+         * @brief Minimum and maximum docked width.
+         *
+         * Zero leaves the authored bound unconstrained. A resizable dock
+         * still retains enough width for its resize rail.
+         */
         float min_dock_width;
         float max_dock_width;
-        /** @brief Minimum and maximum docked height; zero leaves that bound unconstrained. */
+        /**
+         * @brief Minimum and maximum docked height.
+         *
+         * Zero leaves the authored bound unconstrained. A resizable dock
+         * still retains enough height for its resize rail.
+         */
         float min_dock_height;
         float max_dock_height;
         /**
