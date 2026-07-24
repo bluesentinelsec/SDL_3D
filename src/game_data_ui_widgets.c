@@ -369,6 +369,14 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.dock_gap = json_float(window, "dock_gap", 0.0f);
         desc.dock_width = json_float(window, "dock_width", 0.0f);
         desc.dock_height = json_float(window, "dock_height", 0.0f);
+        (void)ui_widget_scene_float(runtime, json_string(window, "dock_width_key", NULL), &desc.dock_width);
+        (void)ui_widget_scene_float(runtime, json_string(window, "dock_height_key", NULL), &desc.dock_height);
+        desc.dock_resizable = ui_widget_bool(window, "dock_resizable", false);
+        desc.dock_resize_thickness = json_float(window, "dock_resize_thickness", 0.0f);
+        desc.min_dock_width = json_float(window, "min_dock_width", 0.0f);
+        desc.max_dock_width = json_float(window, "max_dock_width", 0.0f);
+        desc.min_dock_height = json_float(window, "min_dock_height", 0.0f);
+        desc.max_dock_height = json_float(window, "max_dock_height", 0.0f);
     }
     desc.drag_handle =
         desc.id != NULL && window_drag_handle_id != NULL && SDL_strcmp(desc.id, window_drag_handle_id) == 0;

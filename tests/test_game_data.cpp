@@ -11407,6 +11407,36 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
 })json",
             "UI grid widgets require a positive integer columns count",
         },
+        {
+            "dock_resize_without_state_keys",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 240, "h": 300, "window": { "dock_resizable": true } }
+  ]
+})json",
+            "A dock-resizable UI window requires dock_width_key and dock_height_key",
+        },
+        {
+            "inverted_dock_width_bounds",
+            R"json({
+  "widgets": [
+    {
+      "id": "panel",
+      "type": "panel",
+      "w": 240,
+      "h": 300,
+      "window": {
+        "dock_resizable": true,
+        "dock_width_key": "panel.dock_width",
+        "dock_height_key": "panel.dock_height",
+        "min_dock_width": 400,
+        "max_dock_width": 200
+      }
+    }
+  ]
+})json",
+            "UI window min_dock_width must not exceed max_dock_width",
+        },
     };
 
     const std::filesystem::path dir = unique_test_dir("bad_retained_ui_widgets");
@@ -25328,6 +25358,28 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
         slayer3d_ui_layout_destroy(layout);
         return rect;
     };
+    auto dock_resize_rect = [&](const char *window_id, slayer3d_ui_layout_resize_edge expected_edge) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const std::string resize_id = std::string(window_id) + ".dock_resize";
+        const slayer3d_ui_layout_hit_region *resize = nullptr;
+        for (int i = 0; i < slayer3d_ui_layout_hit_region_count(layout); ++i)
+        {
+            const slayer3d_ui_layout_hit_region *candidate = slayer3d_ui_layout_hit_region_at(layout, i);
+            if (candidate != nullptr && resize_id == candidate->id)
+            {
+                resize = candidate;
+                break;
+            }
+        }
+        EXPECT_NE(resize, nullptr);
+        if (resize != nullptr)
+            EXPECT_EQ(resize->resize_edge, expected_edge);
+        const slayer3d_ui_layout_rect rect = resize != nullptr ? resize->rect : slayer3d_ui_layout_rect{};
+        slayer3d_ui_layout_destroy(layout);
+        return rect;
+    };
     auto expect_header_hit = [&](float x, float y, const char *header_id) {
         slayer3d_ui_layout_model *layout = nullptr;
         EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
@@ -25451,6 +25503,15 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     expect_drag_indicator("ui.editor_shell.actor_viewer.drag_indicator", "ui.editor_shell.actor_viewer.header");
     expect_visible_text("ui.editor_shell.actor_viewer.close.label", "close");
     slayer3d_ui_layout_rect initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
+    slayer3d_ui_layout_rect things_resize =
+        dock_resize_rect("ui.editor_shell.actor_viewer.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(things_resize.x + things_resize.w * 0.5f, things_resize.y + 180.0f, 942.0f, things_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.dock_width", 0.0f), 338.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").w, 338.0f);
+    things_resize = dock_resize_rect("ui.editor_shell.actor_viewer.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(things_resize.x + things_resize.w * 0.5f, things_resize.y + 180.0f, 1042.0f, things_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.actor.viewer.dock_width", 0.0f), 238.0f);
+    initial_things_rect = resolved_window_rect("ui.editor_shell.actor_viewer.panel");
     const float initial_drag_x = initial_things_rect.x + 12.0f;
     const float initial_drag_y = initial_things_rect.y + 16.0f;
     pointer_down(initial_drag_x, initial_drag_y);
@@ -25515,6 +25576,19 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
     EXPECT_FLOAT_EQ(inspector->rect.x, 0.0f);
     EXPECT_FLOAT_EQ(things->rect.x, 312.0f);
     slayer3d_ui_layout_destroy(layout);
+
+    slayer3d_ui_layout_rect inspector_resize =
+        dock_resize_rect("ui.editor_shell.left_inspector.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+    drag(inspector_resize.x + inspector_resize.w * 0.5f, inspector_resize.y + 180.0f, 408.0f,
+         inspector_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.dock_width", 0.0f), 408.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").x, 412.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    inspector_resize = dock_resize_rect("ui.editor_shell.left_inspector.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+    drag(inspector_resize.x + inspector_resize.w * 0.5f, inspector_resize.y + 180.0f, 308.0f,
+         inspector_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.dock_width", 0.0f), 308.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").x, 312.0f);
 
     expect_header_hit(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header");
     expect_drag_handle_hover(324.0f, 96.0f, "ui.editor_shell.actor_viewer.header",
