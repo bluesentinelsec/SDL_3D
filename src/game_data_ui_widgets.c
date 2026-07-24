@@ -315,6 +315,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     if (ui_widget_scene_float(runtime, json_string(node, "h_key", NULL), &scene_h))
         desc.rect.h = scene_h;
     desc.padding = json_float(node, "padding", 0.0f);
+    desc.padding_x = json_float(node, "padding_x", 0.0f);
+    desc.padding_y = json_float(node, "padding_y", 0.0f);
     desc.gap = json_float(node, "gap", 0.0f);
     desc.grid_columns = ui_widget_int(node, "columns", "grid_columns", 0);
     desc.clip_children = ui_widget_bool(node, "clip_children", false);

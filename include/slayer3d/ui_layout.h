@@ -149,7 +149,12 @@ extern "C"
         slayer3d_ui_layout_size_mode width_mode;
         slayer3d_ui_layout_size_mode height_mode;
         slayer3d_ui_layout_rect rect;
+        /** @brief Uniform content padding used when an axis-specific value is zero. */
         float padding;
+        /** @brief Horizontal content padding; zero inherits padding. */
+        float padding_x;
+        /** @brief Vertical content padding; zero inherits padding. */
+        float padding_y;
         float gap;
         /** @brief Number of columns for children placed with SLAYER3D_UI_LAYOUT_AXIS_GRID. */
         int grid_columns;

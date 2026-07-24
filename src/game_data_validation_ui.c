@@ -356,6 +356,11 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget x/y must be numeric when authored");
     if (!ui_widget_optional_number_non_negative(node, "padding"))
         return validation_error(ctx, path, "UI widget padding must be non-negative");
+    if (!ui_widget_optional_number_non_negative(node, "padding_x") ||
+        !ui_widget_optional_number_non_negative(node, "padding_y"))
+    {
+        return validation_error(ctx, path, "UI widget axis padding must be non-negative");
+    }
     if (!ui_widget_optional_number_non_negative(node, "gap"))
         return validation_error(ctx, path, "UI widget gap must be non-negative");
     if (!ui_widget_optional_number_non_negative(node, "border_thickness"))
@@ -770,6 +775,8 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.rect.w = parse_ui_widget_size_value(width, 1.0f);
     desc.rect.h = parse_ui_widget_size_value(height, 1.0f);
     desc.padding = parse_ui_widget_float(node, "padding", 0.0f);
+    desc.padding_x = parse_ui_widget_float(node, "padding_x", 0.0f);
+    desc.padding_y = parse_ui_widget_float(node, "padding_y", 0.0f);
     desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
     desc.clip_children = parse_ui_widget_bool(node, "clip_children", false);
     desc.clip_rect_id = json_string(node, "clip_rect_id");

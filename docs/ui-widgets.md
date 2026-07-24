@@ -117,7 +117,13 @@ thumb or travel math.
 Cell width is the padded content width divided by the column count (minus
 gaps); children with `w: "fill"` stretch to the cell, fixed-size children keep
 their size at the cell origin. Each row is as tall as its tallest fixed-height
-child. Use grids for asset browsers, palettes, and forms:
+child.
+
+`padding` applies the same content inset on both axes. `padding_x` and
+`padding_y` override one axis independently when short rows need horizontal
+gutters without losing control height. A zero axis value inherits `padding`.
+
+Use grids for asset browsers, palettes, and forms:
 
 ```json
 {

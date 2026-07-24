@@ -207,6 +207,36 @@ TEST(SLAYER3DUI, RetainedColumnLayoutDistributesFillChildren)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, AxisSpecificPaddingOverridesUniformPadding)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "panel";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {10.0f, 20.0f, 100.0f, 50.0f};
+    panel.padding = 10.0f;
+    panel.padding_x = 4.0f;
+    panel.padding_y = 2.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    slayer3d_ui_layout_node_desc content{};
+    content.id = "content";
+    content.parent_id = "panel";
+    content.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    content.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    content.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &content));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "content"), 14.0f, 22.0f, 92.0f, 46.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedImageNodeInheritsParentPlacementAndClip)
 {
     slayer3d_ui_layout_model *layout = nullptr;

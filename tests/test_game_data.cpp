@@ -25638,6 +25638,42 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
                                      "ui.editor_shell.liquid_panel.header",
                                      "ui.editor_shell.liquid_panel.drag_indicator",
                                      "ui.editor_shell.liquid_panel.close", "editor.liquid.panel.dock");
+    slayer3d_ui_layout_rect liquid_resize =
+        dock_resize_rect("ui.editor_shell.liquid_panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(liquid_resize.x + liquid_resize.w * 0.5f, liquid_resize.y + 180.0f, 880.0f, liquid_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.liquid.panel.dock_width", 0.0f), 400.0f);
+    const slayer3d_ui_layout_rect expanded_liquid = resolved_window_rect("ui.editor_shell.liquid_panel");
+    const slayer3d_ui_layout_rect expanded_liquid_header = resolved_window_rect("ui.editor_shell.liquid_panel.header");
+    const slayer3d_ui_layout_rect expanded_liquid_close = resolved_window_rect("ui.editor_shell.liquid_panel.close");
+    const slayer3d_ui_layout_rect expanded_liquid_rectangle =
+        resolved_window_rect("ui.editor_shell.liquid_panel.shape.rectangle");
+    const slayer3d_ui_layout_rect expanded_liquid_spheroid =
+        resolved_window_rect("ui.editor_shell.liquid_panel.shape.spheroid");
+    const slayer3d_ui_layout_rect expanded_liquid_clean =
+        resolved_window_rect("ui.editor_shell.liquid_panel.type.clean_water");
+    const slayer3d_ui_layout_rect expanded_liquid_dirty =
+        resolved_window_rect("ui.editor_shell.liquid_panel.type.dirty_water");
+    const slayer3d_ui_layout_rect expanded_liquid_poison =
+        resolved_window_rect("ui.editor_shell.liquid_panel.type.purple_poison");
+    const slayer3d_ui_layout_rect expanded_liquid_decrease =
+        resolved_window_rect("ui.editor_shell.liquid_panel.depth.decrease");
+    EXPECT_FLOAT_EQ(expanded_liquid.w, 400.0f);
+    EXPECT_FLOAT_EQ(expanded_liquid_header.w, 400.0f);
+    EXPECT_FLOAT_EQ(expanded_liquid_close.x + expanded_liquid_close.w, expanded_liquid.x + expanded_liquid.w - 4.0f);
+    EXPECT_FLOAT_EQ(expanded_liquid_rectangle.w, expanded_liquid_spheroid.w);
+    EXPECT_FLOAT_EQ(expanded_liquid_spheroid.x + expanded_liquid_spheroid.w,
+                    expanded_liquid.x + expanded_liquid.w - 6.0f);
+    EXPECT_NEAR(expanded_liquid_clean.w, expanded_liquid_dirty.w, 0.001f);
+    EXPECT_NEAR(expanded_liquid_dirty.w, expanded_liquid_poison.w, 0.001f);
+    EXPECT_FLOAT_EQ(expanded_liquid_decrease.x + expanded_liquid_decrease.w,
+                    expanded_liquid.x + expanded_liquid.w - 6.0f);
+    liquid_resize = dock_resize_rect("ui.editor_shell.liquid_panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(liquid_resize.x + liquid_resize.w * 0.5f, liquid_resize.y + 180.0f, 1256.0f, liquid_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.liquid.panel.dock_width", 0.0f), 24.0f);
+    EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.liquid_panel").w, 24.0f);
+    liquid_resize = dock_resize_rect("ui.editor_shell.liquid_panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    drag(liquid_resize.x + liquid_resize.w * 0.5f, liquid_resize.y + 180.0f, 1048.0f, liquid_resize.y + 180.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.liquid.panel.dock_width", 0.0f), 232.0f);
     expect_window_floats_and_redocks("signal.editor.palette.material", "ui.editor_shell.texture_viewer.panel",
                                      "ui.editor_shell.texture_viewer.header",
                                      "ui.editor_shell.texture_viewer.drag_indicator",

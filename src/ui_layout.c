@@ -20,7 +20,8 @@ typedef struct ui_layout_node
     slayer3d_ui_layout_rect resolved_rect;
     bool has_resolved_clip_rect;
     slayer3d_ui_layout_rect resolved_clip_rect;
-    float padding;
+    float padding_x;
+    float padding_y;
     float gap;
     int grid_columns;
     bool clip_children;
@@ -380,7 +381,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
         return false;
     if (!ui_layout_optional_id_valid(desc->state_source_id))
         return false;
-    if (desc->padding < 0.0f || desc->gap < 0.0f || desc->border_thickness < 0.0f)
+    if (desc->padding < 0.0f || desc->padding_x < 0.0f || desc->padding_y < 0.0f || desc->gap < 0.0f ||
+        desc->border_thickness < 0.0f)
         return false;
     if (desc->dock < SLAYER3D_UI_LAYOUT_DOCK_NONE || desc->dock > SLAYER3D_UI_LAYOUT_DOCK_BOTTOM ||
         desc->dock_top < 0.0f || desc->dock_bottom < 0.0f || desc->dock_margin < 0.0f || desc->dock_gap < 0.0f ||
@@ -438,7 +440,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->width_mode = desc->width_mode;
     node->height_mode = desc->height_mode;
     node->local_rect = desc->rect;
-    node->padding = desc->padding;
+    node->padding_x = desc->padding_x > 0.0f ? desc->padding_x : desc->padding;
+    node->padding_y = desc->padding_y > 0.0f ? desc->padding_y : desc->padding;
     node->gap = desc->gap;
     node->grid_columns = desc->grid_columns;
     node->clip_children = desc->clip_children;
@@ -526,11 +529,12 @@ static int ui_layout_child_count(const slayer3d_ui_layout_model *model, int pare
 static void ui_layout_content_rect(const ui_layout_node *node, slayer3d_ui_layout_rect *out_rect)
 {
     *out_rect = node->resolved_rect;
-    const float pad = SDL_min(node->padding, SDL_min(out_rect->w, out_rect->h) * 0.5f);
-    out_rect->x += pad;
-    out_rect->y += pad;
-    out_rect->w = SDL_max(out_rect->w - pad * 2.0f, 0.0f);
-    out_rect->h = SDL_max(out_rect->h - pad * 2.0f, 0.0f);
+    const float pad_x = SDL_min(node->padding_x, out_rect->w * 0.5f);
+    const float pad_y = SDL_min(node->padding_y, out_rect->h * 0.5f);
+    out_rect->x += pad_x;
+    out_rect->y += pad_y;
+    out_rect->w = SDL_max(out_rect->w - pad_x * 2.0f, 0.0f);
+    out_rect->h = SDL_max(out_rect->h - pad_y * 2.0f, 0.0f);
 }
 
 static float ui_layout_fixed_child_extent(const ui_layout_node *node, slayer3d_ui_layout_axis axis)
