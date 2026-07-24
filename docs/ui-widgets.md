@@ -247,6 +247,13 @@ when they want a visible collapsed sliver. This matches split-pane behavior
 on the web: content retains its natural layout and is clipped as the containing
 pane contracts, then reappears unchanged when the pane expands.
 
+Resizable pane content should use the normal retained-layout constraints rather
+than dimensions copied from the pane's default size. Use `"w": "fill"` and
+`"h": "fill"` for surfaces and rows that follow the pane, fill-sized children
+for flexible row columns, and `anchor_x: "right"` / `anchor_y: "bottom"` for
+fixed controls that track a trailing edge. Fixed dimensions remain appropriate
+for controls whose intrinsic size should not change.
+
 For a bottom console, use the same contract with `default_dock: "bottom"`.
 Its `dock_height_key` may share the root's `h_key` so docked and floating
 heights persist together. A floating-only top resize handle may still author

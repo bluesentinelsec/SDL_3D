@@ -23524,7 +23524,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     std::vector<std::string> text_names = visible_text_names();
     EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.row.preview.value"),
               text_names.end());
-    EXPECT_EQ(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.brush_color.r.value"),
+    EXPECT_NE(std::find(text_names.begin(), text_names.end(), "ui.editor_shell.left_inspector.brush_color.r.value"),
               text_names.end());
     // The scroll pane synthesizes its scrollbar from resolved content, so the
     // track/thumb exist without any hand-authored widgets.
@@ -23712,7 +23712,7 @@ TEST(GameDataRuntime, EditorShellDojoKeepsInspectorAndConsoleInIndependentFrames
     slayer3d_input_update(input, input_tick++);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    click_editor(inspector.x + inspector.w - 8.0f, inspector.y + 8.0f);
+    click_editor(inspector.x + inspector.w - 8.0f, inspector.y + 86.0f);
     EXPECT_STREQ(
         slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.property.edit.focus", "set"),
         "");
@@ -25592,6 +25592,22 @@ TEST(GameDataRuntime, EditorShellDojoWindowsDragDockResizeAndConsumeCanvasInput)
          inspector_resize.y + 180.0f);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.inspector.panel.dock_width", 0.0f), 408.0f);
     EXPECT_FLOAT_EQ(resolved_window_rect("ui.editor_shell.actor_viewer.panel").x, 412.0f);
+    const slayer3d_ui_layout_rect expanded_inspector_header =
+        resolved_window_rect("ui.editor_shell.left_inspector.header");
+    const slayer3d_ui_layout_rect expanded_inspector_close =
+        resolved_window_rect("ui.editor_shell.left_inspector.close");
+    const slayer3d_ui_layout_rect expanded_inspector_scroll =
+        resolved_window_rect("ui.editor_shell.left_inspector.scroll.pane");
+    const slayer3d_ui_layout_rect expanded_inspector_row =
+        resolved_window_rect("ui.editor_shell.left_inspector.row.name");
+    const slayer3d_ui_layout_rect expanded_inspector_value =
+        resolved_window_rect("ui.editor_shell.left_inspector.row.name.value");
+    EXPECT_FLOAT_EQ(expanded_inspector_header.w, 400.0f);
+    EXPECT_FLOAT_EQ(expanded_inspector_close.x + expanded_inspector_close.w,
+                    expanded_inspector_header.x + expanded_inspector_header.w - 5.0f);
+    EXPECT_FLOAT_EQ(expanded_inspector_scroll.w, 396.0f);
+    EXPECT_FLOAT_EQ(expanded_inspector_row.w, 384.0f);
+    EXPECT_FLOAT_EQ(expanded_inspector_value.x + expanded_inspector_value.w, 396.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
     inspector_resize = dock_resize_rect("ui.editor_shell.left_inspector.panel", SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
     drag(inspector_resize.x + inspector_resize.w * 0.5f, inspector_resize.y + 180.0f, 308.0f,
