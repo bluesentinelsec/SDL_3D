@@ -117,7 +117,13 @@ thumb or travel math.
 Cell width is the padded content width divided by the column count (minus
 gaps); children with `w: "fill"` stretch to the cell, fixed-size children keep
 their size at the cell origin. Each row is as tall as its tallest fixed-height
-child. Use grids for asset browsers, palettes, and forms:
+child.
+
+`padding` applies the same content inset on both axes. `padding_x` and
+`padding_y` override one axis independently when short rows need horizontal
+gutters without losing control height. A zero axis value inherits `padding`.
+
+Use grids for asset browsers, palettes, and forms:
 
 ```json
 {
@@ -168,9 +174,10 @@ floating position and `dock_key` owns `"none"`, `"left"`, `"right"`, or
 bottom dock stack and stack horizontally inward in authored order.
 Bottom-docked windows fill the available width and stack upward. Optional
 `dock_width` and `dock_height` values override a window's floating dimension
-on the corresponding dock axis. Window roots paint an opaque surface by
-default and form stacking contexts, so one window's descendants cannot bleed
-through a window above it.
+on the corresponding dock axis. `dock_width_key` and `dock_height_key` bind
+those dimensions to scene state. Window roots paint an opaque surface, clip
+their descendants to their own bounds, and form stacking contexts, so content
+cannot bleed through or escape a resized window.
 
 The retained layout marks the named descendant as a semantic drag handle.
 That role makes the full handle interactive without requiring editor-specific
@@ -193,6 +200,15 @@ larger title bar remains easy to grab.
     "default_dock": "left",
     "dock_top": 80,
     "dock_gap": 4,
+    "dock_width": 308,
+    "dock_height": 500,
+    "dock_resizable": true,
+    "dock_width_key": "editor.inspector.dock_width",
+    "dock_height_key": "editor.inspector.dock_height",
+    "min_dock_width": 24,
+    "max_dock_width": 720,
+    "min_dock_height": 24,
+    "max_dock_height": 640,
     "snap_distance": 48,
     "drag_threshold": 4,
     "titlebar_visible_width": 48
@@ -223,8 +239,30 @@ edge target rails while dragging, an outline around a floating result, and
 the resolved dock slot when an edge is targeted. The preview should match
 the same authored ordering and gap rules used by final dock layout.
 
-For a bottom console, use the same window contract with
-`default_dock: "bottom"`. Author `h_key` on the root and a top-edge
+With `dock_resizable: true`, the retained layout synthesizes a resize rail on
+the dock's canvas-facing edge: right for a left dock, left for a right dock,
+and top for a bottom dock. The rail provides semantic edge metadata for
+pointer capture and a consistent hover/active affordance. Hosts update the
+authored dock size key during capture; the layout clamps the value to
+`min_dock_width` / `max_dock_width` or `min_dock_height` /
+`max_dock_height`, then reflows every window in that dock stack. An optional
+`dock_resize_thickness` changes the hit target from its 6px default without
+changing the visible rail width. A zero minimum means the pane can collapse
+to the resize rail itself; applications may author a slightly larger minimum
+when they want a visible collapsed sliver. This matches split-pane behavior
+on the web: content retains its natural layout and is clipped as the containing
+pane contracts, then reappears unchanged when the pane expands.
+
+Resizable pane content should use the normal retained-layout constraints rather
+than dimensions copied from the pane's default size. Use `"w": "fill"` and
+`"h": "fill"` for surfaces and rows that follow the pane, fill-sized children
+for flexible row columns, and `anchor_x: "right"` / `anchor_y: "bottom"` for
+fixed controls that track a trailing edge. Fixed dimensions remain appropriate
+for controls whose intrinsic size should not change.
+
+For a bottom console, use the same contract with `default_dock: "bottom"`.
+Its `dock_height_key` may share the root's `h_key` so docked and floating
+heights persist together. A floating-only top resize handle may still author
 `resize_handle`, `resize_edge: "top"`, `height_key`, and min/max heights.
 `resolved_height_key` can publish the actual height for virtualized content
 when a side dock stretches the window. Visibility remains ordinary

@@ -356,6 +356,11 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget x/y must be numeric when authored");
     if (!ui_widget_optional_number_non_negative(node, "padding"))
         return validation_error(ctx, path, "UI widget padding must be non-negative");
+    if (!ui_widget_optional_number_non_negative(node, "padding_x") ||
+        !ui_widget_optional_number_non_negative(node, "padding_y"))
+    {
+        return validation_error(ctx, path, "UI widget axis padding must be non-negative");
+    }
     if (!ui_widget_optional_number_non_negative(node, "gap"))
         return validation_error(ctx, path, "UI widget gap must be non-negative");
     if (!ui_widget_optional_number_non_negative(node, "border_thickness"))
@@ -472,8 +477,8 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         if (!root_node)
             return validation_error(ctx, path, "UI widget window is only valid on root widgets");
         static const char *const window_string_keys[] = {
-            "drag_handle",     "resize_handle", "resize_edge",         "dock_key",  "default_dock", "dock_top_key",
-            "dock_bottom_key", "height_key",    "resolved_height_key", "front_key",
+            "drag_handle",     "resize_handle",  "resize_edge",     "dock_key",   "default_dock",        "dock_top_key",
+            "dock_bottom_key", "dock_width_key", "dock_height_key", "height_key", "resolved_height_key", "front_key",
         };
         for (size_t i = 0; i < SDL_arraysize(window_string_keys); ++i)
         {
@@ -494,10 +499,22 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         if (resize_edge != NULL && SDL_strcmp(resize_edge, "top") != 0)
             return validation_error(ctx, path, "UI window resize_edge must be top");
         static const char *const nonnegative_keys[] = {
-            "dock_top",      "dock_bottom",    "dock_margin",
-            "dock_gap",      "dock_width",     "dock_height",
-            "snap_distance", "drag_threshold", "titlebar_visible_width",
-            "min_height",    "max_height",
+            "dock_top",
+            "dock_bottom",
+            "dock_margin",
+            "dock_gap",
+            "dock_width",
+            "dock_height",
+            "dock_resize_thickness",
+            "min_dock_width",
+            "max_dock_width",
+            "min_dock_height",
+            "max_dock_height",
+            "snap_distance",
+            "drag_threshold",
+            "titlebar_visible_width",
+            "min_height",
+            "max_height",
         };
         for (size_t i = 0; i < SDL_arraysize(nonnegative_keys); ++i)
         {
@@ -507,6 +524,14 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         }
         if (obj_get(window, "resize_handle") != NULL && obj_get(window, "height_key") == NULL)
             return validation_error(ctx, path, "A resizable UI window requires height_key");
+        if (!ui_widget_optional_bool(window, "dock_resizable"))
+            return validation_error(ctx, path, "UI window dock_resizable must be a boolean when authored");
+        if (yyjson_is_true(obj_get(window, "dock_resizable")) &&
+            (obj_get(window, "dock_width_key") == NULL || obj_get(window, "dock_height_key") == NULL))
+        {
+            return validation_error(ctx, path,
+                                    "A dock-resizable UI window requires dock_width_key and dock_height_key");
+        }
         if (obj_get(window, "drag_handle") != NULL &&
             (obj_get(node, "x_key") == NULL || obj_get(node, "y_key") == NULL))
         {
@@ -518,6 +543,22 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
             yyjson_is_num(obj_get(window, "max_height")) ? (float)yyjson_get_num(obj_get(window, "max_height")) : 0.0f;
         if (min_height > 0.0f && max_height > 0.0f && min_height > max_height)
             return validation_error(ctx, path, "UI window min_height must not exceed max_height");
+        const float min_dock_width = yyjson_is_num(obj_get(window, "min_dock_width"))
+                                         ? (float)yyjson_get_num(obj_get(window, "min_dock_width"))
+                                         : 0.0f;
+        const float max_dock_width = yyjson_is_num(obj_get(window, "max_dock_width"))
+                                         ? (float)yyjson_get_num(obj_get(window, "max_dock_width"))
+                                         : 0.0f;
+        if (min_dock_width > 0.0f && max_dock_width > 0.0f && min_dock_width > max_dock_width)
+            return validation_error(ctx, path, "UI window min_dock_width must not exceed max_dock_width");
+        const float min_dock_height = yyjson_is_num(obj_get(window, "min_dock_height"))
+                                          ? (float)yyjson_get_num(obj_get(window, "min_dock_height"))
+                                          : 0.0f;
+        const float max_dock_height = yyjson_is_num(obj_get(window, "max_dock_height"))
+                                          ? (float)yyjson_get_num(obj_get(window, "max_dock_height"))
+                                          : 0.0f;
+        if (min_dock_height > 0.0f && max_dock_height > 0.0f && min_dock_height > max_dock_height)
+            return validation_error(ctx, path, "UI window min_dock_height must not exceed max_dock_height");
     }
     if (!ui_widget_optional_non_empty_string_len(node, "action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
         return validation_error(ctx, path, "UI widget action must be a non-empty string shorter than %d bytes",
@@ -734,6 +775,8 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.rect.w = parse_ui_widget_size_value(width, 1.0f);
     desc.rect.h = parse_ui_widget_size_value(height, 1.0f);
     desc.padding = parse_ui_widget_float(node, "padding", 0.0f);
+    desc.padding_x = parse_ui_widget_float(node, "padding_x", 0.0f);
+    desc.padding_y = parse_ui_widget_float(node, "padding_y", 0.0f);
     desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
     desc.clip_children = parse_ui_widget_bool(node, "clip_children", false);
     desc.clip_rect_id = json_string(node, "clip_rect_id");

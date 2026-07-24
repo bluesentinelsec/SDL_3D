@@ -2206,6 +2206,34 @@ static bool emit_retained_drag_indicator(const slayer3d_ui_layout_render_command
     return true;
 }
 
+static bool emit_retained_resize_indicator(const slayer3d_ui_layout_render_command *command,
+                                           slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    if (command == NULL || callback == NULL || command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_NONE)
+        return false;
+
+    const bool vertical = command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT ||
+                          command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT;
+    slayer3d_ui_layout_rect rail = command->rect;
+    if (vertical)
+    {
+        rail.w = command->active ? 3.0f : 2.0f;
+        rail.x = command->rect.x + (command->rect.w - rail.w) * 0.5f;
+    }
+    else
+    {
+        rail.h = command->active ? 3.0f : 2.0f;
+        rail.y = command->rect.y + (command->rect.h - rail.h) * 0.5f;
+    }
+
+    const slayer3d_color color = command->active    ? (slayer3d_color){225, 238, 255, 255}
+                                 : command->hovered ? (slayer3d_color){105, 160, 218, 255}
+                                                    : (slayer3d_color){82, 104, 130, 220};
+    return emit_ui_rect_from_values_clipped_layered(NULL, command->id, command->layer, rail.x, rail.y, rail.w, rail.h,
+                                                    color, command->has_clip_rect, command->clip_rect, callback,
+                                                    userdata);
+}
+
 static bool retained_ui_rects_from_layout_model(const slayer3d_game_data_runtime *runtime,
                                                 slayer3d_ui_layout_model *layout,
                                                 slayer3d_game_data_ui_rect_fn callback, void *userdata)
@@ -2240,6 +2268,11 @@ static bool retained_ui_rects_from_layout_model(const slayer3d_game_data_runtime
         if (command->type == SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR)
         {
             ok = emit_retained_drag_indicator(command, callback, userdata);
+            continue;
+        }
+        if (command->type == SLAYER3D_UI_LAYOUT_NODE_RESIZE_INDICATOR)
+        {
+            ok = emit_retained_resize_indicator(command, callback, userdata);
             continue;
         }
 

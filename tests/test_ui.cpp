@@ -207,6 +207,36 @@ TEST(SLAYER3DUI, RetainedColumnLayoutDistributesFillChildren)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, AxisSpecificPaddingOverridesUniformPadding)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "panel";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {10.0f, 20.0f, 100.0f, 50.0f};
+    panel.padding = 10.0f;
+    panel.padding_x = 4.0f;
+    panel.padding_y = 2.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    slayer3d_ui_layout_node_desc content{};
+    content.id = "content";
+    content.parent_id = "panel";
+    content.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    content.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    content.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &content));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "content"), 14.0f, 22.0f, 92.0f, 46.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedImageNodeInheritsParentPlacementAndClip)
 {
     slayer3d_ui_layout_model *layout = nullptr;
@@ -693,6 +723,122 @@ TEST(SLAYER3DUI, DockedRootWindowsStackAroundTheCanvas)
     EXPECT_FLOAT_EQ(preview.y, 630.0f);
     EXPECT_FLOAT_EQ(preview.w, 1280.0f);
     EXPECT_FLOAT_EQ(preview.h, 90.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, DockedResizableWindowsSynthesizeBoundedSemanticRails)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc left{};
+    left.id = "left";
+    left.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    left.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    left.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    left.rect = {0.0f, 0.0f, 240.0f, 400.0f};
+    left.window = true;
+    left.dock = SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    left.dock_width = 100.0f;
+    left.min_dock_width = 160.0f;
+    left.max_dock_width = 320.0f;
+    left.dock_resizable = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &left));
+
+    slayer3d_ui_layout_node_desc right = left;
+    right.id = "right";
+    right.dock = SLAYER3D_UI_LAYOUT_DOCK_RIGHT;
+    right.dock_width = 900.0f;
+    right.min_dock_width = 120.0f;
+    right.max_dock_width = 280.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &right));
+
+    slayer3d_ui_layout_node_desc bottom = left;
+    bottom.id = "bottom";
+    bottom.dock = SLAYER3D_UI_LAYOUT_DOCK_BOTTOM;
+    bottom.dock_height = 20.0f;
+    bottom.min_dock_height = 72.0f;
+    bottom.max_dock_height = 240.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &bottom));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "left"), 0.0f, 0.0f, 160.0f, 648.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "right"), 1000.0f, 0.0f, 280.0f, 648.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "bottom"), 0.0f, 648.0f, 1280.0f, 72.0f);
+
+    const slayer3d_ui_layout_hit_region *left_resize = find_hit_region(layout, "left.dock_resize");
+    const slayer3d_ui_layout_hit_region *right_resize = find_hit_region(layout, "right.dock_resize");
+    const slayer3d_ui_layout_hit_region *bottom_resize = find_hit_region(layout, "bottom.dock_resize");
+    ASSERT_NE(left_resize, nullptr);
+    ASSERT_NE(right_resize, nullptr);
+    ASSERT_NE(bottom_resize, nullptr);
+    EXPECT_EQ(left_resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+    EXPECT_EQ(right_resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT);
+    EXPECT_EQ(bottom_resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_TOP);
+    EXPECT_FLOAT_EQ(left_resize->rect.x, 154.0f);
+    EXPECT_FLOAT_EQ(left_resize->rect.w, 6.0f);
+    EXPECT_FLOAT_EQ(right_resize->rect.x, 1000.0f);
+    EXPECT_FLOAT_EQ(right_resize->rect.w, 6.0f);
+    EXPECT_FLOAT_EQ(bottom_resize->rect.y, 648.0f);
+    EXPECT_FLOAT_EQ(bottom_resize->rect.h, 6.0f);
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, 157.0f, 200.0f);
+    ASSERT_NE(hit, nullptr);
+    EXPECT_STREQ(hit->id, "left.dock_resize");
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 157.0f;
+    input.pointer_y = 200.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, nullptr));
+    const slayer3d_ui_layout_render_command *rail = find_render_command(layout, "left.dock_resize");
+    ASSERT_NE(rail, nullptr);
+    EXPECT_TRUE(rail->hovered);
+    EXPECT_EQ(rail->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, DockedResizableWindowsCollapseToRailAndClipContents)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc window{};
+    window.id = "window";
+    window.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    window.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.rect = {0.0f, 0.0f, 240.0f, 300.0f};
+    window.window = true;
+    window.dock = SLAYER3D_UI_LAYOUT_DOCK_LEFT;
+    window.dock_width = 1.0f;
+    window.dock_resizable = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &window));
+
+    slayer3d_ui_layout_node_desc content{};
+    content.id = "window.content";
+    content.parent_id = "window";
+    content.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    content.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    content.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    content.rect = {0.0f, 20.0f, 120.0f, 40.0f};
+    content.interactive = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &content));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 400.0f, 300.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "window"), 0.0f, 0.0f, 6.0f, 300.0f);
+
+    const slayer3d_ui_layout_render_command *content_command = find_render_command(layout, "window.content");
+    ASSERT_NE(content_command, nullptr);
+    EXPECT_TRUE(content_command->has_clip_rect);
+    EXPECT_FLOAT_EQ(content_command->clip_rect.x, 0.0f);
+    EXPECT_FLOAT_EQ(content_command->clip_rect.w, 6.0f);
+    EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 50.0f, 30.0f), nullptr);
+
+    const slayer3d_ui_layout_hit_region *resize = slayer3d_ui_layout_hit_test(layout, 3.0f, 100.0f);
+    ASSERT_NE(resize, nullptr);
+    EXPECT_STREQ(resize->id, "window.dock_resize");
+    EXPECT_EQ(resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT);
 
     slayer3d_ui_layout_destroy(layout);
 }

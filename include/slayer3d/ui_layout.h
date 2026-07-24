@@ -53,6 +53,8 @@ extern "C"
         SLAYER3D_UI_LAYOUT_NODE_SCROLL,
         /** @brief Decorative three-bar grip whose state follows an authored drag handle. */
         SLAYER3D_UI_LAYOUT_NODE_DRAG_INDICATOR,
+        /** @brief Synthesized visual rail for resizing a docked window. */
+        SLAYER3D_UI_LAYOUT_NODE_RESIZE_INDICATOR,
     } slayer3d_ui_layout_node_type;
 
     /** @brief Optional layout axis applied to a node's direct children. */
@@ -79,6 +81,16 @@ extern "C"
         SLAYER3D_UI_LAYOUT_DOCK_RIGHT,
         SLAYER3D_UI_LAYOUT_DOCK_BOTTOM,
     } slayer3d_ui_layout_dock;
+
+    /** @brief Semantic edge used by a retained resize control. */
+    typedef enum slayer3d_ui_layout_resize_edge
+    {
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_NONE = 0,
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT,
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT,
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_TOP,
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM,
+    } slayer3d_ui_layout_resize_edge;
 
     /** @brief Optional retained UI text alignment. */
     typedef enum slayer3d_ui_layout_text_align
@@ -137,7 +149,12 @@ extern "C"
         slayer3d_ui_layout_size_mode width_mode;
         slayer3d_ui_layout_size_mode height_mode;
         slayer3d_ui_layout_rect rect;
+        /** @brief Uniform content padding used when an axis-specific value is zero. */
         float padding;
+        /** @brief Horizontal content padding; zero inherits padding. */
+        float padding_x;
+        /** @brief Vertical content padding; zero inherits padding. */
+        float padding_y;
         float gap;
         /** @brief Number of columns for children placed with SLAYER3D_UI_LAYOUT_AXIS_GRID. */
         int grid_columns;
@@ -216,6 +233,26 @@ extern "C"
         float dock_width;
         /** @brief Optional height while docked to the bottom; zero uses the floating height. */
         float dock_height;
+        /** @brief Synthesize a resize rail on the canvas-facing edge while docked. */
+        bool dock_resizable;
+        /** @brief Hit target thickness for the dock resize rail; zero uses the theme default. */
+        float dock_resize_thickness;
+        /**
+         * @brief Minimum and maximum docked width.
+         *
+         * Zero leaves the authored bound unconstrained. A resizable dock
+         * still retains enough width for its resize rail.
+         */
+        float min_dock_width;
+        float max_dock_width;
+        /**
+         * @brief Minimum and maximum docked height.
+         *
+         * Zero leaves the authored bound unconstrained. A resizable dock
+         * still retains enough height for its resize rail.
+         */
+        float min_dock_height;
+        float max_dock_height;
         /**
          * @brief Total item count for a virtualized list container.
          *
@@ -257,6 +294,8 @@ extern "C"
         bool window_front;
         /** @brief Resolved dock side for a root window. */
         slayer3d_ui_layout_dock dock;
+        /** @brief True when this docked root exposes a synthesized resize rail. */
+        bool dock_resizable;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         slayer3d_color text_color;
@@ -327,6 +366,8 @@ extern "C"
         bool selected;
         /** @brief True when this command paints a window drag handle. */
         bool drag_handle;
+        /** @brief Semantic edge represented by a synthesized resize rail. */
+        slayer3d_ui_layout_resize_edge resize_edge;
         /** @brief Node id whose hover and active state drive this command. */
         char state_source_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
@@ -353,6 +394,8 @@ extern "C"
         bool selected;
         /** @brief True when this region begins a window drag gesture. */
         bool drag_handle;
+        /** @brief Semantic edge resized by this region. */
+        slayer3d_ui_layout_resize_edge resize_edge;
         char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         int option_index;
         /** @brief True when this region captures an outside click for its owner popup. */
