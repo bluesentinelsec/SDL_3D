@@ -2302,6 +2302,7 @@ viewport camera without collision:
       "orthographic_size_key": "editor.ortho.size",
       "move_speed": 8.0,
       "fast_speed": 22.0,
+      "move_forward_with_pitch": true,
       "orthographic_pan_speed": 0.85,
       "orthographic_zoom_speed": 1.75,
       "mouse_sensitivity": 0.002,
@@ -2313,12 +2314,15 @@ viewport camera without collision:
 ```
 
 Pair it with an `fps` camera targeting the camera actor. Movement uses the
-actor's yaw on the horizontal plane; `up` and `down` move along world Y. The
-optional `look` action gates mouse-look, which is useful for editors that need
-normal mouse clicking and right-button camera look in the same scene. If `look`
-is omitted, mouse-look is active whenever `mouse_look` is true. The controller
-writes `yaw`, `pitch`, and `camera_forward` by default; override those names
-with `yaw_property`, `pitch_property`, and `forward_property`.
+actor's yaw on the horizontal plane by default. Set `move_forward_with_pitch`
+to `true` for free-flight movement where forward and backward follow the full
+camera facing, including its vertical pitch. The `up` and `down` actions always
+move along world Y. The optional `look` action gates mouse-look, which is useful
+for editors that need normal mouse clicking and right-button camera look in the
+same scene. If `look` is omitted, mouse-look is active whenever `mouse_look` is
+true. The controller writes `yaw`, `pitch`, and `camera_forward` by default;
+override those names with `yaw_property`, `pitch_property`, and
+`forward_property`.
 
 When `mode_key` points at scene state with `orthographic_top`,
 `orthographic_front`, or `orthographic_side`, the same controller switches to

@@ -19020,6 +19020,10 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     ASSERT_NE(skybox.sphere, nullptr);
     EXPECT_NE(std::string(skybox.sphere).find("sphere.png"), std::string::npos);
     ASSERT_EQ(skybox.layer_count, 0);
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.editor_shell.test_run"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.preset, "afternoon");
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.slayer3d_editor.main"));
 
     /* Scrolling steps one row and clamps at the end of the list. */
     emit_signal("signal.editor.sky.scroll.down");
@@ -39512,6 +39516,64 @@ TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
     EXPECT_NEAR(fly->position.z, 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "yaw", 1.0f), 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), 0.0f, 0.001f);
+    slayer3d_game_data_scene_skybox test_run_skybox{};
+    EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &test_run_skybox));
+    struct TestRunHelpCapture
+    {
+        bool found = false;
+    } help_capture;
+    auto capture_test_run_help = [](void *userdata, const slayer3d_game_data_ui_text *text) {
+        auto *capture = static_cast<TestRunHelpCapture *>(userdata);
+        if (text != nullptr && text->name != nullptr && SDL_strcmp(text->name, "ui.editor_shell.test_run.help") == 0)
+        {
+            capture->found = true;
+        }
+        return true;
+    };
+    slayer3d_game_data_ui_metrics test_run_metrics{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &test_run_metrics, capture_test_run_help,
+                                                                &help_capture));
+    EXPECT_FALSE(help_capture.found);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_properties_set_float(fly->props, "yaw", 0.0f);
+    slayer3d_properties_set_float(fly->props, "pitch", 0.6f);
+    SDL_Event movement{};
+    movement.type = SDL_EVENT_KEY_DOWN;
+    movement.key.scancode = SDL_SCANCODE_W;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_NEAR(fly->position.x, 0.0f, 0.001f);
+    EXPECT_GT(fly->position.y, 0.5f);
+    EXPECT_LT(fly->position.z, -0.5f);
+    movement.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 2);
+
+    const float pitched_forward_y = fly->position.y;
+    movement.type = SDL_EVENT_KEY_DOWN;
+    movement.key.scancode = SDL_SCANCODE_Q;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_GT(fly->position.y, pitched_forward_y);
+    movement.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 4);
+
+    const float explicit_up_y = fly->position.y;
+    movement.type = SDL_EVENT_KEY_DOWN;
+    movement.key.scancode = SDL_SCANCODE_E;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_LT(fly->position.y, explicit_up_y);
+    movement.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &movement);
+    slayer3d_input_update(input, 6);
+
     const slayer3d_value *leak_point = slayer3d_properties_get_value(scene_state, "editor.leak.point");
     ASSERT_NE(leak_point, nullptr);
     ASSERT_EQ(leak_point->type, SLAYER3D_VALUE_VEC3);
@@ -40300,6 +40362,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
 
+    const slayer3d_vec3 before_planar_forward = camera_actor->position;
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_W;
@@ -40307,6 +40370,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     slayer3d_input_update(input, 15);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
+    EXPECT_NEAR(camera_actor->position.y, before_planar_forward.y, 0.001f);
 
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);

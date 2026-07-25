@@ -6932,12 +6932,6 @@
       { "id": "model.editor_shell.simple_robot", "path": "asset://models/simple_robot.obj" }
     ],
     "images": [
-      { "id": "image.editor_shell.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
-      { "id": "image.editor_shell.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
-      { "id": "image.editor_shell.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
-      { "id": "image.editor_shell.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
-      { "id": "image.editor_shell.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
-      { "id": "image.editor_shell.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" },
       { "id": "image.editor_shell.texture.wall_metal", "path": "asset://textures/wall_metal.jpg" },
       { "id": "image.editor_shell.texture.rock_floor", "path": "asset://textures/rock_floor.jpg" },
       { "id": "image.editor_shell.texture.ceiling_metal", "path": "asset://textures/ceiling_metal.jpg" },
@@ -7115,6 +7109,7 @@
           "move_acceleration_delay": 0.5,
           "move_acceleration_ramp_time": 2.0,
           "move_acceleration_max_multiplier": 2.0,
+          "move_forward_with_pitch": true,
           "mouse_look": true,
           "mouse_sensitivity": 0.002,
           "pitch_min": -1.45,

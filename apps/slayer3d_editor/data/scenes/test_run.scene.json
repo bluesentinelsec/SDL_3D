@@ -24,31 +24,8 @@
     ]
   },
   "world": {
-    "skybox": {
-      "pos_x": "image.editor_shell.skybox.px",
-      "neg_x": "image.editor_shell.skybox.nx",
-      "pos_y": "image.editor_shell.skybox.py",
-      "neg_y": "image.editor_shell.skybox.ny",
-      "pos_z": "image.editor_shell.skybox.pz",
-      "neg_z": "image.editor_shell.skybox.nz",
-      "size": 400.0
-    },
     "brush_worlds": [
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0], "acceleration": true, "lighting": true }
-    ]
-  },
-  "ui": {
-    "text": [
-      {
-        "name": "ui.editor_shell.test_run.help",
-        "text": "Play Mode: WASD move  Q/E fly  Shift fast  Space jump  Esc return",
-        "font": "font.editor_shell.ui",
-        "x": 0.03,
-        "y": 0.05,
-        "normalized": true,
-        "color": [235, 245, 255, 230],
-        "scale": 0.65
-      }
     ]
   }
 }
