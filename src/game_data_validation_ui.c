@@ -506,6 +506,9 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
             "dock_width",
             "dock_height",
             "dock_resize_thickness",
+            "floating_resize_thickness",
+            "min_width",
+            "max_width",
             "min_dock_width",
             "max_dock_width",
             "min_dock_height",
@@ -526,11 +529,18 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
             return validation_error(ctx, path, "A resizable UI window requires height_key");
         if (!ui_widget_optional_bool(window, "dock_resizable"))
             return validation_error(ctx, path, "UI window dock_resizable must be a boolean when authored");
+        if (!ui_widget_optional_bool(window, "floating_resizable"))
+            return validation_error(ctx, path, "UI window floating_resizable must be a boolean when authored");
         if (yyjson_is_true(obj_get(window, "dock_resizable")) &&
             (obj_get(window, "dock_width_key") == NULL || obj_get(window, "dock_height_key") == NULL))
         {
             return validation_error(ctx, path,
                                     "A dock-resizable UI window requires dock_width_key and dock_height_key");
+        }
+        if (yyjson_is_true(obj_get(window, "floating_resizable")) &&
+            (obj_get(node, "w_key") == NULL || obj_get(node, "h_key") == NULL))
+        {
+            return validation_error(ctx, path, "A floating-resizable UI window requires w_key and h_key");
         }
         if (obj_get(window, "drag_handle") != NULL &&
             (obj_get(node, "x_key") == NULL || obj_get(node, "y_key") == NULL))
@@ -543,6 +553,12 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
             yyjson_is_num(obj_get(window, "max_height")) ? (float)yyjson_get_num(obj_get(window, "max_height")) : 0.0f;
         if (min_height > 0.0f && max_height > 0.0f && min_height > max_height)
             return validation_error(ctx, path, "UI window min_height must not exceed max_height");
+        const float min_width =
+            yyjson_is_num(obj_get(window, "min_width")) ? (float)yyjson_get_num(obj_get(window, "min_width")) : 0.0f;
+        const float max_width =
+            yyjson_is_num(obj_get(window, "max_width")) ? (float)yyjson_get_num(obj_get(window, "max_width")) : 0.0f;
+        if (min_width > 0.0f && max_width > 0.0f && min_width > max_width)
+            return validation_error(ctx, path, "UI window min_width must not exceed max_width");
         const float min_dock_width = yyjson_is_num(obj_get(window, "min_dock_width"))
                                          ? (float)yyjson_get_num(obj_get(window, "min_dock_width"))
                                          : 0.0f;

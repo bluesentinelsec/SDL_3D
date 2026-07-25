@@ -1046,6 +1046,19 @@ mode and brush-setting keys above.
 `scene_state.set` accepts boolean, numeric, string, and vec3-array values. Vec3
 scene-state values are useful for editor work-plane normals, runtime placement
 offsets, and other authored tool state that should not require Lua.
+`value_from_state` copies another scene-state value. `value_from_property`
+copies an actor property without converting its scalar, vector, or color type:
+
+```json
+{
+  "type": "scene_state.set",
+  "key": "settings.display_mode",
+  "value_from_property": {
+    "target": "entity.settings",
+    "key": "display_mode"
+  }
+}
+```
 
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
@@ -2219,6 +2232,15 @@ the same `data_asset`, `scene`, and `player_start` fields as
   }
 }
 ```
+
+The Slayer3D editor's first-class Play command uses `editor.runner.start`
+instead of the manifest handoff actions. This editor integration selects its
+built-in in-process player or fly controller from the current map, or starts
+the configured external executable without a shell. External arguments support
+only the `{current_map}` substitution. Applications should normally emit
+`signal.editor.test_run.request` rather than invoke this action directly so an
+unnamed or modified map is saved before execution. See
+`editor-settings-and-play.md` for the editor workflow and runner contract.
 
 Use `editor.brush_world.status` to publish the current dirty/source state of a
 brush world without exporting its JSON. Outputs support `valid_key`,
@@ -4015,8 +4037,10 @@ HUDs stay sharp while world rendering can use independent render scaling.
 
 Use `target_from_payload` when a sensor or previous action supplies the actor
 name. Use `value_from_payload` when the amount should come from sensor payload
-data. When `property.add` combines an integer with a float, the result is stored
-as a float so fractional damage, timers, and meters can accumulate correctly:
+data. `value_from_state` copies the same supported value types from scene state,
+which is useful when applying retained form fields to a settings actor. When
+`property.add` combines an integer with a float, the result is stored as a float
+so fractional damage, timers, and meters can accumulate correctly:
 
 ```json
 {

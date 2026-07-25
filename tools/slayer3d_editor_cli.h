@@ -91,6 +91,8 @@ extern "C"
         const char *data_root_relative_path;
         const char *window_mode;
         const slayer3d_editor_asset_sources *asset_sources;
+        bool document_named;
+        bool media_path_explicit;
         slayer3d_editor_asset_sources owned_asset_sources;
         bool owns_asset_sources;
     } slayer3d_editor_launch;
@@ -102,10 +104,13 @@ extern "C"
         char *owned_command_assignment;
         char *owned_input_assignment;
         char *owned_save_assignment;
+        char *owned_document_named_assignment;
+        char *owned_window_mode_assignment;
         char *owned_test_run_assignment;
         char *owned_project_dir_assignment;
         char *owned_project_data_root_assignment;
         char *owned_media_path_assignment;
+        char *owned_media_explicit_assignment;
         char *owned_media_relative_assignment;
         char *owned_media_available_assignment;
         char *owned_asset_source_assignments[32];

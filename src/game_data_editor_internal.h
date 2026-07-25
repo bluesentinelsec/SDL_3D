@@ -216,10 +216,13 @@ bool editor_console_copy_selection_if_requested(slayer3d_game_data_runtime *runt
 bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime);
+bool editor_settings_edit_has_focus(const slayer3d_game_data_runtime *runtime);
 bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime);
 bool editor_update_texture_text_edit(slayer3d_game_data_runtime *runtime);
 bool editor_update_global_text_edit(slayer3d_game_data_runtime *runtime);
+bool editor_update_settings_text_edit(slayer3d_game_data_runtime *runtime);
 void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime);
 void editor_update_global_edit_display(slayer3d_game_data_runtime *runtime);
+void editor_update_settings_edit_display(slayer3d_game_data_runtime *runtime);
 
 #endif

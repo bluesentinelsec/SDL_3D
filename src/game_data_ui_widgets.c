@@ -375,6 +375,12 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         (void)ui_widget_scene_float(runtime, json_string(window, "dock_height_key", NULL), &desc.dock_height);
         desc.dock_resizable = ui_widget_bool(window, "dock_resizable", false);
         desc.dock_resize_thickness = json_float(window, "dock_resize_thickness", 0.0f);
+        desc.floating_resizable = ui_widget_bool(window, "floating_resizable", false);
+        desc.floating_resize_thickness = json_float(window, "floating_resize_thickness", 0.0f);
+        desc.min_width = json_float(window, "min_width", 0.0f);
+        desc.max_width = json_float(window, "max_width", 0.0f);
+        desc.min_height = json_float(window, "min_height", 0.0f);
+        desc.max_height = json_float(window, "max_height", 0.0f);
         desc.min_dock_width = json_float(window, "min_dock_width", 0.0f);
         desc.max_dock_width = json_float(window, "max_dock_width", 0.0f);
         desc.min_dock_height = json_float(window, "min_dock_height", 0.0f);

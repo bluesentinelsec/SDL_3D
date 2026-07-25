@@ -4,7 +4,7 @@
   "camera": "camera.editor_shell.player",
   "updates_game": true,
   "renders_world": true,
-  "entities": ["entity.editor_shell.player"],
+  "entities": ["entity.editor_shell.player", "entity.editor_shell.fly_player"],
   "input": {
     "mouse_capture": "unpaused",
     "actions": [
@@ -13,7 +13,14 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
-      "action.exit"
+      "action.editor.camera.forward",
+      "action.editor.camera.back",
+      "action.editor.camera.left",
+      "action.editor.camera.right",
+      "action.editor.camera.up",
+      "action.editor.camera.down",
+      "action.editor.camera.fast",
+      "action.editor.escape"
     ]
   },
   "world": {
@@ -34,7 +41,7 @@
     "text": [
       {
         "name": "ui.editor_shell.test_run.help",
-        "text": "Test Run: WASD move  Space jump  Esc quit",
+        "text": "Play Mode: WASD move  Q/E fly  Shift fast  Space jump  Esc return",
         "font": "font.editor_shell.ui",
         "x": 0.03,
         "y": 0.05,

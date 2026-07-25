@@ -20,6 +20,10 @@ data-authored games running on a generic SDL-powered runtime.
   structure, assets, materials, actors, properties, and editor metadata.
 - [Standalone Editor Packaging](editor-packaging.md): no-argument editor launch,
   static desktop builds, install layout, and the Docker-based browser editor.
+- [Editor Media Directory](editor-media-directory.md): project media discovery,
+  folder contract, persistence, and session overrides.
+- [Editor Settings And Play Mode](editor-settings-and-play.md): settings window,
+  built-in play, free-fly fallback, and external runner contract.
 - [Retained UI Widgets](ui-widgets.md): data-authored UI layout, styling,
   dropdowns, dynamic text, and editor/game UI guidance.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper

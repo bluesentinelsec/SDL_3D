@@ -90,6 +90,7 @@ extern "C"
         SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT,
         SLAYER3D_UI_LAYOUT_RESIZE_EDGE_TOP,
         SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM,
+        SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM_RIGHT,
     } slayer3d_ui_layout_resize_edge;
 
     /** @brief Optional retained UI text alignment. */
@@ -237,6 +238,16 @@ extern "C"
         bool dock_resizable;
         /** @brief Hit target thickness for the dock resize rail; zero uses the theme default. */
         float dock_resize_thickness;
+        /** @brief Synthesize a resize grip at the bottom-right corner while floating. */
+        bool floating_resizable;
+        /** @brief Hit target size for the floating resize grip; zero uses the theme default. */
+        float floating_resize_thickness;
+        /** @brief Minimum and maximum floating width; zero leaves that bound unconstrained. */
+        float min_width;
+        float max_width;
+        /** @brief Minimum and maximum floating height; zero leaves that bound unconstrained. */
+        float min_height;
+        float max_height;
         /**
          * @brief Minimum and maximum docked width.
          *
@@ -296,6 +307,8 @@ extern "C"
         slayer3d_ui_layout_dock dock;
         /** @brief True when this docked root exposes a synthesized resize rail. */
         bool dock_resizable;
+        /** @brief True when this floating root exposes a synthesized resize grip. */
+        bool floating_resizable;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         slayer3d_color text_color;

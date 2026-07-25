@@ -253,6 +253,20 @@ when they want a visible collapsed sliver. This matches split-pane behavior
 on the web: content retains its natural layout and is clipped as the containing
 pane contracts, then reappears unchanged when the pane expands.
 
+Non-dockable tool windows can use the same semantic resize model. Set
+`floating_resizable: true` on the `window`, bind the root's width and height
+with `w_key` and `h_key`, and optionally author `floating_resize_thickness`,
+`min_width`, `max_width`, `min_height`, and `max_height`. The retained layout
+synthesizes a bottom-right grip above the window's complete stacking context.
+The grip owns pointer input and reports
+`SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM_RIGHT`; hosts only update the authored
+size keys during capture. This keeps hit testing, clipping, rendering, and
+window geometry on the same retained-layout path.
+
+Omit `dock_key` for a floating child window that must never dock. Draggable
+windows without a dock state still use title-bar-aware viewport bounds, can
+raise through `front_key`, and consume input over their entire opaque surface.
+
 Resizable pane content should use the normal retained-layout constraints rather
 than dimensions copied from the pane's default size. Use `"w": "fill"` and
 `"h": "fill"` for surfaces and rows that follow the pane, fill-sized children
