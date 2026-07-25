@@ -1879,7 +1879,6 @@ static bool editor_start_external_runner(slayer3d_game_data_runtime *runtime)
     slayer3d_properties *state = runtime != NULL ? runtime->scene_state : NULL;
     const char *configured = state != NULL ? slayer3d_properties_get_string(state, "editor.runner.executable", "") : "";
     const char *save_path = state != NULL ? slayer3d_properties_get_string(state, "editor.save.path", "") : "";
-    const char *project_dir = state != NULL ? slayer3d_properties_get_string(state, "editor.project.dir", "") : "";
     if (configured[0] == '\0' || save_path[0] == '\0')
     {
         editor_publish_console_message(runtime, configured[0] == '\0' ? "External runner executable is not configured"
@@ -1890,6 +1889,7 @@ static bool editor_start_external_runner(slayer3d_game_data_runtime *runtime)
     editor_publish_console_message(runtime, "External runner programs are unavailable in web builds");
     return false;
 #else
+    const char *project_dir = slayer3d_properties_get_string(state, "editor.project.dir", "");
     char *executable =
         editor_path_absolute(configured) ? SDL_strdup(configured) : editor_path_join(project_dir, configured);
     char *current_map = editor_path_make_absolute_from_cwd(save_path);

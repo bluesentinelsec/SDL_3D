@@ -7434,6 +7434,7 @@ TEST(GameDataRuntime, PauseMenuResumeConsumesSharedEnterWithoutRepausing)
     ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.0f));
     EXPECT_FALSE(ctx.paused);
 
+    slayer3d_game_data_app_flow_stop(&flow);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -8309,6 +8310,7 @@ TEST(GameDataRuntime, AppFlowConsumesAuthoredLifecycleAndSceneShortcutControls)
     ASSERT_TRUE(slayer3d_game_data_app_flow_update(&flow, &ctx, runtime, 0.5f));
     EXPECT_TRUE(ctx.quit_requested);
 
+    slayer3d_game_data_app_flow_stop(&flow);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -39602,10 +39604,12 @@ TEST(GameDataRuntime, EditorShellExternalRunnerUsesProjectRelativeExecutableAndC
     const std::filesystem::path dojo_path = slayer3d_editor_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
     const std::filesystem::path runner_dir = unique_test_dir("editor_external_runner");
-    const std::filesystem::path runner_path = runner_dir / "runner.sh";
+    const std::filesystem::path runner_probe_path = SLAYER3D_RUNNER_PROBE_PATH;
+    ASSERT_TRUE(std::filesystem::exists(runner_probe_path)) << runner_probe_path;
+    const std::filesystem::path runner_path = runner_dir / runner_probe_path.filename();
     const std::filesystem::path output_path = runner_dir / "runner-args.txt";
     const std::filesystem::path map_path = runner_dir / "current-map.slayermap.json";
-    write_text(runner_path, ("#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + output_path.string() + "'\n").c_str());
+    ASSERT_TRUE(std::filesystem::copy_file(runner_probe_path, runner_path));
     std::filesystem::permissions(runner_path, std::filesystem::perms::owner_exec | std::filesystem::perms::owner_read |
                                                   std::filesystem::perms::owner_write);
 
@@ -39619,8 +39623,10 @@ TEST(GameDataRuntime, EditorShellExternalRunnerUsesProjectRelativeExecutableAndC
     slayer3d_properties *state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(state, nullptr);
     slayer3d_properties_set_string(state, "editor.runner.kind", "external");
-    slayer3d_properties_set_string(state, "editor.runner.executable", "runner.sh");
-    slayer3d_properties_set_string(state, "editor.runner.arguments", "--map \"{current_map}\" --label \"two words\"");
+    slayer3d_properties_set_string(state, "editor.runner.executable", runner_path.filename().string().c_str());
+    const std::string runner_arguments =
+        "--output \"" + output_path.generic_string() + "\" --map \"{current_map}\" --label \"two words\"";
+    slayer3d_properties_set_string(state, "editor.runner.arguments", runner_arguments.c_str());
     slayer3d_properties_set_string(state, "editor.project.dir", runner_dir.string().c_str());
     slayer3d_properties_set_string(state, "editor.save.path", map_path.string().c_str());
 
