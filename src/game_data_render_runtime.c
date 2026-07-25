@@ -61,22 +61,90 @@ bool slayer3d_game_data_app_signal_applies_window_settings(const slayer3d_game_d
     if (runtime == NULL || signal_id < 0)
         return false;
 
+    const int count = slayer3d_game_data_app_window_apply_signal_count(runtime);
+    for (int i = 0; i < count; ++i)
+        if (slayer3d_game_data_app_window_apply_signal_at(runtime, i) == signal_id)
+            return true;
+    return false;
+}
+
+int slayer3d_game_data_app_window_apply_signal_count(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return 0;
+
     yyjson_val *window = obj_get(obj_get(runtime_root(runtime), "app"), "window");
     const char *apply_signal = json_string(window, "apply_signal", NULL);
-    if (apply_signal != NULL && slayer3d_game_data_find_signal(runtime, apply_signal) == signal_id)
-        return true;
+    int count = apply_signal != NULL && slayer3d_game_data_find_signal(runtime, apply_signal) >= 0 ? 1 : 0;
 
     yyjson_val *apply_signals = obj_get(window, "apply_signals");
     if (!yyjson_is_arr(apply_signals))
-        return false;
+        return count;
 
     for (size_t i = 0; i < yyjson_arr_size(apply_signals); ++i)
     {
         yyjson_val *signal = yyjson_arr_get(apply_signals, i);
-        if (yyjson_is_str(signal) && slayer3d_game_data_find_signal(runtime, yyjson_get_str(signal)) == signal_id)
-            return true;
+        if (!yyjson_is_str(signal))
+            continue;
+        const int signal_id = slayer3d_game_data_find_signal(runtime, yyjson_get_str(signal));
+        if (signal_id < 0)
+            continue;
+        if (apply_signal != NULL && signal_id == slayer3d_game_data_find_signal(runtime, apply_signal))
+            continue;
+        bool duplicate = false;
+        for (size_t prior = 0; prior < i; ++prior)
+        {
+            yyjson_val *prior_signal = yyjson_arr_get(apply_signals, prior);
+            duplicate =
+                duplicate || (yyjson_is_str(prior_signal) &&
+                              slayer3d_game_data_find_signal(runtime, yyjson_get_str(prior_signal)) == signal_id);
+        }
+        if (!duplicate)
+            ++count;
     }
-    return false;
+    return count;
+}
+
+int slayer3d_game_data_app_window_apply_signal_at(const slayer3d_game_data_runtime *runtime, int index)
+{
+    if (runtime == NULL || index < 0)
+        return -1;
+
+    yyjson_val *window = obj_get(obj_get(runtime_root(runtime), "app"), "window");
+    const char *apply_signal = json_string(window, "apply_signal", NULL);
+    const int singular_id = apply_signal != NULL ? slayer3d_game_data_find_signal(runtime, apply_signal) : -1;
+    int current = 0;
+    if (singular_id >= 0)
+    {
+        if (index == current)
+            return singular_id;
+        ++current;
+    }
+
+    yyjson_val *apply_signals = obj_get(window, "apply_signals");
+    for (size_t i = 0; yyjson_is_arr(apply_signals) && i < yyjson_arr_size(apply_signals); ++i)
+    {
+        yyjson_val *signal = yyjson_arr_get(apply_signals, i);
+        if (!yyjson_is_str(signal))
+            continue;
+        const int signal_id = slayer3d_game_data_find_signal(runtime, yyjson_get_str(signal));
+        if (signal_id < 0 || signal_id == singular_id)
+            continue;
+        bool duplicate = false;
+        for (size_t prior = 0; prior < i; ++prior)
+        {
+            yyjson_val *prior_signal = yyjson_arr_get(apply_signals, prior);
+            duplicate =
+                duplicate || (yyjson_is_str(prior_signal) &&
+                              slayer3d_game_data_find_signal(runtime, yyjson_get_str(prior_signal)) == signal_id);
+        }
+        if (duplicate)
+            continue;
+        if (index == current)
+            return signal_id;
+        ++current;
+    }
+    return -1;
 }
 
 bool slayer3d_game_data_get_font_asset(const slayer3d_game_data_runtime *runtime, const char *id,

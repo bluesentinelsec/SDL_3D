@@ -274,11 +274,11 @@
           },
           {
             "name": "action.editor.camera.up",
-            "bindings": [{ "device": "keyboard", "key": "E" }]
+            "bindings": [{ "device": "keyboard", "key": "Q" }]
           },
           {
             "name": "action.editor.camera.down",
-            "bindings": [{ "device": "keyboard", "key": "Q" }]
+            "bindings": [{ "device": "keyboard", "key": "E" }]
           },
           {
             "name": "action.editor.camera.look",
@@ -1204,13 +1204,34 @@
           { "type": "scene_state.set", "key": "editor.settings.display_mode", "value_from_property": { "target": "entity.editor_shell.settings", "key": "display_mode" } },
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.settings.display_mode", "op": "==", "value": "", "default": "" },
+            "if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.settings.display_mode", "op": "!=", "value": "windowed", "default": "" },
+                { "type": "scene_state.compare", "key": "editor.settings.display_mode", "op": "!=", "value": "fullscreen_borderless", "default": "" },
+                { "type": "scene_state.compare", "key": "editor.settings.display_mode", "op": "!=", "value": "fullscreen_exclusive", "default": "" }
+              ]
+            },
             "then": [
               { "type": "scene_state.set", "key": "editor.settings.display_mode", "value_from_state": "editor.window.mode.initial" },
               { "type": "property.set", "target": "entity.editor_shell.settings", "key": "display_mode", "value_from_state": "editor.settings.display_mode" }
             ]
           },
           { "type": "scene_state.set", "key": "editor.runner.kind", "value_from_property": { "target": "entity.editor_shell.settings", "key": "runner_kind" } },
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "editor.runner.kind", "op": "!=", "value": "builtin", "default": "" },
+                { "type": "scene_state.compare", "key": "editor.runner.kind", "op": "!=", "value": "external", "default": "" }
+              ]
+            },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.runner.kind", "value": "builtin" },
+              { "type": "property.set", "target": "entity.editor_shell.settings", "key": "runner_kind", "value": "builtin" }
+            ]
+          },
           { "type": "scene_state.set", "key": "editor.runner.executable", "value_from_property": { "target": "entity.editor_shell.settings", "key": "runner_executable" } },
           { "type": "scene_state.set", "key": "editor.runner.arguments", "value_from_property": { "target": "entity.editor_shell.settings", "key": "runner_arguments" } },
           { "type": "scene_state.set", "key": "editor.settings.persisted_media_path", "value_from_property": { "target": "entity.editor_shell.settings", "key": "media_path" } },
@@ -1228,7 +1249,6 @@
               { "type": "signal.emit", "signal": "signal.editor.media.path.apply" }
             ]
           },
-          { "type": "scene_state.set", "key": "editor.settings.status", "value": "Ready" },
           { "type": "scene_state.set", "key": "editor.media.startup_prompt.open", "value": false },
           { "type": "scene_state.set", "key": "editor.media.status", "value": "ready" },
           {
@@ -5768,7 +5788,6 @@
           { "type": "persistence.save", "entry": "persistence.editor.settings" },
           { "type": "signal.emit", "signal": "signal.editor.media.path.apply" },
           { "type": "scene_state.set", "key": "editor.settings.edit.focus", "value": "" },
-          { "type": "scene_state.set", "key": "editor.settings.status", "value": "Settings applied" },
           { "type": "console.write", "message": "Editor settings applied" }
         ]
       },

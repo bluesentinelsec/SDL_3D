@@ -4935,6 +4935,21 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_STREQ(app.window_display_mode_key, "display_mode");
     EXPECT_STREQ(app.window_renderer_key, "renderer");
     EXPECT_STREQ(app.window_vsync_key, "vsync");
+    ASSERT_EQ(slayer3d_game_data_app_window_apply_signal_count(runtime), 2);
+    EXPECT_EQ(slayer3d_game_data_app_window_apply_signal_at(runtime, 0), app.window_apply_signal_id);
+    EXPECT_EQ(slayer3d_game_data_app_window_apply_signal_at(runtime, 1),
+              slayer3d_game_data_find_signal(runtime, "signal.settings.reset_display"));
+    EXPECT_EQ(slayer3d_game_data_app_window_apply_signal_at(runtime, 2), -1);
+    slayer3d_game_data_app_flow window_flow{};
+    slayer3d_game_data_app_flow_init(&window_flow);
+    ASSERT_TRUE(slayer3d_game_data_app_flow_start(&window_flow, runtime));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), app.window_apply_signal_id, nullptr);
+    EXPECT_TRUE(window_flow.window_apply_requested);
+    slayer3d_game_context window_ctx{};
+    window_ctx.session = session;
+    ASSERT_TRUE(slayer3d_game_data_app_flow_update(&window_flow, &window_ctx, runtime, 0.0f));
+    EXPECT_FALSE(window_flow.window_apply_requested);
+    slayer3d_game_data_app_flow_stop(&window_flow);
 
     slayer3d_registered_actor *match = slayer3d_game_data_find_actor(runtime, "entity.match");
     ASSERT_NE(match, nullptr);
@@ -24433,9 +24448,32 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         slayer3d_ui_layout_destroy(layout);
         return result;
     };
+    auto retained_ui_text = [&](const char *id) {
+        std::string text;
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return text;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        for (int i = 0, count = slayer3d_ui_layout_render_command_count(layout); i < count; ++i)
+        {
+            const slayer3d_ui_layout_render_command *render = slayer3d_ui_layout_render_command_at(layout, i);
+            if (render != nullptr && id != nullptr && std::strcmp(render->id, id) == 0)
+            {
+                text = render->text;
+                break;
+            }
+        }
+        slayer3d_ui_layout_destroy(layout);
+        return text;
+    };
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.settings");
+    ASSERT_NE(settings, nullptr);
+    slayer3d_properties_set_string(settings->props, "display_mode", "windowed");
+    slayer3d_properties_set_string(settings->props, "runner_kind", "builtin");
     emit_signal("signal.editor.file.toggle");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", false));
     HitSummary blank_file_menu_hit = retained_ui_hit(24.0f, 112.0f);
@@ -24600,8 +24638,22 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
                  file_settings_region.rect.y + file_settings_region.rect.h * 0.5f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.settings.open", false));
+    EXPECT_EQ(retained_ui_text("ui.editor_shell.settings.display.mode"), "Windowed");
+    EXPECT_EQ(retained_ui_text("ui.editor_shell.settings.runner.kind"), "Built-in Play Mode");
+    EXPECT_TRUE(retained_ui_text("ui.editor_shell.settings.status").empty());
+    EXPECT_FALSE(retained_ui_region("ui.editor_shell.settings.drag_indicator").found);
     HitRegionSummary settings_resize = retained_ui_region("ui.editor_shell.settings.panel.floating_resize");
     ASSERT_TRUE(settings_resize.found);
+    const float settings_width = slayer3d_properties_get_float(scene_state, "editor.settings.window.width", 0.0f);
+    const float settings_height = slayer3d_properties_get_float(scene_state, "editor.settings.window.height", 0.0f);
+    drag_editor(settings_resize.rect.x + settings_resize.rect.w * 0.5f,
+                settings_resize.rect.y + settings_resize.rect.h * 0.5f,
+                settings_resize.rect.x + settings_resize.rect.w * 0.5f + 40.0f,
+                settings_resize.rect.y + settings_resize.rect.h * 0.5f + 30.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.settings.window.width", 0.0f),
+                    settings_width + 40.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(scene_state, "editor.settings.window.height", 0.0f),
+                    settings_height + 30.0f);
     HitRegionSummary settings_media_field = retained_ui_region("ui.editor_shell.settings.field.media");
     ASSERT_TRUE(settings_media_field.found);
     click_editor(settings_media_field.rect.x + settings_media_field.rect.w * 0.5f,
@@ -24886,6 +24938,10 @@ TEST(GameDataRuntime, EditorShellDojoFileExitRequestsManagedShutdown)
     ASSERT_TRUE(slayer3d_game_data_app_flow_start(&flow, runtime));
     slayer3d_game_context ctx{};
     ctx.session = session;
+
+    ASSERT_EQ(slayer3d_game_data_app_window_apply_signal_count(runtime), 1);
+    EXPECT_EQ(slayer3d_game_data_app_window_apply_signal_at(runtime, 0),
+              slayer3d_game_data_find_signal(runtime, "signal.editor.settings.apply"));
 
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), exit_signal, nullptr);
     EXPECT_FALSE(ctx.quit_requested);
@@ -36035,9 +36091,6 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
     ASSERT_GE(test_run_enter_signal, 0);
     ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.slayer3d_editor.main");
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    const slayer3d_vec3 editor_camera_position = editor_camera->position;
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
@@ -36046,9 +36099,11 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.fly");
     slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
     ASSERT_NE(fly, nullptr);
-    EXPECT_NEAR(fly->position.x, editor_camera_position.x, 0.001f);
-    EXPECT_NEAR(fly->position.y, editor_camera_position.y, 0.001f);
-    EXPECT_NEAR(fly->position.z, editor_camera_position.z, 0.001f);
+    EXPECT_NEAR(fly->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.y, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.z, 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "yaw", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), 0.0f, 0.001f);
 
     slayer3d_data_game_runtime_destroy(host_runtime);
     slayer3d_game_session_destroy(session);
@@ -39419,9 +39474,10 @@ TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
     const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     ASSERT_GE(test_run_enter_signal, 0);
     ASSERT_GE(escape_signal, 0);
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    const slayer3d_vec3 editor_camera_position = editor_camera->position;
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    slayer3d_properties_set_string(mutable_scene_state, "editor.runner.kind", "external");
+    slayer3d_properties_set_string(mutable_scene_state, "editor.runner.executable", "");
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
@@ -39451,9 +39507,11 @@ TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
     slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
     ASSERT_NE(fly, nullptr);
     EXPECT_TRUE(fly->active);
-    EXPECT_NEAR(fly->position.x, editor_camera_position.x, 0.001f);
-    EXPECT_NEAR(fly->position.y, editor_camera_position.y, 0.001f);
-    EXPECT_NEAR(fly->position.z, editor_camera_position.z, 0.001f);
+    EXPECT_NEAR(fly->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.y, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.z, 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "yaw", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), 0.0f, 0.001f);
     const slayer3d_value *leak_point = slayer3d_properties_get_value(scene_state, "editor.leak.point");
     ASSERT_NE(leak_point, nullptr);
     ASSERT_EQ(leak_point->type, SLAYER3D_VALUE_VEC3);
@@ -40188,10 +40246,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                  "select");
 
     const float flyby_y = camera_actor->position.y;
-    EXPECT_TRUE(press_editor_key(SDL_SCANCODE_E, camera_up_action, 9, 0.25f));
+    EXPECT_TRUE(press_editor_key(SDL_SCANCODE_Q, camera_up_action, 9, 0.25f));
     EXPECT_GT(camera_actor->position.y, flyby_y);
     const float raised_y = camera_actor->position.y;
-    EXPECT_TRUE(press_editor_key(SDL_SCANCODE_Q, camera_down_action, 11, 0.25f));
+    EXPECT_TRUE(press_editor_key(SDL_SCANCODE_E, camera_down_action, 11, 0.25f));
     EXPECT_LT(camera_actor->position.y, raised_y);
 
     SDL_Event flyby_click{};

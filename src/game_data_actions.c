@@ -1928,10 +1928,9 @@ static bool editor_start_builtin_play(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
         return false;
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
     slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
-    if (editor_camera == NULL || player == NULL || fly == NULL)
+    if (player == NULL || fly == NULL)
         return false;
 
     const editor_actor_runtime *player_marker = NULL;
@@ -1962,11 +1961,9 @@ static bool editor_start_builtin_play(slayer3d_game_data_runtime *runtime)
     }
     else
     {
-        actor_set_position(fly, editor_camera->position);
-        slayer3d_properties_set_float(fly->props, "yaw",
-                                      slayer3d_properties_get_float(editor_camera->props, "yaw", 0.0f));
-        slayer3d_properties_set_float(fly->props, "pitch",
-                                      slayer3d_properties_get_float(editor_camera->props, "pitch", 0.0f));
+        actor_set_position(fly, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        slayer3d_properties_set_float(fly->props, "yaw", 0.0f);
+        slayer3d_properties_set_float(fly->props, "pitch", 0.0f);
         player->active = false;
         fly->active = true;
         camera = "camera.editor_shell.fly";
@@ -1988,8 +1985,11 @@ static bool execute_editor_runner_start_action(slayer3d_game_data_runtime *runti
     const char *kind = runtime != NULL && runtime->scene_state != NULL
                            ? slayer3d_properties_get_string(runtime->scene_state, "editor.runner.kind", "builtin")
                            : "builtin";
-    return SDL_strcmp(kind, "external") == 0 ? editor_start_external_runner(runtime)
-                                             : editor_start_builtin_play(runtime);
+    const char *executable = runtime != NULL && runtime->scene_state != NULL
+                                 ? slayer3d_properties_get_string(runtime->scene_state, "editor.runner.executable", "")
+                                 : "";
+    return SDL_strcmp(kind, "external") == 0 && executable[0] != '\0' ? editor_start_external_runner(runtime)
+                                                                      : editor_start_builtin_play(runtime);
 }
 
 /* ------------------------------------------------------------------ */

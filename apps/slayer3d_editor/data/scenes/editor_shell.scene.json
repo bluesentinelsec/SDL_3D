@@ -1078,8 +1078,7 @@
             "fill_color": [22, 45, 72, 255],
             "layer": 501,
             "children": [
-              { "id": "ui.editor_shell.settings.title", "text_role": "heading", "type": "label", "x": 14, "y": 8, "w": 150, "h": 22, "text": "Editor Settings", "align": "left", "layer": 502 },
-              { "id": "ui.editor_shell.settings.drag_indicator", "type": "drag_indicator", "x": 78, "y": 7, "w": 28, "h": 24, "anchor_x": "right", "layer": 502 }
+              { "id": "ui.editor_shell.settings.title", "text_role": "heading", "type": "label", "x": 14, "y": 8, "w": 150, "h": 22, "text": "Editor Settings", "align": "left", "layer": 502 }
             ]
           },
           {
@@ -1095,7 +1094,7 @@
             "action": "editor.settings.close",
             "layer": 503
           },
-          { "id": "ui.editor_shell.settings.display.heading", "text_role": "heading", "type": "label", "x": 18, "y": 52, "w": 200, "h": 22, "text": "Display", "align": "left", "layer": 501 },
+          { "id": "ui.editor_shell.settings.display.heading", "text_role": "heading", "type": "label", "x": 18, "y": 52, "w": 200, "h": 22, "text": "Display Mode", "align": "left", "layer": 501 },
           {
             "id": "ui.editor_shell.settings.display.mode",
             "type": "dropdown",
@@ -1213,8 +1212,7 @@
             "interactive": true,
             "action": "editor.settings.apply",
             "layer": 501
-          },
-          { "id": "ui.editor_shell.settings.status", "type": "label", "text_role": "caption", "x": 18, "y": 18, "w": 360, "h": 20, "anchor_y": "bottom", "format": "%s", "bindings": [{ "type": "scene_state", "key": "editor.settings.status", "default": "Ready" }], "align": "left", "layer": 501 }
+          }
         ]
       },
       {
@@ -7478,7 +7476,6 @@
           "drag_threshold": 4,
           "resize_handle": "ui.editor_shell.console.resize_handle",
           "resize_edge": "top",
-          "height_key": "editor.console.height",
           "resolved_height_key": "editor.console.visible_height",
           "min_height": 72,
           "max_height": 360

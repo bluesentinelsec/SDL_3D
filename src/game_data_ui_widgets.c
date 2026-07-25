@@ -414,6 +414,11 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.options = options;
         for (int i = 0; i < desc.option_count; ++i)
             options[i] = yyjson_get_str(yyjson_arr_get(option_values, (size_t)i));
+        if (desc.type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && (desc.text == NULL || desc.text[0] == '\0') &&
+            desc.selected_index >= 0 && desc.selected_index < desc.option_count)
+        {
+            desc.text = options[desc.selected_index];
+        }
     }
 
     if (!slayer3d_ui_layout_add_node(layout, &desc))

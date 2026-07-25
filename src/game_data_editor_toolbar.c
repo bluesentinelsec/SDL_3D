@@ -334,7 +334,7 @@ static bool editor_ui_window_config_for_id(const slayer3d_game_data_runtime *run
     out_config->x_key = json_string(node, "x_key", NULL);
     out_config->y_key = json_string(node, "y_key", NULL);
     out_config->width_key = json_string(node, "w_key", NULL);
-    out_config->height_key = json_string(window, "height_key", NULL);
+    out_config->height_key = json_string(node, "h_key", NULL);
     out_config->resolved_height_key = json_string(window, "resolved_height_key", NULL);
     out_config->dock_key = json_string(window, "dock_key", NULL);
     out_config->dock_width_key = json_string(window, "dock_width_key", NULL);

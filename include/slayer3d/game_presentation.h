@@ -395,7 +395,10 @@ extern "C"
         slayer3d_game_data_app_control app;         /**< Resolved app controls from game data. */
         slayer3d_signal_bus *signal_bus;            /**< Borrowed bus used by app lifecycle signal hooks. */
         int quit_request_connection_id;             /**< Connection for the authored quit request signal. */
+        int *window_apply_connection_ids;           /**< Owned live-window signal connections. */
+        int window_apply_connection_count;          /**< Number of live-window signal connections. */
         bool quit_request_received;                 /**< True after the authored quit request signal fires. */
+        bool window_apply_requested;                /**< True after a live-window apply signal fires. */
         bool quit_pending;                          /**< True after quit has been requested. */
         bool scene_input_armed;                     /**< True once menu input is idle after scene entry. */
         const char *skip_scene;                     /**< Active scene tracked for pending skip input. */
