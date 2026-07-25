@@ -3116,7 +3116,7 @@ static float editor_actor_collection_float(const runtime_collection *collection,
 }
 
 static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runtime, const char *collection_name,
-                                               int index)
+                                               int index, bool activate_tool)
 {
     const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
     char id[128];
@@ -3139,11 +3139,14 @@ static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runti
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", id);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected.label", label);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", id);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
-    char message[192];
-    SDL_snprintf(message, sizeof(message), "selected actor %s", label);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    if (activate_tool)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
+        char message[192];
+        SDL_snprintf(message, sizeof(message), "selected actor %s", label);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    }
     return true;
 }
 
@@ -3298,7 +3301,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     {
         if (selected_index < 0)
             selected_index = 0;
-        (void)editor_actor_select_collection_row(runtime, collection, selected_index);
+        (void)editor_actor_select_collection_row(runtime, collection, selected_index, false);
     }
     else
     {
@@ -3365,7 +3368,7 @@ static bool execute_editor_actor_select_index_action(slayer3d_game_data_runtime 
             return true;
         }
     }
-    return editor_actor_select_collection_row(runtime, collection_name, index);
+    return editor_actor_select_collection_row(runtime, collection_name, index, true);
 }
 
 #define EDITOR_GLOBAL_PROPERTY_CAP 64

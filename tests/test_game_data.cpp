@@ -20575,8 +20575,17 @@ TEST(GameDataRuntime, EditorShellDojoActorBrowserScansConfiguredModelDirectory)
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.path", model_dir.string().c_str());
     slayer3d_properties_set_string(scene_state, "editor.asset_source.models.relative", "custom_models");
+
+    slayer3d_properties_set_string(scene_state, "editor.mode", "select");
+    slayer3d_properties_set_string(scene_state, "editor.tool.mode", "select");
+    emit_signal("signal.editor.actor.refresh");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.actor.selected", ""), "player_capsule");
 
     emit_signal("signal.editor.palette.game_object");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.browser.count", -1), 18);
