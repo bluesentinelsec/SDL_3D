@@ -1070,68 +1070,36 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     return true;
 }
 
-/* Toolbar actions forwarded verbatim as "signal.<action>". */
-static const char *const editor_signal_action_names[] = {
-    "editor.brush.duplicate",
-    "editor.brush.flip_horizontal",
-    "editor.brush.flip_vertical",
-};
-
-/* Action families whose members are all forwarded as "signal.<action>". */
-static const char *const editor_signal_action_prefixes[] = {
-    "editor.texture.",   "editor.palette.",  "editor.actor.",  "editor.things.",     "editor.file.",
-    "editor.inspector.", "editor.property.", "editor.global.", "editor.visibility.", "editor.lock.",
-    "editor.stair.",     "editor.sky.",      "editor.liquid.", "editor.console.",
-};
-
-static bool editor_action_routes_to_signal(const char *action)
+static bool editor_apply_widget_action(slayer3d_game_data_runtime *runtime, const char *action)
 {
-    for (size_t i = 0; i < SDL_arraysize(editor_signal_action_names); ++i)
-    {
-        if (SDL_strcmp(action, editor_signal_action_names[i]) == 0)
-            return true;
-    }
-    for (size_t i = 0; i < SDL_arraysize(editor_signal_action_prefixes); ++i)
-    {
-        if (SDL_strncmp(action, editor_signal_action_prefixes[i], SDL_strlen(editor_signal_action_prefixes[i])) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const char *action)
-{
-    if (runtime == NULL || runtime->scene_state == NULL)
+    if (runtime == NULL || runtime->scene_state == NULL || action == NULL || action[0] == '\0')
         return false;
 
     const char *mode = editor_mode_for_tool_action(action);
     if (mode != NULL)
         return slayer3d_game_data_set_editor_tool_mode(runtime, mode, NULL);
-    if (editor_action_routes_to_signal(action))
+
+    char previous_action[512];
+    char previous_console_line[512];
+    SDL_strlcpy(previous_action, slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", ""),
+                sizeof(previous_action));
+    SDL_strlcpy(previous_console_line,
+                slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", ""),
+                sizeof(previous_console_line));
+    char signal[128];
+    SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
+    if (editor_emit_signal_by_name(runtime, signal))
     {
-        char previous_action[512];
-        char previous_console_line[512];
-        SDL_strlcpy(previous_action,
-                    slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", ""),
-                    sizeof(previous_action));
-        SDL_strlcpy(previous_console_line,
-                    slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", ""),
-                    sizeof(previous_console_line));
-        char signal[128];
-        SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
-        if (editor_emit_signal_by_name(runtime, signal))
+        const char *current_action =
+            slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", "");
+        const char *current_console_line =
+            slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", "");
+        if (current_action[0] != '\0' && SDL_strcmp(current_action, previous_action) != 0 &&
+            SDL_strcmp(current_console_line, previous_console_line) == 0)
         {
-            const char *current_action =
-                slayer3d_properties_get_string(runtime->scene_state, "editor.tool.last_action", "");
-            const char *current_console_line =
-                slayer3d_properties_get_string(runtime->scene_state, "editor.console.history0", "");
-            if (current_action[0] != '\0' && SDL_strcmp(current_action, previous_action) != 0 &&
-                SDL_strcmp(current_console_line, previous_console_line) == 0)
-            {
-                editor_publish_console_message(runtime, current_action);
-            }
-            return true;
+            editor_publish_console_message(runtime, current_action);
         }
+        return true;
     }
     return false;
 }
@@ -1357,7 +1325,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         const char *hit_action = editor_property_row_select_action(hit, derived_action, sizeof(derived_action));
         if (clicked && hit_action[0] != '\0' && !editor_texture_select_action_is_blocked(runtime, hit_action))
         {
-            (void)editor_apply_tool_action(runtime, hit_action);
+            (void)editor_apply_widget_action(runtime, hit_action);
             if (editor_actor_select_action(hit_action))
             {
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.drag.active", true);

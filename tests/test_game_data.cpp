@@ -24593,7 +24593,11 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_EQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), mode_before_file_dismiss);
 
     emit_signal("signal.editor.file.toggle");
-    emit_signal("signal.editor.settings.open");
+    HitRegionSummary file_settings_region = retained_ui_region("ui.editor_shell.file_menu.settings.button");
+    ASSERT_TRUE(file_settings_region.found);
+    EXPECT_EQ(file_settings_region.hit.action, "editor.settings.open");
+    click_editor(file_settings_region.rect.x + file_settings_region.rect.w * 0.5f,
+                 file_settings_region.rect.y + file_settings_region.rect.h * 0.5f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.settings.open", false));
     HitRegionSummary settings_resize = retained_ui_region("ui.editor_shell.settings.panel.floating_resize");
