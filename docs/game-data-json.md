@@ -1786,16 +1786,18 @@ explicit alpha.
 same `outputs` keys with `active_key`/`valid_key` set to false.
 
 Use `editor.command.commit`, `editor.command.undo`, and `editor.command.redo` to
-record validated editor command transactions. A commit requires an active command
-preview in the current scene. `translate` commands targeting a brush `element`
+record and replay validated editor command transactions. A preview commit
+requires an active command preview in the current scene. `translate` commands targeting a brush `element`
 mutate the selected runtime brush by shifting its planes by the preview offset,
 then rebuild brush bounds and the compiled render mesh. `resize` and `extrude`
 commands targeting a brush `face` move that face plane by the preview distance,
 then rebuild brush bounds and the compiled render mesh. `paint` commands
 targeting a brush `face` replace that face's material and rebuild the compiled
-render mesh. Undo and redo apply the inverse/forward mutation and move the
-command-history cursor. Other command names are accepted as transaction records
-so editor UI can be authored ahead of future mutation implementations.
+render mesh. Brush create, duplicate, paste, and delete operations store source
+brush snapshots. Thing paste and delete operations store the complete authored
+actor plus any connections removed by deletion. Undo and redo apply the
+inverse/forward mutation and move the command-history cursor. Multi-brush Edit
+operations share one transaction id and therefore undo or redo atomically.
 Successful brush-world mutations mark the affected runtime brush world dirty and
 increment its editor revision. Transaction outputs can publish `dirty_key`,
 `revision_key`, `saved_revision_key`, and `source_path_key` alongside the
@@ -1842,6 +1844,38 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_face_stable_id`, `editor_transaction_face_index`, `editor_transaction_offset`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
+
+Use `editor.selection.copy`, `editor.selection.cut`, and
+`editor.selection.paste` for the runtime's structured editor clipboard. Brush
+selection copies complete source brushes, including face materials, properties,
+stable metadata, and geometry. Thing selection copies the complete authored
+actor, including transform, prefab state, and properties. Paste creates new
+stable identities and selects the new objects. Cut first captures the selection
+and then performs the same transaction-backed delete used by the editor's
+Delete command. The clipboard is intentionally document data, not operating
+system text.
+
+All three actions support `valid_key`, `message_key`, `kind_key`, and
+`count_key` outputs. They also publish the canonical
+`editor.clipboard.valid`, `editor.clipboard.message`,
+`editor.clipboard.kind`, and `editor.clipboard.count` scene-state keys.
+
+```json
+{
+  "type": "editor.selection.copy",
+  "outputs": {
+    "valid_key": "editor.clipboard.valid",
+    "message_key": "editor.clipboard.message",
+    "kind_key": "editor.clipboard.kind",
+    "count_key": "editor.clipboard.count"
+  }
+}
+```
+
+The Slayer3D editor maps these actions to the Edit menu and conventional
+Ctrl/Cmd+C, Ctrl/Cmd+X, and Ctrl/Cmd+V shortcuts. Undo uses Ctrl/Cmd+Z; redo
+uses Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y. The existing single-key `U` and `Y`
+bindings remain available for editor workflows.
 
 Use `editor.texture.scan` to populate an editor texture browser from one
 configured filesystem directory. By default it reads

@@ -306,6 +306,11 @@ static void free_editor_command_transaction_entry(editor_command_transaction_ent
         free_editor_brush_source_box_runtime(&entry->source_clip_before[i]);
     for (int i = 0; i < entry->source_clip_after_count; ++i)
         free_editor_brush_source_box_runtime(&entry->source_clip_after[i]);
+    if (entry->has_actor_snapshot)
+        free_editor_actor_runtime(&entry->actor_snapshot);
+    for (int i = 0; i < entry->actor_connection_count; ++i)
+        free_editor_connection_runtime(&entry->actor_connections[i]);
+    SDL_free(entry->actor_connections);
     SDL_zero(*entry);
 }
 
@@ -345,6 +350,21 @@ void free_editor_command_history(editor_command_history_state *history)
     SDL_zero(*history);
 }
 
+void free_editor_clipboard(editor_clipboard_state *clipboard)
+{
+    if (clipboard == NULL)
+        return;
+    for (int i = 0; i < clipboard->brush_count; ++i)
+    {
+        SDL_free(clipboard->brushes[i].world_name);
+        free_editor_brush_source_box_runtime(&clipboard->brushes[i].source_box);
+    }
+    SDL_free(clipboard->brushes);
+    if (clipboard->kind == EDITOR_CLIPBOARD_ACTOR)
+        free_editor_actor_runtime(&clipboard->actor);
+    SDL_zero(*clipboard);
+}
+
 static editor_command_transaction_entry *editor_command_history_append(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
@@ -370,6 +390,7 @@ static editor_command_transaction_entry *editor_command_history_append(slayer3d_
     entry->material_index = -1;
     entry->previous_material_index = -1;
     entry->brush_index = -1;
+    entry->actor_index = -1;
     history->count++;
     history->cursor = history->count;
     return entry;
@@ -1270,7 +1291,7 @@ static void sync_editor_selection_after_transaction(slayer3d_game_data_runtime *
         return;
     }
 
-    if (SDL_strcmp(entry->command, "duplicate") == 0)
+    if (SDL_strcmp(entry->command, "duplicate") == 0 || SDL_strcmp(entry->command, "paste") == 0)
     {
         if (forward)
             select_editor_brush_for_transaction(runtime, entry);
@@ -1748,6 +1769,74 @@ static void update_active_editor_selection_material_for_transaction(slayer3d_gam
     publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
 }
 
+static bool editor_transaction_has_actor_mutation(const editor_command_transaction_entry *entry)
+{
+    if (entry == NULL || entry->command == NULL || entry->target == NULL || entry->element_name == NULL ||
+        entry->element_name[0] == '\0' || SDL_strcmp(entry->target, "actor") != 0)
+    {
+        return false;
+    }
+    return SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "paste") == 0 ||
+           SDL_strcmp(entry->command, "delete") == 0;
+}
+
+static void publish_editor_actor_transaction_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.actor.dirty", runtime->editor_actor_dirty);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.revision", (int)runtime->editor_actor_revision);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.actor.count", runtime->editor_actor_count);
+}
+
+static bool apply_editor_actor_transaction(slayer3d_game_data_runtime *runtime, editor_command_transaction_entry *entry,
+                                           bool forward)
+{
+    if (runtime == NULL || entry == NULL || !editor_transaction_has_actor_mutation(entry))
+        return false;
+
+    const bool deleting = SDL_strcmp(entry->command, "delete") == 0;
+    const bool remove_actor = deleting == forward;
+    if (remove_actor)
+    {
+        if (!entry->has_actor_snapshot)
+        {
+            const editor_actor_runtime *actor = find_editor_actor(runtime, entry->element_name);
+            if (actor == NULL || !copy_editor_actor_runtime(actor, &entry->actor_snapshot))
+            {
+                return false;
+            }
+            entry->has_actor_snapshot = true;
+            if (!capture_editor_actor_connections(runtime, entry->element_name, &entry->actor_connections,
+                                                  &entry->actor_connection_count))
+            {
+                return false;
+            }
+        }
+        (void)remove_editor_actor_connections(runtime, entry->element_name);
+        if (!remove_editor_actor_runtime(runtime, entry->element_name, NULL, NULL))
+            return false;
+        (void)slayer3d_game_data_clear_active_editor_selection(runtime);
+        publish_editor_actor_transaction_state(runtime);
+        return true;
+    }
+
+    if (!entry->has_actor_snapshot || !insert_editor_actor_runtime(runtime, entry->actor_index, &entry->actor_snapshot))
+    {
+        return false;
+    }
+    if (deleting && !restore_editor_connections(runtime, entry->actor_connections, entry->actor_connection_count))
+    {
+        (void)remove_editor_actor_connections(runtime, entry->element_name);
+        (void)remove_editor_actor_runtime(runtime, entry->element_name, NULL, NULL);
+        publish_editor_actor_transaction_state(runtime);
+        return false;
+    }
+    select_editor_actor_runtime(runtime, entry->element_name);
+    publish_editor_actor_transaction_state(runtime);
+    return true;
+}
+
 static bool editor_transaction_has_brush_mutation(const editor_command_transaction_entry *entry)
 {
     if (entry == NULL || entry->command == NULL || entry->target == NULL || entry->world_name == NULL ||
@@ -1764,7 +1853,8 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
            (SDL_strcmp(entry->command, "shear") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "sector_floor") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "clip") == 0 && SDL_strcmp(entry->target, "selection") == 0) ||
-           ((SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0) &&
+           ((SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0 ||
+             SDL_strcmp(entry->command, "paste") == 0) &&
             SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "delete") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "paint") == 0 &&
@@ -1778,6 +1868,8 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
 static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtime,
                                               editor_command_transaction_entry *entry, bool forward)
 {
+    if (editor_transaction_has_actor_mutation(entry))
+        return apply_editor_actor_transaction(runtime, entry, forward);
     if (!editor_transaction_has_brush_mutation(entry))
         return true;
 
@@ -1819,7 +1911,8 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
             sync_editor_selection_after_transaction(runtime, entry, forward);
         return true;
     }
-    if (SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0)
+    if (SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0 ||
+        SDL_strcmp(entry->command, "paste") == 0)
     {
         if (!forward)
             sync_editor_selection_after_transaction(runtime, entry, forward);
@@ -2482,16 +2575,20 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
         }
     }
 
+    editor_command_history_state *history = &runtime->editor_command_history;
+    const int first_entry = history->cursor;
     editor_command_transaction_entry *last_entry = NULL;
     int deleted_count = 0;
+    int transaction_group_id = -1;
     for (int i = target_count - 1; i >= 0; --i)
     {
         editor_command_transaction_entry *entry = editor_command_history_append(runtime);
         if (entry == NULL)
-        {
-            free_selected_editor_brush_delete_targets(targets, target_count);
-            return false;
-        }
+            goto delete_fail;
+        if (transaction_group_id < 0)
+            transaction_group_id = entry->id;
+        else
+            entry->id = transaction_group_id;
         if (!copy_editor_transaction_string(targets[i].scene, &entry->scene) ||
             !copy_editor_transaction_string("delete", &entry->command) ||
             !copy_editor_transaction_string("element", &entry->target) ||
@@ -2499,12 +2596,7 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
             !copy_editor_transaction_string(targets[i].element, &entry->element_name) ||
             !copy_editor_transaction_string(targets[i].element_stable_id, &entry->element_stable_id))
         {
-            editor_command_history_state *history = &runtime->editor_command_history;
-            free_editor_command_transaction_entry(entry);
-            history->count--;
-            history->cursor = history->count;
-            free_selected_editor_brush_delete_targets(targets, target_count);
-            return false;
+            goto delete_fail;
         }
         entry->face_index = -1;
         entry->has_bounds = targets[i].has_bounds;
@@ -2512,13 +2604,7 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
         SDL_snprintf(entry->message, sizeof(entry->message), "deleted %s", targets[i].element);
 
         if (!apply_editor_transaction_mutation(runtime, entry, true))
-        {
-            const char *message = json_string(action, "invalid_message", "selected brush delete failed");
-            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
-            free_selected_editor_brush_delete_targets(targets, target_count);
-            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
-                                                       message);
-        }
+            goto delete_fail;
         last_entry = entry;
         deleted_count++;
     }
@@ -2531,6 +2617,84 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
     free_selected_editor_brush_delete_targets(targets, target_count);
     return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", deleted_count > 0,
                                                last_entry, message);
+
+delete_fail: {
+    for (int rollback = first_entry + deleted_count - 1; rollback >= first_entry; --rollback)
+        (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+    for (int clear = first_entry; clear < history->count; ++clear)
+        free_editor_command_transaction_entry(&history->entries[clear]);
+    history->count = first_entry;
+    history->cursor = first_entry;
+    const char *failure_message = json_string(action, "invalid_message", "selected brush delete failed");
+    publish_editor_transaction(runtime, outputs, "commit", false, NULL, failure_message);
+    free_selected_editor_brush_delete_targets(targets, target_count);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                               failure_message);
+}
+}
+
+bool slayer3d_game_data_delete_selected_editor_actor_transaction(slayer3d_game_data_runtime *runtime,
+                                                                 yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+
+    slayer3d_game_data_editor_selection selection;
+    SDL_zero(selection);
+    if (!slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.hit ||
+        selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR || selection.element_name == NULL ||
+        selection.element_name[0] == '\0')
+    {
+        const char *message = json_string(action, "invalid_message", "nothing selected to delete");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        if (runtime->scene_state != NULL)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+        return true;
+    }
+
+    const editor_actor_runtime *actor = find_editor_actor(runtime, selection.element_name);
+    if (actor == NULL)
+    {
+        const char *message = json_string(action, "invalid_message", "selected Thing no longer exists");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        if (runtime->scene_state != NULL)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+        return true;
+    }
+
+    char actor_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    SDL_strlcpy(actor_name, actor->name, sizeof(actor_name));
+    const char *role = actor->properties != NULL ? slayer3d_properties_get_string(actor->properties, "role", "") : "";
+    const char *noun = "actor";
+    if (SDL_strcmp(role, "object") == 0)
+        noun = "object";
+    else if (SDL_strcmp(role, "light") == 0)
+        noun = "light";
+    else if (SDL_strcmp(role, "effect") == 0)
+        noun = "effect";
+    const int actor_index = (int)(actor - runtime->editor_actors);
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    if (entry == NULL || !editor_prepare_transaction_common(entry, slayer3d_game_data_active_scene(runtime), "delete",
+                                                            "actor", "editor_actors", actor_name))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        return false;
+    }
+    entry->actor_index = actor_index;
+    SDL_snprintf(entry->message, sizeof(entry->message), "deleted selected %s", noun);
+    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        return false;
+    }
+
+    publish_editor_transaction(runtime, outputs, "commit", true, entry, entry->message);
+    if (runtime->scene_state != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", entry->message);
+    return true;
 }
 
 bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -2593,7 +2757,7 @@ bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runt
     }
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     editor_command_transaction_entry *last_entry = NULL;
     int resized_count = 0;
     int applied_count = 0;
@@ -2879,9 +3043,10 @@ bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_run
     }
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int source_delta[3] = {0, 0, 0};
     int applied_count = 0;
+    int transaction_group_id = -1;
     slayer3d_game_data_editor_selection duplicated[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
     SDL_zeroa(duplicated);
 
@@ -2902,6 +3067,10 @@ bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_run
         {
             goto fail;
         }
+        if (transaction_group_id < 0)
+            transaction_group_id = entry->id;
+        else
+            entry->id = transaction_group_id;
 
         brush_world_runtime *mutable_world = find_brush_world_runtime_mutable(runtime, entry->world_name);
         init_editor_selection(&duplicated[applied_count]);
@@ -2942,6 +3111,316 @@ fail:
     history->count = first_entry;
     history->cursor = first_entry;
     return false;
+}
+
+static const char *editor_clipboard_kind_name(editor_clipboard_kind kind)
+{
+    switch (kind)
+    {
+    case EDITOR_CLIPBOARD_BRUSHES:
+        return "brushes";
+    case EDITOR_CLIPBOARD_ACTOR:
+        return "Thing";
+    case EDITOR_CLIPBOARD_EMPTY:
+        break;
+    }
+    return "empty";
+}
+
+static int editor_clipboard_item_count(const editor_clipboard_state *clipboard)
+{
+    if (clipboard == NULL)
+        return 0;
+    if (clipboard->kind == EDITOR_CLIPBOARD_BRUSHES)
+        return clipboard->brush_count;
+    return clipboard->kind == EDITOR_CLIPBOARD_ACTOR ? 1 : 0;
+}
+
+static void publish_editor_clipboard_result(slayer3d_game_data_runtime *runtime, yyjson_val *action, bool valid,
+                                            const char *message)
+{
+    slayer3d_properties *scene_state = runtime != NULL ? runtime->scene_state : NULL;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const editor_clipboard_state *clipboard = runtime != NULL ? &runtime->editor_clipboard : NULL;
+    const char *kind = editor_clipboard_kind_name(clipboard != NULL ? clipboard->kind : EDITOR_CLIPBOARD_EMPTY);
+    const int count = editor_clipboard_item_count(clipboard);
+    editor_set_bool_output(scene_state, outputs, "valid_key", valid);
+    editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
+    editor_set_string_output(scene_state, outputs, "kind_key", kind);
+    editor_set_int_output(scene_state, outputs, "count_key", count);
+    if (scene_state != NULL)
+    {
+        slayer3d_properties_set_bool(scene_state, "editor.clipboard.valid", valid);
+        slayer3d_properties_set_string(scene_state, "editor.clipboard.message", message != NULL ? message : "");
+        slayer3d_properties_set_string(scene_state, "editor.clipboard.kind", kind);
+        slayer3d_properties_set_int(scene_state, "editor.clipboard.count", count);
+        slayer3d_properties_set_string(scene_state, "editor.tool.last_action", message != NULL ? message : "");
+    }
+}
+
+static bool capture_editor_selection_clipboard(slayer3d_game_data_runtime *runtime, editor_clipboard_state *clipboard)
+{
+    if (runtime == NULL || clipboard == NULL)
+        return false;
+    SDL_zero(*clipboard);
+
+    slayer3d_game_data_editor_selection active;
+    SDL_zero(active);
+    if (slayer3d_game_data_get_active_editor_selection(runtime, &active) && active.hit &&
+        active.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR && active.element_name != NULL)
+    {
+        const editor_actor_runtime *actor = find_editor_actor(runtime, active.element_name);
+        if (actor == NULL || !copy_editor_actor_runtime(actor, &clipboard->actor))
+            return false;
+        clipboard->kind = EDITOR_CLIPBOARD_ACTOR;
+        return true;
+    }
+
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL ||
+        active_scene == NULL || SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
+    {
+        return false;
+    }
+
+    clipboard->brushes =
+        (editor_clipboard_brush *)SDL_calloc((size_t)runtime->editor_selected_brush_count, sizeof(*clipboard->brushes));
+    if (clipboard->brushes == NULL)
+        return false;
+    clipboard->kind = EDITOR_CLIPBOARD_BRUSHES;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+        const char *identity = editor_metadata_stable_id(selection->element_editor);
+        if (identity == NULL || identity[0] == '\0')
+            identity = selection->element_name;
+        editor_clipboard_brush *brush = &clipboard->brushes[clipboard->brush_count];
+        brush->world_name = selection->world_name != NULL ? SDL_strdup(selection->world_name) : NULL;
+        if (brush->world_name == NULL || world_runtime == NULL ||
+            !editor_brush_world_copy_source_box_by_identity(world_runtime, identity, &brush->source_box, NULL, NULL, 0))
+        {
+            free_editor_clipboard(clipboard);
+            return false;
+        }
+        clipboard->brush_count++;
+    }
+    return clipboard->brush_count > 0;
+}
+
+bool slayer3d_game_data_copy_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                              const slayer3d_properties *payload)
+{
+    (void)payload;
+    editor_clipboard_state clipboard;
+    if (!capture_editor_selection_clipboard(runtime, &clipboard))
+    {
+        publish_editor_clipboard_result(runtime, action, false, "nothing selected to copy");
+        return true;
+    }
+
+    free_editor_clipboard(&runtime->editor_clipboard);
+    runtime->editor_clipboard = clipboard;
+    char message[96];
+    const int count = editor_clipboard_item_count(&clipboard);
+    SDL_snprintf(message, sizeof(message),
+                 clipboard.kind == EDITOR_CLIPBOARD_ACTOR
+                     ? "copied selected Thing"
+                     : (count == 1 ? "copied 1 selected brush" : "copied %d selected brushes"),
+                 count);
+    publish_editor_clipboard_result(runtime, action, true, message);
+    return true;
+}
+
+static bool paste_editor_brush_clipboard(slayer3d_game_data_runtime *runtime, char *message, size_t message_size)
+{
+    editor_clipboard_state *clipboard = &runtime->editor_clipboard;
+    editor_command_history_state *history = &runtime->editor_command_history;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    const int first_entry = history->cursor;
+    int group_id = -1;
+    int applied_count = 0;
+    slayer3d_game_data_editor_selection pasted[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    SDL_zeroa(pasted);
+
+    if (clipboard->brush_count <= 0 || clipboard->brush_count > SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY)
+        return false;
+    for (int i = 0; i < clipboard->brush_count; ++i)
+    {
+        editor_clipboard_brush *source = &clipboard->brushes[i];
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, source->world_name);
+        editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+        char brush_name[256];
+        if (world_runtime == NULL || !world_runtime->editor_has_source_model || entry == NULL ||
+            !editor_brush_world_generate_brush_name(world_runtime, brush_name, sizeof(brush_name)) ||
+            !editor_prepare_transaction_common(entry, active_scene, "paste", "element", source->world_name,
+                                               brush_name) ||
+            !copy_editor_transaction_string(brush_name, &entry->element_stable_id) ||
+            !copy_editor_brush_source_box_runtime(&source->source_box, &entry->source_box_snapshot) ||
+            !assign_editor_source_box_snapshot_identity(&entry->source_box_snapshot, brush_name) ||
+            !editor_brush_world_validate_source_box_candidate(world_runtime, &entry->source_box_snapshot, -1, NULL, 0))
+        {
+            goto fail;
+        }
+        if (group_id < 0)
+            group_id = entry->id;
+        else
+            entry->id = group_id;
+        entry->has_source_box_snapshot = true;
+        entry->brush_index = world_runtime->editor_source_box_count;
+        entry->has_bounds = true;
+        entry->bounds = editor_brush_source_box_bounds_meters(world_runtime, &entry->source_box_snapshot);
+        SDL_snprintf(entry->message, sizeof(entry->message), "pasted %s", brush_name);
+        if (!apply_editor_transaction_mutation(runtime, entry, true))
+            goto fail;
+        init_editor_selection(&pasted[applied_count]);
+        refresh_editor_brush_selection_for_identity(world_runtime, &pasted[applied_count], brush_name, brush_name, -1,
+                                                    NULL);
+        applied_count++;
+    }
+
+    clear_editor_selected_brushes(runtime);
+    runtime->editor_selected_brush_scene = active_scene;
+    for (int i = 0; i < applied_count; ++i)
+    {
+        if (pasted[i].hit)
+            (void)add_editor_selected_brush(runtime, &pasted[i]);
+    }
+    update_active_editor_selection_from_selected_brushes(runtime);
+    publish_editor_transaction_selection_state(runtime);
+    SDL_snprintf(message, message_size, applied_count == 1 ? "pasted 1 brush" : "pasted %d brushes", applied_count);
+    return true;
+
+fail:
+    for (int rollback = first_entry + applied_count - 1; rollback >= first_entry; --rollback)
+        (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+    for (int clear = first_entry; clear < history->count; ++clear)
+        free_editor_command_transaction_entry(&history->entries[clear]);
+    history->count = first_entry;
+    history->cursor = first_entry;
+    return false;
+}
+
+static bool generate_editor_actor_paste_name(const slayer3d_game_data_runtime *runtime, const char *source_name,
+                                             char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    const char *base = source_name != NULL && source_name[0] != '\0' ? source_name : "thing.editor";
+    for (int i = 1; i < 100000; ++i)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s.copy.%d", base, i);
+        if (find_editor_actor(runtime, buffer) == NULL)
+            return true;
+    }
+    buffer[0] = '\0';
+    return false;
+}
+
+static bool paste_editor_actor_clipboard(slayer3d_game_data_runtime *runtime, char *message, size_t message_size)
+{
+    editor_clipboard_state *clipboard = &runtime->editor_clipboard;
+    char actor_name[256];
+    if (clipboard->kind != EDITOR_CLIPBOARD_ACTOR ||
+        !generate_editor_actor_paste_name(runtime, clipboard->actor.name, actor_name, sizeof(actor_name)))
+    {
+        return false;
+    }
+
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    if (entry == NULL ||
+        !editor_prepare_transaction_common(entry, slayer3d_game_data_active_scene(runtime), "paste", "actor",
+                                           "editor_actors", actor_name) ||
+        !copy_editor_actor_runtime(&clipboard->actor, &entry->actor_snapshot))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        return false;
+    }
+
+    char *name_copy = SDL_strdup(actor_name);
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    char *scene_copy = active_scene != NULL ? SDL_strdup(active_scene) : NULL;
+    if (name_copy == NULL || (active_scene != NULL && scene_copy == NULL))
+    {
+        SDL_free(name_copy);
+        SDL_free(scene_copy);
+        editor_command_history_discard_last(runtime, entry);
+        return false;
+    }
+    SDL_free(entry->actor_snapshot.name);
+    SDL_free(entry->actor_snapshot.scene);
+    entry->actor_snapshot.name = name_copy;
+    entry->actor_snapshot.scene = scene_copy;
+    entry->has_actor_snapshot = true;
+    entry->actor_index = runtime->editor_actor_count;
+    SDL_snprintf(entry->message, sizeof(entry->message), "pasted Thing %s", actor_name);
+    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        return false;
+    }
+    SDL_strlcpy(message, entry->message, message_size);
+    return true;
+}
+
+bool slayer3d_game_data_paste_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload)
+{
+    (void)payload;
+    if (runtime == NULL)
+        return false;
+    if (runtime->editor_clipboard.kind == EDITOR_CLIPBOARD_EMPTY)
+    {
+        publish_editor_clipboard_result(runtime, action, false, "clipboard is empty");
+        return true;
+    }
+
+    char message[128];
+    const bool pasted = runtime->editor_clipboard.kind == EDITOR_CLIPBOARD_BRUSHES
+                            ? paste_editor_brush_clipboard(runtime, message, sizeof(message))
+                            : paste_editor_actor_clipboard(runtime, message, sizeof(message));
+    publish_editor_clipboard_result(runtime, action, pasted, pasted ? message : "paste failed");
+    return true;
+}
+
+bool slayer3d_game_data_cut_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                             const slayer3d_properties *payload)
+{
+    if (runtime == NULL)
+        return false;
+    if (slayer3d_game_data_editor_selection_contains_locked_objects(runtime))
+        return slayer3d_game_data_reject_locked_editor_selection_action(runtime, NULL);
+
+    editor_clipboard_state clipboard;
+    if (!capture_editor_selection_clipboard(runtime, &clipboard))
+    {
+        publish_editor_clipboard_result(runtime, action, false, "nothing selected to cut");
+        return true;
+    }
+
+    bool deleted = false;
+    if (clipboard.kind == EDITOR_CLIPBOARD_ACTOR)
+        deleted = slayer3d_game_data_delete_selected_editor_actor_transaction(runtime, action);
+    else
+        deleted = slayer3d_game_data_delete_selected_editor_brushes(runtime, action, payload);
+    if (!deleted)
+    {
+        free_editor_clipboard(&clipboard);
+        publish_editor_clipboard_result(runtime, action, false, "cut failed");
+        return false;
+    }
+
+    free_editor_clipboard(&runtime->editor_clipboard);
+    runtime->editor_clipboard = clipboard;
+    char message[96];
+    const int count = editor_clipboard_item_count(&clipboard);
+    SDL_snprintf(message, sizeof(message),
+                 clipboard.kind == EDITOR_CLIPBOARD_ACTOR
+                     ? "cut selected Thing"
+                     : (count == 1 ? "cut 1 selected brush" : "cut %d selected brushes"),
+                 count);
+    publish_editor_clipboard_result(runtime, action, true, message);
+    return true;
 }
 
 static const char *editor_paint_action_material_name(slayer3d_game_data_runtime *runtime, yyjson_val *action)
@@ -3200,7 +3679,7 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
         return false;
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     editor_command_transaction_entry *last_entry = NULL;
     int applied_count = 0;
     int painted_face_count = 0;
@@ -3598,7 +4077,7 @@ bool slayer3d_game_data_color_selected_editor_brushes(slayer3d_game_data_runtime
         return false;
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     editor_command_transaction_entry *last_entry = NULL;
     int applied_count = 0;
     int colored_count = 0;
@@ -3742,7 +4221,7 @@ bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_run
     }
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int applied_count = 0;
     editor_command_transaction_entry *last_entry = NULL;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -3824,7 +4303,7 @@ bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtim
 
     axis = slayer3d_vec3_normalize(axis);
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int applied_count = 0;
     editor_command_transaction_entry *last_entry = NULL;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -3907,7 +4386,7 @@ bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime
         return false;
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int applied_count = 0;
     editor_command_transaction_entry *last_entry = NULL;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -4011,7 +4490,7 @@ static bool slayer3d_game_data_mirror_selected_editor_brushes(slayer3d_game_data
 
     plane_normal = slayer3d_vec3_normalize(plane_normal);
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int entry_count = 0;
     int applied_count = 0;
     bool mutation_applied[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
@@ -4210,7 +4689,7 @@ bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime
         return false;
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int applied_count = 0;
     editor_command_transaction_entry *last_entry = NULL;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -4304,7 +4783,7 @@ bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runt
         return false;
 
     editor_command_history_state *history = &runtime->editor_command_history;
-    const int first_entry = history->count;
+    const int first_entry = history->cursor;
     int applied_count = 0;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
@@ -4408,6 +4887,67 @@ bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtim
                                                entry->message);
 }
 
+static bool editor_transaction_changes_brush_presence(const editor_command_transaction_entry *entry)
+{
+    if (entry == NULL || entry->command == NULL || entry->target == NULL || SDL_strcmp(entry->target, "element") != 0)
+    {
+        return false;
+    }
+    return SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0 ||
+           SDL_strcmp(entry->command, "paste") == 0 || SDL_strcmp(entry->command, "delete") == 0;
+}
+
+static void sync_editor_transaction_group_selection(slayer3d_game_data_runtime *runtime,
+                                                    const editor_command_history_state *history, int group_start,
+                                                    int group_end, bool forward)
+{
+    if (runtime == NULL || history == NULL || group_start < 0 || group_end <= group_start ||
+        group_end >= history->count)
+    {
+        return;
+    }
+
+    bool changes_brush_presence = false;
+    bool select_present_brushes = false;
+    for (int i = group_start; i <= group_end; ++i)
+    {
+        const editor_command_transaction_entry *entry = &history->entries[i];
+        if (!editor_transaction_changes_brush_presence(entry))
+            continue;
+        changes_brush_presence = true;
+        const bool deleting = SDL_strcmp(entry->command, "delete") == 0;
+        if (deleting != forward)
+            select_present_brushes = true;
+    }
+    if (!changes_brush_presence)
+        return;
+
+    clear_editor_selected_brushes(runtime);
+    if (select_present_brushes)
+    {
+        runtime->editor_selected_brush_scene = slayer3d_game_data_active_scene(runtime);
+        for (int i = group_start; i <= group_end; ++i)
+        {
+            const editor_command_transaction_entry *entry = &history->entries[i];
+            if (!editor_transaction_changes_brush_presence(entry))
+                continue;
+            const bool deleting = SDL_strcmp(entry->command, "delete") == 0;
+            if (deleting == forward)
+                continue;
+
+            slayer3d_game_data_editor_selection selection;
+            init_editor_selection(&selection);
+            const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+            refresh_editor_brush_selection_for_identity(world_runtime, &selection, entry->element_name,
+                                                        entry->element_stable_id, -1, NULL);
+            if (selection.hit)
+                (void)add_editor_selected_brush(runtime, &selection);
+        }
+    }
+    update_active_editor_selection_from_selected_brushes(runtime);
+    publish_editor_transaction_selection_state(runtime);
+}
+
 bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                             const slayer3d_properties *payload)
 {
@@ -4444,6 +4984,7 @@ bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime,
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
     }
     history->cursor = group_start;
+    sync_editor_transaction_group_selection(runtime, history, group_start, group_end, false);
     char message[128];
     format_editor_transaction_message(runtime, "undo", true, entry,
                                       json_string(action, "message", "undo {editor_command}"), message,
@@ -4488,6 +5029,7 @@ bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime,
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "redo", false, NULL, message);
     }
     history->cursor = group_end + 1;
+    sync_editor_transaction_group_selection(runtime, history, group_start, group_end, true);
     char message[128];
     format_editor_transaction_message(runtime, "redo", true, entry,
                                       json_string(action, "message", "redo {editor_command}"), message,

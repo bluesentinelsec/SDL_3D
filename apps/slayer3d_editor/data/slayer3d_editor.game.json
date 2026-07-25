@@ -83,11 +83,42 @@
           },
           {
             "name": "action.editor.command.undo",
-            "bindings": [{ "device": "keyboard", "key": "U" }]
+            "bindings": [
+              { "device": "keyboard", "key": "U" },
+              { "device": "keyboard", "key": "Z", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "Z", "modifiers": ["gui"] }
+            ]
           },
           {
             "name": "action.editor.command.redo",
-            "bindings": [{ "device": "keyboard", "key": "Y" }]
+            "bindings": [
+              { "device": "keyboard", "key": "Y" },
+              { "device": "keyboard", "key": "Z", "modifiers": ["ctrl", "shift"] },
+              { "device": "keyboard", "key": "Z", "modifiers": ["gui", "shift"] },
+              { "device": "keyboard", "key": "Y", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "Y", "modifiers": ["gui"] }
+            ]
+          },
+          {
+            "name": "action.editor.copy",
+            "bindings": [
+              { "device": "keyboard", "key": "C", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "C", "modifiers": ["gui"] }
+            ]
+          },
+          {
+            "name": "action.editor.cut",
+            "bindings": [
+              { "device": "keyboard", "key": "X", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "X", "modifiers": ["gui"] }
+            ]
+          },
+          {
+            "name": "action.editor.paste",
+            "bindings": [
+              { "device": "keyboard", "key": "V", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "V", "modifiers": ["gui"] }
+            ]
           },
           {
             "name": "action.editor.delete_selected",
@@ -663,6 +694,9 @@
     "signal.editor.brush.flip_vertical",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
+    "signal.editor.copy",
+    "signal.editor.cut",
+    "signal.editor.paste",
     "signal.editor.tool.floor",
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
@@ -770,6 +804,8 @@
     "signal.editor.things.category.effects",
     "signal.editor.file.toggle",
     "signal.editor.file.close",
+    "signal.editor.edit.toggle",
+    "signal.editor.edit.close",
     "signal.editor.file.new",
     "signal.editor.file.open_dialog",
     "signal.editor.file.open",
@@ -877,6 +913,24 @@
         "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
+        "action": "action.editor.copy",
+        "on_pressed": "signal.editor.copy"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
+        "action": "action.editor.cut",
+        "on_pressed": "signal.editor.cut"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
+        "action": "action.editor.paste",
+        "on_pressed": "signal.editor.paste"
       },
       {
         "type": "sensor.input_pressed",
@@ -4872,7 +4926,8 @@
                 ]
               }
             ]
-          }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
         ]
       },
       {
@@ -5669,7 +5724,8 @@
               }
             ],
             "else": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to undo" }]
-          }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
         ]
       },
       {
@@ -5706,13 +5762,60 @@
               }
             ],
             "else": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to redo" }]
-          }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.copy",
+        "actions": [
+          {
+            "type": "editor.selection.copy",
+            "outputs": {
+              "valid_key": "editor.clipboard.valid",
+              "message_key": "editor.clipboard.message",
+              "kind_key": "editor.clipboard.kind",
+              "count_key": "editor.clipboard.count"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.cut",
+        "actions": [
+          {
+            "type": "editor.selection.cut",
+            "outputs": {
+              "valid_key": "editor.clipboard.valid",
+              "message_key": "editor.clipboard.message",
+              "kind_key": "editor.clipboard.kind",
+              "count_key": "editor.clipboard.count"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.paste",
+        "actions": [
+          {
+            "type": "editor.selection.paste",
+            "outputs": {
+              "valid_key": "editor.clipboard.valid",
+              "message_key": "editor.clipboard.message",
+              "kind_key": "editor.clipboard.kind",
+              "count_key": "editor.clipboard.count"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
         ]
       },
       {
         "signal": "signal.editor.file.toggle",
         "actions": [
           { "type": "scene_state.toggle", "key": "editor.file.menu.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
           { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
           { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
@@ -5726,6 +5829,26 @@
         "signal": "signal.editor.file.close",
         "actions": [
           { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false }
+        ]
+      },
+      {
+        "signal": "signal.editor.edit.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.edit.menu.open", "default": false },
+          { "type": "scene_state.set", "key": "editor.file.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.global.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.actor.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.sky.panel.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.liquid.panel.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "edit menu" }
+        ]
+      },
+      {
+        "signal": "signal.editor.edit.close",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.edit.menu.open", "value": false }
         ]
       },
       {

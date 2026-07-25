@@ -279,6 +279,15 @@ bool validate_editor_selection_delete_selected_action(validation_context *ctx, y
     return validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_selection_clipboard_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    const char *output_keys[] = {"valid_key", "message_key", "kind_key", "count_key"};
+    if (!validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)))
+        return false;
+    return validate_optional_action_branches(ctx, action, json_path, names, false);
+}
+
 bool validate_editor_selection_resize_y_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                validation_names *names, const char *type)
 {

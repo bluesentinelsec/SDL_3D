@@ -3575,47 +3575,6 @@ static void editor_actor_publish_place_outputs(slayer3d_game_data_runtime *runti
     editor_set_int_output(scene_state, outputs, "count_key", runtime != NULL ? runtime->editor_actor_count : 0);
 }
 
-static slayer3d_bounding_box editor_actor_selection_bounds(const editor_actor_runtime *actor)
-{
-    slayer3d_vec3 scale = actor != NULL ? actor->scale : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
-    slayer3d_vec3 half = slayer3d_vec3_make(0.5f * scale.x, 0.5f * scale.y, 0.5f * scale.z);
-    const char *mesh = actor != NULL ? actor->mesh : NULL;
-    if (mesh != NULL && SDL_strcmp(mesh, "capsule") == 0)
-        half = slayer3d_vec3_make(0.35f * scale.x, 0.9f * scale.y, 0.35f * scale.z);
-    else if (mesh != NULL && SDL_strcmp(mesh, "rectangle") == 0)
-        half = slayer3d_vec3_make(0.45f * scale.x, 0.9f * scale.y, 0.25f * scale.z);
-
-    slayer3d_bounding_box bounds;
-    const slayer3d_vec3 position = actor != NULL ? actor->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    bounds.min = slayer3d_vec3_make(position.x - half.x, position.y, position.z - half.z);
-    bounds.max = slayer3d_vec3_make(position.x + half.x, position.y + half.y * 2.0f, position.z + half.z);
-    return bounds;
-}
-
-static void editor_select_placed_actor(slayer3d_game_data_runtime *runtime, const char *actor_name)
-{
-    if (runtime == NULL || actor_name == NULL || actor_name[0] == '\0')
-        return;
-    const editor_actor_runtime *actor = find_editor_actor(runtime, actor_name);
-    if (actor == NULL)
-        return;
-
-    clear_editor_selected_brushes(runtime);
-    init_editor_selection(&runtime->editor_active_selection);
-    runtime->editor_active_selection.hit = true;
-    runtime->editor_active_selection.type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_ACTOR;
-    runtime->editor_active_selection.world_name = "editor_actors";
-    runtime->editor_active_selection.element_name = actor->name;
-    runtime->editor_active_selection.element_index = (int)(actor - runtime->editor_actors);
-    runtime->editor_active_selection.face_index = -1;
-    runtime->editor_active_selection.point = actor->position;
-    runtime->editor_active_selection.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
-    runtime->editor_active_selection.bounds = editor_actor_selection_bounds(actor);
-    runtime->editor_active_selection.has_bounds = true;
-    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
-    publish_editor_selected_brush_count(runtime);
-}
-
 static const char *editor_actor_placement_noun(const char *role)
 {
     if (role != NULL && SDL_strcmp(role, "object") == 0)
@@ -3775,7 +3734,7 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
     char message[192];
     if (ok)
     {
-        editor_select_placed_actor(runtime, actor_name);
+        select_editor_actor_runtime(runtime, actor_name);
         SDL_snprintf(message, sizeof(message), "%s %s placed", label[0] != '\0' ? label : id,
                      editor_actor_placement_noun(role));
     }
@@ -4983,6 +4942,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
         return slayer3d_game_data_select_editor_brush_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.selection.copy") == 0)
+        return slayer3d_game_data_copy_editor_selection(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.selection.cut") == 0)
+        return slayer3d_game_data_cut_editor_selection(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.selection.paste") == 0)
+        return slayer3d_game_data_paste_editor_selection(runtime, action, payload);
 
     if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
     {

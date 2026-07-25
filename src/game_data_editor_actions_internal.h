@@ -35,6 +35,12 @@ slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                        const slayer3d_properties *payload);
+bool slayer3d_game_data_copy_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                              const slayer3d_properties *payload);
+bool slayer3d_game_data_cut_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                             const slayer3d_properties *payload);
+bool slayer3d_game_data_paste_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload);
 bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                          const slayer3d_properties *payload);
 bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -71,6 +77,8 @@ bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runt
 bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_selected_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_delete_selected_editor_actor_transaction(slayer3d_game_data_runtime *runtime,
+                                                                 yyjson_val *action);
 bool slayer3d_game_data_hide_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_show_all_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_lock_selected_editor_objects_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -104,6 +112,7 @@ void free_editor_actors_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_prefabs_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_connections_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_command_history(editor_command_history_state *history);
+void free_editor_clipboard(editor_clipboard_state *clipboard);
 slayer3d_bounding_box editor_resized_preview_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 normal, float distance);
 void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
                                     const char *command, const char *target, const char *message,

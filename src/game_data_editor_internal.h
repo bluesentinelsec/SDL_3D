@@ -159,6 +159,19 @@ void publish_editor_selection_properties(slayer3d_game_data_runtime *runtime,
                                          const slayer3d_game_data_editor_selection *selection, int slot_count);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_translate_selected_editor_actor(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+bool copy_editor_actor_runtime(const editor_actor_runtime *source, editor_actor_runtime *dest);
+void free_editor_actor_runtime(editor_actor_runtime *actor);
+bool insert_editor_actor_runtime(slayer3d_game_data_runtime *runtime, int index, const editor_actor_runtime *actor);
+bool remove_editor_actor_runtime(slayer3d_game_data_runtime *runtime, const char *name, editor_actor_runtime *out_actor,
+                                 int *out_index);
+void select_editor_actor_runtime(slayer3d_game_data_runtime *runtime, const char *name);
+bool copy_editor_connection_runtime(const editor_connection_runtime *source, editor_connection_runtime *dest);
+void free_editor_connection_runtime(editor_connection_runtime *connection);
+bool capture_editor_actor_connections(const slayer3d_game_data_runtime *runtime, const char *actor_name,
+                                      editor_connection_runtime **out_connections, int *out_count);
+bool restore_editor_connections(slayer3d_game_data_runtime *runtime, const editor_connection_runtime *connections,
+                                int count);
+int remove_editor_actor_connections(slayer3d_game_data_runtime *runtime, const char *actor_name);
 bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                        const char *material_name, unsigned int contents,
                                                        const int source_min[3], const int source_max[3],

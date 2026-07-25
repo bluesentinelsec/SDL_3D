@@ -511,6 +511,11 @@ typedef struct editor_command_transaction_entry
     int source_clip_after_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
     editor_brush_source_box_runtime source_clip_before[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
     editor_brush_source_box_runtime source_clip_after[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    int actor_index;
+    bool has_actor_snapshot;
+    editor_actor_runtime actor_snapshot;
+    editor_connection_runtime *actor_connections;
+    int actor_connection_count;
     char message[128];
 } editor_command_transaction_entry;
 
@@ -521,6 +526,27 @@ typedef struct editor_command_history_state
     int cursor;
     int next_id;
 } editor_command_history_state;
+
+typedef enum editor_clipboard_kind
+{
+    EDITOR_CLIPBOARD_EMPTY = 0,
+    EDITOR_CLIPBOARD_BRUSHES,
+    EDITOR_CLIPBOARD_ACTOR,
+} editor_clipboard_kind;
+
+typedef struct editor_clipboard_brush
+{
+    char *world_name;
+    editor_brush_source_box_runtime source_box;
+} editor_clipboard_brush;
+
+typedef struct editor_clipboard_state
+{
+    editor_clipboard_kind kind;
+    editor_clipboard_brush *brushes;
+    int brush_count;
+    editor_actor_runtime actor;
+} editor_clipboard_state;
 
 typedef struct editor_player_start_runtime
 {
