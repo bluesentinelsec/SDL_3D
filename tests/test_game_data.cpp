@@ -36104,10 +36104,10 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
     ASSERT_NE(fly, nullptr);
     EXPECT_NEAR(fly->position.x, 0.0f, 0.001f);
-    EXPECT_NEAR(fly->position.y, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.y, 1.8f, 0.001f);
     EXPECT_NEAR(fly->position.z, 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "yaw", 1.0f), 0.0f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), -0.25f, 0.001f);
 
     slayer3d_data_game_runtime_destroy(host_runtime);
     slayer3d_game_session_destroy(session);
@@ -39512,10 +39512,10 @@ TEST(GameDataRuntime, EditorShellDojoWarnsOnLeakingSourceModel)
     ASSERT_NE(fly, nullptr);
     EXPECT_TRUE(fly->active);
     EXPECT_NEAR(fly->position.x, 0.0f, 0.001f);
-    EXPECT_NEAR(fly->position.y, 0.0f, 0.001f);
+    EXPECT_NEAR(fly->position.y, 1.8f, 0.001f);
     EXPECT_NEAR(fly->position.z, 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "yaw", 1.0f), 0.0f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(fly->props, "pitch", 1.0f), -0.25f, 0.001f);
     slayer3d_game_data_scene_skybox test_run_skybox{};
     EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &test_run_skybox));
     struct TestRunHelpCapture

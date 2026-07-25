@@ -1961,9 +1961,12 @@ static bool editor_start_builtin_play(slayer3d_game_data_runtime *runtime)
     }
     else
     {
-        actor_set_position(fly, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-        slayer3d_properties_set_float(fly->props, "yaw", 0.0f);
-        slayer3d_properties_set_float(fly->props, "pitch", 0.0f);
+        actor_set_position(
+            fly, slayer3d_properties_get_vec3(fly->props, "play_spawn_position", slayer3d_vec3_make(0.0f, 1.8f, 0.0f)));
+        slayer3d_properties_set_float(fly->props, "yaw",
+                                      slayer3d_properties_get_float(fly->props, "play_spawn_yaw", 0.0f));
+        slayer3d_properties_set_float(fly->props, "pitch",
+                                      slayer3d_properties_get_float(fly->props, "play_spawn_pitch", -0.25f));
         player->active = false;
         fly->active = true;
         camera = "camera.editor_shell.fly";

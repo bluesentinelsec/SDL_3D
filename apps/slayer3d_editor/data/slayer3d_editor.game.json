@@ -7084,11 +7084,14 @@
     {
       "name": "entity.editor_shell.fly_player",
       "active": false,
-      "transform": { "position": [-9.55008, 3.49932, 6.36672] },
+      "transform": { "position": [0.0, 1.8, 0.0] },
       "properties": {
-        "yaw": { "type": "float", "value": 0.98279 },
-        "pitch": { "type": "float", "value": -0.29566 },
-        "camera_forward": { "type": "vec3", "value": [0.79584, -0.29161, -0.53056] }
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": -0.25 },
+        "camera_forward": { "type": "vec3", "value": [0.0, -0.2474, -0.9689] },
+        "play_spawn_position": { "type": "vec3", "value": [0.0, 1.8, 0.0] },
+        "play_spawn_yaw": { "type": "float", "value": 0.0 },
+        "play_spawn_pitch": { "type": "float", "value": -0.25 }
       },
       "components": [
         {
