@@ -1734,6 +1734,7 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
 #define EDITOR_RUNNER_ARG_MAX 64
 #define EDITOR_RUNNER_TOKEN_MAX 4096
 
+#ifndef __EMSCRIPTEN__
 static char *editor_runner_substitute_current_map(const char *text, const char *current_map)
 {
     static const char placeholder[] = "{current_map}";
@@ -1873,6 +1874,7 @@ static char **editor_runner_build_argv(const char *executable, const char *argum
         *out_count = count;
     return argv;
 }
+#endif
 
 static bool editor_start_external_runner(slayer3d_game_data_runtime *runtime)
 {
