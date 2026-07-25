@@ -248,6 +248,28 @@ static const editor_text_edit_context editor_global_edit_context = {
     NULL,
 };
 
+/* Editor settings path and command-line fields. */
+
+static const editor_text_field_binding editor_settings_edit_fields[] = {
+    {"media", "editor.media.path.input", "editor.settings.media.display", 240U, "signal.editor.settings.apply",
+     "editing media directory"},
+    {"runner", "editor.runner.executable", "editor.settings.runner.display", 240U, "signal.editor.settings.apply",
+     "editing runner executable"},
+    {"arguments", "editor.runner.arguments", "editor.settings.arguments.display", 240U, "signal.editor.settings.apply",
+     "editing runner arguments"},
+};
+
+static const editor_text_edit_context editor_settings_edit_context = {
+    "editor.settings.edit.focus",
+    "editor.settings.edit.replace_on_text",
+    editor_settings_edit_fields,
+    SDL_arraysize(editor_settings_edit_fields),
+    "settings edit cancelled",
+    true,
+    true,
+    NULL,
+};
+
 bool editor_property_edit_has_focus(const slayer3d_game_data_runtime *runtime)
 {
     return editor_text_edit_active_field(runtime, &editor_property_edit_context) != NULL;
@@ -261,6 +283,11 @@ bool editor_texture_edit_has_focus(const slayer3d_game_data_runtime *runtime)
 bool editor_global_edit_has_focus(const slayer3d_game_data_runtime *runtime)
 {
     return editor_text_edit_active_field(runtime, &editor_global_edit_context) != NULL;
+}
+
+bool editor_settings_edit_has_focus(const slayer3d_game_data_runtime *runtime)
+{
+    return editor_text_edit_active_field(runtime, &editor_settings_edit_context) != NULL;
 }
 
 bool editor_update_property_text_edit(slayer3d_game_data_runtime *runtime)
@@ -278,6 +305,11 @@ bool editor_update_global_text_edit(slayer3d_game_data_runtime *runtime)
     return editor_update_text_edit(runtime, &editor_global_edit_context);
 }
 
+bool editor_update_settings_text_edit(slayer3d_game_data_runtime *runtime)
+{
+    return editor_update_text_edit(runtime, &editor_settings_edit_context);
+}
+
 void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
 {
     editor_text_edit_refresh_displays(runtime, &editor_texture_edit_context);
@@ -286,4 +318,9 @@ void editor_update_texture_edit_display(slayer3d_game_data_runtime *runtime)
 void editor_update_global_edit_display(slayer3d_game_data_runtime *runtime)
 {
     editor_text_edit_refresh_displays(runtime, &editor_global_edit_context);
+}
+
+void editor_update_settings_edit_display(slayer3d_game_data_runtime *runtime)
+{
+    editor_text_edit_refresh_displays(runtime, &editor_settings_edit_context);
 }

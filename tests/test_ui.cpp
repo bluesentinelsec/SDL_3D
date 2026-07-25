@@ -843,6 +843,47 @@ TEST(SLAYER3DUI, DockedResizableWindowsCollapseToRailAndClipContents)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, FloatingResizableWindowSynthesizesBottomRightGrip)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc window{};
+    window.id = "settings";
+    window.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    window.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    window.rect = {120.0f, 80.0f, 420.0f, 300.0f};
+    window.window = true;
+    window.floating_resizable = true;
+    window.floating_resize_thickness = 18.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &window));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_hit_region *resize = find_hit_region(layout, "settings.floating_resize");
+    ASSERT_NE(resize, nullptr);
+    EXPECT_EQ(resize->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM_RIGHT);
+    EXPECT_FLOAT_EQ(resize->rect.x, 522.0f);
+    EXPECT_FLOAT_EQ(resize->rect.y, 362.0f);
+    EXPECT_FLOAT_EQ(resize->rect.w, 18.0f);
+    EXPECT_FLOAT_EQ(resize->rect.h, 18.0f);
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, 535.0f, 375.0f);
+    ASSERT_NE(hit, nullptr);
+    EXPECT_STREQ(hit->id, "settings.floating_resize");
+
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 535.0f;
+    input.pointer_y = 375.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, nullptr));
+    const slayer3d_ui_layout_render_command *grip = find_render_command(layout, "settings.floating_resize");
+    ASSERT_NE(grip, nullptr);
+    EXPECT_TRUE(grip->hovered);
+    EXPECT_EQ(grip->resize_edge, SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM_RIGHT);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, SafeAreaViewportOffsetsRootsAnchorsDocksAndPopups)
 {
     slayer3d_ui_layout_model *layout = nullptr;

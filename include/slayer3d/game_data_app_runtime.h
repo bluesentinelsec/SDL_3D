@@ -67,6 +67,24 @@ extern "C"
                                                                int signal_id);
 
     /**
+     * @brief Return the number of authored signals that apply live window settings.
+     *
+     * Both `app.window.apply_signal` and `app.window.apply_signals` contribute
+     * registered, de-duplicated signals to this list.
+     */
+    int slayer3d_game_data_app_window_apply_signal_count(const slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Return one authored live-window apply signal id.
+     *
+     * @param runtime Loaded game-data runtime.
+     * @param index Zero-based index below
+     * `slayer3d_game_data_app_window_apply_signal_count()`.
+     * @return Registered signal id, or -1 when the index is invalid.
+     */
+    int slayer3d_game_data_app_window_apply_signal_at(const slayer3d_game_data_runtime *runtime, int index);
+
+    /**
      * @brief Evaluate the data-authored app pause condition.
      *
      * Returns true when `app.pause.allowed_if` is absent. When present, the

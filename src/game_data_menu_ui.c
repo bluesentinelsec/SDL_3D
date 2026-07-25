@@ -2214,6 +2214,32 @@ static bool emit_retained_resize_indicator(const slayer3d_ui_layout_render_comma
 
     const bool vertical = command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_LEFT ||
                           command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_RIGHT;
+    if (command->resize_edge == SLAYER3D_UI_LAYOUT_RESIZE_EDGE_BOTTOM_RIGHT)
+    {
+        const float thickness = command->active ? 3.0f : 2.0f;
+        const slayer3d_color color = command->active    ? (slayer3d_color){225, 238, 255, 255}
+                                     : command->hovered ? (slayer3d_color){105, 160, 218, 255}
+                                                        : (slayer3d_color){82, 104, 130, 220};
+        const float inset = 3.0f;
+        const slayer3d_ui_layout_rect horizontal = {
+            command->rect.x + command->rect.w * 0.35f,
+            command->rect.y + command->rect.h - inset - thickness,
+            command->rect.w * 0.65f - inset,
+            thickness,
+        };
+        const slayer3d_ui_layout_rect vertical_rail = {
+            command->rect.x + command->rect.w - inset - thickness,
+            command->rect.y + command->rect.h * 0.35f,
+            thickness,
+            command->rect.h * 0.65f - inset,
+        };
+        return emit_ui_rect_from_values_clipped_layered(NULL, command->id, command->layer, horizontal.x, horizontal.y,
+                                                        horizontal.w, horizontal.h, color, command->has_clip_rect,
+                                                        command->clip_rect, callback, userdata) &&
+               emit_ui_rect_from_values_clipped_layered(NULL, command->id, command->layer, vertical_rail.x,
+                                                        vertical_rail.y, vertical_rail.w, vertical_rail.h, color,
+                                                        command->has_clip_rect, command->clip_rect, callback, userdata);
+    }
     slayer3d_ui_layout_rect rail = command->rect;
     if (vertical)
     {

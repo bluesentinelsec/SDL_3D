@@ -375,6 +375,12 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         (void)ui_widget_scene_float(runtime, json_string(window, "dock_height_key", NULL), &desc.dock_height);
         desc.dock_resizable = ui_widget_bool(window, "dock_resizable", false);
         desc.dock_resize_thickness = json_float(window, "dock_resize_thickness", 0.0f);
+        desc.floating_resizable = ui_widget_bool(window, "floating_resizable", false);
+        desc.floating_resize_thickness = json_float(window, "floating_resize_thickness", 0.0f);
+        desc.min_width = json_float(window, "min_width", 0.0f);
+        desc.max_width = json_float(window, "max_width", 0.0f);
+        desc.min_height = json_float(window, "min_height", 0.0f);
+        desc.max_height = json_float(window, "max_height", 0.0f);
         desc.min_dock_width = json_float(window, "min_dock_width", 0.0f);
         desc.max_dock_width = json_float(window, "max_dock_width", 0.0f);
         desc.min_dock_height = json_float(window, "min_dock_height", 0.0f);
@@ -408,6 +414,11 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
         desc.options = options;
         for (int i = 0; i < desc.option_count; ++i)
             options[i] = yyjson_get_str(yyjson_arr_get(option_values, (size_t)i));
+        if (desc.type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && (desc.text == NULL || desc.text[0] == '\0') &&
+            desc.selected_index >= 0 && desc.selected_index < desc.option_count)
+        {
+            desc.text = options[desc.selected_index];
+        }
     }
 
     if (!slayer3d_ui_layout_add_node(layout, &desc))

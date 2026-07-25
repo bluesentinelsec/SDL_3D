@@ -1046,6 +1046,19 @@ mode and brush-setting keys above.
 `scene_state.set` accepts boolean, numeric, string, and vec3-array values. Vec3
 scene-state values are useful for editor work-plane normals, runtime placement
 offsets, and other authored tool state that should not require Lua.
+`value_from_state` copies another scene-state value. `value_from_property`
+copies an actor property without converting its scalar, vector, or color type:
+
+```json
+{
+  "type": "scene_state.set",
+  "key": "settings.display_mode",
+  "value_from_property": {
+    "target": "entity.settings",
+    "key": "display_mode"
+  }
+}
+```
 
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
@@ -2220,6 +2233,15 @@ the same `data_asset`, `scene`, and `player_start` fields as
 }
 ```
 
+The Slayer3D editor's first-class Play command uses `editor.runner.start`
+instead of the manifest handoff actions. This editor integration selects its
+built-in in-process player or fly controller from the current map, or starts
+the configured external executable without a shell. External arguments support
+only the `{current_map}` substitution. Applications should normally emit
+`signal.editor.test_run.request` rather than invoke this action directly so an
+unnamed or modified map is saved before execution. See
+`editor-settings-and-play.md` for the editor workflow and runner contract.
+
 Use `editor.brush_world.status` to publish the current dirty/source state of a
 brush world without exporting its JSON. Outputs support `valid_key`,
 `message_key`, `world_key`, `dirty_key`, `revision_key`, `saved_revision_key`,
@@ -2280,6 +2302,7 @@ viewport camera without collision:
       "orthographic_size_key": "editor.ortho.size",
       "move_speed": 8.0,
       "fast_speed": 22.0,
+      "move_forward_with_pitch": true,
       "orthographic_pan_speed": 0.85,
       "orthographic_zoom_speed": 1.75,
       "mouse_sensitivity": 0.002,
@@ -2291,12 +2314,15 @@ viewport camera without collision:
 ```
 
 Pair it with an `fps` camera targeting the camera actor. Movement uses the
-actor's yaw on the horizontal plane; `up` and `down` move along world Y. The
-optional `look` action gates mouse-look, which is useful for editors that need
-normal mouse clicking and right-button camera look in the same scene. If `look`
-is omitted, mouse-look is active whenever `mouse_look` is true. The controller
-writes `yaw`, `pitch`, and `camera_forward` by default; override those names
-with `yaw_property`, `pitch_property`, and `forward_property`.
+actor's yaw on the horizontal plane by default. Set `move_forward_with_pitch`
+to `true` for free-flight movement where forward and backward follow the full
+camera facing, including its vertical pitch. The `up` and `down` actions always
+move along world Y. The optional `look` action gates mouse-look, which is useful
+for editors that need normal mouse clicking and right-button camera look in the
+same scene. If `look` is omitted, mouse-look is active whenever `mouse_look` is
+true. The controller writes `yaw`, `pitch`, and `camera_forward` by default;
+override those names with `yaw_property`, `pitch_property`, and
+`forward_property`.
 
 When `mode_key` points at scene state with `orthographic_top`,
 `orthographic_front`, or `orthographic_side`, the same controller switches to
@@ -4015,8 +4041,10 @@ HUDs stay sharp while world rendering can use independent render scaling.
 
 Use `target_from_payload` when a sensor or previous action supplies the actor
 name. Use `value_from_payload` when the amount should come from sensor payload
-data. When `property.add` combines an integer with a float, the result is stored
-as a float so fractional damage, timers, and meters can accumulate correctly:
+data. `value_from_state` copies the same supported value types from scene state,
+which is useful when applying retained form fields to a settings actor. When
+`property.add` combines an integer with a float, the result is stored as a float
+so fractional damage, timers, and meters can accumulate correctly:
 
 ```json
 {

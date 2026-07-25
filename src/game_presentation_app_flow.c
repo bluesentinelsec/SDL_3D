@@ -82,6 +82,15 @@ static void app_flow_on_quit_request(void *userdata, int signal_id, const slayer
         flow->quit_request_received = true;
 }
 
+static void app_flow_on_window_apply_request(void *userdata, int signal_id, const slayer3d_properties *payload)
+{
+    slayer3d_game_data_app_flow *flow = (slayer3d_game_data_app_flow *)userdata;
+    (void)signal_id;
+    (void)payload;
+    if (flow != NULL)
+        flow->window_apply_requested = true;
+}
+
 static bool app_flow_request_scene(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
                                    const char *scene_name)
 {
@@ -177,8 +186,6 @@ static bool app_flow_consume_menu(slayer3d_game_data_app_flow *flow, slayer3d_ga
 
     if (result.signal_id >= 0)
         slayer3d_signal_emit(bus, result.signal_id, NULL);
-    if (slayer3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id))
-        (void)app_flow_apply_window_settings(flow, ctx, runtime);
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)
@@ -392,9 +399,15 @@ void slayer3d_game_data_app_flow_stop(slayer3d_game_data_app_flow *flow)
         return;
     if (flow->signal_bus != NULL && flow->quit_request_connection_id > 0)
         slayer3d_signal_disconnect(flow->signal_bus, flow->quit_request_connection_id);
+    for (int i = 0; flow->signal_bus != NULL && i < flow->window_apply_connection_count; ++i)
+        slayer3d_signal_disconnect(flow->signal_bus, flow->window_apply_connection_ids[i]);
+    SDL_free(flow->window_apply_connection_ids);
+    flow->window_apply_connection_ids = NULL;
+    flow->window_apply_connection_count = 0;
     flow->signal_bus = NULL;
     flow->quit_request_connection_id = 0;
     flow->quit_request_received = false;
+    flow->window_apply_requested = false;
 }
 
 bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime)
@@ -413,9 +426,9 @@ bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer
     if (!slayer3d_game_data_get_app_control(runtime, &flow->app))
         return false;
 
+    flow->signal_bus = runtime->session != NULL ? slayer3d_game_session_get_signal_bus(runtime->session) : NULL;
     if (flow->app.quit_request_signal_id >= 0)
     {
-        flow->signal_bus = runtime->session != NULL ? slayer3d_game_session_get_signal_bus(runtime->session) : NULL;
         flow->quit_request_connection_id =
             slayer3d_signal_connect(flow->signal_bus, flow->app.quit_request_signal_id, app_flow_on_quit_request, flow);
         if (flow->quit_request_connection_id <= 0)
@@ -423,6 +436,30 @@ bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer
             slayer3d_game_data_app_flow_stop(flow);
             return SDL_SetError("Unable to connect app quit request signal");
         }
+    }
+
+    const int window_apply_count = slayer3d_game_data_app_window_apply_signal_count(runtime);
+    if (window_apply_count > 0)
+    {
+        flow->window_apply_connection_ids = SDL_calloc((size_t)window_apply_count, sizeof(int));
+        if (flow->window_apply_connection_ids == NULL)
+        {
+            slayer3d_game_data_app_flow_stop(flow);
+            return false;
+        }
+        for (int i = 0; i < window_apply_count; ++i)
+        {
+            const int signal_id = slayer3d_game_data_app_window_apply_signal_at(runtime, i);
+            const int connection_id =
+                slayer3d_signal_connect(flow->signal_bus, signal_id, app_flow_on_window_apply_request, flow);
+            if (connection_id <= 0)
+            {
+                slayer3d_game_data_app_flow_stop(flow);
+                return SDL_SetError("Unable to connect app window apply signal");
+            }
+            flow->window_apply_connection_ids[flow->window_apply_connection_count++] = connection_id;
+        }
+        flow->window_apply_requested = true;
     }
 
     slayer3d_game_data_transition_desc transition;
@@ -461,6 +498,11 @@ bool slayer3d_game_data_app_flow_update(slayer3d_game_data_app_flow *flow, slaye
         flow->quit_request_received = false;
         if (quit_enabled)
             app_flow_request_quit(flow, ctx, runtime);
+    }
+    if (flow->window_apply_requested)
+    {
+        flow->window_apply_requested = false;
+        (void)app_flow_apply_window_settings(flow, ctx, runtime);
     }
     bool skip_applied = false;
     bool skip_blocks_menus = false;

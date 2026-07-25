@@ -658,13 +658,17 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
     const float speed = fast > 0.0f
                             ? json_float(component, "fast_speed", json_float(component, "move_speed", 8.0f) * 2.5f)
                             : json_float(component, "move_speed", 8.0f);
-    const float fwd_x = SDL_sinf(yaw);
-    const float fwd_z = -SDL_cosf(yaw);
-    const float right_x = SDL_cosf(yaw);
-    const float right_z = SDL_sinf(yaw);
+    const slayer3d_vec3 move_forward = json_bool(component, "move_forward_with_pitch", false)
+                                           ? camera_forward
+                                           : slayer3d_vec3_make(SDL_sinf(yaw), 0.0f, -SDL_cosf(yaw));
     const float move_step = speed * hold_multiplier * move_dt;
-    const slayer3d_vec3 delta = slayer3d_vec3_make((fwd_x * forward + right_x * side) * move_step, vertical * move_step,
-                                                   (fwd_z * forward + right_z * side) * move_step);
+    slayer3d_vec3 world_move = slayer3d_vec3_add(
+        slayer3d_vec3_add(slayer3d_vec3_scale(move_forward, forward), slayer3d_vec3_scale(camera_right, side)),
+        slayer3d_vec3_make(0.0f, vertical, 0.0f));
+    const float world_move_len_sq = slayer3d_vec3_length_squared(world_move);
+    if (world_move_len_sq > 1.0f)
+        world_move = slayer3d_vec3_scale(world_move, 1.0f / SDL_sqrtf(world_move_len_sq));
+    const slayer3d_vec3 delta = slayer3d_vec3_scale(world_move, move_step);
     if (slayer3d_vec3_length_squared(delta) > 0.0000001f)
         actor_set_position(actor, slayer3d_vec3_add(actor->position, delta));
 

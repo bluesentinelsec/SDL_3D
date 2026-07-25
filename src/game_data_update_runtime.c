@@ -148,10 +148,10 @@ bool slayer3d_game_data_update(slayer3d_game_data_runtime *runtime, float dt)
      * guards never read a stale frame. */
     if (runtime->scene_state != NULL)
     {
-        slayer3d_properties_set_bool(runtime->scene_state, "editor.ui.text_entry.active",
-                                     editor_property_edit_has_focus(runtime) ||
-                                         editor_texture_edit_has_focus(runtime) ||
-                                         editor_global_edit_has_focus(runtime));
+        slayer3d_properties_set_bool(
+            runtime->scene_state, "editor.ui.text_entry.active",
+            editor_property_edit_has_focus(runtime) || editor_texture_edit_has_focus(runtime) ||
+                editor_global_edit_has_focus(runtime) || editor_settings_edit_has_focus(runtime));
     }
     update_sensors(runtime);
     update_noise_events(runtime, dt);

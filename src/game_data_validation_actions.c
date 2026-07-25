@@ -1055,6 +1055,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.map.lighting_plan", validate_editor_map_lighting_plan_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.save_manifest", validate_editor_test_run_save_manifest_action),
+        ACTION_RULE_EXACT_HANDLER("editor.runner.start", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.brush_world.status", validate_editor_brush_world_status_action),
         ACTION_RULE_EXACT_HANDLER("editor.brush_world.validate_source",
                                   validate_editor_brush_world_validate_source_action),
@@ -1212,13 +1213,22 @@ static bool validate_property_set_or_add_action(validation_context *ctx, yyjson_
 
     yyjson_val *value = obj_get(action, "value");
     yyjson_val *value_from_payload_value = obj_get(action, "value_from_payload");
+    yyjson_val *value_from_state_value = obj_get(action, "value_from_state");
     const char *value_from_payload = json_string(action, "value_from_payload");
-    if ((value == NULL && value_from_payload == NULL) || (value != NULL && value_from_payload != NULL))
-        return validation_error(ctx, json_path, "%s requires exactly one of value or value_from_payload", type);
+    const char *value_from_state = json_string(action, "value_from_state");
+    const int value_source_count =
+        (value != NULL ? 1 : 0) + (value_from_payload != NULL ? 1 : 0) + (value_from_state != NULL ? 1 : 0);
+    if (value_source_count != 1)
+        return validation_error(ctx, json_path,
+                                "%s requires exactly one of value, value_from_payload, or value_from_state", type);
     if (value_from_payload_value != NULL && !yyjson_is_str(value_from_payload_value))
         return validation_error(ctx, json_path, "%s value_from_payload must be a string", type);
     if (value_from_payload != NULL && value_from_payload[0] == '\0')
         return validation_error(ctx, json_path, "%s value_from_payload must be non-empty", type);
+    if (value_from_state_value != NULL && !yyjson_is_str(value_from_state_value))
+        return validation_error(ctx, json_path, "%s value_from_state must be a string", type);
+    if (value_from_state != NULL && value_from_state[0] == '\0')
+        return validation_error(ctx, json_path, "%s value_from_state must be non-empty", type);
     return true;
 }
 
@@ -1777,13 +1787,27 @@ static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val 
         return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
     yyjson_val *value = obj_get(action, "value");
     yyjson_val *value_from_state = obj_get(action, "value_from_state");
-    if (value != NULL && value_from_state != NULL)
-        return validation_error(ctx, json_path, "scene_state.set requires value or value_from_state, not both");
+    yyjson_val *value_from_property = obj_get(action, "value_from_property");
+    const int value_source_count =
+        (value != NULL ? 1 : 0) + (value_from_state != NULL ? 1 : 0) + (value_from_property != NULL ? 1 : 0);
+    if (value_source_count != 1)
+        return validation_error(
+            ctx, json_path, "scene_state.set requires exactly one of value, value_from_state, or value_from_property");
     if (value_from_state != NULL)
     {
         if (!yyjson_is_str(value_from_state) || yyjson_get_str(value_from_state)[0] == '\0')
             return validation_error(ctx, json_path, "scene_state.set value_from_state must be a non-empty string");
         return true;
+    }
+    if (value_from_property != NULL)
+    {
+        if (!yyjson_is_obj(value_from_property) || !is_non_empty_string(value_from_property, "target") ||
+            !is_non_empty_string(value_from_property, "key"))
+        {
+            return validation_error(ctx, json_path,
+                                    "scene_state.set value_from_property requires non-empty target and key strings");
+        }
+        return require_ref(ctx, &names->entities, "entity", json_string(value_from_property, "target"), json_path);
     }
     if (value == NULL || !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) ||
                            is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4)))

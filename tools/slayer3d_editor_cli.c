@@ -600,6 +600,15 @@ static bool editor_window_mode_valid(const char *value)
                              SDL_strcmp(value, "fullscreen-borderless") == 0);
 }
 
+static const char *editor_window_mode_state_value(const char *value)
+{
+    if (value != NULL && SDL_strcmp(value, "fullscreen") == 0)
+        return "fullscreen_exclusive";
+    if (value != NULL && SDL_strcmp(value, "fullscreen-borderless") == 0)
+        return "fullscreen_borderless";
+    return "windowed";
+}
+
 slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args, FILE *stream)
 {
     struct arg_str *project = arg_str0(NULL, "project", "<project>", "project directory or slayer3d.project.json");
@@ -1292,6 +1301,8 @@ bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slay
     out_launch->media_relative_path = "";
     out_launch->input_path = args->command == SLAYER3D_EDITOR_COMMAND_OPEN ? args->input_path : "";
     out_launch->save_path = save_path;
+    out_launch->document_named = args->owned_output_path == NULL;
+    out_launch->media_path_explicit = args->media_path != NULL && args->media_path[0] != '\0';
     out_launch->test_run_path = project->test_run_path;
     out_launch->project_dir = project->project_dir;
     out_launch->data_root_relative_path = project->data_root_relative_path;
@@ -1618,7 +1629,7 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         return false;
     }
 
-    const int state_count = 4 + 2 + 3 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
+    const int state_count = 7 + 2 + 3 + (int)SDL_arraysize(out_invocation->owned_asset_source_assignments);
     int argc = 7 + (editor_invocation_extra_asset_root_count(out_invocation) * 2) + (state_count * 2);
     if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
@@ -1636,13 +1647,18 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
         "editor.command", launch->input_path != NULL && launch->input_path[0] != '\0' ? "open" : "new");
     out_invocation->owned_input_assignment = editor_state_assignment("editor.input.path", launch->input_path);
     out_invocation->owned_save_assignment = editor_state_assignment("editor.save.path", launch->save_path);
+    out_invocation->owned_document_named_assignment =
+        editor_state_assignment("editor.document.named", launch->document_named ? "true" : "false");
+    out_invocation->owned_window_mode_assignment =
+        editor_state_assignment("editor.window.mode.initial", editor_window_mode_state_value(launch->window_mode));
     out_invocation->owned_test_run_assignment =
         editor_state_assignment("editor.test_run.path", launch->test_run_path != NULL ? launch->test_run_path : "");
     out_invocation->owned_project_dir_assignment = editor_state_assignment("editor.project.dir", launch->project_dir);
     out_invocation->owned_project_data_root_assignment =
         editor_state_assignment("editor.project.data_root", launch->data_root_relative_path);
     if (out_invocation->owned_command_assignment == NULL || out_invocation->owned_input_assignment == NULL ||
-        out_invocation->owned_save_assignment == NULL || out_invocation->owned_test_run_assignment == NULL ||
+        out_invocation->owned_save_assignment == NULL || out_invocation->owned_document_named_assignment == NULL ||
+        out_invocation->owned_window_mode_assignment == NULL || out_invocation->owned_test_run_assignment == NULL ||
         out_invocation->owned_project_dir_assignment == NULL ||
         out_invocation->owned_project_data_root_assignment == NULL ||
         !editor_build_asset_source_assignments(out_invocation, launch->asset_sources))
@@ -1697,6 +1713,8 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
     }
 
     out_invocation->owned_media_path_assignment = editor_state_assignment("editor.media.path", launch->media_dir);
+    out_invocation->owned_media_explicit_assignment =
+        editor_state_assignment("editor.media.path.explicit", launch->media_path_explicit ? "true" : "false");
     out_invocation->owned_media_relative_assignment =
         editor_state_assignment("editor.media.relative", launch->media_relative_path);
     out_invocation->owned_media_available_assignment =
@@ -1705,6 +1723,7 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
                                                               ? "true"
                                                               : "false");
     if (out_invocation->owned_media_path_assignment == NULL ||
+        out_invocation->owned_media_explicit_assignment == NULL ||
         out_invocation->owned_media_relative_assignment == NULL ||
         out_invocation->owned_media_available_assignment == NULL)
     {
@@ -1714,10 +1733,11 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launc
 
     char *owned_state[] = {
         out_invocation->owned_command_assignment,        out_invocation->owned_input_assignment,
-        out_invocation->owned_save_assignment,           out_invocation->owned_test_run_assignment,
+        out_invocation->owned_save_assignment,           out_invocation->owned_document_named_assignment,
+        out_invocation->owned_window_mode_assignment,    out_invocation->owned_test_run_assignment,
         out_invocation->owned_project_dir_assignment,    out_invocation->owned_project_data_root_assignment,
-        out_invocation->owned_media_path_assignment,     out_invocation->owned_media_relative_assignment,
-        out_invocation->owned_media_available_assignment};
+        out_invocation->owned_media_path_assignment,     out_invocation->owned_media_explicit_assignment,
+        out_invocation->owned_media_relative_assignment, out_invocation->owned_media_available_assignment};
     for (size_t i = 0; i < SDL_arraysize(owned_state); ++i)
     {
         if (!editor_add_arg(out_invocation, &index, "--state") ||
@@ -1754,10 +1774,13 @@ void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation
     SDL_free(invocation->owned_command_assignment);
     SDL_free(invocation->owned_input_assignment);
     SDL_free(invocation->owned_save_assignment);
+    SDL_free(invocation->owned_document_named_assignment);
+    SDL_free(invocation->owned_window_mode_assignment);
     SDL_free(invocation->owned_test_run_assignment);
     SDL_free(invocation->owned_project_dir_assignment);
     SDL_free(invocation->owned_project_data_root_assignment);
     SDL_free(invocation->owned_media_path_assignment);
+    SDL_free(invocation->owned_media_explicit_assignment);
     SDL_free(invocation->owned_media_relative_assignment);
     SDL_free(invocation->owned_media_available_assignment);
     for (size_t i = 0; i < SDL_arraysize(invocation->owned_asset_source_assignments); ++i)

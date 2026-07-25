@@ -10,6 +10,7 @@
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
+#include <SDL3/SDL_process.h>
 
 void slayer3d_game_data_editor_file_dialog_request_free(editor_file_dialog_request *request)
 {
@@ -1716,7 +1717,7 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
     slayer3d_properties_set_bool(runtime->scene_state, "editor.media.startup_prompt.open", false);
     if (was_startup_prompt)
     {
-        slayer3d_properties_set_bool(runtime->scene_state, "editor.media.settings.open", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.settings.open", false);
         slayer3d_properties_set_bool(runtime->scene_state, "editor.file.menu.open", false);
     }
     slayer3d_properties_set_string(runtime->scene_state, status_key, "media path updated");
@@ -1724,6 +1725,276 @@ static bool execute_editor_media_path_apply_action(slayer3d_game_data_runtime *r
     SDL_free(relative_path);
     SDL_free(absolute_path);
     return true;
+}
+
+/* ------------------------------------------------------------------ */
+/* Editor play mode and external runner                                */
+/* ------------------------------------------------------------------ */
+
+#define EDITOR_RUNNER_ARG_MAX 64
+#define EDITOR_RUNNER_TOKEN_MAX 4096
+
+#ifndef __EMSCRIPTEN__
+static char *editor_runner_substitute_current_map(const char *text, const char *current_map)
+{
+    static const char placeholder[] = "{current_map}";
+    if (text == NULL || current_map == NULL)
+        return NULL;
+    size_t count = 0U;
+    const char *cursor = text;
+    while ((cursor = SDL_strstr(cursor, placeholder)) != NULL)
+    {
+        ++count;
+        cursor += sizeof(placeholder) - 1U;
+    }
+    const size_t text_size = SDL_strlen(text);
+    const size_t map_size = SDL_strlen(current_map);
+    const size_t placeholder_size = sizeof(placeholder) - 1U;
+    size_t result_size = text_size;
+    if (map_size >= placeholder_size)
+        result_size += count * (map_size - placeholder_size);
+    else
+        result_size -= count * (placeholder_size - map_size);
+    char *result = (char *)SDL_malloc(result_size + 1U);
+    if (result == NULL)
+        return NULL;
+
+    char *output = result;
+    cursor = text;
+    const char *match = NULL;
+    while ((match = SDL_strstr(cursor, placeholder)) != NULL)
+    {
+        const size_t prefix_size = (size_t)(match - cursor);
+        SDL_memcpy(output, cursor, prefix_size);
+        output += prefix_size;
+        SDL_memcpy(output, current_map, map_size);
+        output += map_size;
+        cursor = match + placeholder_size;
+    }
+    SDL_strlcpy(output, cursor, result_size + 1U - (size_t)(output - result));
+    return result;
+}
+
+static void editor_runner_free_argv(char **argv, int count)
+{
+    if (argv == NULL)
+        return;
+    for (int i = 0; i < count; ++i)
+        SDL_free(argv[i]);
+    SDL_free(argv);
+}
+
+static char **editor_runner_build_argv(const char *executable, const char *arguments, const char *current_map,
+                                       int *out_count, char *error, size_t error_size)
+{
+    if (out_count != NULL)
+        *out_count = 0;
+    char **argv = (char **)SDL_calloc(EDITOR_RUNNER_ARG_MAX + 2U, sizeof(*argv));
+    if (argv == NULL)
+        return NULL;
+    argv[0] = SDL_strdup(executable);
+    int count = argv[0] != NULL ? 1 : 0;
+    const char *cursor = arguments != NULL ? arguments : "";
+    while (argv[0] != NULL && *cursor != '\0')
+    {
+        while (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
+            ++cursor;
+        if (*cursor == '\0')
+            break;
+        if (count > EDITOR_RUNNER_ARG_MAX)
+        {
+            SDL_snprintf(error, error_size, "runner accepts at most %d arguments", EDITOR_RUNNER_ARG_MAX);
+            editor_runner_free_argv(argv, count);
+            return NULL;
+        }
+
+        char token[EDITOR_RUNNER_TOKEN_MAX];
+        size_t token_size = 0U;
+        char quote = '\0';
+        bool started = false;
+        while (*cursor != '\0')
+        {
+            const char ch = *cursor;
+            if (quote == '\0' && (ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'))
+                break;
+            ++cursor;
+            started = true;
+            if (ch == '\\' && *cursor != '\0')
+            {
+                if (token_size + 1U < sizeof(token))
+                    token[token_size++] = *cursor;
+                ++cursor;
+                continue;
+            }
+            if (ch == '\'' || ch == '"')
+            {
+                if (quote == '\0')
+                {
+                    quote = ch;
+                    continue;
+                }
+                if (quote == ch)
+                {
+                    quote = '\0';
+                    continue;
+                }
+            }
+            if (token_size + 1U >= sizeof(token))
+            {
+                SDL_snprintf(error, error_size, "runner argument is too long");
+                editor_runner_free_argv(argv, count);
+                return NULL;
+            }
+            token[token_size++] = ch;
+        }
+        if (quote != '\0')
+        {
+            SDL_snprintf(error, error_size, "runner arguments contain an unterminated quote");
+            editor_runner_free_argv(argv, count);
+            return NULL;
+        }
+        if (!started)
+            continue;
+        token[token_size] = '\0';
+        argv[count] = editor_runner_substitute_current_map(token, current_map);
+        if (argv[count] == NULL)
+        {
+            editor_runner_free_argv(argv, count);
+            return NULL;
+        }
+        ++count;
+    }
+    if (argv[0] == NULL)
+    {
+        editor_runner_free_argv(argv, count);
+        return NULL;
+    }
+    argv[count] = NULL;
+    if (out_count != NULL)
+        *out_count = count;
+    return argv;
+}
+#endif
+
+static bool editor_start_external_runner(slayer3d_game_data_runtime *runtime)
+{
+    slayer3d_properties *state = runtime != NULL ? runtime->scene_state : NULL;
+    const char *configured = state != NULL ? slayer3d_properties_get_string(state, "editor.runner.executable", "") : "";
+    const char *save_path = state != NULL ? slayer3d_properties_get_string(state, "editor.save.path", "") : "";
+    if (configured[0] == '\0' || save_path[0] == '\0')
+    {
+        editor_publish_console_message(runtime, configured[0] == '\0' ? "External runner executable is not configured"
+                                                                      : "Save the map before running it");
+        return false;
+    }
+#ifdef __EMSCRIPTEN__
+    editor_publish_console_message(runtime, "External runner programs are unavailable in web builds");
+    return false;
+#else
+    const char *project_dir = slayer3d_properties_get_string(state, "editor.project.dir", "");
+    char *executable =
+        editor_path_absolute(configured) ? SDL_strdup(configured) : editor_path_join(project_dir, configured);
+    char *current_map = editor_path_make_absolute_from_cwd(save_path);
+    char error[256] = {0};
+    int argc = 0;
+    char **argv =
+        executable != NULL && current_map != NULL
+            ? editor_runner_build_argv(executable, slayer3d_properties_get_string(state, "editor.runner.arguments", ""),
+                                       current_map, &argc, error, sizeof(error))
+            : NULL;
+    SDL_Process *process = argv != NULL ? SDL_CreateProcess((const char *const *)argv, false) : NULL;
+    if (process == NULL)
+    {
+        editor_publish_console_messagef(runtime, "External runner failed: %s",
+                                        error[0] != '\0' ? error : SDL_GetError());
+    }
+    else
+    {
+        editor_publish_console_messagef(runtime, "External runner started: %s", executable);
+        SDL_DestroyProcess(process);
+    }
+    editor_runner_free_argv(argv, argc);
+    SDL_free(current_map);
+    SDL_free(executable);
+    return process != NULL;
+#endif
+}
+
+static bool editor_actor_is_player_character(const editor_actor_runtime *actor)
+{
+    return actor != NULL && actor->properties != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(actor->properties, "actor-type", ""), "player-character") == 0;
+}
+
+static bool editor_start_builtin_play(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
+    slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
+    if (player == NULL || fly == NULL)
+        return false;
+
+    const editor_actor_runtime *player_marker = NULL;
+    for (int i = 0; i < runtime->editor_actor_count; ++i)
+    {
+        if (editor_actor_is_player_character(&runtime->editor_actors[i]))
+        {
+            player_marker = &runtime->editor_actors[i];
+            break;
+        }
+    }
+
+    const char *camera = NULL;
+    const char *message = NULL;
+    if (player_marker != NULL)
+    {
+        actor_set_position(player, player_marker->position);
+        slayer3d_properties_set_float(player->props, "yaw", player_marker->rotation.y);
+        slayer3d_properties_set_float(player->props, "pitch", player_marker->rotation.x);
+        fps_controller_runtime *controller = find_fps_controller(runtime, player->name);
+        if (controller != NULL)
+            controller->initialized = false;
+        player->active = true;
+        fly->active = false;
+        camera = "camera.editor_shell.player";
+        slayer3d_properties_set_string(runtime->scene_state, "editor.play.mode", "player");
+        message = "Built-in play mode started at player-character";
+    }
+    else
+    {
+        actor_set_position(
+            fly, slayer3d_properties_get_vec3(fly->props, "play_spawn_position", slayer3d_vec3_make(0.0f, 1.8f, 0.0f)));
+        slayer3d_properties_set_float(fly->props, "yaw",
+                                      slayer3d_properties_get_float(fly->props, "play_spawn_yaw", 0.0f));
+        slayer3d_properties_set_float(fly->props, "pitch",
+                                      slayer3d_properties_get_float(fly->props, "play_spawn_pitch", -0.25f));
+        player->active = false;
+        fly->active = true;
+        camera = "camera.editor_shell.fly";
+        slayer3d_properties_set_string(runtime->scene_state, "editor.play.mode", "fly");
+        message = "Built-in fly mode started (no player-character in map)";
+    }
+    if (!slayer3d_game_data_set_active_scene(runtime, "scene.editor_shell.test_run"))
+        return false;
+    runtime->active_camera = camera;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.test_run.enter.valid", true);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.test_run.enter.message", message);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    editor_publish_console_message(runtime, message);
+    return true;
+}
+
+static bool execute_editor_runner_start_action(slayer3d_game_data_runtime *runtime)
+{
+    const char *kind = runtime != NULL && runtime->scene_state != NULL
+                           ? slayer3d_properties_get_string(runtime->scene_state, "editor.runner.kind", "builtin")
+                           : "builtin";
+    const char *executable = runtime != NULL && runtime->scene_state != NULL
+                                 ? slayer3d_properties_get_string(runtime->scene_state, "editor.runner.executable", "")
+                                 : "";
+    return SDL_strcmp(kind, "external") == 0 && executable[0] != '\0' ? editor_start_external_runner(runtime)
+                                                                      : editor_start_builtin_play(runtime);
 }
 
 /* ------------------------------------------------------------------ */
@@ -2847,7 +3118,7 @@ static float editor_actor_collection_float(const runtime_collection *collection,
 }
 
 static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runtime, const char *collection_name,
-                                               int index)
+                                               int index, bool activate_tool)
 {
     const runtime_collection *collection = find_runtime_collection_const(runtime, collection_name);
     char id[128];
@@ -2870,11 +3141,14 @@ static bool editor_actor_select_collection_row(slayer3d_game_data_runtime *runti
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected", id);
     slayer3d_properties_set_string(runtime->scene_state, "editor.actor.selected.label", label);
     slayer3d_properties_set_string(runtime->scene_state, "editor.palette.game_object.cursor", id);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
-    char message[192];
-    SDL_snprintf(message, sizeof(message), "selected actor %s", label);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    if (activate_tool)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.mode", "thing");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
+        char message[192];
+        SDL_snprintf(message, sizeof(message), "selected actor %s", label);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    }
     return true;
 }
 
@@ -3029,7 +3303,7 @@ static bool execute_editor_actor_scan_action(slayer3d_game_data_runtime *runtime
     {
         if (selected_index < 0)
             selected_index = 0;
-        (void)editor_actor_select_collection_row(runtime, collection, selected_index);
+        (void)editor_actor_select_collection_row(runtime, collection, selected_index, false);
     }
     else
     {
@@ -3096,7 +3370,7 @@ static bool execute_editor_actor_select_index_action(slayer3d_game_data_runtime 
             return true;
         }
     }
-    return editor_actor_select_collection_row(runtime, collection_name, index);
+    return editor_actor_select_collection_row(runtime, collection_name, index, true);
 }
 
 #define EDITOR_GLOBAL_PROPERTY_CAP 64
@@ -4338,34 +4612,39 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         const char *key = json_string(action, "key", NULL);
         yyjson_val *value = obj_get(action, "value");
         const char *value_from_payload = json_string(action, "value_from_payload", NULL);
+        const char *value_from_state = json_string(action, "value_from_state", NULL);
         const slayer3d_value *payload_value = value_from_payload != NULL && payload != NULL
                                                   ? slayer3d_properties_get_value(payload, value_from_payload)
                                                   : NULL;
-        if (actor == NULL || key == NULL || (value == NULL && payload_value == NULL))
+        const slayer3d_value *state_value = value_from_state != NULL && runtime != NULL && runtime->scene_state != NULL
+                                                ? slayer3d_properties_get_value(runtime->scene_state, value_from_state)
+                                                : NULL;
+        const slayer3d_value *source_value = payload_value != NULL ? payload_value : state_value;
+        if (actor == NULL || key == NULL || (value == NULL && payload_value == NULL && state_value == NULL))
             return false;
 
         if (SDL_strcmp(type, "property.add") == 0)
         {
             const slayer3d_value *existing = slayer3d_properties_get_value(actor->props, key);
-            if (existing != NULL && existing->type == SLAYER3D_VALUE_INT && payload_value != NULL &&
-                payload_value->type == SLAYER3D_VALUE_INT)
+            if (existing != NULL && existing->type == SLAYER3D_VALUE_INT && source_value != NULL &&
+                source_value->type == SLAYER3D_VALUE_INT)
             {
-                slayer3d_properties_set_int(actor->props, key, existing->as_int + payload_value->as_int);
+                slayer3d_properties_set_int(actor->props, key, existing->as_int + source_value->as_int);
             }
-            else if (existing != NULL && existing->type == SLAYER3D_VALUE_FLOAT && payload_value != NULL &&
-                     payload_value->type == SLAYER3D_VALUE_FLOAT)
+            else if (existing != NULL && existing->type == SLAYER3D_VALUE_FLOAT && source_value != NULL &&
+                     source_value->type == SLAYER3D_VALUE_FLOAT)
             {
-                slayer3d_properties_set_float(actor->props, key, existing->as_float + payload_value->as_float);
+                slayer3d_properties_set_float(actor->props, key, existing->as_float + source_value->as_float);
             }
-            else if (existing != NULL && existing->type == SLAYER3D_VALUE_FLOAT && payload_value != NULL &&
-                     payload_value->type == SLAYER3D_VALUE_INT)
+            else if (existing != NULL && existing->type == SLAYER3D_VALUE_FLOAT && source_value != NULL &&
+                     source_value->type == SLAYER3D_VALUE_INT)
             {
-                slayer3d_properties_set_float(actor->props, key, existing->as_float + (float)payload_value->as_int);
+                slayer3d_properties_set_float(actor->props, key, existing->as_float + (float)source_value->as_int);
             }
-            else if (existing != NULL && existing->type == SLAYER3D_VALUE_INT && payload_value != NULL &&
-                     payload_value->type == SLAYER3D_VALUE_FLOAT)
+            else if (existing != NULL && existing->type == SLAYER3D_VALUE_INT && source_value != NULL &&
+                     source_value->type == SLAYER3D_VALUE_FLOAT)
             {
-                slayer3d_properties_set_float(actor->props, key, (float)existing->as_int + payload_value->as_float);
+                slayer3d_properties_set_float(actor->props, key, (float)existing->as_int + source_value->as_float);
             }
             else if (existing != NULL && existing->type == SLAYER3D_VALUE_INT && yyjson_is_num(value))
                 slayer3d_properties_set_int(actor->props, key, existing->as_int + (int)yyjson_get_int(value));
@@ -4374,9 +4653,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
             else
                 return false;
         }
-        else if (payload_value != NULL)
+        else if (source_value != NULL)
         {
-            copy_property_value(actor->props, key, payload_value);
+            copy_property_value(actor->props, key, source_value);
         }
         else
         {
@@ -4451,6 +4730,7 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     {
         const char *key = json_string(action, "key", NULL);
         const char *value_from_state = json_string(action, "value_from_state", NULL);
+        yyjson_val *value_from_property = obj_get(action, "value_from_property");
         yyjson_val *value = obj_get(action, "value");
         if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
             return false;
@@ -4482,6 +4762,19 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                 return true;
             }
             return false;
+        }
+        if (yyjson_is_obj(value_from_property))
+        {
+            slayer3d_registered_actor *actor =
+                slayer3d_game_data_find_actor(runtime, json_string(value_from_property, "target", NULL));
+            const char *property_key = json_string(value_from_property, "key", NULL);
+            const slayer3d_value *source = actor != NULL && property_key != NULL
+                                               ? slayer3d_properties_get_value(actor->props, property_key)
+                                               : NULL;
+            if (source == NULL)
+                return false;
+            copy_property_value(runtime->scene_state, key, source);
+            return true;
         }
         if (value == NULL)
             return false;
@@ -4588,6 +4881,20 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     {
         if (runtime == NULL || runtime->scene_state == NULL)
             return false;
+        const scene_entry *scene = active_scene_entry_const(runtime);
+        if (scene != NULL && scene->name != NULL && SDL_strcmp(scene->name, "scene.editor_shell.test_run") == 0)
+        {
+            slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
+            slayer3d_registered_actor *fly = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.fly_player");
+            if (player != NULL)
+                player->active = false;
+            if (fly != NULL)
+                fly->active = false;
+            runtime->active_camera = "camera.editor_shell.viewport";
+            slayer3d_properties_set_string(runtime->scene_state, "editor.play.mode", "");
+            editor_publish_console_message(runtime, "Returned to editor");
+            return slayer3d_game_data_set_active_scene(runtime, "scene.slayer3d_editor.main");
+        }
         if (editor_mode_is_paint(runtime) ||
             slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.viewer.active", false) ||
             slayer3d_properties_get_bool(runtime->scene_state, "editor.actor.viewer.active", false) ||
@@ -4950,6 +5257,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.test_run.save_manifest") == 0)
         return slayer3d_game_data_save_editor_test_run_manifest_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.runner.start") == 0)
+        return execute_editor_runner_start_action(runtime);
 
     if (SDL_strcmp(type, "editor.brush_world.status") == 0)
         return slayer3d_game_data_publish_editor_brush_world_status_action(runtime, action);

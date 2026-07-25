@@ -215,5 +215,8 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
     yyjson_val *mouse_look = obj_get(component, "mouse_look");
     if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
         return validation_error(ctx, path, "controller.editor_camera mouse_look must be a boolean");
+    yyjson_val *move_forward_with_pitch = obj_get(component, "move_forward_with_pitch");
+    if (move_forward_with_pitch != NULL && !yyjson_is_bool(move_forward_with_pitch))
+        return validation_error(ctx, path, "controller.editor_camera move_forward_with_pitch must be a boolean");
     return true;
 }

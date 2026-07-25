@@ -42,6 +42,15 @@ const char *expected_editor_default_window_mode()
 #endif
 }
 
+const char *expected_editor_default_settings_window_mode()
+{
+#if defined(__EMSCRIPTEN__)
+    return "windowed";
+#else
+    return "fullscreen_exclusive";
+#endif
+}
+
 std::filesystem::path unique_cli_test_path(const char *name)
 {
     const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -342,6 +351,8 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     EXPECT_TRUE(loaded_project.asset_sources.effects.available);
     slayer3d_editor_launch launch;
     ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    EXPECT_TRUE(launch.document_named);
+    EXPECT_FALSE(launch.media_path_explicit);
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
 
     slayer3d_editor_runner_invocation invocation;
@@ -362,6 +373,9 @@ TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find("editor.input.path="), std::string::npos);
     EXPECT_NE(joined.find("editor.save.path=" + output), std::string::npos);
+    EXPECT_NE(joined.find("editor.document.named=true"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("editor.window.mode.initial=") + expected_editor_default_settings_window_mode()),
+              std::string::npos);
     EXPECT_NE(joined.find("editor.test_run.path=" + (project_dir / "build" / "test-run.json").string()),
               std::string::npos);
     EXPECT_NE(joined.find("editor.project.dir=" + project_dir.string()), std::string::npos);
@@ -574,6 +588,7 @@ TEST(ToolCli, EditorMediaPathBecomesAuthoritativeAssetSourceRoot)
     slayer3d_editor_launch launch;
     ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    EXPECT_TRUE(launch.media_path_explicit);
     ASSERT_NE(launch.asset_sources, nullptr);
     EXPECT_STREQ(launch.media_dir, media.c_str());
     EXPECT_STREQ(launch.media_relative_path, "media");
@@ -596,6 +611,7 @@ TEST(ToolCli, EditorMediaPathBecomesAuthoritativeAssetSourceRoot)
         joined += invocation.argv[i];
     }
     EXPECT_NE(joined.find("editor.media.path=" + media), std::string::npos);
+    EXPECT_NE(joined.find("editor.media.path.explicit=true"), std::string::npos);
     EXPECT_NE(joined.find("editor.media.relative=media"), std::string::npos);
     EXPECT_NE(joined.find("editor.media.available=true"), std::string::npos);
     EXPECT_NE(joined.find("editor.asset_source.textures.path=" + (media_dir / "textures").string()), std::string::npos);
@@ -680,6 +696,8 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
     EXPECT_STREQ(launch.input_path, "");
     EXPECT_STREQ(launch.save_path, args.output_path);
+    EXPECT_FALSE(launch.document_named);
+    EXPECT_FALSE(launch.media_path_explicit);
 
     slayer3d_editor_runner_invocation invocation;
     ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
@@ -696,6 +714,9 @@ TEST(ToolCli, EditorNoArgsLaunchesDefaultUntitledMap)
     EXPECT_NE(joined.find(std::string("--window-mode\n") + expected_window_mode), std::string::npos);
     EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
     EXPECT_NE(joined.find(std::string("editor.save.path=") + args.output_path), std::string::npos);
+    EXPECT_NE(joined.find("editor.document.named=false"), std::string::npos);
+    EXPECT_NE(joined.find(std::string("editor.window.mode.initial=") + expected_editor_default_settings_window_mode()),
+              std::string::npos);
     EXPECT_NE(joined.find("editor.project.dir=" + std::string(launch.project_dir)), std::string::npos);
 
     slayer3d_editor_runner_invocation_destroy(&invocation);

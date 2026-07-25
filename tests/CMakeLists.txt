@@ -256,6 +256,16 @@ else()
                 SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
                 SLAYER3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
         )
+        add_executable(slayer3d_runner_probe runner_probe.c)
+        target_compile_features(slayer3d_runner_probe PRIVATE c_std_11)
+        slayer3d_enable_warnings(slayer3d_runner_probe)
+        slayer3d_enable_sanitizers(slayer3d_runner_probe)
+        add_dependencies(slayer3d_game_data_test slayer3d_runner_probe)
+        target_compile_definitions(
+            slayer3d_game_data_test
+            PRIVATE
+                SLAYER3D_RUNNER_PROBE_PATH="$<TARGET_FILE:slayer3d_runner_probe>"
+        )
     endif()
     slayer3d_add_test(slayer3d_input_test test_input.cpp unit)
     slayer3d_add_test(slayer3d_transition_test test_transition.cpp render)
