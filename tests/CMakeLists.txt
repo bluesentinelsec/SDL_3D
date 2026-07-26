@@ -58,6 +58,11 @@ function(slayer3d_add_test target_name source_file test_label)
         # hosted macOS runners when creating hidden GL contexts.
         set(_slayer3d_test_timeout 30)
     endif()
+    if(SLAYER3D_ENABLE_SANITIZERS)
+        # Instrumented editor interaction tests can take more than twice as
+        # long on hosted runners even when their native builds remain fast.
+        math(EXPR _slayer3d_test_timeout "${_slayer3d_test_timeout} * 2")
+    endif()
 
     gtest_discover_tests(
         ${target_name}
