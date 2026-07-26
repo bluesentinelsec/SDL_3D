@@ -46,52 +46,6 @@ static bool editor_hit_id_has_prefix(const slayer3d_ui_layout_hit_region *hit, c
     return SDL_strncmp(hit->id, prefix, SDL_strlen(prefix)) == 0;
 }
 
-static bool editor_hit_is_toolbar(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.toolbar.") ||
-           editor_hit_id_has_prefix(hit, "ui.editor_shell.tool_toolbar.");
-}
-
-static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
-}
-
-static bool editor_hit_is_file_menu(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.file_menu.");
-}
-
-static bool editor_hit_is_global_panel(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.global_panel.");
-}
-
-static bool editor_hit_is_stair_panel(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.stair_panel.");
-}
-
-static bool editor_hit_is_liquid_panel(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.liquid_panel.");
-}
-
-static bool editor_hit_is_skybox_panel(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.skybox_panel.");
-}
-
-static bool editor_hit_is_actor_viewer(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.actor_viewer.");
-}
-
-static bool editor_hit_is_left_inspector(const slayer3d_ui_layout_hit_region *hit)
-{
-    return editor_hit_id_has_prefix(hit, "ui.editor_shell.left_inspector.");
-}
-
 static bool editor_hit_is_console(const slayer3d_ui_layout_hit_region *hit)
 {
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.console.");
@@ -104,11 +58,6 @@ static bool editor_hit_is_synthesized_scrollbar(const slayer3d_ui_layout_hit_reg
     const size_t id_len = SDL_strlen(hit->id);
     const size_t suffix_len = SDL_strlen(SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX);
     return id_len >= suffix_len && SDL_strcmp(hit->id + id_len - suffix_len, SLAYER3D_UI_LAYOUT_SCROLLBAR_SUFFIX) == 0;
-}
-
-static bool editor_hit_is_outside_click_capture(const slayer3d_ui_layout_hit_region *hit)
-{
-    return hit != NULL && hit->outside_click;
 }
 
 typedef struct editor_ui_window_config
@@ -1135,7 +1084,6 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_ui_layout_destroy(layout);
         return true;
     }
-    const bool window_event_active = editor_resolved_window_for_hit(layout, hit) != NULL;
     const bool property_focus_active = editor_property_edit_has_focus(runtime);
     const bool texture_focus_active = editor_texture_edit_has_focus(runtime);
     const bool global_focus_active = editor_global_edit_has_focus(runtime);
@@ -1276,8 +1224,6 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_properties_set_bool(runtime->scene_state, "editor.console.selection.active", false);
         editor_refresh_console_lines(runtime);
     }
-    const bool console_event_active =
-        editor_hit_is_console(hit) && (clicked || released || left_down || wheel_y != 0.0f);
     if (editor_handle_bound_dropdown(runtime, hit, clicked))
     {
         if (out_consumed != NULL)
@@ -1285,10 +1231,13 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_ui_layout_destroy(layout);
         return true;
     }
-    if (editor_hit_is_toolbar(hit) || editor_hit_is_texture_viewer(hit) || editor_hit_is_file_menu(hit) ||
-        editor_hit_is_global_panel(hit) || editor_hit_is_stair_panel(hit) || editor_hit_is_liquid_panel(hit) ||
-        editor_hit_is_skybox_panel(hit) || editor_hit_is_actor_viewer(hit) || editor_hit_is_left_inspector(hit) ||
-        editor_hit_is_outside_click_capture(hit) || console_event_active || window_event_active)
+    /*
+     * The retained layout is the authority for interactivity. Every hit
+     * region represents a widget that owns pointer input, regardless of its
+     * application-specific id. This keeps new menus and reusable library UI
+     * from requiring a parallel host-side prefix allowlist.
+     */
+    if (hit != NULL)
     {
         if (out_consumed != NULL)
             *out_consumed = true;

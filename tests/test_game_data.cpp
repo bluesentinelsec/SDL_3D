@@ -21608,6 +21608,102 @@ TEST(GameDataRuntime, EditorEditMenuCopiesCutsPastesAndReplaysBrushesAndThings)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorEditMenuButtonsDispatchThroughRetainedUi)
+{
+    const std::filesystem::path editor_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(editor_path)) << editor_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(editor_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    configure_editor_shell_media_available_for_tests(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.scene.enter");
+    ASSERT_GE(enter_signal, 0);
+    slayer3d_signal_emit(bus, enter_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    int input_tick = 1;
+    auto click_widget = [&](const char *id) {
+        slayer3d_ui_layout_model *layout = nullptr;
+        ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+        ASSERT_NE(layout, nullptr);
+        ASSERT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        const slayer3d_ui_layout_resolved_node *node = slayer3d_ui_layout_find_resolved_node(layout, id);
+        ASSERT_NE(node, nullptr) << id;
+        const float x = node->rect.x + node->rect.w * 0.5f;
+        const float y = node->rect.y + node->rect.h * 0.5f;
+        slayer3d_ui_layout_destroy(layout);
+
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = x;
+        down.button.y = y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = x;
+        up.button.y = y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
+    auto click_edit_command = [&](const char *button_id) {
+        click_widget("ui.editor_shell.toolbar.edit.button");
+        ASSERT_TRUE(
+            slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.edit.menu.open", false));
+        click_widget(button_id);
+        EXPECT_FALSE(
+            slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.edit.menu.open", true));
+    };
+    auto brush_count = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world.brush_count;
+    };
+
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+    ASSERT_EQ(brush_count(), 1);
+
+    click_edit_command("ui.editor_shell.edit_menu.delete.button");
+    EXPECT_EQ(brush_count(), 0);
+    click_edit_command("ui.editor_shell.edit_menu.undo.button");
+    EXPECT_EQ(brush_count(), 1);
+    click_edit_command("ui.editor_shell.edit_menu.copy.button");
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.clipboard.valid", false));
+    click_edit_command("ui.editor_shell.edit_menu.paste.button");
+    EXPECT_EQ(brush_count(), 2);
+    click_edit_command("ui.editor_shell.edit_menu.cut.button");
+    EXPECT_EQ(brush_count(), 1);
+    click_edit_command("ui.editor_shell.edit_menu.undo.button");
+    EXPECT_EQ(brush_count(), 2);
+    click_edit_command("ui.editor_shell.edit_menu.redo.button");
+    EXPECT_EQ(brush_count(), 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoVisibilityTogglesHideAndRestoreBrushesAndThings)
 {
     const std::filesystem::path editor_path = slayer3d_editor_data_path();
