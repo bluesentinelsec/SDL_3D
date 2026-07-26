@@ -15,6 +15,9 @@
       "action.editor.command.commit",
       "action.editor.command.undo",
       "action.editor.command.redo",
+      "action.editor.copy",
+      "action.editor.cut",
+      "action.editor.paste",
       "action.editor.delete_selected",
       "action.editor.new",
       "action.editor.open",
@@ -635,7 +638,16 @@
             "action": "editor.file.toggle",
             "selected_if": { "type": "scene_state.compare", "key": "editor.file.menu.open", "op": "==", "value": true, "default": false }
           },
-          { "id": "ui.editor_shell.toolbar.edit.button", "type": "button", "w": 62, "h": 28, "text": "Edit", "interactive": true },
+          {
+            "id": "ui.editor_shell.toolbar.edit.button",
+            "type": "button",
+            "w": 62,
+            "h": 28,
+            "text": "Edit",
+            "interactive": true,
+            "action": "editor.edit.toggle",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.edit.menu.open", "op": "==", "value": true, "default": false }
+          },
           {
             "id": "ui.editor_shell.toolbar.shape.button",
             "type": "dropdown",
@@ -1032,6 +1044,44 @@
             "action": "editor.file.exit",
             "layer": 501
           }
+        ]
+      },
+      {
+        "id": "ui.editor_shell.edit_menu.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 70,
+        "y": 38,
+        "w": 220,
+        "h": 256,
+        "clip_children": true,
+        "interactive": true,
+        "layer": 500,
+        "outside_click_action": "editor.edit.close",
+        "fill_color": [8, 13, 22, 255],
+        "border_color": [82, 112, 154, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.edit.menu.open", "op": "==", "value": true, "default": false },
+        "children": [
+          { "id": "ui.editor_shell.edit_menu.title", "text_role": "heading", "type": "label", "x": 12, "y": 8, "w": 100, "h": 20, "text": "Edit", "layer": 501 },
+          {
+            "id": "ui.editor_shell.edit_menu.close.button",
+            "type": "button",
+            "x": 166,
+            "y": 6,
+            "w": 44,
+            "h": 24,
+            "text": "close",
+            "interactive": true,
+            "action": "editor.edit.close",
+            "layer": 501
+          },
+          { "id": "ui.editor_shell.edit_menu.undo.button", "type": "button", "x": 12, "y": 38, "w": 196, "h": 26, "text": "Undo", "interactive": true, "action": "editor.command.undo", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.redo.button", "type": "button", "x": 12, "y": 72, "w": 196, "h": 26, "text": "Redo", "interactive": true, "action": "editor.command.redo", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.cut.button", "type": "button", "x": 12, "y": 106, "w": 196, "h": 26, "text": "Cut", "interactive": true, "action": "editor.cut", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.copy.button", "type": "button", "x": 12, "y": 140, "w": 196, "h": 26, "text": "Copy", "interactive": true, "action": "editor.copy", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.paste.button", "type": "button", "x": 12, "y": 174, "w": 196, "h": 26, "text": "Paste", "interactive": true, "action": "editor.paste", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.delete.button", "type": "button", "x": 12, "y": 208, "w": 196, "h": 26, "text": "Delete", "interactive": true, "action": "editor.delete_selected", "layer": 501 }
         ]
       },
       {

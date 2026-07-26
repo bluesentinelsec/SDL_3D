@@ -354,6 +354,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     }
     clear_menu_text_entry_capture(runtime);
     reset_editor_clip_tool_state(runtime, "");
+    free_editor_clipboard(&runtime->editor_clipboard);
     free_editor_command_history(&runtime->editor_command_history);
 
     for (int i = 0; i < runtime->sector_level_count; ++i)

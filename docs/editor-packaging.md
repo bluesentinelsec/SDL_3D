@@ -50,12 +50,13 @@ animated presets under `media/skyboxes/` for the repository editor project).
 Selecting an entry and pressing `Apply` previews the sky in the viewport and
 records it as the map's global sky, which is saved into the `.slayermap.json`
 `skybox` block and restored on open. `Default` returns to the editor's
-built-in sky. Skyboxes are discovered from the authoritative project media root,
-normally `media/skyboxes/`. Nested subdirectories are scanned, and directories
-are recognized as skyboxes when they contain a seamless equirectangular
-`sphere.png` panorama. Legacy six-face cubemap directories (`px.png` ...
-`nz.png`) and animated layer directories (`layer_outer.png`, optional
-`layer_inner.png`) remain readable for old content.
+built-in sky. Apply and Default participate in the editor's Undo/Redo history.
+Skyboxes are discovered from the authoritative project media root, normally
+`media/skyboxes/`. Nested subdirectories are scanned, and directories are
+recognized as skyboxes when they contain a seamless equirectangular `sphere.png`
+panorama. Legacy six-face cubemap directories (`px.png` ... `nz.png`) and
+animated layer directories (`layer_outer.png`, optional `layer_inner.png`)
+remain readable for old content.
 See [Skybox Asset Contract](skybox-assets.md) for the project media contract.
 
 ## Bundled Assets
