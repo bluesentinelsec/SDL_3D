@@ -3729,16 +3729,14 @@ static bool execute_editor_actor_place_selected_action(slayer3d_game_data_runtim
 
     char actor_name[128];
     char error[192];
-    const bool ok =
-        slayer3d_game_data_place_editor_actor(runtime, &desc, actor_name, sizeof(actor_name), error, sizeof(error));
-    slayer3d_properties_destroy(properties);
     char message[192];
+    SDL_snprintf(message, sizeof(message), "%s %s placed", label[0] != '\0' ? label : id,
+                 editor_actor_placement_noun(role));
+    const bool ok = slayer3d_game_data_place_editor_actor_transaction(runtime, &desc, message, actor_name,
+                                                                      sizeof(actor_name), error, sizeof(error));
+    slayer3d_properties_destroy(properties);
     if (ok)
-    {
         select_editor_actor_runtime(runtime, actor_name);
-        SDL_snprintf(message, sizeof(message), "%s %s placed", label[0] != '\0' ? label : id,
-                     editor_actor_placement_noun(role));
-    }
     editor_actor_publish_place_outputs(runtime, outputs, ok, ok ? message : error, ok ? actor_name : "");
     return true;
 }

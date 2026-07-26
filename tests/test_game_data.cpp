@@ -21629,6 +21629,13 @@ TEST(GameDataRuntime, EditorEditMenuCopiesCutsPastesAndReplaysBrushesAndThings)
     update_editor_placement_preview(runtime, editor, &hover);
     emit_signal("signal.editor.command.commit");
     ASSERT_EQ(actor_count(), 1);
+    emit_signal("signal.editor.command.undo");
+    EXPECT_EQ(actor_count(), 0);
+    slayer3d_game_data_editor_actor placed_actor{};
+    EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed_actor));
+    emit_signal("signal.editor.command.redo");
+    EXPECT_EQ(actor_count(), 1);
+    EXPECT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "object.editor_shell.capsule.1", &placed_actor));
 
     slayer3d_game_data_place_editor_connection_desc connection{};
     connection.id = "connection.editor.edit_probe";
@@ -30271,6 +30278,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(placed_actor.properties, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(placed_actor.properties, "role", ""), "player");
     EXPECT_STREQ(slayer3d_properties_get_string(placed_actor.properties, "display_mode", ""), "solid");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
+    EXPECT_FALSE(slayer3d_game_data_get_editor_actor(runtime, "actor.editor_shell.player.1", &placed_actor));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", -1), 0);
+    slayer3d_signal_emit(bus, redo_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_editor_actor(runtime, "actor.editor_shell.player.1", &placed_actor));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.actor.count", 0), 1);
 
     struct ActorDebug

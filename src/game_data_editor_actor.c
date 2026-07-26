@@ -2153,11 +2153,11 @@ bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *ru
 
     char actor_name[128];
     char error[192];
-    const bool ok =
-        slayer3d_game_data_place_editor_actor(runtime, &desc, actor_name, sizeof(actor_name), error, sizeof(error));
+    const char *message = json_string(action, "message", "actor placed");
+    const bool ok = slayer3d_game_data_place_editor_actor_transaction(runtime, &desc, message, actor_name,
+                                                                      sizeof(actor_name), error, sizeof(error));
     slayer3d_properties_destroy(properties);
-    publish_editor_actor_outputs(runtime, outputs, ok, ok ? json_string(action, "message", "actor placed") : error,
-                                 ok ? actor_name : "");
+    publish_editor_actor_outputs(runtime, outputs, ok, ok ? message : error, ok ? actor_name : "");
     return true;
 }
 

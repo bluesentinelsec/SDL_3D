@@ -79,6 +79,10 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
 bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_place_editor_actor_transaction(slayer3d_game_data_runtime *runtime,
+                                                       const slayer3d_game_data_place_editor_actor_desc *desc,
+                                                       const char *message, char *out_name, size_t out_name_size,
+                                                       char *error_buffer, int error_buffer_size);
 bool slayer3d_game_data_delete_selected_editor_actor_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_selected_editor_actor_transaction(slayer3d_game_data_runtime *runtime,
                                                                  yyjson_val *action);
