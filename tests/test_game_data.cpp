@@ -19022,6 +19022,15 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     ASSERT_NE(skybox.sphere, nullptr);
     EXPECT_NE(std::string(skybox.sphere).find("sphere.png"), std::string::npos);
     ASSERT_EQ(skybox.layer_count, 0);
+
+    emit_signal("signal.editor.command.undo");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "default");
+    EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    emit_signal("signal.editor.command.redo");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "afternoon");
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.preset, "afternoon");
+
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.editor_shell.test_run"));
     ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
     EXPECT_STREQ(skybox.preset, "afternoon");
@@ -19039,6 +19048,13 @@ TEST(GameDataRuntime, EditorShellSkyboxPanelScansSelectsAndAppliesPresets)
     /* Reset clears the override; the editor shell authors no scene sky, so
      * the runtime reports no active skybox again. */
     emit_signal("signal.editor.sky.reset");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "default");
+    EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    emit_signal("signal.editor.command.undo");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "afternoon");
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.preset, "afternoon");
+    emit_signal("signal.editor.command.redo");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.sky.active", ""), "default");
     EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
 
@@ -19369,6 +19385,13 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     slayer3d_game_data_editor_selection active_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     ASSERT_GE(active_selection.face_index, 0);
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    std::vector<std::string> original_materials;
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        original_materials.emplace_back(world.brushes[0].faces[i].material_name);
+
     emit_signal("signal.editor.texture.select.lava");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
                  "mat.editor.texture.lava");
@@ -19377,10 +19400,19 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "painted 6 faces with mat.editor.texture.lava");
 
-    slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
     ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
+
+    emit_signal("signal.editor.command.undo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(static_cast<size_t>(world.brushes[0].face_count), original_materials.size());
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_EQ(world.brushes[0].faces[i].material_name, original_materials[static_cast<size_t>(i)]);
+    emit_signal("signal.editor.command.redo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     for (int i = 0; i < world.brushes[0].face_count; ++i)
         EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
 
@@ -19462,6 +19494,14 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
         slayer3d_signal_emit(bus, signal, nullptr);
     };
 
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    const unsigned int original_contents = world.brushes[0].contents;
+    std::vector<std::string> original_materials;
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        original_materials.emplace_back(world.brushes[0].faces[i].material_name);
+
     emit_signal("signal.editor.liquid.type.lava");
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
@@ -19470,11 +19510,22 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "painted 6 faces with mat.editor.liquid.lava");
 
-    slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
     ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.lava");
+
+    emit_signal("signal.editor.command.undo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brushes[0].contents, original_contents);
+    ASSERT_EQ(static_cast<size_t>(world.brushes[0].face_count), original_materials.size());
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_EQ(world.brushes[0].faces[i].material_name, original_materials[static_cast<size_t>(i)]);
+    emit_signal("signal.editor.command.redo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
     for (int i = 0; i < world.brushes[0].face_count; ++i)
         EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.lava");
 
@@ -19487,6 +19538,14 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     EXPECT_NEAR(world.brushes[0].bounds.min.y, min_y_before - 1.0f, 0.001f);
     EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
     EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    emit_signal("signal.editor.command.undo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, min_y_before, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
+    emit_signal("signal.editor.command.redo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, min_y_before - 1.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, max_y_before, 0.001f);
 
     emit_signal("signal.editor.liquid.type.clean_water");
 
@@ -19494,6 +19553,16 @@ TEST(GameDataRuntime, EditorShellDojoLiquidPaintAndDepthEditSelection)
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
     ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
+    emit_signal("signal.editor.command.undo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.lava");
+    emit_signal("signal.editor.command.redo");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brushes[0].contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER);
     for (int i = 0; i < world.brushes[0].face_count; ++i)
         EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.liquid.clean_water");
 
@@ -21603,6 +21672,12 @@ TEST(GameDataRuntime, EditorEditMenuCopiesCutsPastesAndReplaysBrushesAndThings)
     EXPECT_EQ(actor_count(), 1);
     emit_signal("signal.editor.command.undo");
     EXPECT_EQ(actor_count(), 2);
+    emit_signal("signal.editor.delete_selected");
+    EXPECT_EQ(actor_count(), 1);
+    emit_signal("signal.editor.command.undo");
+    EXPECT_EQ(actor_count(), 2);
+    emit_signal("signal.editor.command.redo");
+    EXPECT_EQ(actor_count(), 1);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -21684,6 +21759,25 @@ TEST(GameDataRuntime, EditorEditMenuButtonsDispatchThroughRetainedUi)
     seed_editor_shell_test_cube(runtime);
     select_editor_shell_test_cube(runtime);
     ASSERT_EQ(brush_count(), 1);
+
+    const int select_lava_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.texture.select.lava");
+    const int paint_selection_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.texture.paint.selection");
+    ASSERT_GE(select_lava_signal, 0);
+    ASSERT_GE(paint_selection_signal, 0);
+    slayer3d_signal_emit(bus, select_lava_signal, nullptr);
+    slayer3d_signal_emit(bus, paint_selection_signal, nullptr);
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
+    click_edit_command("ui.editor_shell.edit_menu.undo.button");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.wall");
+    click_edit_command("ui.editor_shell.edit_menu.redo.button");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
 
     click_edit_command("ui.editor_shell.edit_menu.delete.button");
     EXPECT_EQ(brush_count(), 0);

@@ -1793,9 +1793,12 @@ then rebuild brush bounds and the compiled render mesh. `resize` and `extrude`
 commands targeting a brush `face` move that face plane by the preview distance,
 then rebuild brush bounds and the compiled render mesh. `paint` commands
 targeting a brush `face` replace that face's material and rebuild the compiled
-render mesh. Brush create, duplicate, paste, and delete operations store source
-brush snapshots. Thing paste and delete operations store the complete authored
-actor plus any connections removed by deletion. Undo and redo apply the
+render mesh. Selection-wide paint records every affected face or liquid brush
+under one transaction id, so one undo restores the complete application. Brush
+create, duplicate, paste, and delete operations store source brush snapshots.
+Thing paste and delete operations store the complete authored actor plus any
+connections removed by deletion. Skybox Apply and Default operations store the
+previous and resulting scene sky configuration. Undo and redo apply the
 inverse/forward mutation and move the command-history cursor. Multi-brush Edit
 operations share one transaction id and therefore undo or redo atomically.
 Successful brush-world mutations mark the affected runtime brush world dirty and

@@ -57,6 +57,9 @@ bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime,
                                             const slayer3d_properties *payload);
 bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                             const slayer3d_properties *payload);
+bool slayer3d_game_data_apply_editor_skybox_transaction(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                        const char *sky_json, const char *active_name, const char *mode,
+                                                        const char *message);
 bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_export_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_save_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);

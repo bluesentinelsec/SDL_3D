@@ -6,6 +6,7 @@
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_stdinc.h>
+#include <stdlib.h>
 
 #include "game_data_brush_internal.h"
 #include "slayer3d/math.h"
@@ -298,6 +299,12 @@ static void free_editor_command_transaction_entry(editor_command_transaction_ent
     SDL_free((void *)entry->material_name);
     SDL_free((void *)entry->previous_material_name);
     SDL_free((void *)entry->face_stable_id);
+    SDL_free((void *)entry->sky_json);
+    SDL_free((void *)entry->previous_sky_json);
+    SDL_free((void *)entry->sky_active);
+    SDL_free((void *)entry->previous_sky_active);
+    SDL_free((void *)entry->sky_mode);
+    SDL_free((void *)entry->previous_sky_mode);
     if (entry->has_source_box_snapshot)
         free_editor_brush_source_box_runtime(&entry->source_box_snapshot);
     if (entry->has_source_box_after_snapshot)
@@ -1780,6 +1787,28 @@ static bool editor_transaction_has_actor_mutation(const editor_command_transacti
            SDL_strcmp(entry->command, "delete") == 0;
 }
 
+static bool editor_transaction_has_skybox_mutation(const editor_command_transaction_entry *entry)
+{
+    return entry != NULL && entry->command != NULL && entry->target != NULL &&
+           SDL_strcmp(entry->command, "skybox") == 0 && SDL_strcmp(entry->target, "scene") == 0;
+}
+
+static bool apply_editor_skybox_transaction(slayer3d_game_data_runtime *runtime,
+                                            const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_transaction_has_skybox_mutation(entry))
+        return false;
+
+    const char *json = forward ? entry->sky_json : entry->previous_sky_json;
+    const char *active = forward ? entry->sky_active : entry->previous_sky_active;
+    const char *mode = forward ? entry->sky_mode : entry->previous_sky_mode;
+    if (!slayer3d_game_data_set_scene_sky_override_json(runtime, json != NULL && json[0] != '\0' ? json : NULL))
+        return false;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.sky.active", active != NULL ? active : "default");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.sky.mode", mode != NULL ? mode : "");
+    return true;
+}
+
 static void publish_editor_actor_transaction_state(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -1868,6 +1897,8 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
 static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtime,
                                               editor_command_transaction_entry *entry, bool forward)
 {
+    if (editor_transaction_has_skybox_mutation(entry))
+        return apply_editor_skybox_transaction(runtime, entry, forward);
     if (editor_transaction_has_actor_mutation(entry))
         return apply_editor_actor_transaction(runtime, entry, forward);
     if (!editor_transaction_has_brush_mutation(entry))
@@ -2344,6 +2375,53 @@ static bool editor_prepare_transaction_common(editor_command_transaction_entry *
            copy_editor_transaction_string(target, &entry->target) &&
            copy_editor_transaction_string(world_name, &entry->world_name) &&
            copy_editor_transaction_string(element_name, &entry->element_name);
+}
+
+bool slayer3d_game_data_apply_editor_skybox_transaction(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                        const char *sky_json, const char *active_name, const char *mode,
+                                                        const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || active_name == NULL || mode == NULL)
+        return false;
+
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (active_scene == NULL)
+        return false;
+
+    char *previous_json = NULL;
+    if (runtime->scene_sky_override != NULL)
+        previous_json = yyjson_write(runtime->scene_sky_override, 0, NULL);
+    if (runtime->scene_sky_override != NULL && previous_json == NULL)
+        return false;
+
+    editor_command_history_state *history = &runtime->editor_command_history;
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    const char *previous_active = slayer3d_properties_get_string(runtime->scene_state, "editor.sky.active", "default");
+    const char *previous_mode = slayer3d_properties_get_string(runtime->scene_state, "editor.sky.mode", "");
+    const bool prepared =
+        editor_prepare_transaction_common(entry, active_scene, "skybox", "scene", NULL, NULL) &&
+        copy_editor_transaction_string(sky_json != NULL ? sky_json : "", &entry->sky_json) &&
+        copy_editor_transaction_string(previous_json != NULL ? previous_json : "", &entry->previous_sky_json) &&
+        copy_editor_transaction_string(active_name, &entry->sky_active) &&
+        copy_editor_transaction_string(previous_active != NULL ? previous_active : "default",
+                                       &entry->previous_sky_active) &&
+        copy_editor_transaction_string(mode, &entry->sky_mode) &&
+        copy_editor_transaction_string(previous_mode != NULL ? previous_mode : "", &entry->previous_sky_mode);
+    free(previous_json);
+
+    if (!prepared || !apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        free_editor_command_transaction_entry(entry);
+        history->count--;
+        history->cursor = history->count;
+        return false;
+    }
+
+    SDL_strlcpy(entry->message, message != NULL ? message : "skybox changed", sizeof(entry->message));
+    yyjson_val *outputs = obj_get(action, "outputs");
+    publish_editor_transaction(runtime, outputs, "commit", true, entry, entry->message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", true, entry,
+                                               entry->message);
 }
 
 static bool editor_source_clip_transaction_capture_before(const brush_world_runtime *world_runtime,
@@ -3681,6 +3759,7 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
     editor_command_history_state *history = &runtime->editor_command_history;
     const int first_entry = history->cursor;
     editor_command_transaction_entry *last_entry = NULL;
+    int transaction_group_id = -1;
     int applied_count = 0;
     int painted_face_count = 0;
     editor_paint_selection_target *selection_targets = NULL;
@@ -3814,11 +3893,16 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
                 editor_command_transaction_entry *entry = NULL;
                 if (!append_editor_brush_paint_element_transaction(runtime, active_scene, world_runtime, &selection,
                                                                    target_selection->element_stable_id, material_index,
-                                                                   material_name, requested_contents, &entry) ||
-                    !apply_editor_transaction_mutation(runtime, entry, true))
+                                                                   material_name, requested_contents, &entry))
                 {
                     goto fail;
                 }
+                if (transaction_group_id < 0)
+                    transaction_group_id = entry->id;
+                else
+                    entry->id = transaction_group_id;
+                if (!apply_editor_transaction_mutation(runtime, entry, true))
+                    goto fail;
                 last_entry = entry;
                 applied_count++;
                 painted_face_count += target_selection->face_count;
@@ -3840,11 +3924,16 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
                 editor_command_transaction_entry *entry = NULL;
                 if (!append_editor_brush_paint_transaction(runtime, active_scene, world_runtime, &selection,
                                                            target_selection->element_stable_id, brush, face_index,
-                                                           material_index, material_name, &entry) ||
-                    !apply_editor_transaction_mutation(runtime, entry, true))
+                                                           material_index, material_name, &entry))
                 {
                     goto fail;
                 }
+                if (transaction_group_id < 0)
+                    transaction_group_id = entry->id;
+                else
+                    entry->id = transaction_group_id;
+                if (!apply_editor_transaction_mutation(runtime, entry, true))
+                    goto fail;
                 last_entry = entry;
                 applied_count++;
                 painted_face_count++;

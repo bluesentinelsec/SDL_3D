@@ -2488,9 +2488,12 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     const char *name = slayer3d_properties_get_string(state, "editor.sky.selected.name", "");
     if (name == NULL || name[0] == '\0' || SDL_strcmp(name, "default") == 0)
     {
-        (void)slayer3d_game_data_set_scene_sky_override_json(runtime, NULL);
-        slayer3d_properties_set_string(state, "editor.sky.active", "default");
-        slayer3d_properties_set_string(state, "editor.sky.mode", "");
+        if (!slayer3d_game_data_apply_editor_skybox_transaction(runtime, action, NULL, "default", "",
+                                                                "skybox reset to editor default"))
+        {
+            editor_publish_console_message(runtime, "Skybox reset failed");
+            return true;
+        }
         editor_publish_console_message(runtime, "Skybox reset to editor default");
         return true;
     }
@@ -2506,7 +2509,10 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     }
 
     char *json = editor_sky_build_override_json(base, editor_sky_preset_leaf(name), has_sphere, has_faces, layer_count);
-    if (json == NULL || !slayer3d_game_data_set_scene_sky_override_json(runtime, json))
+    const char *mode = has_sphere ? "sphere" : (layer_count > 0 ? "layers" : "cubemap");
+    char message[192];
+    SDL_snprintf(message, sizeof(message), "Skybox applied: %s%s", name, layer_count > 0 ? " (animated)" : "");
+    if (json == NULL || !slayer3d_game_data_apply_editor_skybox_transaction(runtime, action, json, name, mode, message))
     {
         free(json);
         editor_publish_console_message(runtime, "Skybox apply failed: could not build sky configuration");
@@ -2514,11 +2520,6 @@ static bool execute_editor_sky_apply_action(slayer3d_game_data_runtime *runtime,
     }
     free(json);
 
-    slayer3d_properties_set_string(state, "editor.sky.active", name);
-    slayer3d_properties_set_string(state, "editor.sky.mode",
-                                   has_sphere ? "sphere" : (layer_count > 0 ? "layers" : "cubemap"));
-    char message[192];
-    SDL_snprintf(message, sizeof(message), "Skybox applied: %s%s", name, layer_count > 0 ? " (animated)" : "");
     editor_publish_console_message(runtime, message);
     return true;
 }

@@ -490,6 +490,12 @@ typedef struct editor_command_transaction_entry
     const char *material_name;
     const char *previous_material_name;
     const char *face_stable_id;
+    const char *sky_json;
+    const char *previous_sky_json;
+    const char *sky_active;
+    const char *previous_sky_active;
+    const char *sky_mode;
+    const char *previous_sky_mode;
     int face_index;
     int material_index;
     int previous_material_index;
