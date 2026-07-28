@@ -382,10 +382,15 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     if (!ui_widget_optional_bool(node, "interactive"))
         return validation_error(ctx, path, "UI widget interactive must be a boolean when authored");
     if (!ui_widget_optional_string_len(node, "text", SLAYER3D_UI_LAYOUT_TEXT_MAX) ||
-        !ui_widget_optional_string_len(node, "label", SLAYER3D_UI_LAYOUT_TEXT_MAX))
+        !ui_widget_optional_string_len(node, "label", SLAYER3D_UI_LAYOUT_TEXT_MAX) ||
+        !ui_widget_optional_string_len(node, "shortcut", SLAYER3D_UI_LAYOUT_TEXT_MAX))
     {
-        return validation_error(ctx, path, "UI widget text/label must be a string shorter than %d bytes",
+        return validation_error(ctx, path, "UI widget text/label/shortcut must be a string shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_TEXT_MAX);
+    }
+    if (obj_get(node, "shortcut") != NULL && SDL_strcmp(type, "button") != 0 && SDL_strcmp(type, "dropdown") != 0)
+    {
+        return validation_error(ctx, path, "UI widget shortcut is only supported by button and dropdown controls");
     }
     if (!ui_widget_optional_string_len(node, "format", SLAYER3D_UI_LAYOUT_TEXT_MAX) ||
         !ui_widget_optional_string_len(node, "text_format", SLAYER3D_UI_LAYOUT_TEXT_MAX))
@@ -799,6 +804,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.layer = parse_ui_widget_int(node, "layer", "z", 0);
     desc.interactive = parse_ui_widget_bool(node, "interactive", false);
     desc.text = parse_ui_widget_string(node, "text", "label");
+    desc.shortcut = json_string(node, "shortcut");
     desc.font = json_string(node, "font");
     desc.action = json_string(node, "action");
     desc.has_text_color = obj_get(node, "text_color") != NULL;

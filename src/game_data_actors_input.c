@@ -729,6 +729,8 @@ static int input_modifier_from_json_name(const char *name)
     {
         return SLAYER3D_INPUT_MOD_GUI;
     }
+    if (SDL_strcasecmp(name, "primary") == 0)
+        return SLAYER3D_INPUT_MOD_PRIMARY;
     return -1;
 }
 
@@ -791,6 +793,7 @@ static bool keyboard_modifier_masks_from_json(yyjson_val *binding, int *required
     yyjson_val *modifiers = obj_get(binding, "modifiers");
     yyjson_val *required = obj_get(binding, "required_modifiers");
     yyjson_val *excluded = obj_get(binding, "excluded_modifiers");
+    yyjson_val *exact = obj_get(binding, "exact_modifiers");
     int required_mask = SLAYER3D_INPUT_MOD_NONE;
     int excluded_mask = SLAYER3D_INPUT_MOD_NONE;
 
@@ -798,6 +801,17 @@ static bool keyboard_modifier_masks_from_json(yyjson_val *binding, int *required
     {
         set_error(error_buffer, error_buffer_size,
                   "keyboard binding must not define both modifiers and required_modifiers");
+        return false;
+    }
+    if (exact != NULL && !yyjson_is_bool(exact))
+    {
+        set_error(error_buffer, error_buffer_size, "keyboard binding exact_modifiers must be a boolean");
+        return false;
+    }
+    if (json_bool(binding, "exact_modifiers", false) && excluded != NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "keyboard binding must not define excluded_modifiers when exact_modifiers is true");
         return false;
     }
     if (!input_modifier_mask_from_json(modifiers != NULL ? modifiers : required, &required_mask,
@@ -812,6 +826,12 @@ static bool keyboard_modifier_masks_from_json(yyjson_val *binding, int *required
         set_error(error_buffer, error_buffer_size,
                   "keyboard binding required_modifiers and excluded_modifiers must not overlap");
         return false;
+    }
+    if (json_bool(binding, "exact_modifiers", false))
+    {
+        const int all_modifiers =
+            SLAYER3D_INPUT_MOD_SHIFT | SLAYER3D_INPUT_MOD_CTRL | SLAYER3D_INPUT_MOD_ALT | SLAYER3D_INPUT_MOD_GUI;
+        excluded_mask = all_modifiers & ~required_mask;
     }
 
     if (required_modifiers != NULL)
@@ -966,10 +986,18 @@ bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *err
                 continue;
 
             const int action_id = slayer3d_input_register_action(input, name);
+            if (action_id < 0)
+            {
+                set_errorf(error_buffer, error_buffer_size, "failed to register input action '%s'", name);
+                return false;
+            }
             named_action *entries =
                 (named_action *)SDL_realloc(runtime->actions, (size_t)(runtime->action_count + 1) * sizeof(*entries));
             if (entries == NULL)
+            {
+                set_error(error_buffer, error_buffer_size, "failed to allocate input action table");
                 return false;
+            }
             runtime->actions = entries;
             runtime->actions[runtime->action_count++] = (named_action){name, action_id};
 

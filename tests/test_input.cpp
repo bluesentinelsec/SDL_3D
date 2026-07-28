@@ -756,6 +756,26 @@ TEST(Input, ShiftTabTriggersPreviousTabOnly)
     EXPECT_TRUE(slayer3d_input_is_held(input.input, tab_prev));
 }
 
+TEST(Input, PrimaryModifierUsesPlatformNativeCommandKey)
+{
+    InputPtr input;
+    const int save = slayer3d_input_register_action(input.input, "save");
+    slayer3d_input_bind_key_mod(input.input, save, SDL_SCANCODE_S, SLAYER3D_INPUT_MOD_PRIMARY);
+
+#if defined(__APPLE__)
+    constexpr SDL_Keymod primary = SDL_KMOD_GUI;
+#else
+    constexpr SDL_Keymod primary = SDL_KMOD_CTRL;
+#endif
+    SDL_SetModState(primary);
+    push_key_mod(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_S, primary);
+    slayer3d_input_update(input.input, 1);
+    SDL_SetModState(SDL_KMOD_NONE);
+
+    EXPECT_TRUE(slayer3d_input_is_pressed(input.input, save));
+    EXPECT_TRUE(slayer3d_input_is_held(input.input, save));
+}
+
 TEST(Input, SnapshotPointerIsStableUntilNextUpdate)
 {
     InputPtr input;

@@ -1226,6 +1226,8 @@ TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
     panel.has_text_color = true;
     panel.text_scale = 0.75f;
     panel.text_align = SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT;
+    panel.text = "Save";
+    panel.shortcut = "Ctrl+S";
     ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
 
     ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
@@ -1249,6 +1251,8 @@ TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
     EXPECT_EQ(command->text_color.a, 240);
     EXPECT_FLOAT_EQ(command->text_scale, 0.75f);
     EXPECT_EQ(command->text_align, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT);
+    EXPECT_STREQ(command->text, "Save");
+    EXPECT_STREQ(command->shortcut, "Ctrl+S");
 
     slayer3d_ui_layout_destroy(layout);
 }

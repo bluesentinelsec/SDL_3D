@@ -47,7 +47,7 @@ static bool validation_input_modifier_name_valid(const char *name)
                             SDL_strcasecmp(name, "control") == 0 || SDL_strcasecmp(name, "alt") == 0 ||
                             SDL_strcasecmp(name, "option") == 0 || SDL_strcasecmp(name, "gui") == 0 ||
                             SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
-                            SDL_strcasecmp(name, "meta") == 0);
+                            SDL_strcasecmp(name, "meta") == 0 || SDL_strcasecmp(name, "primary") == 0);
 }
 
 static int validation_input_modifier_mask(const char *name)
@@ -65,6 +65,8 @@ static int validation_input_modifier_mask(const char *name)
     {
         return SLAYER3D_INPUT_MOD_GUI;
     }
+    if (SDL_strcasecmp(name, "primary") == 0)
+        return SLAYER3D_INPUT_MOD_PRIMARY;
     return -1;
 }
 
@@ -116,11 +118,19 @@ static bool validate_keyboard_modifiers(validation_context *ctx, yyjson_val *bin
     yyjson_val *modifiers = obj_get(binding, "modifiers");
     yyjson_val *required = obj_get(binding, "required_modifiers");
     yyjson_val *excluded = obj_get(binding, "excluded_modifiers");
+    yyjson_val *exact = obj_get(binding, "exact_modifiers");
     int required_mask = SLAYER3D_INPUT_MOD_NONE;
     int excluded_mask = SLAYER3D_INPUT_MOD_NONE;
 
     if (modifiers != NULL && required != NULL)
         return validation_error(ctx, path, "keyboard binding must not define both modifiers and required_modifiers");
+    if (exact != NULL && !yyjson_is_bool(exact))
+        return validation_error(ctx, path, "keyboard binding exact_modifiers must be a boolean");
+    if (yyjson_is_true(exact) && excluded != NULL)
+    {
+        return validation_error(ctx, path,
+                                "keyboard binding must not define excluded_modifiers when exact_modifiers is true");
+    }
     if (!validate_keyboard_modifier_mask(ctx, modifiers != NULL ? modifiers : required, path,
                                          "keyboard binding required_modifiers", &required_mask) ||
         !validate_keyboard_modifier_mask(ctx, excluded, path, "keyboard binding excluded_modifiers", &excluded_mask))

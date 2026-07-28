@@ -27,7 +27,7 @@ extern "C"
 {
 #endif
 
-#define SLAYER3D_INPUT_MAX_ACTIONS 64
+#define SLAYER3D_INPUT_MAX_ACTIONS 128
 #define SLAYER3D_INPUT_MAX_BINDINGS 128
 #define SLAYER3D_INPUT_ACTION_NAME_MAX 64
 #define SLAYER3D_INPUT_MAX_GAMEPADS 4
@@ -66,6 +66,13 @@ extern "C"
         SLAYER3D_INPUT_MOD_CTRL = 1 << 1,
         SLAYER3D_INPUT_MOD_ALT = 1 << 2,
         SLAYER3D_INPUT_MOD_GUI = 1 << 3,
+#if defined(__APPLE__)
+        /** @brief Platform-native command modifier: GUI/Command on Apple platforms. */
+        SLAYER3D_INPUT_MOD_PRIMARY = SLAYER3D_INPUT_MOD_GUI,
+#else
+    /** @brief Platform-native command modifier: Control on non-Apple platforms. */
+    SLAYER3D_INPUT_MOD_PRIMARY = SLAYER3D_INPUT_MOD_CTRL,
+#endif
     } slayer3d_input_modifier;
 
     /**

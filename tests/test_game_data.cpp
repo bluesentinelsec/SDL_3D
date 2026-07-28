@@ -18563,13 +18563,21 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(editor_state.revision, 1U);
     EXPECT_EQ(editor_state.saved_revision, 1U);
 
-    auto press_key = [&](SDL_Scancode scancode, Uint64 frame) {
+    auto press_key = [&](SDL_Scancode scancode, Uint64 frame, SDL_Keymod modifiers = SDL_KMOD_NONE) {
+        SDL_SetModState(modifiers);
         SDL_Event key{};
         key.type = SDL_EVENT_KEY_DOWN;
         key.key.scancode = scancode;
+        key.key.mod = modifiers;
         slayer3d_input_process_event(input, &key);
         slayer3d_input_update(input, frame);
+        SDL_SetModState(SDL_KMOD_NONE);
     };
+#if defined(__APPLE__)
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_GUI;
+#else
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_CTRL;
+#endif
     auto target_cube_min_y = [&]() -> float {
         struct BoundsCapture
         {
@@ -18769,7 +18777,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(active_selection.has_bounds);
     EXPECT_NEAR(active_selection.bounds.min.y, 0.35f, 0.001f);
 
-    press_key(SDL_SCANCODE_U, 8);
+    press_key(SDL_SCANCODE_Z, 8, primary_modifier);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "undo");
@@ -18782,7 +18790,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(active_selection.has_bounds);
     EXPECT_NEAR(active_selection.bounds.min.y, 0.0f, 0.001f);
 
-    press_key(SDL_SCANCODE_Y, 9);
+    press_key(SDL_SCANCODE_Z, 9, primary_modifier | SDL_KMOD_SHIFT);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "redo");
@@ -18823,7 +18831,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.material_name, "mat.editor.texture.wall_metal");
 
-    press_key(SDL_SCANCODE_U, 13);
+    press_key(SDL_SCANCODE_Z, 13, primary_modifier);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "undo paint #2");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
@@ -18832,7 +18840,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.material_name, "mat.editor.wall");
 
-    press_key(SDL_SCANCODE_Y, 14);
+    press_key(SDL_SCANCODE_Z, 14, primary_modifier | SDL_KMOD_SHIFT);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "redo paint #2");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 2);
@@ -24850,6 +24858,25 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
         slayer3d_ui_layout_destroy(layout);
         return text;
     };
+    auto retained_ui_shortcut = [&](const char *id) {
+        std::string shortcut;
+        slayer3d_ui_layout_model *layout = nullptr;
+        EXPECT_TRUE(slayer3d_ui_layout_create(&layout));
+        if (layout == nullptr)
+            return shortcut;
+        EXPECT_TRUE(slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, nullptr, layout));
+        for (int i = 0, count = slayer3d_ui_layout_render_command_count(layout); i < count; ++i)
+        {
+            const slayer3d_ui_layout_render_command *render = slayer3d_ui_layout_render_command_at(layout, i);
+            if (render != nullptr && id != nullptr && std::strcmp(render->id, id) == 0)
+            {
+                shortcut = render->shortcut;
+                break;
+            }
+        }
+        slayer3d_ui_layout_destroy(layout);
+        return shortcut;
+    };
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -24892,9 +24919,21 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
               file_rects.end());
     EXPECT_EQ(std::find(file_rects.begin(), file_rects.end(), "ui.editor_shell.file_menu.plan_lighting.button"),
               file_rects.end());
+#if defined(__APPLE__)
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.file_menu.new.button"), "Cmd+N");
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.file_menu.settings.button"), "Cmd+,");
+#else
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.file_menu.new.button"), "Ctrl+N");
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.file_menu.settings.button"), "Ctrl+,");
+#endif
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+#if defined(__APPLE__)
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_GUI;
+#else
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_CTRL;
+#endif
     int input_tick = 1;
     auto click_editor = [&](float x, float y) {
         SDL_Event motion{};
@@ -25013,6 +25052,17 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.file.menu.open", true));
     EXPECT_EQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), mode_before_file_dismiss);
 
+    emit_signal("signal.editor.edit.toggle");
+#if defined(__APPLE__)
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.edit_menu.undo.button"), "Cmd+Z");
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.edit_menu.redo.button"), "Cmd+Shift+Z");
+#else
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.edit_menu.undo.button"), "Ctrl+Z");
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.edit_menu.redo.button"), "Ctrl+Shift+Z");
+#endif
+    EXPECT_EQ(retained_ui_shortcut("ui.editor_shell.edit_menu.delete.button"), "Delete");
+    emit_signal("signal.editor.edit.close");
+
     emit_signal("signal.editor.file.toggle");
     HitRegionSummary file_settings_region = retained_ui_region("ui.editor_shell.file_menu.settings.button");
     ASSERT_TRUE(file_settings_region.found);
@@ -25044,10 +25094,19 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.settings.edit.focus", ""), "media");
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.ui.text_entry.active", false));
+    slayer3d_properties_set_bool(scene_state, "editor.new.valid", false);
+    press_editor_hotkey(SDL_SCANCODE_N, primary_modifier);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.new.valid", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.settings.open", false));
     emit_signal("signal.editor.settings.close");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.settings.open", true));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.ui.text_entry.active", true));
+
+    press_editor_hotkey(SDL_SCANCODE_COMMA, primary_modifier);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.settings.open", false));
+    emit_signal("signal.editor.settings.close");
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     SDL_Event motion_event{};
     motion_event.type = SDL_EVENT_MOUSE_MOTION;
@@ -25232,7 +25291,11 @@ TEST(GameDataRuntime, EditorShellDojoFileMenuCreatesOpensAndSavesMaps)
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "rotate", nullptr));
     ASSERT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "rotate");
 
-    press_editor_hotkey(SDL_SCANCODE_N, SDL_KMOD_GUI);
+    slayer3d_properties_set_string(scene_state, "editor.texture.edit.focus", "");
+    slayer3d_properties_set_string(scene_state, "editor.property.edit.focus", "");
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.ui.text_entry.active", true));
+    press_editor_hotkey(SDL_SCANCODE_N, primary_modifier);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.new.valid", false));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     EXPECT_EQ(world.brush_count, 0);
@@ -25698,13 +25761,182 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
     EXPECT_NEAR(tool_toolbar.h, menu_toolbar.h, 0.001f);
 
     const std::vector<std::string> labels = visible_text();
-    EXPECT_TRUE(contains_text(labels, "Select (space)"));
-    EXPECT_TRUE(contains_text(labels, "Brush Tool (b)"));
-    EXPECT_TRUE(contains_text(labels, "Clip (c)"));
-    EXPECT_TRUE(contains_text(labels, "Face (f)"));
-    EXPECT_TRUE(contains_text(labels, "Vertex (v)"));
-    EXPECT_TRUE(contains_text(labels, "Duplicate (d)"));
-    EXPECT_TRUE(contains_text(labels, "Texture (m)"));
+    EXPECT_TRUE(contains_text(labels, "Select"));
+    EXPECT_TRUE(contains_text(labels, "Space"));
+    EXPECT_TRUE(contains_text(labels, "Brush Tool"));
+    EXPECT_TRUE(contains_text(labels, "1"));
+    EXPECT_TRUE(contains_text(labels, "Edge"));
+    EXPECT_TRUE(contains_text(labels, "2"));
+    EXPECT_TRUE(contains_text(labels, "Clip"));
+    EXPECT_TRUE(contains_text(labels, "3"));
+    EXPECT_TRUE(contains_text(labels, "Face"));
+    EXPECT_TRUE(contains_text(labels, "4"));
+    EXPECT_TRUE(contains_text(labels, "Vertex"));
+    EXPECT_TRUE(contains_text(labels, "5"));
+    EXPECT_TRUE(contains_text(labels, "Rotate"));
+    EXPECT_TRUE(contains_text(labels, "6"));
+    EXPECT_TRUE(contains_text(labels, "Scale"));
+    EXPECT_TRUE(contains_text(labels, "7"));
+    EXPECT_TRUE(contains_text(labels, "Shear"));
+    EXPECT_TRUE(contains_text(labels, "8"));
+    EXPECT_TRUE(contains_text(labels, "Duplicate"));
+#if defined(__APPLE__)
+    EXPECT_TRUE(contains_text(labels, "Cmd+D"));
+#else
+    EXPECT_TRUE(contains_text(labels, "Ctrl+D"));
+#endif
+    EXPECT_TRUE(contains_text(labels, "Texture"));
+    EXPECT_TRUE(contains_text(labels, "9"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorHotkeysSeparateCommandsToolsAndMovement)
+{
+    const std::filesystem::path dojo_path = slayer3d_editor_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    auto action_id = [&](const char *name) {
+        const int id = slayer3d_game_data_find_action(runtime, name);
+        EXPECT_GE(id, 0) << name;
+        return id;
+    };
+    const int paste_action = action_id("action.editor.paste");
+    const int cut_action = action_id("action.editor.cut");
+    const int save_action = action_id("action.editor.export");
+    const int duplicate_action = action_id("action.editor.brush.duplicate");
+    const int flip_horizontal_action = action_id("action.editor.brush.flip_horizontal");
+    const int camera_back_action = action_id("action.editor.camera.back");
+    const int camera_right_action = action_id("action.editor.camera.right");
+    const int camera_up_action = action_id("action.editor.camera.up");
+    const int camera_fast_action = action_id("action.editor.camera.fast");
+    const int ortho_zoom_out_action = action_id("action.editor.ortho.zoom.out");
+    EXPECT_GE(action_id("action.jump"), 0);
+
+#if defined(__APPLE__)
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_GUI;
+#else
+    constexpr SDL_Keymod primary_modifier = SDL_KMOD_CTRL;
+#endif
+    Uint64 frame = 1;
+    auto key_down = [&](SDL_Scancode scancode, SDL_Keymod modifiers) {
+        SDL_SetModState(modifiers);
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        key.key.mod = modifiers;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame++);
+    };
+    auto key_up = [&](SDL_Scancode scancode, SDL_Keymod modifiers) {
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_UP;
+        key.key.scancode = scancode;
+        key.key.mod = modifiers;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame++);
+        SDL_SetModState(SDL_KMOD_NONE);
+    };
+
+    struct ToolShortcut
+    {
+        SDL_Scancode scancode;
+        const char *action;
+        const char *mode;
+    };
+    const ToolShortcut tool_shortcuts[] = {
+        {SDL_SCANCODE_1, "action.editor.mode.brush", "brush"},
+        {SDL_SCANCODE_2, "action.editor.mode.edge", "edge"},
+        {SDL_SCANCODE_3, "action.editor.mode.clip", "clip"},
+        {SDL_SCANCODE_4, "action.editor.mode.face", "face"},
+        {SDL_SCANCODE_5, "action.editor.mode.vertex", "vertex"},
+        {SDL_SCANCODE_6, "action.editor.mode.rotate", "rotate"},
+        {SDL_SCANCODE_7, "action.editor.mode.scale", "scale"},
+        {SDL_SCANCODE_8, "action.editor.mode.shear", "shear"},
+    };
+    for (const ToolShortcut &shortcut : tool_shortcuts)
+    {
+        const int tool_action = action_id(shortcut.action);
+        key_down(shortcut.scancode, SDL_KMOD_NONE);
+        EXPECT_TRUE(slayer3d_input_is_pressed(input, tool_action)) << shortcut.action;
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), shortcut.mode);
+        key_up(shortcut.scancode, SDL_KMOD_NONE);
+    }
+
+    const int texture_action = action_id("action.editor.palette.material");
+    key_down(SDL_SCANCODE_9, SDL_KMOD_NONE);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, texture_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.active", false));
+    key_up(SDL_SCANCODE_9, SDL_KMOD_NONE);
+
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
+    key_down(SDL_SCANCODE_V, primary_modifier);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, paste_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, action_id("action.editor.mode.vertex")));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    key_up(SDL_SCANCODE_V, primary_modifier);
+
+    key_down(SDL_SCANCODE_S, primary_modifier);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, save_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, camera_back_action));
+    key_up(SDL_SCANCODE_S, primary_modifier);
+
+    key_down(SDL_SCANCODE_D, primary_modifier);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, duplicate_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, camera_right_action));
+    key_up(SDL_SCANCODE_D, primary_modifier);
+
+    key_down(SDL_SCANCODE_D, SDL_KMOD_NONE);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, camera_right_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, duplicate_action));
+    key_up(SDL_SCANCODE_D, SDL_KMOD_NONE);
+
+    key_down(SDL_SCANCODE_D, SDL_KMOD_SHIFT);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, camera_right_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, duplicate_action));
+    key_up(SDL_SCANCODE_D, SDL_KMOD_SHIFT);
+
+    key_down(SDL_SCANCODE_LSHIFT, SDL_KMOD_SHIFT);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, camera_fast_action));
+    key_up(SDL_SCANCODE_LSHIFT, SDL_KMOD_SHIFT);
+
+    key_down(SDL_SCANCODE_Q, primary_modifier);
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, camera_up_action));
+    key_up(SDL_SCANCODE_Q, primary_modifier);
+
+    key_down(SDL_SCANCODE_X, SDL_KMOD_SHIFT);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, flip_horizontal_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, ortho_zoom_out_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, cut_action));
+    key_up(SDL_SCANCODE_X, SDL_KMOD_SHIFT);
+
+    key_down(SDL_SCANCODE_X, primary_modifier);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, cut_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, flip_horizontal_action));
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, ortho_zoom_out_action));
+    key_up(SDL_SCANCODE_X, primary_modifier);
+
+    key_down(SDL_SCANCODE_1, SDL_KMOD_SHIFT);
+    EXPECT_FALSE(slayer3d_input_is_pressed(input, action_id("action.editor.mode.brush")));
+    key_up(SDL_SCANCODE_1, SDL_KMOD_SHIFT);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -29425,8 +29657,15 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         return pressed;
     };
     EXPECT_FALSE(press_save_chord(SDL_KMOD_NONE, 100));
-    EXPECT_TRUE(press_save_chord(SDL_KMOD_CTRL, 102));
+#if defined(__APPLE__)
+    EXPECT_FALSE(press_save_chord(SDL_KMOD_CTRL, 102));
     EXPECT_TRUE(press_save_chord(SDL_KMOD_GUI, 104));
+    EXPECT_FALSE(press_save_chord(SDL_KMOD_GUI | SDL_KMOD_SHIFT, 106));
+#else
+    EXPECT_TRUE(press_save_chord(SDL_KMOD_CTRL, 102));
+    EXPECT_FALSE(press_save_chord(SDL_KMOD_GUI, 104));
+    EXPECT_FALSE(press_save_chord(SDL_KMOD_CTRL | SDL_KMOD_SHIFT, 106));
+#endif
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 660.0f;
@@ -29619,7 +29858,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 1.0f), 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.thickness", 0.0f), 0.2f, 0.001f);
 
-    EXPECT_TRUE(press_key_for_action(SDL_SCANCODE_B, brush_mode_action_id, 105));
+    EXPECT_TRUE(press_key_for_action(SDL_SCANCODE_1, brush_mode_action_id, 105));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "brush");
     slayer3d_signal_emit(bus, mode_select_signal, nullptr);
@@ -29648,7 +29887,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
-    EXPECT_TRUE(press_key_for_action(SDL_SCANCODE_C, clip_mode_action_id, 107));
+    EXPECT_TRUE(press_key_for_action(SDL_SCANCODE_3, clip_mode_action_id, 107));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "clip");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
@@ -29658,10 +29897,16 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                  "Clip Tool: select brushes to clip");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.clip.selected"));
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+#if defined(__APPLE__)
+    EXPECT_FALSE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_CTRL, clip_cycle_action_id, 109));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "front");
+    EXPECT_TRUE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_GUI, clip_cycle_action_id, 111));
+#else
     EXPECT_TRUE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_CTRL, clip_cycle_action_id, 109));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
-    EXPECT_TRUE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_GUI, clip_cycle_action_id, 111));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "both");
+    EXPECT_FALSE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_GUI, clip_cycle_action_id, 111));
+#endif
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", true));
@@ -46760,6 +47005,105 @@ TEST(GameDataRuntime, ValidatesKeyboardBindingModifiers)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "overlap_input_modifier.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("must not overlap"), std::string::npos) << error;
+
+    write_text(dir / "primary_input_modifier.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Primary Input Modifier", "id": "test.primary_input_modifier", "version": "0.1.0" },
+  "world": { "name": "world.primary_input_modifier", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.test",
+        "actions": [
+          {
+            "name": "action.save",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "S",
+                "required_modifiers": ["primary"],
+                "exact_modifiers": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "primary_input_modifier.game.json").string().c_str(), nullptr,
+                                                 error, sizeof(error)))
+        << error;
+
+    write_text(dir / "bad_exact_input_modifier.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Exact Input Modifier", "id": "test.bad_exact_input_modifier", "version": "0.1.0" },
+  "world": { "name": "world.bad_exact_input_modifier", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.test",
+        "actions": [
+          {
+            "name": "action.save",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "S",
+                "required_modifiers": ["primary"],
+                "excluded_modifiers": ["alt"],
+                "exact_modifiers": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_exact_input_modifier.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("must not define excluded_modifiers"), std::string::npos) << error;
+
+    write_text(dir / "bad_exact_input_modifier_type.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Exact Modifier Type", "id": "test.bad_exact_modifier_type", "version": "0.1.0" },
+  "world": { "name": "world.bad_exact_modifier_type", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.test",
+        "actions": [
+          {
+            "name": "action.save",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "S",
+                "exact_modifiers": "yes"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_exact_input_modifier_type.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("exact_modifiers must be a boolean"), std::string::npos) << error;
 
     remove_test_dir(dir);
 }
