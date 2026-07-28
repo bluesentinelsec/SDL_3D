@@ -47,7 +47,7 @@ static bool validation_input_modifier_name_valid(const char *name)
                             SDL_strcasecmp(name, "control") == 0 || SDL_strcasecmp(name, "alt") == 0 ||
                             SDL_strcasecmp(name, "option") == 0 || SDL_strcasecmp(name, "gui") == 0 ||
                             SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
-                            SDL_strcasecmp(name, "meta") == 0);
+                            SDL_strcasecmp(name, "meta") == 0 || SDL_strcasecmp(name, "primary") == 0);
 }
 
 static int validation_input_modifier_mask(const char *name)
@@ -65,6 +65,8 @@ static int validation_input_modifier_mask(const char *name)
     {
         return SLAYER3D_INPUT_MOD_GUI;
     }
+    if (SDL_strcasecmp(name, "primary") == 0)
+        return SLAYER3D_INPUT_MOD_PRIMARY;
     return -1;
 }
 

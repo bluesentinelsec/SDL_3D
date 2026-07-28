@@ -84,40 +84,32 @@
           {
             "name": "action.editor.command.undo",
             "bindings": [
-              { "device": "keyboard", "key": "U" },
-              { "device": "keyboard", "key": "Z", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "Z", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "Z", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.command.redo",
             "bindings": [
-              { "device": "keyboard", "key": "Y" },
-              { "device": "keyboard", "key": "Z", "modifiers": ["ctrl", "shift"] },
-              { "device": "keyboard", "key": "Z", "modifiers": ["gui", "shift"] },
-              { "device": "keyboard", "key": "Y", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "Y", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "Z", "required_modifiers": ["primary", "shift"], "excluded_modifiers": ["alt"] },
+              { "device": "keyboard", "key": "Y", "required_modifiers": ["ctrl"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.copy",
             "bindings": [
-              { "device": "keyboard", "key": "C", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "C", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "C", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.cut",
             "bindings": [
-              { "device": "keyboard", "key": "X", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "X", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "X", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.paste",
             "bindings": [
-              { "device": "keyboard", "key": "V", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "V", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "V", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
@@ -150,29 +142,31 @@
           {
             "name": "action.editor.new",
             "bindings": [
-              { "device": "keyboard", "key": "N", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "N", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "N", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.open",
             "bindings": [
-              { "device": "keyboard", "key": "O", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "O", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "O", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.export",
             "bindings": [
-              { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
-              { "device": "keyboard", "key": "S", "modifiers": ["gui"] }
+              { "device": "keyboard", "key": "S", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
             "name": "action.editor.save_as",
             "bindings": [
-              { "device": "keyboard", "key": "S", "modifiers": ["ctrl", "shift"] },
-              { "device": "keyboard", "key": "S", "modifiers": ["gui", "shift"] }
+              { "device": "keyboard", "key": "S", "required_modifiers": ["primary", "shift"], "excluded_modifiers": ["alt"] }
+            ]
+          },
+          {
+            "name": "action.editor.settings.open",
+            "bindings": [
+              { "device": "keyboard", "key": "COMMA", "required_modifiers": ["primary"], "excluded_modifiers": ["shift", "alt"] }
             ]
           },
           {
@@ -970,23 +964,33 @@
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
         "action": "action.editor.new",
         "on_pressed": "signal.editor.file.new"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
         "action": "action.editor.open",
         "on_pressed": "signal.editor.file.open_dialog"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
         "action": "action.editor.export",
         "on_pressed": "signal.editor.file.save"
       },
       {
         "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
         "action": "action.editor.save_as",
         "on_pressed": "signal.editor.file.save_as_dialog"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "active_if": { "type": "scene_state.compare", "key": "editor.ui.text_entry.active", "op": "==", "value": false, "default": false },
+        "action": "action.editor.settings.open",
+        "on_pressed": "signal.editor.settings.open"
       },
       {
         "type": "sensor.input_pressed",

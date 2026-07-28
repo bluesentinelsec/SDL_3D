@@ -1877,8 +1877,9 @@ All three actions support `valid_key`, `message_key`, `kind_key`, and
 
 The Slayer3D editor maps these actions to the Edit menu and conventional
 Ctrl/Cmd+C, Ctrl/Cmd+X, and Ctrl/Cmd+V shortcuts. Undo uses Ctrl/Cmd+Z; redo
-uses Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y. The existing single-key `U` and `Y`
-bindings remain available for editor workflows.
+uses Ctrl/Cmd+Shift+Z, with Ctrl+Y retained as a Windows/Linux alias. Authored
+bindings use the platform-aware `primary` modifier so Command is selected on
+Apple platforms and Control elsewhere.
 
 Use `editor.texture.scan` to populate an editor texture browser from one
 configured filesystem directory. By default it reads

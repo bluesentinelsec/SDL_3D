@@ -1767,6 +1767,8 @@ static slayer3d_game_data_ui_align retained_ui_text_align(const slayer3d_ui_layo
             return SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
         if (command->text_align == SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT)
             return SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
+        if (command->shortcut[0] != '\0')
+            return SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
     }
     if (command != NULL && retained_ui_text_is_left_aligned(command->id))
         return SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
@@ -1836,6 +1838,17 @@ static bool retained_ui_text_from_layout_model(const slayer3d_game_data_runtime 
         text.clip_h = command->clip_rect.h;
         text.clip_normalized = false;
         ok = callback(userdata, &text);
+        if (ok && command->shortcut[0] != '\0')
+        {
+            char shortcut_name[SLAYER3D_UI_LAYOUT_ID_MAX];
+            SDL_snprintf(shortcut_name, sizeof(shortcut_name), "%s.shortcut", name);
+            text.name = shortcut_name;
+            text.text = command->shortcut;
+            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
+            text.centered = false;
+            text.x = command->rect.x + command->rect.w - 8.0f;
+            ok = callback(userdata, &text);
+        }
     }
 
     return ok;

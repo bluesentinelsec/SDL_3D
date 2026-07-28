@@ -23,6 +23,7 @@
       "action.editor.open",
       "action.editor.export",
       "action.editor.save_as",
+      "action.editor.settings.open",
       "action.editor.test_run.prepare",
       "action.editor.test_run.enter",
       "action.editor.ortho.pan.left",
@@ -968,6 +969,7 @@
             "w": 284,
             "h": 26,
             "text": "New Document",
+            "shortcut": "Primary+N",
             "interactive": true,
             "action": "editor.file.new",
             "layer": 501
@@ -980,6 +982,7 @@
             "w": 284,
             "h": 26,
             "text": "Open Document...",
+            "shortcut": "Primary+O",
             "interactive": true,
             "action": "editor.file.open_dialog",
             "layer": 501
@@ -992,6 +995,7 @@
             "w": 284,
             "h": 26,
             "text": "Save Document",
+            "shortcut": "Primary+S",
             "interactive": true,
             "action": "editor.file.save",
             "layer": 501
@@ -1004,6 +1008,7 @@
             "w": 284,
             "h": 26,
             "text": "Save Document as...",
+            "shortcut": "Primary+Shift+S",
             "interactive": true,
             "action": "editor.file.save_as_dialog",
             "layer": 501
@@ -1028,6 +1033,7 @@
             "w": 284,
             "h": 26,
             "text": "Settings...",
+            "shortcut": "Primary+,",
             "interactive": true,
             "action": "editor.settings.open",
             "layer": 501
@@ -1076,12 +1082,12 @@
             "action": "editor.edit.close",
             "layer": 501
           },
-          { "id": "ui.editor_shell.edit_menu.undo.button", "type": "button", "x": 12, "y": 38, "w": 196, "h": 26, "text": "Undo", "interactive": true, "action": "editor.command.undo", "layer": 501 },
-          { "id": "ui.editor_shell.edit_menu.redo.button", "type": "button", "x": 12, "y": 72, "w": 196, "h": 26, "text": "Redo", "interactive": true, "action": "editor.command.redo", "layer": 501 },
-          { "id": "ui.editor_shell.edit_menu.cut.button", "type": "button", "x": 12, "y": 106, "w": 196, "h": 26, "text": "Cut", "interactive": true, "action": "editor.cut", "layer": 501 },
-          { "id": "ui.editor_shell.edit_menu.copy.button", "type": "button", "x": 12, "y": 140, "w": 196, "h": 26, "text": "Copy", "interactive": true, "action": "editor.copy", "layer": 501 },
-          { "id": "ui.editor_shell.edit_menu.paste.button", "type": "button", "x": 12, "y": 174, "w": 196, "h": 26, "text": "Paste", "interactive": true, "action": "editor.paste", "layer": 501 },
-          { "id": "ui.editor_shell.edit_menu.delete.button", "type": "button", "x": 12, "y": 208, "w": 196, "h": 26, "text": "Delete", "interactive": true, "action": "editor.delete_selected", "layer": 501 }
+          { "id": "ui.editor_shell.edit_menu.undo.button", "type": "button", "x": 12, "y": 38, "w": 196, "h": 26, "text": "Undo", "shortcut": "Primary+Z", "interactive": true, "action": "editor.command.undo", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.redo.button", "type": "button", "x": 12, "y": 72, "w": 196, "h": 26, "text": "Redo", "shortcut": "Primary+Shift+Z", "interactive": true, "action": "editor.command.redo", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.cut.button", "type": "button", "x": 12, "y": 106, "w": 196, "h": 26, "text": "Cut", "shortcut": "Primary+X", "interactive": true, "action": "editor.cut", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.copy.button", "type": "button", "x": 12, "y": 140, "w": 196, "h": 26, "text": "Copy", "shortcut": "Primary+C", "interactive": true, "action": "editor.copy", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.paste.button", "type": "button", "x": 12, "y": 174, "w": 196, "h": 26, "text": "Paste", "shortcut": "Primary+V", "interactive": true, "action": "editor.paste", "layer": 501 },
+          { "id": "ui.editor_shell.edit_menu.delete.button", "type": "button", "x": 12, "y": 208, "w": 196, "h": 26, "text": "Delete", "shortcut": "Delete", "interactive": true, "action": "editor.delete_selected", "layer": 501 }
         ]
       },
       {

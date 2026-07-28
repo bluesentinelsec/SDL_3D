@@ -123,6 +123,27 @@ static const char *ui_widget_string(yyjson_val *node, const char *primary_key, c
     return value != NULL ? value : json_string(node, secondary_key, NULL);
 }
 
+static const char *ui_widget_shortcut_text(yyjson_val *node, char *buffer, size_t buffer_size)
+{
+    const char *shortcut = json_string(node, "shortcut", NULL);
+    if (shortcut == NULL || shortcut[0] == '\0' || buffer == NULL || buffer_size == 0U)
+        return shortcut;
+
+    static const char primary_prefix[] = "Primary+";
+    if (SDL_strncasecmp(shortcut, primary_prefix, SDL_strlen(primary_prefix)) == 0)
+    {
+#if defined(__APPLE__)
+        SDL_snprintf(buffer, buffer_size, "Cmd+%s", shortcut + SDL_strlen(primary_prefix));
+#else
+        SDL_snprintf(buffer, buffer_size, "Ctrl+%s", shortcut + SDL_strlen(primary_prefix));
+#endif
+        return buffer;
+    }
+
+    SDL_strlcpy(buffer, shortcut, buffer_size);
+    return buffer;
+}
+
 static bool ui_widget_scene_float(const slayer3d_game_data_runtime *runtime, const char *key, float *out_value)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || out_value == NULL)
@@ -326,6 +347,8 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
 
     char text_buffer[SLAYER3D_UI_LAYOUT_TEXT_MAX];
     desc.text = ui_widget_dynamic_text(runtime, metrics, node, text_buffer, sizeof(text_buffer));
+    char shortcut_buffer[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+    desc.shortcut = ui_widget_shortcut_text(node, shortcut_buffer, sizeof(shortcut_buffer));
     desc.font = json_string(node, "font", NULL);
     desc.action = json_string(node, "action", NULL);
     desc.outside_click_action = json_string(node, "outside_click_action", NULL);

@@ -140,7 +140,8 @@ Use C for:
 Keyboard bindings may require modifier chords with `modifiers` or
 `required_modifiers`, and may reject modifier states with `excluded_modifiers`.
 Supported modifier names are `shift`, `ctrl`/`control`, `alt`/`option`, and
-`gui`/`cmd`/`command`/`meta`.
+`gui`/`cmd`/`command`/`meta`. Use `primary` for platform-native application
+commands: it resolves to Command on Apple platforms and Control elsewhere.
 
 ## Promotion Rule
 

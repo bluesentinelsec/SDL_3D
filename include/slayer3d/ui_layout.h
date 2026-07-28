@@ -170,6 +170,13 @@ extern "C"
         /** @brief Optional node id whose hover and active state drive this node's presentation. */
         const char *state_source_id;
         const char *text;
+        /**
+         * @brief Optional command chord displayed at the trailing edge of a control.
+         *
+         * The shortcut is presentation metadata; input behavior remains owned by
+         * the input action bound to the control's action.
+         */
+        const char *shortcut;
         const char *font;
         const char *action;
         /**
@@ -310,6 +317,7 @@ extern "C"
         /** @brief True when this floating root exposes a synthesized resize grip. */
         bool floating_resizable;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+        char shortcut[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
         slayer3d_color text_color;
         bool has_text_color;
@@ -358,6 +366,7 @@ extern "C"
         slayer3d_ui_layout_rect clip_rect;
         int layer;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+        char shortcut[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
         slayer3d_color text_color;
         bool has_text_color;

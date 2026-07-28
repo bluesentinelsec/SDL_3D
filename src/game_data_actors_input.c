@@ -729,6 +729,8 @@ static int input_modifier_from_json_name(const char *name)
     {
         return SLAYER3D_INPUT_MOD_GUI;
     }
+    if (SDL_strcasecmp(name, "primary") == 0)
+        return SLAYER3D_INPUT_MOD_PRIMARY;
     return -1;
 }
 

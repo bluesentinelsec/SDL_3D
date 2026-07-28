@@ -334,6 +334,10 @@ Nodes may author:
 - `color` or `fill_color`: background fill color.
 - `border_color` and `border_thickness`: optional border.
 - `font`, `text` or `label`: static text content.
+- `shortcut`: optional command-chord presentation for `button` and `dropdown`
+  controls. The label is drawn at the trailing edge while the command text is
+  drawn at the leading edge. `Primary+` is presented as `Cmd+` on Apple
+  platforms and `Ctrl+` elsewhere.
 - `text_role`: `body` (the default), `caption`, or `heading`.
 - `text_color`: an explicit per-node override of the role color.
 - `text_scale`: a legacy explicit scale override for exceptional content.
@@ -341,6 +345,10 @@ Nodes may author:
 
 Colors are `[r, g, b]` or `[r, g, b, a]` byte arrays. `align` may be `left`,
 `center`, or `right`.
+
+`shortcut` is presentation metadata and does not create an input binding.
+Author the corresponding action binding with the `primary` modifier so the
+menu label and behavior share the same platform convention.
 
 ## Dynamic Text
 
