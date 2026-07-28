@@ -24,6 +24,8 @@ data-authored games running on a generic SDL-powered runtime.
   folder contract, persistence, and session overrides.
 - [Editor Settings And Play Mode](editor-settings-and-play.md): settings window,
   built-in play, free-fly fallback, and external runner contract.
+- [Editor Hotkeys](hotkeys.md): complete keyboard and mouse binding reference
+  for editor tools, viewport navigation, and built-in play mode.
 - [Retained UI Widgets](ui-widgets.md): data-authored UI layout, styling,
   dropdowns, dynamic text, and editor/game UI guidance.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper

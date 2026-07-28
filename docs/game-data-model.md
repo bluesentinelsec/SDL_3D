@@ -142,6 +142,10 @@ Keyboard bindings may require modifier chords with `modifiers` or
 Supported modifier names are `shift`, `ctrl`/`control`, `alt`/`option`, and
 `gui`/`cmd`/`command`/`meta`. Use `primary` for platform-native application
 commands: it resolves to Command on Apple platforms and Control elsewhere.
+Set `exact_modifiers` to `true` when no modifiers other than those explicitly
+required may be held. Exact bindings cannot also define `excluded_modifiers`.
+This is appropriate for application commands and tool accelerators; movement
+bindings should instead exclude command modifiers while allowing Shift.
 
 ## Promotion Rule
 
